@@ -1,0 +1,27 @@
+# Task Checklist: Full Stack Integration
+
+## Planning
+- [x] Research existing implementations
+- [x] Create Implementation Plan
+- [ ] Get User Approval on Plan
+
+## Phase 1: Backend Foundation
+- [x] Implement [OrdersGateway](file:///d:/mart/baldia-mart/backend-api/src/orders/orders.gateway.ts#10-43) for real-time updates
+- [x] Add [SeedController](file:///d:/mart/baldia-mart/backend-api/src/admin/seed.controller.ts#7-52) for initial data population
+- [x] Update [OrdersService](file:///d:/mart/baldia-mart/backend-api/src/orders/orders.service.ts#11-95) to utilize Socket.io gateway
+
+## Phase 2: Admin Panel Management
+- [ ] Implement Category CRUD pages
+- [ ] Implement Product CRUD pages
+- [ ] Add image URL support for items
+
+## Phase 3: Mobile App Journey
+- [ ] Fetch Categories/Products from API in [HomeScreen](file:///d:/mart/baldia-mart/mobile-user-app/src/screens/HomeScreen.tsx#18-65)
+- [ ] Implement Cart logic in `CartScreen`
+- [ ] Connect `CheckoutScreen` to Order API
+- [ ] Create `OrderTrackingScreen` with real-time Socket.io listeners
+
+## Phase 4: Final Polish & Verification
+- [ ] Seed full data (multiple categories/products)
+- [ ] Verify real-time status transitions
+- [ ] Final end-to-end walkthrough

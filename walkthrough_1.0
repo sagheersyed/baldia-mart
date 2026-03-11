@@ -1,0 +1,47 @@
+# Walkthrough: Hyperlocal Delivery App Integration
+
+This walkthrough demonstrates the successful integration of the **Backend API**, **Admin Panel**, and **Mobile User App** for a fully functional hyperlocal delivery system.
+
+## 1. Backend & Real-time Foundation 🏗️
+The backend now supports real-time communication via **Socket.io** and a robust PostgreSQL database.
+
+- **Real-time Gateway**: [OrdersGateway](file:///d:/mart/baldia-mart/backend-api/src/orders/orders.gateway.ts#10-43) manages room-based status updates.
+- **Database Seeding**: A rich dataset of Categories (Snacks, Beverages, Meat, etc.) and Products has been seeded.
+- **API CRUD**: Full REST endpoints for Categories and Products.
+
+## 2. Premium Admin Panel 🖥️
+A modern, glassmorphism-inspired dashboard for inventory management.
+
+### Categories Management
+Admin can view, add, and delete categories with real-time API sync.
+> [!TIP]
+> Each category card features smooth hover animations and image support.
+
+### Product Inventory
+A comprehensive table-based view for managing stock, pricing, and category mapping.
+
+## 3. Seamless Mobile Journey 📱
+The mobile app is now dynamic, fetching live data and managing real-time orders.
+
+### Home & Categories
+- **Dynamic Fetching**: Categories and Products are loaded directly from the backend.
+- **Add to Cart**: Intuitive UI to quickly add items to the shopping basket.
+
+### Cart & Checkout
+- **CartContext**: Shared state ensures the cart is accessible across all screens.
+- **Order Placement**: Integration with `ordersApi.checkout` processes payments and creates orders.
+
+### Real-time Tracking 📡
+- **Live Updates**: The [OrderTrackingScreen](file:///d:/mart/baldia-mart/mobile-user-app/src/screens/OrderTrackingScreen.tsx#8-89) listens to Socket.io events.
+- **Visual Progress**: A timeline showing order stages (Pending → Confirmed → Out for Delivery → Delivered).
+
+## 4. End-to-End Verification ✅
+The system was verified through the following flow:
+1. **Admin**: Added "Fresh Milk" to the "Dairy" category via the Admin Panel.
+2. **User**: Logged in, saw the new category, added Milk to the cart.
+3. **User**: Proceeded to checkout and placed the order.
+4. **Backend**: Created the order and notified the tracking room.
+5. **User**: Automatically redirected to the tracking screen with live status updates.
+
+---
+**Status**: Integrated & Ready for Launch 🚀

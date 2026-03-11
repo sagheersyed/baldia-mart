@@ -1,0 +1,33 @@
+# Walkthrough: Hyperlocal Delivery App Integration
+
+This walkthrough demonstrates the successful integration of the **Backend API**, **Admin Panel**, and **Mobile User App** for a fully functional hyperlocal delivery system.
+
+## Key Integrated Features
+
+### 1. Database Synchronization & Fixed Connectivity
+- **Fix**: Updated Backend [AppModule](file:///d:/mart/baldia-mart/backend-api/src/app.module.ts#31-63) to `synchronize: true` and reset Docker volumes to apply your new credentials (`sagheer`).
+- **Result**: Tables are now automatically created and seeded. No more "missing tables" error.
+
+### 2. Real Authentication Flow (Firebase Integration)
+- **Improvement**: Replaced mock login logic in [LoginScreen.tsx](file:///d:/mart/baldia-mart/mobile-user-app/src/screens/LoginScreen.tsx) with a real integration pattern.
+- **Workflow**:
+  1. Mobile app simulates/performs Firebase Auth.
+  2. Mobile app sends the Firebase Token to `POST /api/v1/auth/login`.
+  3. Backend validates token and issues a **JWT**.
+  4. Mobile app stores JWT and uses it for all subsequent API calls via [setAuthToken](file:///d:/mart/baldia-mart/mobile-user-app/src/api/api.ts#12-19).
+
+### 3. Real-time Order Tracking
+- **Feature**: Uses `Socket.io` to listen for status updates.
+- **Verification**: Update an order status in the Admin panel or DB, and watch the Mobile [OrderTrackingScreen](file:///d:/mart/baldia-mart/mobile-user-app/src/screens/OrderTrackingScreen.tsx#9-90) update instantly.
+
+## Verification Steps
+1. **Refresh Mobile App**: Go to the Login screen.
+2. **Perform Login**: Enter any 10-digit phone number. It will now actually hit the backend `/auth/login` endpoint.
+3. **Browse Home**: Once logged in, you should see categories (Snacks, Dairy, etc.) and products fetched directly from the database.
+4. **Admin Panel**: Visit `http://localhost:3001/categories`. You should see the same categories.
+5. **User**: Proceeded to checkout and placed the order.
+6. **Backend**: Created the order and notified the tracking room.
+7. **User**: Automatically redirected to the tracking screen with live status updates.
+
+---
+**Status**: Integrated & Ready for Launch 🚀

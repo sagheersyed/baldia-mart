@@ -1,0 +1,74 @@
+# Implementation Plan: Full Stack Integration & Real-time Flow
+
+This plan outlines the steps to integrate the `backend-api`, `admin-panel`, and `mobile-user-app` into a fully functional "K-Mart" style hyperlocal application.
+
+## Proposed Changes
+
+### 1. Backend API (Real-time & Data Enrichment)
+
+#### [NEW] [orders.gateway.ts](file:///d:/mart/baldia-mart/backend-api/src/orders/orders.gateway.ts)
+- Create a Socket.io gateway to handle real-time order status updates.
+- Allow users to join a room specific to their order (e.g., `order_{id}`).
+
+#### [MODIFY] [orders.service.ts](file:///d:/mart/baldia-mart/backend-api/src/orders/orders.service.ts)
+- Inject the [OrdersGateway](file:///d:/mart/baldia-mart/backend-api/src/orders/orders.gateway.ts#10-43) to emit status changes when an order is updated (e.g., from `pending` to `confirmed`).
+
+#### [NEW] [seed.controller.ts](file:///d:/mart/baldia-mart/backend-api/src/admin/seed.controller.ts)
+- Create an endpoint to populate the database with realistic categories and products (e.g., Snacks, Beverages, Fresh Produce) using placeholder images.
+
+---
+
+### 2. Admin Panel (Management UI)
+
+#### [MODIFY] [categories/page.tsx](file:///d:/mart/baldia-mart/admin-panel/src/app/categories/page.tsx)
+- Implement a full CRUD UI for categories.
+- Add a modal/form to add a NEW category with name, description, and image URL.
+
+#### [MODIFY] [products/page.tsx](file:///d:/mart/baldia-mart/admin-panel/src/app/products/page.tsx)
+- Implement a full CRUD UI for products.
+- Link products to categories via a dropdown.
+
+---
+
+### 3. Mobile User App (Integration)
+
+#### [MODIFY] [HomeScreen.tsx](file:///d:/mart/baldia-mart/mobile-user-app/src/screens/HomeScreen.tsx)
+- Replace static `CATEGORIES` and `PRODUCTS` constants with API calls.
+- Fetch data from `GET /api/v1/categories` and `GET /api/v1/products`.
+
+#### [MODIFY] [CartScreen.tsx](file:///d:/mart/baldia-mart/mobile-user-app/src/screens/CartScreen.tsx)
+- Implement functional "Add to Cart" logic (local state management).
+- Calculate totals and navigate to Checkout.
+
+#### [MODIFY] [CheckoutScreen.tsx](file:///d:/mart/baldia-mart/mobile-user-app/src/screens/CheckoutScreen.tsx)
+- Connect "Place Order" button to `POST /api/v1/orders/checkout`.
+- Handle success by navigating to an order tracking view.
+
+#### [NEW] [OrderTrackingScreen.tsx](file:///d:/mart/baldia-mart/mobile-user-app/src/screens/OrderTrackingScreen.tsx)
+- Display current order status.
+- Listen for Socket.io events to update status in real-time.
+
+---
+
+---
+
+### 4. System Stability & Auth Integration (FIXES)
+
+#### [MODIFY] [backend-api/src/app.module.ts](file:///d:/mart/baldia-mart/backend-api/src/app.module.ts)
+- Set `synchronize: true` to ensure all tables (Users, Categories, Products, etc.) are created in the database.
+
+#### [MODIFY] [mobile-user-app/src/screens/LoginScreen.tsx](file:///d:/mart/baldia-mart/mobile-user-app/src/screens/LoginScreen.tsx)
+- Replaced hardcoded login with a real integration flow calling `POST /auth/login`.
+- Added loading indicators and error handling for authentication.
+
+#### [NEW] [mobile-user-app/src/config/firebaseConfig.ts](file:///d:/mart/baldia-mart/mobile-user-app/src/config/firebaseConfig.ts)
+- Created configuration placeholder for official Firebase project setup.
+
+---
+
+## Verification Plan
+
+### Manual Verification
+1. **Database Check**: Run `docker logs baldia_mart_api` to confirm successful connection with new credentials.
+2. **Auth Integration**: Open Mobile Login, enter phone, and verify it navigates to Home only after a successful Backend API response.
+3. **Inventory Sync**: Verify that categories created in the Admin panel (e.g., via Seeding) appear instantly in the Mobile [HomeScreen](file:///d:/mart/baldia-mart/mobile-user-app/src/screens/HomeScreen.tsx#7-111).

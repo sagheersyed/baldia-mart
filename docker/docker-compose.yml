@@ -1,0 +1,66 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: baldia_mart_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: baldia_mart
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ../database/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    networks:
+      - baldia_net
+
+  redis:
+    image: redis:7-alpine
+    container_name: baldia_mart_cache
+    ports:
+      - "6379:6379"
+    networks:
+      - baldia_net
+
+  backend-api:
+    build:
+      context: ../backend-api
+      dockerfile: ../docker/backend.Dockerfile
+    container_name: baldia_mart_api
+    ports:
+      - "3000:3000"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USERNAME=postgres
+      - DB_PASSWORD=postgres
+      - DB_DATABASE=baldia_mart
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - baldia_net
+
+  admin-panel:
+    build:
+      context: ../admin-panel
+      dockerfile: ../docker/admin.Dockerfile
+    container_name: baldia_mart_admin
+    ports:
+      - "3001:3000" # Maps Next.js to 3001
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:3000/api/v1
+    depends_on:
+      - backend-api
+    networks:
+      - baldia_net
+
+volumes:
+  pgdata:
+
+
+networks:
+  baldia_net:
+    driver: bridge
