@@ -17,8 +17,12 @@ export class AuthController {
   async login(@Req() req: Request) {
     const firebaseUser = req.user;
     if (!firebaseUser) throw new UnauthorizedException();
-    const user = await this.authService.validateFirebaseUser(firebaseUser);
-    return this.authService.login(user);
+    const { user, isNew } = await this.authService.validateFirebaseUser(firebaseUser);
+    const authResponse = this.authService.login(user);
+    return {
+      ...authResponse,
+      isNewUser: isNew
+    };
   }
 
   @Post('send-otp')

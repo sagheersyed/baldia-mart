@@ -1,12 +1,66 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, KeyboardAvoidingView, Platform, Alert, ActivityIndicator } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
+import * as Google from 'expo-auth-session/providers/google';
+import * as AuthSession from 'expo-auth-session';
 import { authApi, setAuthToken } from '../api/api';
 import { auth } from '../firebaseConfig';
-import { GoogleAuthProvider, signInWithCredential, signInWithPhoneNumber, RecaptchaVerifier } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen({ navigation }: any) {
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    androidClientId: '293399332795-tqfg57qr3qsu4l2a3gl97stssbic9k76.apps.googleusercontent.com',
+    iosClientId: '293399332795-tqfg57qr3qsu4l2a3gl97stssbic9k76.apps.googleusercontent.com',
+    webClientId: '293399332795-tqfg57qr3qsu4l2a3gl97stssbic9k76.apps.googleusercontent.com',
+    responseType: 'id_token',
+    scopes: ['openid', 'profile', 'email'],
+    redirectUri: AuthSession.makeRedirectUri({
+      scheme: 'baldia-mart-user',
+      path: 'google-auth', // Optional: added for clarity
+    }),
+  });
+
+  useEffect(() => {
+    if (response?.type === 'success') {
+      const { id_token } = response.params;
+      handleGoogleAuthSuccess(id_token);
+    }
+  }, [response]);
+
+  const handleGoogleAuthSuccess = async (idToken: string) => {
+    setLoading(true);
+    try {
+      // 1. Authenticate with Firebase using Google Token
+      const credential = GoogleAuthProvider.credential(idToken);
+      const userCredential = await signInWithCredential(auth, credential);
+      const firebaseToken = await userCredential.user.getIdToken();
+
+      // 2. Send Firebase Token to Backend
+      const res = await authApi.login(firebaseToken);
+      
+      if (res.data.access_token) {
+        setAuthToken(res.data.access_token);
+        // Check if user is new or has incomplete profile
+        const isNew = res.data.isNewUser || !res.data.user?.name || res.data.user?.name === 'Valued Customer';
+        
+        if (isNew) {
+           navigation.replace('CompleteProfile');
+        } else {
+           navigation.replace('Main');
+        }
+      }
+    } catch (error: any) {
+       console.error('Firebase/Backend Google login failed:', error);
+       Alert.alert('Login Failed', 'Unable to complete Google authentication. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleLogin = async () => {
     if (phone.length < 10) {
@@ -31,22 +85,7 @@ export default function LoginScreen({ navigation }: any) {
   };
 
   const handleGoogleLogin = async () => {
-    setLoading(true);
-    try {
-      // Exchange (Mock or Real) Google Auth Token for Backend JWT
-      const mockGoogleToken = "fake-google-token";
-      const res = await authApi.login(mockGoogleToken);
-      
-      if (res.data.access_token) {
-        setAuthToken(res.data.access_token);
-        navigation.replace('Main');
-      }
-    } catch (error) {
-       console.error('Google login failed:', error);
-       Alert.alert('Google Login Failed');
-    } finally {
-      setLoading(false);
-    }
+    promptAsync();
   };
 
   return (

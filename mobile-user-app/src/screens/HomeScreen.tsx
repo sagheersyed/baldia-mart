@@ -1,12 +1,57 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, memo } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, ActivityIndicator, RefreshControl } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { categoriesApi, productsApi, addressesApi } from '../api/api';
 import { useCart } from '../context/CartContext';
 
+// Memoized product card — only re-renders when its own props change,
+// preventing image flicker when cart state updates.
+const ProductCard = memo(({ prod, cartQty, onAdd }: { prod: any; cartQty: number; onAdd: (p: any) => void }) => {
+  const stock = prod.stock ?? prod.stockQuantity ?? 1;
+  const isOutOfStock = stock <= 0;
+  return (
+    <View style={styles.prodCard}>
+      <View style={styles.prodImageContainer}>
+        {prod.imageUrl ? (
+          <Image source={{ uri: prod.imageUrl }} style={styles.fullImage} fadeDuration={0} />
+        ) : (
+          <View style={styles.prodPlaceholder} />
+        )}
+        {cartQty > 0 && (
+          <View style={styles.cartBadge}>
+            <Text style={styles.cartBadgeText}>{cartQty}</Text>
+          </View>
+        )}
+        {isOutOfStock && (
+          <View style={styles.outOfStockOverlay}>
+            <Text style={styles.outOfStockText}>Out of Stock</Text>
+          </View>
+        )}
+      </View>
+      <Text style={styles.prodName} numberOfLines={1}>{prod.name}</Text>
+      <Text style={styles.prodCat}>{prod.category?.name}</Text>
+      <View style={styles.priceRow}>
+        <View>
+          <Text style={styles.price}>Rs. {(Number(prod.discountPrice || prod.price) || 0).toFixed(0)}</Text>
+          {Number(prod.discountPrice) > 0 && Number(prod.discountPrice) < Number(prod.price) && (
+            <Text style={styles.oldPrice}>Rs. {(Number(prod.price) || 0).toFixed(0)}</Text>
+          )}
+        </View>
+        <TouchableOpacity
+          style={[styles.addBtn, isOutOfStock && styles.addBtnDisabled]}
+          onPress={() => onAdd(prod)}
+          disabled={isOutOfStock}
+        >
+          <Text style={styles.addBtnText}>+</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+});
+
 export default function HomeScreen({ navigation }: any) {
-  const { addToCart, getCartCount } = useCart();
+  const { cart, addToCart, getCartCount } = useCart();
   const [categories, setCategories] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
@@ -65,6 +110,7 @@ export default function HomeScreen({ navigation }: any) {
   );
 
   const handleAddToCart = (product: any) => {
+    if ((product.stock ?? product.stockQuantity ?? 1) <= 0) return;
     addToCart(product);
   };
 
@@ -123,7 +169,7 @@ export default function HomeScreen({ navigation }: any) {
             >
               <View style={[styles.catImageContainer, selectedCategoryId === cat.id && styles.catActiveBorder]}>
                 {cat.imageUrl ? (
-                  <Image source={{ uri: cat.imageUrl }} style={styles.fullImage} />
+                  <Image source={{ uri: cat.imageUrl }} style={styles.fullImage} fadeDuration={0} />
                 ) : (
                   <View style={styles.catPlaceholder} />
                 )}
@@ -135,30 +181,18 @@ export default function HomeScreen({ navigation }: any) {
 
         <Text style={styles.sectionTitle}>Featured Products</Text>
         <View style={styles.productsGrid}>
-          {filteredProducts.map(prod => (
-            <View key={prod.id} style={styles.prodCard}>
-              <View style={styles.prodImageContainer}>
-                {prod.imageUrl ? (
-                  <Image source={{ uri: prod.imageUrl }} style={styles.fullImage} />
-                ) : (
-                  <View style={styles.prodPlaceholder} />
-                )}
-              </View>
-              <Text style={styles.prodName} numberOfLines={1}>{prod.name}</Text>
-              <Text style={styles.prodCat}>{prod.category?.name}</Text>
-              <View style={styles.priceRow}>
-                <View>
-                  <Text style={styles.price}>${(Number(prod.price) || 0).toFixed(2)}</Text>
-                  {Number(prod.discountPrice) < Number(prod.price) && Number(prod.discountPrice) > 0 && (
-                    <Text style={styles.oldPrice}>${(Number(prod.price) || 0).toFixed(2)}</Text>
-                  )}
-                </View>
-                <TouchableOpacity style={styles.addBtn} onPress={() => handleAddToCart(prod)}>
-                  <Text style={styles.addBtnText}>+</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ))}
+          {filteredProducts.map(prod => {
+            const cartItem = cart.find((c: any) => c.id === prod.id);
+            const cartQty = cartItem ? cartItem.quantity : 0;
+            return (
+              <ProductCard
+                key={prod.id}
+                prod={prod}
+                cartQty={cartQty}
+                onAdd={handleAddToCart}
+              />
+            );
+          })}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -195,8 +229,21 @@ const styles = StyleSheet.create({
   price: { fontSize: 16, fontWeight: '900', color: '#FF4500' },
   oldPrice: { fontSize: 10, color: '#bbb', textDecorationLine: 'line-through' },
   addBtn: { width: 32, height: 32, backgroundColor: '#FF4500', borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  addBtnDisabled: { backgroundColor: '#ccc' },
   addBtnText: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
   catCardActive: { opacity: 1 },
   catActiveBorder: { borderColor: '#FF4500', borderWidth: 2 },
+  cartBadge: {
+    position: 'absolute', top: 6, right: 6,
+    backgroundColor: '#FF4500', borderRadius: 12,
+    minWidth: 22, height: 22, justifyContent: 'center', alignItems: 'center',
+    paddingHorizontal: 4, elevation: 3,
+  },
+  cartBadgeText: { color: '#fff', fontSize: 11, fontWeight: '900' },
+  outOfStockOverlay: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    backgroundColor: 'rgba(0,0,0,0.55)', paddingVertical: 5, alignItems: 'center',
+  },
+  outOfStockText: { color: '#fff', fontSize: 10, fontWeight: '700' },
 });
 

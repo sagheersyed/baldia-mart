@@ -10,9 +10,10 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  async validateFirebaseUser(firebaseUser: any): Promise<User> {
+  async validateFirebaseUser(firebaseUser: any): Promise<{ user: User; isNew: boolean }> {
     const { uid, email, name, picture } = firebaseUser;
     let user = await this.usersService.findByFirebaseUid(uid);
+    let isNew = false;
     
     if (!user) {
       // Auto-register via Firebase data from OAuth
@@ -21,9 +22,10 @@ export class AuthService {
         email: email || `${uid}@placeholder.email`, // Fallback for phone-auth
         name: name || 'Valued Customer',
       });
+      isNew = true;
     }
 
-    return user;
+    return { user, isNew };
   }
 
   async findOrCreateByPhone(phoneNumber: string): Promise<{ user: User; isNew: boolean }> {

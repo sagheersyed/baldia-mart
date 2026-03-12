@@ -18,6 +18,7 @@ import MyOrdersScreen from './src/screens/MyOrdersScreen';
 import SavedAddressesScreen from './src/screens/SavedAddressesScreen';
 import EditProfileScreen from './src/screens/EditProfileScreen';
 import HelpScreen from './src/screens/HelpScreen';
+import NotificationsScreen from './src/screens/NotificationsScreen';
 import OtpScreen from './src/screens/OtpScreen';
 import CompleteProfileScreen from './src/screens/CompleteProfileScreen';
 
@@ -76,7 +77,7 @@ export default function App() {
             <Stack.Screen name="MyOrders" component={MyOrdersScreen} />
             <Stack.Screen name="SavedAddresses" component={SavedAddressesScreen} />
             <Stack.Screen name="EditProfile" component={EditProfileScreen} />
-            <Stack.Screen name="Notifications" component={HelpScreen} />
+            <Stack.Screen name="Notifications" component={NotificationsScreen} />
             <Stack.Screen name="Help" component={HelpScreen} />
           </Stack.Navigator>
         </NavigationContainer>

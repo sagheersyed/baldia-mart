@@ -19,13 +19,16 @@ function formatDate(dateStr: string) {
   return d.toLocaleDateString('en-PK', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-function OrderCard({ order, onTrack }: any) {
+function OrderCard({ order, onTrack, onCancel }: any) {
   const cfg = STATUS_CONFIG[order.status] || STATUS_CONFIG['pending'];
   const itemCount = order.items?.length || 0;
   const firstItem = order.items?.[0]?.product?.name || 'Order';
 
+  // Can cancel if NOT shipped (out_for_delivery), delivered, or already cancelled
+  const canCancel = order.status !== 'shipped' && order.status !== 'delivered' && order.status !== 'cancelled';
+
   return (
-    <View style={styles.orderCard}>
+    <View style={[styles.orderCard, order.status === 'cancelled' && styles.cancelledCard]}>
       <View style={styles.orderHeader}>
         <View>
           <Text style={styles.orderId}>#{order.id?.slice(-8).toUpperCase()}</Text>
@@ -54,8 +57,11 @@ function OrderCard({ order, onTrack }: any) {
         >
           <Text style={styles.trackBtnText}>Track Order</Text>
         </TouchableOpacity>
-        {order.status === 'pending' && (
-          <TouchableOpacity style={styles.cancelBtn}>
+        {canCancel && (
+          <TouchableOpacity 
+            style={styles.cancelBtn}
+            onPress={() => onCancel(order.id)}
+          >
             <Text style={styles.cancelBtnText}>Cancel</Text>
           </TouchableOpacity>
         )}
@@ -94,7 +100,34 @@ export default function MyOrdersScreen({ navigation }: any) {
     navigation.navigate('OrderTracking', { orderId });
   };
 
-  if (loading) {
+  const handleCancel = (orderId: string) => {
+    Alert.alert(
+      'Cancel Order',
+      'Are you sure you want to cancel this order?',
+      [
+        { text: 'No', style: 'cancel' },
+        { 
+          text: 'Yes, Cancel', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              await ordersApi.cancelOrder(orderId);
+              Alert.alert('Success', 'Order cancelled successfully');
+              fetchOrders();
+            } catch (error: any) {
+              console.error('Failed to cancel order:', error);
+              const msg = error.response?.data?.message || 'Failed to cancel order. Please try again.';
+              Alert.alert('Error', msg);
+              setLoading(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  if (loading && !refreshing) {
     return (
       <View style={styles.loader}>
         <ActivityIndicator size="large" color="#FF4500" />
@@ -127,7 +160,13 @@ export default function MyOrdersScreen({ navigation }: any) {
           contentContainerStyle={{ padding: 16 }}
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FF4500" />}
-          renderItem={({ item }) => <OrderCard order={item} onTrack={handleTrack} />}
+          renderItem={({ item }) => (
+            <OrderCard 
+              order={item} 
+              onTrack={handleTrack} 
+              onCancel={handleCancel} 
+            />
+          )}
           ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
         />
       )}
@@ -150,6 +189,11 @@ const styles = StyleSheet.create({
   orderCard: {
     backgroundColor: '#fff', borderRadius: 16, padding: 16,
     elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4,
+  },
+  cancelledCard: {
+    backgroundColor: '#FFF8F8',
+    borderWidth: 1.5,
+    borderColor: '#FED7D7',
   },
   orderHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   orderId: { fontSize: 15, fontWeight: '700', color: '#1A1A1A' },

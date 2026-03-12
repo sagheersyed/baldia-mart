@@ -102,6 +102,15 @@ export class OrdersService {
     });
   }
 
+  async getOrderById(id: string, userId: string): Promise<Order> {
+    const order = await this.ordersRepository.findOne({
+      where: { id, userId },
+      relations: ['items', 'items.product', 'address'],
+    });
+    if (!order) throw new NotFoundException('Order not found');
+    return order;
+  }
+
   async updateStatus(id: string, status: string): Promise<Order> {
     const order = await this.ordersRepository.findOne({ where: { id } });
     if (!order) throw new NotFoundException('Order not found');
@@ -112,6 +121,46 @@ export class OrdersService {
     // Emit real-time update
     this.ordersGateway.emitOrderStatusUpdate(id, status);
     
+    return updatedOrder;
+  }
+
+  async cancelOrder(id: string, userId: string): Promise<Order> {
+    const order = await this.ordersRepository.findOne({ where: { id, userId } });
+    if (!order) throw new NotFoundException('Order not found or access denied');
+
+    if (order.status === 'out_for_delivery' || order.status === 'delivered') {
+      throw new BadRequestException('Order cannot be cancelled. It is already out for delivery or delivered.');
+    }
+
+    if (order.status === 'cancelled') {
+      throw new BadRequestException('Order is already cancelled.');
+    }
+
+    order.status = 'cancelled';
+    const updatedOrder = await this.ordersRepository.save(order);
+
+    // Emit real-time update
+    this.ordersGateway.emitOrderStatusUpdate(id, 'cancelled');
+
+    return updatedOrder;
+  }
+
+  async reorderOrder(id: string, userId: string): Promise<Order> {
+    const order = await this.ordersRepository.findOne({
+      where: { id, userId },
+    });
+    if (!order) throw new NotFoundException('Order not found or access denied');
+    if (order.status !== 'cancelled') {
+      throw new BadRequestException('Only cancelled orders can be reordered.');
+    }
+
+    // Restore the same order back to pending
+    order.status = 'pending';
+    const updatedOrder = await this.ordersRepository.save(order);
+
+    // Emit real-time update so tracking screen reflects instantly
+    this.ordersGateway.emitOrderStatusUpdate(id, 'pending');
+
     return updatedOrder;
   }
 }

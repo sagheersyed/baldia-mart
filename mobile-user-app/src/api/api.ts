@@ -50,6 +50,9 @@ export const productsApi = {
 export const ordersApi = {
   checkout: (data: any) => api.post('/orders/checkout', data),
   getHistory: () => api.get('/orders/history'),
+  getById: (orderId: string) => api.get(`/orders/${orderId}`),
   updateStatus: (orderId: string, status: string) =>
     api.put(`/orders/${orderId}/status`, { status }),
+  cancelOrder: (orderId: string) => api.post(`/orders/${orderId}/cancel`),
+  reorderOrder: (orderId: string) => api.post(`/orders/${orderId}/reorder`),
 };
