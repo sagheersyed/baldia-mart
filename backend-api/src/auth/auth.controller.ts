@@ -2,23 +2,41 @@ import { Controller, Post, Get, Body, UnauthorizedException, Req, UseGuards } fr
 import { AuthService } from './auth.service';
 import { AuthGuard } from '@nestjs/passport';
 import { Request } from 'express';
+import { OtpService } from '../otp/otp.service';
+import { Throttle } from '@nestjs/throttler';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly otpService: OtpService,
+  ) {}
 
   @Post('login')
   @UseGuards(AuthGuard('firebase-auth'))
   async login(@Req() req: Request) {
-    // The firebase strategy will attach the decoded token to req.user
     const firebaseUser = req.user;
     if (!firebaseUser) throw new UnauthorizedException();
-    
-    // Validate or create user in DB
     const user = await this.authService.validateFirebaseUser(firebaseUser);
-    
-  // Return JWT customized for our own backend security
     return this.authService.login(user);
+  }
+
+  @Post('send-otp')
+  @Throttle({ default: { limit: 30, ttl: 3600000 } })
+  async sendOtp(@Body('phoneNumber') phoneNumber: string) {
+    return this.otpService.sendOtp(phoneNumber);
+  }
+
+  @Post('verify-otp')
+  async verifyOtp(
+    @Body('phoneNumber') phoneNumber: string,
+    @Body('otpCode') otpCode: string,
+  ) {
+    const isValid = await this.otpService.verifyOtp(phoneNumber, otpCode);
+    if (!isValid) throw new UnauthorizedException('Invalid or expired OTP');
+
+    const user = await this.authService.findOrCreateByPhone(phoneNumber);
+    return this.authService.loginWithPhone(user);
   }
 
   @Get('me')

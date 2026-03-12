@@ -1,0 +1,22 @@
+# OTP Authentication Task
+
+## Backend
+- [x] Create [otp.entity.ts](file:///d:/mart/baldia-mart/backend-api/src/otp/otp.entity.ts)
+- [x] Create [otp.service.ts](file:///d:/mart/baldia-mart/backend-api/src/otp/otp.service.ts) (generate, hash, verify, rate limit)
+- [x] Create [otp.module.ts](file:///d:/mart/baldia-mart/backend-api/src/otp/otp.module.ts)
+- [x] Update [user.entity.ts](file:///d:/mart/baldia-mart/backend-api/src/users/user.entity.ts) (nullable firebaseUid, isPhoneVerified)
+- [x] Update [auth.service.ts](file:///d:/mart/baldia-mart/backend-api/src/auth/auth.service.ts) (findOrCreateByPhone, loginWithPhone)
+- [x] Update [auth.controller.ts](file:///d:/mart/baldia-mart/backend-api/src/auth/auth.controller.ts) (POST /send-otp, POST /verify-otp)
+- [x] Update [auth.module.ts](file:///d:/mart/baldia-mart/backend-api/src/auth/auth.module.ts) (import OtpModule)
+- [x] Rebuild backend Docker image
+
+## Frontend
+- [x] Update [api.ts](file:///d:/mart/baldia-mart/mobile-user-app/src/api/api.ts) (sendOtp, verifyOtp)
+- [x] Create [OtpScreen.tsx](file:///d:/mart/baldia-mart/mobile-user-app/src/screens/OtpScreen.tsx) (phone entry + 6-digit OTP with auto-advance + resend timer)
+- [x] Update [LoginScreen.tsx](file:///d:/mart/baldia-mart/mobile-user-app/src/screens/LoginScreen.tsx) (phone button → navigate to OtpScreen)
+- [x] Update [App.tsx](file:///d:/mart/baldia-mart/mobile-user-app/App.tsx) (register OtpScreen)
+
+## Verification
+- [x] Test POST /auth/send-otp via curl
+- [x] Test POST /auth/verify-otp via curl
+- [x] Test full flow in Expo Go

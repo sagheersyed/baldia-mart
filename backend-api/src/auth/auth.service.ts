@@ -26,6 +26,26 @@ export class AuthService {
     return user;
   }
 
+  async findOrCreateByPhone(phoneNumber: string): Promise<User> {
+    let user = await this.usersService.findByPhone(phoneNumber);
+    if (!user) {
+      user = await this.usersService.create({
+        phoneNumber,
+        name: 'New Customer',
+        isPhoneVerified: false,
+      });
+    }
+    return user;
+  }
+
+  async loginWithPhone(user: User) {
+    // Mark as verified on successful login via OTP
+    if (!user.isPhoneVerified) {
+      await this.usersService.update(user.id, { isPhoneVerified: true });
+    }
+    return this.login(user);
+  }
+
   login(user: User) {
     const payload = { sub: user.id, email: user.email, role: user.role };
     return {

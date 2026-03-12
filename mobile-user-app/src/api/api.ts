@@ -21,6 +21,9 @@ export const authApi = {
   login: (firebaseToken: string) =>
     api.post('/auth/login', {}, { headers: { Authorization: `Bearer ${firebaseToken}` } }),
   getMe: () => api.get('/auth/me'),
+  sendOtp: (phoneNumber: string) => api.post('/auth/send-otp', { phoneNumber }),
+  verifyOtp: (phoneNumber: string, otpCode: string) =>
+    api.post('/auth/verify-otp', { phoneNumber, otpCode }),
 };
 
 export const usersApi = {

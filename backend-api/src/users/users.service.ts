@@ -14,6 +14,10 @@ export class UsersService {
     return this.usersRepository.findOne({ where: { firebaseUid } });
   }
 
+  async findByPhone(phoneNumber: string): Promise<User | null> {
+    return this.usersRepository.findOne({ where: { phoneNumber } });
+  }
+
   async findById(id: string): Promise<User> {
     const user = await this.usersRepository.findOne({ where: { id } });
     if (!user) throw new NotFoundException('User not found');

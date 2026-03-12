@@ -10,28 +10,21 @@ export default function LoginScreen({ navigation }: any) {
 
   const handleLogin = async () => {
     if (phone.length < 10) {
-      Alert.alert('Error', 'Please enter a valid phone number');
+      Alert.alert('Error', 'Please enter a valid phone number (e.g., +923001234567)');
       return;
     }
 
     setLoading(true);
     try {
-      // For persistent dev testing, we still support mock tokens if the backend allows it
-      // or if we haven't implemented the ReCaptcha UI yet.
-      // To use REAL phone auth, you need a RecaptchaVerifier which requires a DOM element.
+      // Step 1: Request OTP from backend
+      await authApi.sendOtp(phone);
       
-      const mockFirebaseToken = `fake-token-for-${phone}`;
-      
-      // Exchange token for Backend JWT
-      const res = await authApi.login(mockFirebaseToken);
-      
-      if (res.data.access_token) {
-        setAuthToken(res.data.access_token);
-        navigation.replace('Main');
-      }
-    } catch (error) {
-      console.error('Login failed:', error);
-      Alert.alert('Login Failed', 'Unable to authenticate. Please try again.');
+      // Step 2: Navigate to OTP verification screen
+      navigation.navigate('Otp', { phoneNumber: phone });
+    } catch (error: any) {
+      console.error('Login request failed:', error);
+      const msg = error.response?.data?.message || 'Unable to send OTP. Please try again.';
+      Alert.alert('Error', msg);
     } finally {
       setLoading(false);
     }

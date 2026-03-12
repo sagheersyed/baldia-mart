@@ -1,0 +1,40 @@
+# Multi-Issue Resolution Walkthrough
+
+I have addressed the critical issues reported across the application, focusing on the checkout process, profile loading, and data synchronization.
+
+## 1. Checkout 400 Error Fix
+The backend [OrdersService](file:///d:/mart/baldia-mart/backend-api/src/orders/orders.service.ts#11-118) was failing because it expected cart data to exist in the database, while the mobile app only maintained cart state locally. 
+- **Change**: Updated [OrdersController](file:///d:/mart/baldia-mart/backend-api/src/orders/orders.controller.ts#6-34) and [OrdersService](file:///d:/mart/baldia-mart/backend-api/src/orders/orders.service.ts#11-118) to accept an optional `items` array in the checkout payload.
+- **Verification**: The mobile [CheckoutScreen](file:///d:/mart/baldia-mart/mobile-user-app/src/screens/CheckoutScreen.tsx#7-162) now sends the current cart items directly to the backend. Pricing integrity is maintained by fetching the real prices from the DB during order creation.
+
+## 2. Real Profile & Address Display
+Resolved the issue where the profile section appeared "dummy" or failed to load.
+- **Change**: Updated [ProfileScreen](file:///d:/mart/baldia-mart/mobile-user-app/src/screens/ProfileScreen.tsx#48-197) and [HomeScreen](file:///d:/mart/baldia-mart/mobile-user-app/src/screens/HomeScreen.tsx#7-147) to fetch the user's real default address from the database.
+- **UI Update**: Added a **Sync** button in the profile header to force refresh the user state.
+
+## 3. Categories & Products Fetching Fix
+Resolved the issue where categories and products were returning empty lists `[]`.
+- **Root Cause**: The database was empty after the recent backend rebuild.
+- **Fix**: Re-seeded the database using the `POST /admin/seed` endpoint. Verified data presence via direct API calls.
+- **UX Improvement**: Added a **Pull-to-Refresh** (RefreshControl) to the [HomeScreen](file:///d:/mart/baldia-mart/mobile-user-app/src/screens/HomeScreen.tsx#7-147). Users can now pull down to refresh categories, products, and location data instantly.
+
+## 4. Rate Limit Fix
+Adjusted the global throttler settings to accommodate modern app usage patterns.
+- **Change**: Increased rate limit from **10** to **300** requests per minute in [app.module.ts](file:///d:/mart/baldia-mart/backend-api/src/app.module.ts).
+- **Reasoning**: The Professional Profile section makes several parallel requests (Profile, Addresses, Order History) which would trigger a 429 error within seconds on the old 10-req limit.
+
+## 5. Mobile OTP Authentication
+Implemented a full-stack, secure mobile number sign-in flow.
+- **Backend**: Created a dedicated [OtpModule](file:///d:/mart/baldia-mart/backend-api/src/otp/otp.module.ts#6-12) with bcrypt hashing and rate limiting. Users are automatically registered if they sign in with a new number.
+- **Frontend**: Built a professional [OtpScreen](file:///d:/mart/baldia-mart/mobile-user-app/src/screens/OtpScreen.tsx#9-142) with:
+  - 6-digit auto-advance inputs
+  - Backspace navigation
+  - 60-second resend timer
+  - Error handling for invalid/expired codes
+
+## How to Test
+1. **Login**: Open the app and tap "Continue with Phone".
+2. **OTP Send**: Enter any phone number (e.g., +923412248616).
+3. **Backend Log**: Watch the `baldia_mart_api` Docker logs to see the generated code: `[DEV] OTP for ... → 123456`.
+4. **OTP Verify**: Enter the 6 digits in the app. You should be logged in instantly.
+5. **Resend**: Wait 60 seconds to test the "Resend OTP" button.

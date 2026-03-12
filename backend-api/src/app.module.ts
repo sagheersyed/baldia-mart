@@ -15,6 +15,7 @@ import { PaymentsModule } from './payments/payments.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { RidersModule } from './riders/riders.module';
 import { AdminModule } from './admin/admin.module';
+import { OtpModule } from './otp/otp.module';
 
 // Entities
 import { User } from './users/user.entity';
@@ -28,6 +29,7 @@ import { OrderItem } from './orders/order-item.entity';
 import { Payment } from './payments/payment.entity';
 import { Notification } from './notifications/notification.entity';
 import { Rider } from './riders/rider.entity';
+import { Otp } from './otp/otp.entity';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 
@@ -53,7 +55,7 @@ import { APP_GUARD } from '@nestjs/core';
       database: process.env.DB_DATABASE || 'baldia_mart',
       entities: [
         User, Address, DeliveryZone, Category, Product, 
-        CartItem, Order, OrderItem, Payment, Notification, Rider
+        CartItem, Order, OrderItem, Payment, Notification, Rider, Otp
       ],
       synchronize: process.env.NODE_ENV !== 'production',
     }),
@@ -69,6 +71,7 @@ import { APP_GUARD } from '@nestjs/core';
     NotificationsModule,
     RidersModule,
     AdminModule,
+    OtpModule,
   ],
   controllers: [AppController],
   providers: [
