@@ -1,0 +1,23 @@
+# Phase 1: Environment Stabilization
+- [x] Align `mobile-user-app` Expo dependencies to SDK 54 (`npx expo install --fix`).
+- [ ] Verify both mobile apps start cleanly in Expo Go.
+
+# Phase 2: Mobile Production Readiness (EAS Setup)
+- [ ] Initialize EAS configs (`eas.json`) in `mobile-user-app` and `mobile-rider-app`.
+- [ ] Configure production app icons, splash screens, and package identifiers in [app.json](file:///d:/mart/baldia-mart/mobile-user-app/app.json).
+- [ ] Setup remote dynamic environment variables handling.
+
+# Phase 3: Backend Security & Optimization
+- [ ] Disable `synchronize: true` in TypeORM and configure migration scripts.
+- [ ] Install helmet and throttler for API security and rate limiting.
+- [ ] Implement integrated production logger.
+- [ ] Review and optimize NestJS multi-stage Dockerfile.
+
+# Phase 4: Admin Dashboard Production Prep
+- [ ] Configure `output: 'standalone'` in Next.js config.
+- [ ] Review `admin-panel` Dockerfile for lean production build.
+
+# Phase 5: Final Build and Verification
+- [ ] Run test local EAS builds for Android.
+- [ ] Perform end-to-end checkout flow using production-like Docker setup.
+- [ ] Publish documentation for CI/CD automated deployments.

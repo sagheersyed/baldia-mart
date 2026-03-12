@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // For Android Emulator, use 10.0.2.2. For iOS/Local, use localhost.
 // Replace with your local machine's IP (e.g., 192.168.1.10) for physical devices.
-const BASE_URL = 'http://10.0.2.2:3000/api/v1';
+const BASE_URL = 'http://192.168.100.142:3000/api/v1';
 
 export const api = axios.create({
   baseURL: BASE_URL,
@@ -21,6 +21,12 @@ export const authApi = {
   login: (firebaseToken: string) => api.post('/auth/login', {}, {
     headers: { Authorization: `Bearer ${firebaseToken}` }
   }),
+  getMe: () => api.get('/auth/me'),
+};
+
+export const addressesApi = {
+  getAll: () => api.get('/addresses'),
+  create: (data: any) => api.post('/addresses', data),
 };
 
 export const categoriesApi = {

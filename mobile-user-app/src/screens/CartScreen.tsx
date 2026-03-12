@@ -30,7 +30,7 @@ export default function CartScreen({ navigation }: any) {
                 </View>
                 <View style={styles.itemDetails}>
                   <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
-                  <Text style={styles.itemPrice}>${item.price.toFixed(2)}</Text>
+                  <Text style={styles.itemPrice}>${(Number(item.price) || 0).toFixed(2)}</Text>
                 </View>
                 <View style={styles.qtyBox}>
                   <TouchableOpacity onPress={() => updateQuantity(item.id, item.quantity - 1)}>
@@ -47,15 +47,15 @@ export default function CartScreen({ navigation }: any) {
             <View style={styles.summaryBox}>
                <View style={styles.row}>
                  <Text style={styles.summaryLabel}>Subtotal</Text>
-                 <Text style={styles.summaryVal}>${subtotal.toFixed(2)}</Text>
+                 <Text style={styles.summaryVal}>${(Number(subtotal) || 0).toFixed(2)}</Text>
                </View>
                <View style={styles.row}>
                  <Text style={styles.summaryLabel}>Delivery Fee</Text>
-                 <Text style={styles.summaryVal}>${deliveryFee.toFixed(2)}</Text>
+                 <Text style={styles.summaryVal}>${(Number(deliveryFee) || 0).toFixed(2)}</Text>
                </View>
                <View style={[styles.row, styles.totalRow]}>
                  <Text style={styles.totalLabel}>Total</Text>
-                 <Text style={styles.totalVal}>${total.toFixed(2)}</Text>
+                 <Text style={styles.totalVal}>${(Number(total) || 0).toFixed(2)}</Text>
                </View>
             </View>
           </ScrollView>
@@ -65,7 +65,7 @@ export default function CartScreen({ navigation }: any) {
               style={styles.checkoutBtn}
               onPress={() => navigation.navigate('Checkout')}
             >
-              <Text style={styles.checkoutText}>Proceed to Checkout (${total.toFixed(2)})</Text>
+              <Text style={styles.checkoutText}>Proceed to Checkout (${(Number(total) || 0).toFixed(2)})</Text>
             </TouchableOpacity>
           </View>
         </>

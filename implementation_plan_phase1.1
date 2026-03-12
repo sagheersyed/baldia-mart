@@ -1,0 +1,39 @@
+# Goal Description
+The core hyperlocal delivery system has been developed. The goal now is to elevate the platform (User App, Rider App, Admin Panel, and Backend API) to a production-ready state. This includes correcting the current Expo SDK mismatch on the mobile user app, setting up native build configurations (EAS), solidifying backend security/performance for deployment, and preparing the necessary infrastructure tools.
+
+## Proposed Changes
+### 1. Mobile Apps (User & Rider)
+- **Downgrade Expo SDK:** Align `mobile-user-app` to Expo SDK 54 to match the rider app and the user's available Expo Go client, ensuring immediate non-blocking development.
+- **Production Build Config (EAS):** 
+  - Install `eas-cli` and initialize EAS for both React Native projects.
+  - Create [eas.json](file:///d:/mart/baldia-mart/mobile-user-app/eas.json) for managing deployment environments (development, preview, production).
+  - Configure App Icons, Splash Screens, and Bundle Identifiers (`com.baldia.mart.user`, `com.baldia.mart.rider`) in [app.json](file:///d:/mart/baldia-mart/mobile-user-app/app.json).
+- **Live Firebase Integration:** 
+  - Apply the `roshaab-app` config to both User and Rider apps.
+  - Switch from Mock tokens to actual Firebase Auth tokens.
+- **Environment Variables:** Set up [.env](file:///d:/mart/baldia-mart/backend-api/.env) for API URLs and the new Firebase Project ID.
+
+### 2. Backend API (NestJS)
+- **Security Enhancements:** Implement `helmet` for HTTP header security and `@nestjs/throttler` for API rate limiting.
+- **Logging & Monitoring:** Configure `nestjs-pino` for high-performance JSON logging of all API requests.
+- **Database Seeding:** Create a comprehensive production-ready [seed.sql](file:///d:/mart/baldia-mart/database/seed.sql) with real Balochistan/Karachi region products and categories.
+- **Production Dockerization:** Finalize lightweight images and ensure persistent volume health.
+
+### 3. Admin Dashboard (Next.js)
+- **Production Optimization:** Ensure Next.js is building in standalone mode for optimized Docker deployments.
+- **Environment config:** Properly validate required environment variables during build time.
+
+### 4. Comprehensive Logging
+- **Backend Request Logging:** Implement a global interceptor using `nestjs-pino` or `winston` for high-performance logging of all HTTP traffic.
+- **Frontend Interaction Logging:** Create a logging service in the mobile app to capture user flow and critical errors.
+- **Audit Trails:** Add an `AuditLog` entity to the database to persist sensitive business events (e.g., status changes, payment attempts).
+
+## Verification Plan
+### Automated Tests
+- Run `npm run build` on all frontend and backend applications to guarantee zero compilation errors.
+- Run any existing backend unit tests or endpoint e2e tests (`npm run test:e2e`).
+- Verify Docker containers build successfully via `docker-compose build`.
+
+### Manual Verification
+- **EAS Build Check:** Run a local EAS build or generate an Android APK/AAB to verify native compilation succeeds without Expo Go.
+- **Backend Security:** Use cURL or Postman to test rate limits and check response headers for Helmet security enhancements.
