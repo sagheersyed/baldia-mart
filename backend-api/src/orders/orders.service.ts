@@ -19,14 +19,35 @@ export class OrdersService {
     private ordersGateway: OrdersGateway,
   ) {}
 
-  async placeOrder(userId: string, addressId: string, paymentMethod: string, notes?: string): Promise<Order> {
-    // 1. Get cart items
-    const cartItems = await this.cartService.getCartByUserId(userId);
+  async placeOrder(userId: string, addressId: string, paymentMethod: string, notes?: string, items?: any[]): Promise<Order> {
+    console.log('--- PlaceOrder Debug ---');
+    console.log('UserId:', userId);
+    console.log('AddressId:', addressId);
+    console.log('Items:', JSON.stringify(items));
+
+    // 1. Get cart items (from DB or payload)
+    let cartItems: any[] = [];
+    if (items && items.length > 0) {
+      // If items provided in body, we need to fetch corresponding products to get real prices
+      for (const item of items) {
+        const product = await this.orderItemsRepository.manager.getRepository('Product').findOne({ where: { id: item.productId } }) as any;
+        if (product) {
+          cartItems.push({
+            productId: item.productId,
+            quantity: item.quantity,
+            product: product
+          });
+        }
+      }
+    } else {
+      cartItems = await this.cartService.getCartByUserId(userId);
+    }
+
     if (cartItems.length === 0) throw new BadRequestException('Cart is empty');
 
     // 2. Validate Address & Delivery Zone
     const address = await this.addressesService.findOne(addressId);
-    if (address.userId !== userId) throw new BadRequestException('Invalid address');
+    if (!address || address.userId !== userId) throw new BadRequestException('Invalid address');
 
     const validation = await this.deliveryZonesService.validateAddressInZone(address.latitude, address.longitude);
     if (!validation.isValid) {
@@ -65,8 +86,10 @@ export class OrdersService {
     }));
     await this.orderItemsRepository.save(orderItemsToSave);
 
-    // 6. Clear Cart
-    await this.cartService.clearCart(userId);
+    // 6. Clear Cart if it was stored in DB
+    if (!items) {
+      await this.cartService.clearCart(userId);
+    }
 
     return savedOrder;
   }

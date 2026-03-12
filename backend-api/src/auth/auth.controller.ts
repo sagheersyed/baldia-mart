@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UnauthorizedException, Req, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Body, UnauthorizedException, Req, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AuthGuard } from '@nestjs/passport';
 import { Request } from 'express';
@@ -17,7 +17,13 @@ export class AuthController {
     // Validate or create user in DB
     const user = await this.authService.validateFirebaseUser(firebaseUser);
     
-    // Return JWT customized for our own backend security
+  // Return JWT customized for our own backend security
     return this.authService.login(user);
+  }
+
+  @Get('me')
+  @UseGuards(AuthGuard('jwt'))
+  async getMe(@Req() req: Request) {
+    return req.user;
   }
 }

@@ -37,6 +37,7 @@ services:
       - DB_DATABASE=baldia_mart
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - NODE_ENV=production
     depends_on:
       - postgres
       - redis

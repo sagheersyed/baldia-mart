@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { categoriesApi, productsApi } from '../api/api';
+import { categoriesApi, productsApi, addressesApi } from '../api/api';
 import { useCart } from '../context/CartContext';
 
 export default function HomeScreen({ navigation }: any) {
   const { addToCart, getCartCount } = useCart();
   const [categories, setCategories] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [address, setAddress] = useState<any>(null);
 
   useEffect(() => {
     loadData();
@@ -17,12 +19,16 @@ export default function HomeScreen({ navigation }: any) {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [catRes, prodRes] = await Promise.all([
+      const [catRes, prodRes, addrRes] = await Promise.all([
         categoriesApi.getAll(),
-        productsApi.getAll()
+        productsApi.getAll(),
+        addressesApi.getAll()
       ]);
-      setCategories(catRes.data);
-      setProducts(prodRes.data);
+      setCategories(catRes.data || []);
+      setProducts(prodRes.data || []);
+      if (addrRes.data && addrRes.data.length > 0) {
+        setAddress(addrRes.data.find((a: any) => a.isDefault) || addrRes.data[0]);
+      }
     } catch (error) {
       console.error('Failed to load home data:', error);
     } finally {
@@ -33,6 +39,10 @@ export default function HomeScreen({ navigation }: any) {
   const handleAddToCart = (product: any) => {
     addToCart(product);
   };
+
+  const filteredProducts = selectedCategoryId 
+    ? products.filter(p => p.categoryId === selectedCategoryId)
+    : products;
 
   if (loading) {
     return (
@@ -46,10 +56,10 @@ export default function HomeScreen({ navigation }: any) {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <View>
+        <TouchableOpacity style={styles.locationBox} onPress={loadData}>
           <Text style={styles.deliveryText}>Delivering to</Text>
-          <Text style={styles.locationText}>Baldia Town, Karachi</Text>
-        </View>
+          <Text style={styles.locationText}>{address ? `${address.label}: ${address.streetAddress.substring(0,20)}...` : 'Select Location'}</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={styles.cartBtn} onPress={() => navigation.navigate('Cart')}>
           <Text style={styles.cartCount}>{getCartCount()}</Text>
         </TouchableOpacity>
@@ -63,9 +73,22 @@ export default function HomeScreen({ navigation }: any) {
 
         <Text style={styles.sectionTitle}>Categories</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categories}>
+          <TouchableOpacity 
+            style={[styles.catCard, !selectedCategoryId && styles.catCardActive]}
+            onPress={() => setSelectedCategoryId(null)}
+          >
+            <View style={[styles.catImageContainer, !selectedCategoryId && styles.catActiveBorder]}>
+              <Text style={{ fontSize: 24 }}>🏠</Text>
+            </View>
+            <Text style={styles.catText}>All</Text>
+          </TouchableOpacity>
           {categories.map(cat => (
-            <TouchableOpacity key={cat.id} style={styles.catCard}>
-              <View style={styles.catImageContainer}>
+            <TouchableOpacity 
+              key={cat.id} 
+              style={[styles.catCard, selectedCategoryId === cat.id && styles.catCardActive]}
+              onPress={() => setSelectedCategoryId(cat.id)}
+            >
+              <View style={[styles.catImageContainer, selectedCategoryId === cat.id && styles.catActiveBorder]}>
                 {cat.imageUrl ? (
                   <Image source={{ uri: cat.imageUrl }} style={styles.fullImage} />
                 ) : (
@@ -79,7 +102,7 @@ export default function HomeScreen({ navigation }: any) {
 
         <Text style={styles.sectionTitle}>Featured Products</Text>
         <View style={styles.productsGrid}>
-          {products.map(prod => (
+          {filteredProducts.map(prod => (
             <View key={prod.id} style={styles.prodCard}>
               <View style={styles.prodImageContainer}>
                 {prod.imageUrl ? (
@@ -92,9 +115,9 @@ export default function HomeScreen({ navigation }: any) {
               <Text style={styles.prodCat}>{prod.category?.name}</Text>
               <View style={styles.priceRow}>
                 <View>
-                  <Text style={styles.price}>${Number(prod.price).toFixed(2)}</Text>
-                  {prod.discountPrice < prod.price && prod.discountPrice > 0 && (
-                    <Text style={styles.oldPrice}>${Number(prod.price).toFixed(2)}</Text>
+                  <Text style={styles.price}>${(Number(prod.price) || 0).toFixed(2)}</Text>
+                  {Number(prod.discountPrice) < Number(prod.price) && Number(prod.discountPrice) > 0 && (
+                    <Text style={styles.oldPrice}>${(Number(prod.price) || 0).toFixed(2)}</Text>
                   )}
                 </View>
                 <TouchableOpacity style={styles.addBtn} onPress={() => handleAddToCart(prod)}>
@@ -114,9 +137,10 @@ const styles = StyleSheet.create({
   loaderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' },
   loaderText: { marginTop: 10, color: '#666', fontWeight: 'bold' },
   header: { padding: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
+  locationBox: { flex: 1 },
   deliveryText: { fontSize: 12, color: '#666' },
-  locationText: { fontSize: 16, fontWeight: 'bold', color: '#FF4500' },
-  cartBtn: { width: 40, height: 40, backgroundColor: '#FFF5F0', borderRadius: 20, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#FFE4D1' },
+  locationText: { fontSize: 15, fontWeight: 'bold', color: '#FF4500' },
+  cartBtn: { width: 44, height: 44, backgroundColor: '#FFF5F0', borderRadius: 22, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#FFE4D1' },
   cartCount: { fontWeight: 'bold', color: '#FF4500' },
   banner: { margin: 20, padding: 20, backgroundColor: '#FF4500', borderRadius: 20, elevation: 5, shadowColor: '#FF4500', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 10 },
   bannerSmall: { color: '#FFE4D1', fontWeight: 'bold', fontSize: 12, marginBottom: 5 },
@@ -138,6 +162,8 @@ const styles = StyleSheet.create({
   price: { fontSize: 16, fontWeight: '900', color: '#FF4500' },
   oldPrice: { fontSize: 10, color: '#bbb', textDecorationLine: 'line-through' },
   addBtn: { width: 32, height: 32, backgroundColor: '#FF4500', borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  addBtnText: { color: '#fff', fontSize: 20, fontWeight: 'bold' }
+  addBtnText: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
+  catCardActive: { opacity: 1 },
+  catActiveBorder: { borderColor: '#FF4500', borderWidth: 2 },
 });
 

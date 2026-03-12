@@ -15,7 +15,8 @@ export class OrdersController {
       user.id,
       body.addressId,
       body.paymentMethod,
-      body.notes
+      body.notes,
+      body.items
     );
   }
 

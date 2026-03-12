@@ -1,13 +1,34 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCart } from '../context/CartContext';
-import { ordersApi } from '../api/api';
+import { ordersApi, addressesApi } from '../api/api';
 
 export default function CheckoutScreen({ navigation }: any) {
   const { cart, getCartTotal, clearCart } = useCart();
   const [selectedPayment, setSelectedPayment] = useState('cod');
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+  const [addresses, setAddresses] = useState<any[]>([]);
+  const [selectedAddress, setSelectedAddress] = useState<any>(null);
+  const [isLoadingAddresses, setIsLoadingAddresses] = useState(true);
+
+  useEffect(() => {
+    fetchAddresses();
+  }, []);
+
+  const fetchAddresses = async () => {
+    try {
+      const res = await addressesApi.getAll();
+      setAddresses(res.data);
+      if (res.data.length > 0) {
+        setSelectedAddress(res.data.find((a: any) => a.isDefault) || res.data[0]);
+      }
+    } catch (error) {
+      console.error('Failed to fetch addresses:', error);
+    } finally {
+      setIsLoadingAddresses(false);
+    }
+  };
   
   const subtotal = getCartTotal();
   const deliveryFee = 2.00;
@@ -19,17 +40,21 @@ export default function CheckoutScreen({ navigation }: any) {
       return;
     }
 
+    if (!selectedAddress) {
+      Alert.alert('Error', 'Please select a delivery address');
+      return;
+    }
+
     setIsPlacingOrder(true);
     try {
       const orderData = {
+        addressId: selectedAddress.id,
+        paymentMethod: selectedPayment,
+        notes: '', // Optional notes field
         items: cart.map(item => ({
           productId: item.id,
-          quantity: item.quantity,
-          price: item.price
-        })),
-        totalAmount: total,
-        paymentMethod: selectedPayment,
-        deliveryAddress: 'House 123, Sector 4, Baldia Town' // Hardcoded for demo
+          quantity: item.quantity
+        }))
       };
 
       const res = await ordersApi.checkout(orderData);
@@ -58,16 +83,27 @@ export default function CheckoutScreen({ navigation }: any) {
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionTitle}>Delivery Details</Text>
-        <TouchableOpacity style={styles.addressBox}>
-          <View style={styles.addressIcon}>
-             <Text style={{ fontSize: 20 }}>🏠</Text>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.addressLabel}>Home Address</Text>
-            <Text style={styles.addressText}>House 123, Sector 4, Baldia Town</Text>
-          </View>
-          <Text style={styles.changeBtn}>Edit</Text>
-        </TouchableOpacity>
+        {isLoadingAddresses ? (
+          <ActivityIndicator color="#FF4500" style={{ marginVertical: 20 }} />
+        ) : selectedAddress ? (
+          <TouchableOpacity style={styles.addressBox}>
+            <View style={styles.addressIcon}>
+               <Text style={{ fontSize: 20 }}>🏠</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.addressLabel}>{selectedAddress.label || 'Home'}</Text>
+              <Text style={styles.addressText}>{selectedAddress.streetAddress}</Text>
+            </View>
+            <Text style={styles.changeBtn}>Edit</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity 
+            style={styles.addressBox}
+            onPress={() => Alert.alert('Notice', 'Address selection coming soon. Using seeded address.')}
+          >
+            <Text style={{ color: '#666', textAlign: 'center', flex: 1 }}>No address found. Please add one.</Text>
+          </TouchableOpacity>
+        )}
 
         <Text style={styles.sectionTitle}>Payment Method</Text>
         <TouchableOpacity 
@@ -94,15 +130,15 @@ export default function CheckoutScreen({ navigation }: any) {
            <Text style={styles.sectionTitle}>Order Summary</Text>
            <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Subtotal</Text>
-              <Text style={styles.summaryVal}>${subtotal.toFixed(2)}</Text>
+              <Text style={styles.summaryVal}>${(Number(subtotal) || 0).toFixed(2)}</Text>
            </View>
            <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Delivery Fee</Text>
-              <Text style={styles.summaryVal}>${deliveryFee.toFixed(2)}</Text>
+              <Text style={styles.summaryVal}>${(Number(deliveryFee) || 0).toFixed(2)}</Text>
            </View>
            <View style={[styles.summaryRow, styles.totalPadding]}>
               <Text style={styles.totalLabel}>Grand Total</Text>
-              <Text style={styles.totalVal}>${total.toFixed(2)}</Text>
+              <Text style={styles.totalVal}>${(Number(total) || 0).toFixed(2)}</Text>
            </View>
         </View>
       </ScrollView>
@@ -116,7 +152,7 @@ export default function CheckoutScreen({ navigation }: any) {
           {isPlacingOrder ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.placeOrderText}>Confirm Order - ${total.toFixed(2)}</Text>
+            <Text style={styles.placeOrderText}>Confirm Order - ${(Number(total) || 0).toFixed(2)}</Text>
           )}
         </TouchableOpacity>
       </View>

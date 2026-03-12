@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { LoggerModule } from 'nestjs-pino';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -27,9 +28,22 @@ import { OrderItem } from './orders/order-item.entity';
 import { Payment } from './payments/payment.entity';
 import { Notification } from './notifications/notification.entity';
 import { Rider } from './riders/rider.entity';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 
 @Module({
   imports: [
+    ThrottlerModule.forRoot([{
+      ttl: 60000,
+      limit: 10,
+    }]),
+    LoggerModule.forRoot({
+      pinoHttp: {
+        transport: process.env.NODE_ENV !== 'production' 
+          ? { target: 'pino-pretty' } 
+          : undefined,
+      },
+    }),
     TypeOrmModule.forRoot({
       type: 'postgres',
       host: process.env.DB_HOST || 'localhost',
@@ -41,7 +55,7 @@ import { Rider } from './riders/rider.entity';
         User, Address, DeliveryZone, Category, Product, 
         CartItem, Order, OrderItem, Payment, Notification, Rider
       ],
-      synchronize: true,
+      synchronize: process.env.NODE_ENV !== 'production',
     }),
     UsersModule,
     AuthModule,
@@ -57,6 +71,12 @@ import { Rider } from './riders/rider.entity';
     AdminModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
 })
 export class AppModule {}

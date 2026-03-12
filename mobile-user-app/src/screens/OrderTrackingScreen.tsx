@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import io from 'socket.io-client';
 
 // Use same base URL as API
-const SOCKET_URL = 'http://10.0.2.2:3000';
+const SOCKET_URL = 'http://192.168.100.142:3000';
 
 export default function OrderTrackingScreen({ route, navigation }: any) {
   const { orderId } = route.params;

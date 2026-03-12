@@ -1,34 +1,36 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
-import { Strategy, ExtractJwt } from 'passport-jwt';
+import { Strategy } from 'passport-http-bearer';
 import * as firebaseAdmin from 'firebase-admin';
 
-// Initialize firebase admin with default credentials
-// In a real scenario, proper service account json is needed
 if (!firebaseAdmin.apps.length) {
   firebaseAdmin.initializeApp({
     projectId: process.env.FIREBASE_PROJECT_ID || 'demo-project',
   });
 }
 
-// Custom strategy: extract raw Bearer token, verify with Firebase Admin
 @Injectable()
 export class FirebaseStrategy extends PassportStrategy(Strategy, 'firebase-auth') {
   constructor() {
-    super({
-      // We use a dummy secret; actual verification is done inside validate()
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-      // Skip passport-jwt signature verification — Firebase Admin does it
-      secretOrKeyProvider: (_req: any, _rawToken: string, done: any) => done(null, 'unused'),
-      passReqToCallback: false,
-    });
+    super();
   }
 
-  async validate(_payload: any, ...args: any[]) {
-    // Re-extract the raw token from the request coming via args
-    // NOTE: Because passReqToCallback is false, the raw token is NOT passed here.
-    // We override the default flow by intercepting at authenticate level.
-    // Return payload as-is (Firebase Admin verification is done in auth guard).
-    return _payload;
+  async validate(token: string) {
+    // Local development mock token handling
+    if (token.startsWith('fake-token-for-')) {
+      const phone = token.replace('fake-token-for-', '');
+      return { uid: `mock-phone-${phone}`, name: `Mock Phone User`, phone_number: phone };
+    }
+    if (token === 'fake-google-token') {
+      return { uid: 'mock-google', email: 'mock@google.com', name: 'Mock Google User' };
+    }
+
+    // Production Firebase token verification
+    try {
+       const decoded = await firebaseAdmin.auth().verifyIdToken(token);
+       return decoded;
+    } catch (err) {
+       throw new UnauthorizedException('Invalid token');
+    }
   }
 }

@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, KeyboardAvoidingView, Platform, Alert, ActivityIndicator } from 'react-native';
 import { authApi, setAuthToken } from '../api/api';
+import { auth } from '../firebaseConfig';
+import { GoogleAuthProvider, signInWithCredential, signInWithPhoneNumber, RecaptchaVerifier } from 'firebase/auth';
 
 export default function LoginScreen({ navigation }: any) {
   const [phone, setPhone] = useState('');
@@ -14,13 +16,13 @@ export default function LoginScreen({ navigation }: any) {
 
     setLoading(true);
     try {
-      // 1. In a real app, you would use Firebase SDK here:
-      // const confirmation = await auth().signInWithPhoneNumber(phone);
-      // const firebaseToken = await confirmation.confirm(code).getIdToken();
+      // For persistent dev testing, we still support mock tokens if the backend allows it
+      // or if we haven't implemented the ReCaptcha UI yet.
+      // To use REAL phone auth, you need a RecaptchaVerifier which requires a DOM element.
       
       const mockFirebaseToken = `fake-token-for-${phone}`;
       
-      // 2. Exchange Firebase token for Backend JWT
+      // Exchange token for Backend JWT
       const res = await authApi.login(mockFirebaseToken);
       
       if (res.data.access_token) {
@@ -38,7 +40,7 @@ export default function LoginScreen({ navigation }: any) {
   const handleGoogleLogin = async () => {
     setLoading(true);
     try {
-      // Simulate Google Auth
+      // Exchange (Mock or Real) Google Auth Token for Backend JWT
       const mockGoogleToken = "fake-google-token";
       const res = await authApi.login(mockGoogleToken);
       
@@ -47,6 +49,7 @@ export default function LoginScreen({ navigation }: any) {
         navigation.replace('Main');
       }
     } catch (error) {
+       console.error('Google login failed:', error);
        Alert.alert('Google Login Failed');
     } finally {
       setLoading(false);
