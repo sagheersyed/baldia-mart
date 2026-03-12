@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { categoriesApi, productsApi, addressesApi } from '../api/api';
 import { useCart } from '../context/CartContext';
@@ -12,13 +12,15 @@ export default function HomeScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [address, setAddress] = useState<any>(null);
 
+  const [refreshing, setRefreshing] = useState(false);
+
   useEffect(() => {
     loadData();
   }, []);
 
   const loadData = async () => {
     try {
-      setLoading(true);
+      if (!refreshing) setLoading(true);
       const [catRes, prodRes, addrRes] = await Promise.all([
         categoriesApi.getAll(),
         productsApi.getAll(),
@@ -33,8 +35,14 @@ export default function HomeScreen({ navigation }: any) {
       console.error('Failed to load home data:', error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
+
+  const onRefresh = React.useCallback(() => {
+    setRefreshing(true);
+    loadData();
+  }, [loadData]);
 
   const handleAddToCart = (product: any) => {
     addToCart(product);
@@ -65,7 +73,12 @@ export default function HomeScreen({ navigation }: any) {
         </TouchableOpacity>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FF4500" />
+        }
+      >
         <View style={styles.banner}>
           <Text style={styles.bannerSmall}>Express Delivery</Text>
           <Text style={styles.bannerText}>Get items in 20 Mins!</Text>

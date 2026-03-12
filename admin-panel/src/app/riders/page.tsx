@@ -33,11 +33,11 @@ export default function RidersPage() {
                 <tr key={i} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
                   <td className="py-4 font-medium text-gray-800">RDR-{450 + i}</td>
                   <td className="py-4 text-gray-800 font-medium">Zain Ali {i}</td>
-                  <td className="py-4 text-gray-500">+92 300 123456{i}</td>
+                  <td className="py-4 text-gray-500">+92 316 0007564</td>
                   <td className="py-4 text-gray-500">Honda CD70</td>
                   <td className="py-4">
-                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${i===1 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
-                      {i===1 ? 'Online' : 'Offline'}
+                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${i === 1 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                      {i === 1 ? 'Online' : 'Offline'}
                     </span>
                   </td>
                   <td className="py-4 font-medium text-gray-800">${(i * 125.50).toFixed(2)}</td>

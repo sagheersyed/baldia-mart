@@ -18,15 +18,20 @@ export const setAuthToken = (token: string | null) => {
 };
 
 export const authApi = {
-  login: (firebaseToken: string) => api.post('/auth/login', {}, {
-    headers: { Authorization: `Bearer ${firebaseToken}` }
-  }),
+  login: (firebaseToken: string) =>
+    api.post('/auth/login', {}, { headers: { Authorization: `Bearer ${firebaseToken}` } }),
   getMe: () => api.get('/auth/me'),
+};
+
+export const usersApi = {
+  updateMe: (data: { name?: string; phoneNumber?: string }) => api.patch('/users/me', data),
 };
 
 export const addressesApi = {
   getAll: () => api.get('/addresses'),
   create: (data: any) => api.post('/addresses', data),
+  delete: (id: string) => api.delete(`/addresses/${id}`),
+  setDefault: (id: string) => api.patch(`/addresses/${id}/default`),
 };
 
 export const categoriesApi = {
@@ -41,5 +46,6 @@ export const productsApi = {
 export const ordersApi = {
   checkout: (data: any) => api.post('/orders/checkout', data),
   getHistory: () => api.get('/orders/history'),
-  updateStatus: (orderId: string, status: string) => api.put(`/orders/${orderId}/status`, { status }),
+  updateStatus: (orderId: string, status: string) =>
+    api.put(`/orders/${orderId}/status`, { status }),
 };

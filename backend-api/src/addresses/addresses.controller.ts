@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Req, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Delete, Patch, Body, Param, Req, UseGuards } from '@nestjs/common';
 import { AddressesService } from './addresses.service';
 import { AuthGuard } from '@nestjs/passport';
 import { Request } from 'express';
@@ -18,5 +18,17 @@ export class AddressesController {
   async createAddress(@Req() req: Request, @Body() body: any) {
     const user = req.user as any;
     return this.addressesService.create(user.id, body);
+  }
+
+  @Delete(':id')
+  async deleteAddress(@Req() req: Request, @Param('id') id: string) {
+    const user = req.user as any;
+    return this.addressesService.delete(id, user.id);
+  }
+
+  @Patch(':id/default')
+  async setDefaultAddress(@Req() req: Request, @Param('id') id: string) {
+    const user = req.user as any;
+    return this.addressesService.setDefault(id, user.id);
   }
 }

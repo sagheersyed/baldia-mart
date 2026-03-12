@@ -34,8 +34,8 @@ import { APP_GUARD } from '@nestjs/core';
 @Module({
   imports: [
     ThrottlerModule.forRoot([{
-      ttl: 60000,
-      limit: 10,
+      ttl: 60000,   // 1 minute window
+      limit: 300,   // 300 requests per minute per IP (reasonable for a mobile app)
     }]),
     LoggerModule.forRoot({
       pinoHttp: {
