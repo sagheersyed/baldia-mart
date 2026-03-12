@@ -51,7 +51,12 @@ export default function OtpScreen({ navigation, route }: any) {
       const res = await authApi.verifyOtp(phoneNumber, otpCode);
       if (res.data.access_token) {
         setAuthToken(res.data.access_token);
-        navigation.replace('Main');
+        
+        if (res.data.isNewUser) {
+          navigation.replace('CompleteProfile');
+        } else {
+          navigation.replace('Main');
+        }
       }
     } catch (error: any) {
       const msg = error.response?.data?.message || 'Verification failed';

@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, ActivityIndicator, RefreshControl } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { categoriesApi, productsApi, addressesApi } from '../api/api';
 import { useCart } from '../context/CartContext';
@@ -43,6 +44,25 @@ export default function HomeScreen({ navigation }: any) {
     setRefreshing(true);
     loadData();
   }, [loadData]);
+
+  // Refresh address when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      const refreshAddress = async () => {
+        try {
+          const addrRes = await addressesApi.getAll();
+          if (addrRes.data && addrRes.data.length > 0) {
+            setAddress(addrRes.data.find((a: any) => a.isDefault) || addrRes.data[0]);
+          } else {
+            setAddress(null);
+          }
+        } catch (error) {
+          console.error('Failed to refresh address on focus:', error);
+        }
+      };
+      refreshAddress();
+    }, [])
+  );
 
   const handleAddToCart = (product: any) => {
     addToCart(product);

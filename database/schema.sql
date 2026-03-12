@@ -41,6 +41,8 @@ CREATE TABLE addresses (
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     label VARCHAR(100), -- Home, Work, etc.
     street_address TEXT NOT NULL,
+    city VARCHAR(100),
+    postal_code VARCHAR(20),
     latitude DECIMAL(10, 8) NOT NULL,
     longitude DECIMAL(11, 8) NOT NULL,
     is_default BOOLEAN DEFAULT FALSE,

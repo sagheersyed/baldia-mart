@@ -26,16 +26,18 @@ export class AuthService {
     return user;
   }
 
-  async findOrCreateByPhone(phoneNumber: string): Promise<User> {
+  async findOrCreateByPhone(phoneNumber: string): Promise<{ user: User; isNew: boolean }> {
     let user = await this.usersService.findByPhone(phoneNumber);
+    let isNew = false;
     if (!user) {
       user = await this.usersService.create({
         phoneNumber,
         name: 'New Customer',
         isPhoneVerified: false,
       });
+      isNew = true;
     }
-    return user;
+    return { user, isNew };
   }
 
   async loginWithPhone(user: User) {

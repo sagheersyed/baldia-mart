@@ -31,4 +31,10 @@ export class AddressesController {
     const user = req.user as any;
     return this.addressesService.setDefault(id, user.id);
   }
+
+  @Patch(':id')
+  async updateAddress(@Req() req: Request, @Param('id') id: string, @Body() body: any) {
+    const user = req.user as any;
+    return this.addressesService.update(id, user.id, body);
+  }
 }

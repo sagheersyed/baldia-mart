@@ -9,7 +9,7 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Patch('me')
-  async updateMe(@Req() req: Request, @Body() body: { name?: string; phoneNumber?: string }) {
+  async updateMe(@Req() req: Request, @Body() body: { name?: string; phoneNumber?: string; email?: string }) {
     const user = req.user as any;
     return this.usersService.update(user.id, body);
   }

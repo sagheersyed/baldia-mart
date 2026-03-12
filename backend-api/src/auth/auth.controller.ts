@@ -35,8 +35,13 @@ export class AuthController {
     const isValid = await this.otpService.verifyOtp(phoneNumber, otpCode);
     if (!isValid) throw new UnauthorizedException('Invalid or expired OTP');
 
-    const user = await this.authService.findOrCreateByPhone(phoneNumber);
-    return this.authService.loginWithPhone(user);
+    const { user, isNew } = await this.authService.findOrCreateByPhone(phoneNumber);
+    const authResponse = await this.authService.loginWithPhone(user);
+    
+    return {
+      ...authResponse,
+      isNewUser: isNew,
+    };
   }
 
   @Get('me')

@@ -41,4 +41,17 @@ export class AddressesService {
     address.isDefault = true;
     return this.addressRepository.save(address);
   }
+
+  async update(id: string, userId: string, data: Partial<Address>): Promise<Address> {
+    const address = await this.findOne(id);
+    if (address.userId !== userId) throw new ForbiddenException('Not your address');
+    
+    // If setting to default, unset others first
+    if (data.isDefault) {
+      await this.addressRepository.update({ userId }, { isDefault: false });
+    }
+    
+    Object.assign(address, data);
+    return this.addressRepository.save(address);
+  }
 }

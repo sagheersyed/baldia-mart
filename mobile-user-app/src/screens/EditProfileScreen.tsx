@@ -8,7 +8,7 @@ import { authApi, usersApi } from '../api/api';
 export default function EditProfileScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ name: '', phoneNumber: '' });
+  const [form, setForm] = useState({ name: '', phoneNumber: '', email: '' });
   const [originalUser, setOriginalUser] = useState<any>(null);
 
   useEffect(() => {
@@ -17,7 +17,7 @@ export default function EditProfileScreen({ navigation }: any) {
         const res = await authApi.getMe();
         const u = res.data;
         setOriginalUser(u);
-        setForm({ name: u.name || '', phoneNumber: u.phoneNumber || '' });
+        setForm({ name: u.name || '', phoneNumber: u.phoneNumber || '', email: u.email || '' });
       } catch (e) {
         Alert.alert('Error', 'Failed to load profile.');
         navigation.goBack();
@@ -34,7 +34,11 @@ export default function EditProfileScreen({ navigation }: any) {
     }
     setSaving(true);
     try {
-      await usersApi.updateMe({ name: form.name.trim(), phoneNumber: form.phoneNumber.trim() });
+      await usersApi.updateMe({ 
+        name: form.name.trim(), 
+        phoneNumber: form.phoneNumber.trim(),
+        email: form.email.trim()
+      });
       Alert.alert('Success', 'Profile updated successfully!', [
         { text: 'OK', onPress: () => navigation.goBack() }
       ]);
@@ -45,7 +49,9 @@ export default function EditProfileScreen({ navigation }: any) {
     }
   };
 
-  const hasChanges = form.name !== (originalUser?.name || '') || form.phoneNumber !== (originalUser?.phoneNumber || '');
+  const hasChanges = form.name !== (originalUser?.name || '') || 
+                    form.phoneNumber !== (originalUser?.phoneNumber || '') ||
+                    form.email !== (originalUser?.email || '');
 
   if (loading) {
     return <View style={styles.loader}><ActivityIndicator size="large" color="#FF4500" /></View>;
@@ -112,8 +118,16 @@ export default function EditProfileScreen({ navigation }: any) {
             <Text style={styles.sectionTitle}>Account Information</Text>
             <View style={styles.fieldCard}>
               <View style={styles.field}>
-                <Text style={styles.fieldLabel}>Email</Text>
-                <Text style={styles.fieldReadonly}>{originalUser?.email || 'N/A'}</Text>
+                <Text style={styles.fieldLabel}>Email Address</Text>
+                <TextInput
+                  style={styles.fieldInput}
+                  value={form.email}
+                  onChangeText={(v) => setForm({ ...form, email: v })}
+                  placeholder="Enter your email"
+                  placeholderTextColor="#CCC"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
               </View>
               <View style={[styles.field, { borderBottomWidth: 0 }]}>
                 <Text style={styles.fieldLabel}>Account Type</Text>
@@ -122,7 +136,7 @@ export default function EditProfileScreen({ navigation }: any) {
                 </View>
               </View>
             </View>
-            <Text style={styles.readonlyNote}>Email and account type cannot be changed here.</Text>
+            <Text style={styles.readonlyNote}>Account type cannot be changed here.</Text>
           </View>
 
           <TouchableOpacity

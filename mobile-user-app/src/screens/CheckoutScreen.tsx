@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Scr
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCart } from '../context/CartContext';
 import { ordersApi, addressesApi } from '../api/api';
+import AddressPickerModal from '../components/AddressPickerModal';
 
 export default function CheckoutScreen({ navigation }: any) {
   const { cart, getCartTotal, clearCart } = useCart();
@@ -11,6 +12,7 @@ export default function CheckoutScreen({ navigation }: any) {
   const [addresses, setAddresses] = useState<any[]>([]);
   const [selectedAddress, setSelectedAddress] = useState<any>(null);
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(true);
+  const [showAddressModal, setShowAddressModal] = useState(false);
 
   useEffect(() => {
     fetchAddresses();
@@ -21,12 +23,32 @@ export default function CheckoutScreen({ navigation }: any) {
       const res = await addressesApi.getAll();
       setAddresses(res.data);
       if (res.data.length > 0) {
-        setSelectedAddress(res.data.find((a: any) => a.isDefault) || res.data[0]);
+        // If we have a selected address, try to keep it, otherwise pick default
+        const currentId = selectedAddress?.id;
+        const found = res.data.find((a: any) => a.id === currentId) || res.data.find((a: any) => a.isDefault) || res.data[0];
+        setSelectedAddress(found);
       }
     } catch (error) {
       console.error('Failed to fetch addresses:', error);
     } finally {
       setIsLoadingAddresses(false);
+    }
+  };
+
+  const handleUpdateAddress = async (addrData: any) => {
+    try {
+      if (selectedAddress?.id) {
+        await addressesApi.update(selectedAddress.id, { ...addrData, isDefault: true });
+        await fetchAddresses();
+        setShowAddressModal(false);
+      } else {
+        // Fallback for case where no address exists yet
+        await addressesApi.create({ ...addrData, isDefault: true });
+        await fetchAddresses();
+        setShowAddressModal(false);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update address');
     }
   };
   
@@ -63,9 +85,10 @@ export default function CheckoutScreen({ navigation }: any) {
         clearCart();
         navigation.replace('OrderTracking', { orderId: res.data.id });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Checkout failed:', error);
-      Alert.alert('Error', 'Failed to place order. Please try again.');
+      const msg = error.response?.data?.message || 'Failed to place order. Please try again.';
+      Alert.alert('Error', msg);
     } finally {
       setIsPlacingOrder(false);
     }
@@ -86,7 +109,7 @@ export default function CheckoutScreen({ navigation }: any) {
         {isLoadingAddresses ? (
           <ActivityIndicator color="#FF4500" style={{ marginVertical: 20 }} />
         ) : selectedAddress ? (
-          <TouchableOpacity style={styles.addressBox}>
+          <TouchableOpacity style={styles.addressBox} onPress={() => setShowAddressModal(true)}>
             <View style={styles.addressIcon}>
                <Text style={{ fontSize: 20 }}>🏠</Text>
             </View>
@@ -156,6 +179,14 @@ export default function CheckoutScreen({ navigation }: any) {
           )}
         </TouchableOpacity>
       </View>
+
+      <AddressPickerModal
+        visible={showAddressModal}
+        onClose={() => setShowAddressModal(false)}
+        onSave={handleUpdateAddress}
+        initialData={selectedAddress}
+        title="Update Delivery Address"
+      />
     </SafeAreaView>
   );
 }

@@ -51,7 +51,7 @@ export class OrdersService {
 
     const validation = await this.deliveryZonesService.validateAddressInZone(address.latitude, address.longitude);
     if (!validation.isValid) {
-      throw new BadRequestException('Service not available in your area. Minimum distance is > 50km.');
+      throw new BadRequestException('Delivery not available. Your address is outside our 50km service zone.');
     }
 
     // 3. Calculate Totals

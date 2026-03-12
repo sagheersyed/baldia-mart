@@ -4,6 +4,7 @@ import {
   SafeAreaView, ActivityIndicator, Alert, RefreshControl, Modal, TextInput, ScrollView
 } from 'react-native';
 import { addressesApi } from '../api/api';
+import AddressPickerModal from '../components/AddressPickerModal';
 
 const LABEL_OPTIONS = ['Home', 'Work', 'Other'];
 
@@ -40,7 +41,6 @@ export default function SavedAddressesScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [newAddr, setNewAddr] = useState({ label: 'Home', streetAddress: '', city: 'Karachi', postalCode: '' });
   const [saving, setSaving] = useState(false);
 
   const fetchAddresses = useCallback(async () => {
@@ -84,21 +84,14 @@ export default function SavedAddressesScreen({ navigation }: any) {
     }
   };
 
-  const handleAddAddress = async () => {
-    if (!newAddr.streetAddress.trim()) {
-      Alert.alert('Validation', 'Please enter a street address.');
-      return;
-    }
+  const handleAddAddress = async (addrData: any) => {
     setSaving(true);
     try {
       await addressesApi.create({
-        ...newAddr,
-        latitude: 24.8607,
-        longitude: 67.0011,
+        ...addrData,
         isDefault: addresses.length === 0,
       });
       setShowAddModal(false);
-      setNewAddr({ label: 'Home', streetAddress: '', city: 'Karachi', postalCode: '' });
       await fetchAddresses();
     } catch (e) {
       Alert.alert('Error', 'Failed to add address.');
@@ -145,65 +138,12 @@ export default function SavedAddressesScreen({ navigation }: any) {
         />
       )}
 
-      {/* Add Modal */}
-      <Modal visible={showAddModal} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>Add New Address</Text>
-            
-            <Text style={styles.inputLabel}>Label</Text>
-            <View style={styles.labelRow}>
-              {LABEL_OPTIONS.map((l) => (
-                <TouchableOpacity
-                  key={l}
-                  style={[styles.labelChip, newAddr.label === l && styles.labelChipActive]}
-                  onPress={() => setNewAddr({ ...newAddr, label: l })}
-                >
-                  <Text style={[styles.labelChipText, newAddr.label === l && styles.labelChipTextActive]}>{l}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <Text style={styles.inputLabel}>Street Address *</Text>
-            <TextInput
-              style={styles.textInput}
-              placeholder="e.g. House 12, Block 5, Gulshan-e-Iqbal"
-              value={newAddr.streetAddress}
-              onChangeText={(v) => setNewAddr({ ...newAddr, streetAddress: v })}
-              placeholderTextColor="#bbb"
-            />
-
-            <Text style={styles.inputLabel}>City</Text>
-            <TextInput
-              style={styles.textInput}
-              placeholder="City"
-              value={newAddr.city}
-              onChangeText={(v) => setNewAddr({ ...newAddr, city: v })}
-              placeholderTextColor="#bbb"
-            />
-
-            <Text style={styles.inputLabel}>Postal Code</Text>
-            <TextInput
-              style={styles.textInput}
-              placeholder="e.g. 75500"
-              value={newAddr.postalCode}
-              keyboardType="numeric"
-              onChangeText={(v) => setNewAddr({ ...newAddr, postalCode: v })}
-              placeholderTextColor="#bbb"
-            />
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.cancelModal} onPress={() => setShowAddModal(false)}>
-                <Text style={styles.cancelModalText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.saveBtn} onPress={handleAddAddress} disabled={saving}>
-                {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.saveBtnText}>Save Address</Text>}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <AddressPickerModal
+        visible={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onSave={handleAddAddress}
+        title="Add New Address"
+      />
     </SafeAreaView>
   );
 }

@@ -1,0 +1,92 @@
+# Mobile OTP Authentication
+
+Add secure mobile number OTP sign-in as a standalone auth path inside the existing NestJS backend — completely separate from the existing Firebase strategy. JWT strategy stays unchanged, so all other protected routes keep working.
+
+## User Review Required
+
+> [!IMPORTANT]
+> **SMS Gateway**: This plan uses **Twilio** to send real OTPs. You need a Twilio account (free trial works). I'll add `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_PHONE_NUMBER` as env variables.<!-- If you prefer a different provider (e.g. Africa's Talking, Vonage, or just console-log for dev), let me know before approving. -->
+
+> [!NOTE]
+> **Existing Google / Firebase flow stays intact.** The OTP endpoints are completely additive. The mock `fake-google-token` login path is not removed.
+
+> [!NOTE]
+> **DB schema change**: `isPhoneVerified` column added to `users`. The existing `firebaseUid` column becomes **nullable** so phone-only users have no Firebase dependency. TypeORM `synchronize` on dev will apply this automatically.
+
+---
+
+## Proposed Changes
+
+### Backend — New `OTP` Entity & Module
+
+#### [NEW] [otp.entity.ts](file:///d:/mart/baldia-mart/backend-api/src/otp/otp.entity.ts)
+- Fields: [id](file:///d:/mart/baldia-mart/backend-api/src/auth/jwt.strategy.ts#16-21), `phoneNumber`, `otpHash` (bcrypt-hashed), `expiresAt`, `isUsed`, `attempts`, `createdAt`
+
+#### [NEW] [otp.service.ts](file:///d:/mart/baldia-mart/backend-api/src/otp/otp.service.ts)
+- [sendOtp(phone)](file:///d:/mart/baldia-mart/backend-api/src/otp/otp.service.ts#22-59) — generates 6-digit OTP, hashes it, stores it, calls Twilio SMS API
+- [verifyOtp(phone, code)](file:///d:/mart/baldia-mart/backend-api/src/auth/auth.controller.ts#31-46) — checks hash, expiry (5 min), used flag, increments attempts, marks used
+
+#### [NEW] [otp.module.ts](file:///d:/mart/baldia-mart/backend-api/src/otp/otp.module.ts) — imports TypeOrmModule for OTP entity, exports OtpService
+
+---
+
+### Backend — Auth Module Changes
+
+#### [MODIFY] [user.entity.ts](file:///d:/mart/baldia-mart/backend-api/src/users/user.entity.ts)
+- `firebaseUid` → nullable
+- Add `isPhoneVerified: boolean` (default `false`)
+
+#### [MODIFY] [auth.service.ts](file:///d:/mart/baldia-mart/backend-api/src/auth/auth.service.ts)
+- Add [findOrCreateByPhone(phone)](file:///d:/mart/baldia-mart/backend-api/src/auth/auth.service.ts#29-42) — finds / creates user by phone number
+- Add [loginWithPhone(user)](file:///d:/mart/baldia-mart/backend-api/src/auth/auth.service.ts#43-50) — issues JWT (reuses existing [login()](file:///d:/mart/baldia-mart/mobile-user-app/src/api/api.ts#21-23) pattern)
+
+#### [MODIFY] [auth.controller.ts](file:///d:/mart/baldia-mart/backend-api/src/auth/auth.controller.ts)
+- `POST /auth/send-otp` — body: `{ phoneNumber }` — with per-IP throttle (5 req / hour via `@Throttle`)
+- `POST /auth/verify-otp` — body: `{ phoneNumber, otpCode }` — returns `{ access_token, user, isNewUser }`
+
+#### [MODIFY] [auth.module.ts](file:///d:/mart/baldia-mart/backend-api/src/auth/auth.module.ts)
+- Import [OtpModule](file:///d:/mart/baldia-mart/backend-api/src/otp/otp.module.ts#6-12), `TypeOrmModule.forFeature([User])`
+
+#### [MODIFY] [app.module.ts](file:///d:/mart/baldia-mart/backend-api/src/app.module.ts)
+- Add Twilio env vars to docker-compose hint (no code change needed)
+
+---
+
+### Frontend — Mobile App
+
+#### [NEW] [OtpScreen.tsx](file:///d:/mart/baldia-mart/mobile-user-app/src/screens/OtpScreen.tsx)
+- Step 1 — Enter phone number, hit Send OTP
+- Step 2 — Enter 6-digit OTP with auto-advance inputs + 60s resend timer
+- On success → Check `isNewUser` flag:
+  - If `true` → Navigate to `CompleteProfile`
+  - If `false` → Sets JWT → Navigate to [Main](file:///d:/mart/baldia-mart/mobile-user-app/App.tsx#26-61)
+
+#### [NEW] `CompleteProfileScreen.tsx`
+- Form: Name, Email
+- Button: "Complete Registration" → calls `PATCH /users/me` → sets JWT → navigates to Main
+
+#### [MODIFY] [LoginScreen.tsx](file:///d:/mart/baldia-mart/mobile-user-app/src/screens/LoginScreen.tsx)
+- Replace mock phone handler with navigation to [OtpScreen](file:///d:/mart/baldia-mart/mobile-user-app/src/screens/OtpScreen.tsx#9-142)
+- Google login stays as-is
+
+#### [MODIFY] [api.ts](file:///d:/mart/baldia-mart/mobile-user-app/src/api/api.ts)
+- Add `authApi.sendOtp(phone)` and `authApi.verifyOtp(phone, code)`
+
+#### [MODIFY] [App.tsx](file:///d:/mart/baldia-mart/mobile-user-app/App.tsx)
+- Register [OtpScreen](file:///d:/mart/baldia-mart/mobile-user-app/src/screens/OtpScreen.tsx#9-142) and `CompleteProfileScreen` in the stack
+
+---
+
+## Verification Plan
+
+### Automated
+- `docker-compose up -d --build backend-api` to deploy changes
+- `Invoke-RestMethod -Method Post -Uri http://127.0.0.1:3000/api/v1/auth/send-otp -Body '{"phoneNumber":"+923001234567"}' -ContentType application/json`
+- Verify `otp` table row is created in DB
+- Verify `POST /auth/verify-otp` returns an `access_token`
+
+### Manual
+- Test "Continue with Phone" button in Expo Go
+- Verify OTP screen appears and OTP boxes auto-advance
+- Verify correct login and navigation to Home
+- Verify re-send button appears after 60s

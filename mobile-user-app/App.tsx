@@ -19,6 +19,7 @@ import SavedAddressesScreen from './src/screens/SavedAddressesScreen';
 import EditProfileScreen from './src/screens/EditProfileScreen';
 import HelpScreen from './src/screens/HelpScreen';
 import OtpScreen from './src/screens/OtpScreen';
+import CompleteProfileScreen from './src/screens/CompleteProfileScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -67,6 +68,7 @@ export default function App() {
           <Stack.Navigator initialRouteName="Login" screenOptions={{ headerShown: false }}>
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="Otp" component={OtpScreen} />
+            <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen} />
             <Stack.Screen name="Main" component={MainTabs} />
             <Stack.Screen name="Checkout" component={CheckoutScreen} />
             <Stack.Screen name="OrderTracking" component={OrderTrackingScreen} />

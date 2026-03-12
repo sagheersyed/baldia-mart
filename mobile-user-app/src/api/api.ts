@@ -27,13 +27,14 @@ export const authApi = {
 };
 
 export const usersApi = {
-  updateMe: (data: { name?: string; phoneNumber?: string }) => api.patch('/users/me', data),
+  updateMe: (data: { name?: string; phoneNumber?: string; email?: string }) => api.patch('/users/me', data),
 };
 
 export const addressesApi = {
   getAll: () => api.get('/addresses'),
   create: (data: any) => api.post('/addresses', data),
   delete: (id: string) => api.delete(`/addresses/${id}`),
+  update: (id: string, data: any) => api.patch(`/addresses/${id}`, data),
   setDefault: (id: string) => api.patch(`/addresses/${id}/default`),
 };
 
