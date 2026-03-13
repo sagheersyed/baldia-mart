@@ -22,6 +22,10 @@ import NotificationsScreen from './src/screens/NotificationsScreen';
 import OtpScreen from './src/screens/OtpScreen';
 import CompleteProfileScreen from './src/screens/CompleteProfileScreen';
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { setAuthToken, authApi } from './src/api/api';
+import { ActivityIndicator, View } from 'react-native';
+
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
@@ -62,11 +66,43 @@ function MainTabs() {
 }
 
 export default function App() {
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [initialRoute, setInitialRoute] = React.useState('Login');
+
+  React.useEffect(() => {
+    const checkToken = async () => {
+      try {
+        const token = await AsyncStorage.getItem('userToken');
+        if (token) {
+          setAuthToken(token);
+          // Verify token with server
+          await authApi.getMe();
+          setInitialRoute('Main');
+        }
+      } catch (e) {
+        console.log('Session expired or invalid:', e);
+        setAuthToken(null); // Clear invalid token
+        setInitialRoute('Login');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    checkToken();
+  }, []);
+
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
+        <ActivityIndicator size="large" color="#FF4500" />
+      </View>
+    );
+  }
+
   return (
     <SafeAreaProvider>
       <CartProvider>
         <NavigationContainer>
-          <Stack.Navigator initialRouteName="Login" screenOptions={{ headerShown: false }}>
+          <Stack.Navigator initialRouteName={initialRoute} screenOptions={{ headerShown: false }}>
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="Otp" component={OtpScreen} />
             <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen} />

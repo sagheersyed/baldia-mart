@@ -1,0 +1,26 @@
+# Walkthrough: UI Consistency & Rider Auth Fixes
+
+I've polished the user and rider experiences by resolving inconsistencies and stabilizing the login flow.
+
+## Key Fixes
+
+### 1. Unified Currency & Pricing
+- **Syncing Prices**: Standardized all currency displays to **Rs.** across both apps. 
+- **Formatting**: Removed confusing decimal mismatches (e.g., $4.5 vs Rs 5). All totals are now displayed in a consistent, rounded format suitable for local use.
+
+### 2. Standardized Order IDs
+- **Matching Numbers**: Both customers and riders now see the **exact same order number** (e.g., `#ORD-A1B2C3D4`).
+- **Logical Slicing**: Standardized all ID displays to use the first 8 characters of the order's unique code, ensuring clear communication between support and delivery teams.
+
+### 3. Bulletproof Rider Auth
+- **No Login Loops**: Refactored the Rider App's navigation to use a conditional flow. Once a rider is logged in, they stay in the Dashboard stack.
+- **Secure Navigation**: It is now impossible to "back out" of the Dashboard into the Login screen while an active session exists. This makes the app much more professional and reliable during deliveries.
+
+## Verification
+- [x] **My Orders (User)**: Verified Rs. and 8-char Order ID.
+- [x] **Tracking (User)**: Verified Rs. and price consistency.
+- [x] **Dashboard (Rider)**: Verified Rs. and matching Order ID prefixes.
+- [x] **Navigation (Rider)**: Verified that the Login screen is correctly bypassed on app startup.
+
+---
+*The apps are now perfectly synced, professional, and ready for action!*

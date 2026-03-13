@@ -7,16 +7,18 @@ import { UsersModule } from '../users/users.module';
 import { JwtStrategy } from './jwt.strategy';
 import { FirebaseStrategy } from './firebase.strategy';
 import { OtpModule } from '../otp/otp.module';
+import { RidersModule } from '../riders/riders.module';
 
 @Module({
   imports: [
     UsersModule,
+    OtpModule,
+    RidersModule,
     PassportModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET || 'super_secret_jwt_key',
       signOptions: { expiresIn: process.env.JWT_EXPIRATION || '7d' },
     }),
-    OtpModule,
   ],
   providers: [AuthService, JwtStrategy, FirebaseStrategy],
   controllers: [AuthController],

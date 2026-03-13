@@ -1,0 +1,59 @@
+# Refinement: Real-time Sync, Order Preview & Quantity Control
+
+Finalizing the hyperlocal delivery experience by adding missing UX elements, improving real-time reliability, and giving customers more control over their orders.
+
+## User Review Required
+
+> [!IMPORTANT]
+> - **Order Acceptance**: Riders will now see an "Order Preview" screen before accepting. Direct "Accept" from the dashboard will be replaced with "View Details".
+> - **Quantity Adjustment**: Customers can now decrease product quantity (e.g., from 5x to 3x) instead of just removing the entire item.
+
+## Proposed Changes
+
+---
+
+### Phase 7: Rider App UI & Flow Improvements
+
+#### [MODIFY] [App.tsx](file:///d:/mart/baldia-mart/mobile-rider-app/App.tsx)
+- Add `Ionicons` to [RiderTabs](file:///d:/mart/baldia-mart/mobile-rider-app/App.tsx#19-27) for Dashboard and Profile icons.
+- Register new [OrderDetails](file:///d:/mart/baldia-mart/mobile-rider-app/src/screens/NavigationScreen.tsx#12-25) screen.
+
+#### [NEW] [OrderDetailsScreen.tsx](file:///d:/mart/baldia-mart/mobile-rider-app/src/screens/OrderDetailsScreen.tsx)
+- Display full order details (Customer address, total, items with rates).
+- "Accept Order" button at the bottom.
+
+#### [MODIFY] [DashboardScreen.tsx](file:///d:/mart/baldia-mart/mobile-rider-app/src/screens/DashboardScreen.tsx)
+- Change "Accept & Navigate" action to "View Order".
+- Improve socket listener to remove orders from the list if they are accepted by someone else or cancelled.
+
+#### [MODIFY] [NavigationScreen.tsx](file:///d:/mart/baldia-mart/mobile-rider-app/src/screens/NavigationScreen.tsx)
+- Update checklist to show item rates/prices.
+
+---
+
+### Phase 8: Real-time Synchronization & Customer Experience
+
+#### [MODIFY] [orders.service.ts](file:///d:/mart/baldia-mart/backend-api/src/orders/orders.service.ts)
+- Add `updateItemQuantity` method to handle incremental changes.
+- Ensure `orderAccepted` event is broadcasted to all riders.
+
+#### [MODIFY] [orders.gateway.ts](file:///d:/mart/baldia-mart/backend-api/src/orders/orders.gateway.ts)
+- Add broadcast event for `orderAccepted` so other riders see it disappear from their dashboards.
+
+#### [MODIFY] [OrderTrackingScreen.tsx](file:///d:/mart/baldia-mart/mobile-user-app/src/screens/OrderTrackingScreen.tsx)
+- Add `-` and `+` buttons for items in "Pending" or "Confirmed" status.
+- Ensure socket listeners correctly update the entire order object, specifically the item quantities and totals.
+
+---
+
+### Phase 9: Rider Profile Completeness
+
+#### [MODIFY] [ProfileScreen.tsx](file:///d:/mart/baldia-mart/mobile-rider-app/src/screens/ProfileScreen.tsx)
+- Add basic navigation or modals for "Earnings History" and "Vehicle Registration".
+
+## Verification Plan
+
+### Automated/Manual Tests
+- **Rider Preview**: Accept an order only after viewing details.
+- **Quantity Update**: Customer changes 10x Potato to 2x Potato -> Total price updates correctly.
+- **Real-time**: Have two Rider apps open -> Accept an order on one -> Verify it disappears immediately on the other.

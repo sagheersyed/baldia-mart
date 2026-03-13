@@ -1,0 +1,62 @@
+# Real-Time Order Sync Walkthrough
+
+I have completed the integration of real-time order synchronization between the **User Mobile App** and the **Rider Mobile App**. This ensures a seamless delivery experience from the moment an order is placed until it reaches the customer's doorstep.
+
+## Key Accomplishments
+
+### 1. Backend Infrastructure 🏗️
+- **WebSocket Gateway:** Enhanced [OrdersGateway](file:///d:/mart/baldia-mart/backend-api/src/orders/orders.gateway.ts#10-53) with a dedicated `riders_room`.
+- **Broadcasting:** Implemented automatic order broadcasting to all online riders upon checkout.
+- **Rider Assignment:** Created `POST /orders/:id/accept` to safely assign a rider to a pending order and notify the customer.
+- **Status Management:** Added granular status tracking (`confirmed`, `preparing`, `out_for_delivery`, `delivered`) with real-time customer notifications.
+
+### 2. Rider App Features 🚴
+- **Real-Time Dashboard:** Riders now see a live list of pending orders within their zone.
+- **WebSocket Integration:** Riders receive instant alerts when a new order is placed.
+- **Order Acceptance:** A single tap accepts an order, navigates to the store, and updates the customer.
+- **Delivery Lifecycle:** Full support for updating order status from "Arrived at Store" to "Delivered".
+
+### 3. User App Tracking 📱
+- **Live Updates:** The [OrderTrackingScreen](file:///d:/mart/baldia-mart/mobile-user-app/src/screens/OrderTrackingScreen.tsx#19-210) remains synced with the rider's progress via WebSockets.
+- **Rider Details:** Customers now see their assigned rider's name and can call them directly from the tracking screen.
+
+---
+
+## Technical Implementation Details
+
+### Backend: OrdersGateway ([orders.gateway.ts](file:///d:/mart/baldia-mart/backend-api/src/orders/orders.gateway.ts))
+```typescript
+@SubscribeMessage('joinRidersRoom')
+handleJoinRidersRoom(client: Socket) {
+  client.join('riders_room');
+}
+
+emitNewOrder(order: any) {
+  this.server.to('riders_room').emit('newOrder', order);
+}
+```
+
+### Rider App: Socket connection ([DashboardScreen.tsx](file:///d:/mart/baldia-mart/mobile-rider-app/src/screens/DashboardScreen.tsx))
+```tsx
+socket.on('newOrder', (order) => {
+  setPendingOrders(prev => [order, ...prev]);
+  Alert.alert('New Order!', 'A new delivery request is available nearby.');
+});
+```
+
+### User App: Dynamic Rider Display ([OrderTrackingScreen.tsx](file:///d:/mart/baldia-mart/mobile-user-app/src/screens/OrderTrackingScreen.tsx))
+```tsx
+{rider && (
+  <View style={styles.riderCard}>
+    <Text style={styles.riderName}>{rider.name}</Text>
+    {/* ... Call button and avatar ... */}
+  </View>
+)}
+```
+
+## Next Steps
+The core marketplace and delivery engine is now fully functional! 🚀
+You can now proceed with:
+- **Payment Gateway Integration:** Adding real Stripe/JazzCash flows.
+- **Push Notifications:** Implementing FCM/Expo notifications for offline alerts.
+- **Admin Analytics:** Visualizing order volume and rider performance in the dashboard.

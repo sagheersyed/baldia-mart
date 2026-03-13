@@ -10,7 +10,6 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ../database/schema.sql:/docker-entrypoint-initdb.d/schema.sql
     networks:
       - baldia_net
 
@@ -37,7 +36,7 @@ services:
       - DB_DATABASE=baldia_mart
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - NODE_ENV=production
+      - NODE_ENV=development
     depends_on:
       - postgres
       - redis
@@ -60,7 +59,6 @@ services:
 
 volumes:
   pgdata:
-
 
 networks:
   baldia_net:

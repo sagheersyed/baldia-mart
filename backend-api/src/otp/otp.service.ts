@@ -7,7 +7,7 @@ import { Otp } from './otp.entity';
 import * as bcrypt from 'bcryptjs';
 
 const OTP_EXPIRY_MINUTES = 5;
-const MAX_ATTEMPTS_PER_HOUR = 5;
+const MAX_ATTEMPTS_PER_HOUR = 25;
 const OTP_DIGITS = 6;
 
 @Injectable()
@@ -17,7 +17,7 @@ export class OtpService {
   constructor(
     @InjectRepository(Otp)
     private otpRepository: Repository<Otp>,
-  ) {}
+  ) { }
 
   async sendOtp(phoneNumber: string): Promise<{ message: string }> {
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
@@ -59,6 +59,7 @@ export class OtpService {
 
   async verifyOtp(phoneNumber: string, otpCode: string): Promise<boolean> {
     const now = new Date();
+    this.logger.debug(`Verifying OTP for ${phoneNumber} with code ${otpCode}`);
 
     const otpRecord = await this.otpRepository.findOne({
       where: { phoneNumber, isUsed: false },
@@ -66,10 +67,12 @@ export class OtpService {
     });
 
     if (!otpRecord) {
+      this.logger.warn(`No active OTP found for ${phoneNumber}`);
       throw new BadRequestException('No active OTP found. Please request a new one.');
     }
 
     if (otpRecord.expiresAt < now) {
+      this.logger.warn(`OTP expired for ${phoneNumber}. Expired at: ${otpRecord.expiresAt}, Now: ${now}`);
       otpRecord.isUsed = true;
       await this.otpRepository.save(otpRecord);
       throw new BadRequestException('OTP has expired. Please request a new one.');
@@ -78,12 +81,14 @@ export class OtpService {
     otpRecord.attempts += 1;
 
     if (otpRecord.attempts > 3) {
+      this.logger.warn(`Too many attempts for ${phoneNumber}`);
       otpRecord.isUsed = true;
       await this.otpRepository.save(otpRecord);
       throw new BadRequestException('Too many incorrect attempts. Please request a new OTP.');
     }
 
     const isValid = await bcrypt.compare(otpCode, otpRecord.otpHash);
+    this.logger.debug(`Bcrypt comparison for ${phoneNumber}: ${isValid}`);
 
     if (!isValid) {
       await this.otpRepository.save(otpRecord);
@@ -96,6 +101,7 @@ export class OtpService {
     otpRecord.isUsed = true;
     await this.otpRepository.save(otpRecord);
 
+    this.logger.log(`OTP verified successfully for ${phoneNumber}`);
     return true;
   }
 }

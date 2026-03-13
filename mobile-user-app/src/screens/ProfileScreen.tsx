@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity, SafeAreaView,
   ActivityIndicator, ScrollView, RefreshControl, Image, Alert
 } from 'react-native';
-import { authApi, addressesApi, ordersApi } from '../api/api';
+import { authApi, addressesApi, ordersApi, setAuthToken } from '../api/api';
 
 const AVATAR_COLORS = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD'];
 
@@ -101,7 +101,14 @@ export default function ProfileScreen({ navigation }: any) {
   const handleLogout = () => {
     Alert.alert('Log Out', 'Are you sure you want to log out?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Log Out', style: 'destructive', onPress: () => navigation.replace('Login') },
+      { 
+        text: 'Log Out', 
+        style: 'destructive', 
+        onPress: () => {
+          setAuthToken(null);
+          navigation.replace('Login');
+        } 
+      },
     ]);
   };
 

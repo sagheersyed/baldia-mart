@@ -2,11 +2,14 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import { User } from '../users/user.entity';
+import { RidersService } from '../riders/riders.service';
+import { Rider } from '../riders/rider.entity';
 
 @Injectable()
 export class AuthService {
   constructor(
     private usersService: UsersService,
+    private ridersService: RidersService,
     private jwtService: JwtService,
   ) {}
 
@@ -59,6 +62,38 @@ export class AuthService {
         email: user.email,
         name: user.name,
         role: user.role
+      }
+    };
+  }
+
+  // --- RIDER AUTHENTICATION ---
+
+  async findOrCreateRiderByPhone(phoneNumber: string): Promise<{ rider: Rider; isNew: boolean }> {
+    let rider = await this.ridersService.findByPhone(phoneNumber);
+    let isNew = false;
+    if (!rider) {
+      rider = await this.ridersService.create({
+        phoneNumber,
+        name: 'New Rider',
+        firebaseUid: `rider_${Date.now()}`, // Placeholder since we don't have proper firebase rider setup yet
+        email: `rider_${Date.now()}@baldia.mart`
+      });
+      isNew = true;
+    }
+    return { rider, isNew };
+  }
+
+  async loginRider(rider: Rider) {
+    // Note: Generating a token with role = 'rider'
+    const payload = { sub: rider.id, phone: rider.phoneNumber, role: 'rider' };
+    return {
+      access_token: this.jwtService.sign(payload),
+      rider: {
+        id: rider.id,
+        phoneNumber: rider.phoneNumber,
+        name: rider.name,
+        role: 'rider',
+        isProfileComplete: rider.isProfileComplete
       }
     };
   }

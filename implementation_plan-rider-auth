@@ -1,0 +1,131 @@
+# Multi-Feature UI/UX Improvements
+
+Six improvements to enhance the user experience across the app.
+
+## Proposed Changes
+
+### 1. Cancelled Order — Tracking & Reorder
+
+#### [MODIFY] [OrderTrackingScreen.tsx](file:///d:/mart/baldia-mart/mobile-user-app/src/screens/OrderTrackingScreen.tsx)
+- When status is `cancelled`, show **"Cancelled by you"** message.
+- Add a **"Reorder"** button that calls a new [reorderOrder](file:///d:/mart/baldia-mart/backend-api/src/orders/orders.service.ts#148-166) API endpoint to create a fresh pending order from cancelled items.
+
+#### [MODIFY] [orders.service.ts](file:///d:/mart/baldia-mart/backend-api/src/orders/orders.service.ts)
+- Add [reorderOrder(orderId, userId)](file:///d:/mart/baldia-mart/backend-api/src/orders/orders.service.ts#148-166) method: fetches cancelled order items, creates a new order with `pending` status.
+
+#### [MODIFY] [orders.controller.ts](file:///d:/mart/baldia-mart/backend-api/src/orders/orders.controller.ts)
+- Add `POST /orders/:id/reorder` endpoint.
+
+#### [MODIFY] [api.ts](file:///d:/mart/baldia-mart/mobile-user-app/src/api/api.ts)
+- Add [reorderOrder(orderId)](file:///d:/mart/baldia-mart/backend-api/src/orders/orders.service.ts#148-166) to `ordersApi`.
+
+---
+
+### 2. Order Card Color on Cancellation
+
+#### [MODIFY] [MyOrdersScreen.tsx](file:///d:/mart/baldia-mart/mobile-user-app/src/screens/MyOrdersScreen.tsx)
+- When `order.status === 'cancelled'`, apply a red-tinted background (`#FFF5F5`) to the order card border/background.
+
+---
+
+### 3. Product Image Flicker Fix (Home Screen)
+
+#### [MODIFY] [HomeScreen.tsx](file:///d:/mart/baldia-mart/mobile-user-app/src/screens/HomeScreen.tsx)
+- Wrap product `<Image>` in a state-aware component.
+  - Set `fadeDuration={0}` on Image component in [HomeScreen.tsx](file:///d:/mart/baldia-mart/mobile-user-app/src/screens/HomeScreen.tsx) to stop opacity animations clashing with React Native re-rendering logic.
+  - Implement a `React.memo` ProductCard wrapper in [HomeScreen.tsx](file:///d:/mart/baldia-mart/mobile-user-app/src/screens/HomeScreen.tsx) to isolate cart state changes and eliminate product list DOM thrashing.
+- Show a styled placeholder `<View>` while the image is loading via `onLoadStart`/`onLoadEnd`.
+
+---
+
+# Phase 4: Rider-Customer Real-Time Sync (Current Plan)
+
+The objective is to connect the Customer app, Backend, and Rider app so that new orders are instantly broadcasted to active riders, riders can accept orders, and customers can track the rider's progress in real time.
+
+## User Review Required
+> [!IMPORTANT]
+> Since the Rider app currently relies on mock data and no authentication, we will implement a basic Phone-based Login for Riders on the backend (similar to the Customer OTP logic). Please confirm if you want Riders to use OTP login or a simpler login mechanism for now.
+
+## Proposed Changes
+
+### Backend (`backend-api`)
+
+#### [MODIFY] [src/orders/order.entity.ts](file:///d:/mart/baldia-mart/backend-api/src/orders/order.entity.ts)
+- Add a ManyToOne relation for [Rider](file:///d:/mart/baldia-mart/backend-api/src/riders/rider.entity.ts#3-44) so we can attach a rider to an order.
+
+#### [MODIFY] [src/riders/riders.module.ts](file:///d:/mart/baldia-mart/backend-api/src/riders/riders.module.ts) & Add `riders.service.ts`
+- Implement basic rider retrieval and creation methods ([findByPhone](file:///d:/mart/baldia-mart/backend-api/src/users/users.service.ts#17-20), [create](file:///d:/mart/baldia-mart/backend-api/src/products/products.controller.ts#25-28)).
+
+#### [MODIFY] [src/auth/auth.controller.ts](file:///d:/mart/baldia-mart/backend-api/src/auth/auth.controller.ts) & [src/auth/auth.service.ts](file:///d:/mart/baldia-mart/backend-api/src/auth/auth.service.ts)
+- Add `POST /auth/rider/login-otp` and `POST /auth/rider/verify-otp` to grant JWTs with `role: 'rider'`.
+
+#### [MODIFY] [src/orders/orders.controller.ts](file:///d:/mart/baldia-mart/backend-api/src/orders/orders.controller.ts) & [src/orders/orders.service.ts](file:///d:/mart/baldia-mart/backend-api/src/orders/orders.service.ts)
+- **GET /orders/pending**: Endpoint for Riders to fetch currently unassigned orders.
+- **POST /orders/:id/accept**: Endpoint for Riders to accept an order. This sets `riderId`, updates status, and broadcasts to the customer.
+- In [placeOrder](file:///d:/mart/baldia-mart/backend-api/src/orders/orders.service.ts#22-96), add logic to broadcast the new order via websockets.
+
+#### [MODIFY] [src/orders/orders.gateway.ts](file:///d:/mart/baldia-mart/backend-api/src/orders/orders.gateway.ts)
+- Add `joinRidersRoom` subscription.
+- Add `emitNewOrder` method to broadcast newly placed orders to the `riders_room`.
+
+### Mobile Rider App (`mobile-rider-app`)
+
+#### [NEW] [src/api/api.ts](file:///d:/mart/baldia-mart/mobile-user-app/src/api/api.ts)
+- Setup robust Axios instance, token management, and endpoints analogous to the User App.
+
+#### [MODIFY] [src/screens/LoginScreen.tsx](file:///d:/mart/baldia-mart/mobile-user-app/src/screens/LoginScreen.tsx)
+- Replace mock login with actual API calls to backend Rider Auth.
+
+#### [MODIFY] [src/screens/DashboardScreen.tsx](file:///d:/mart/baldia-mart/mobile-rider-app/src/screens/DashboardScreen.tsx)
+- Connect to `socket.io-client` on load and join `riders_room`.
+- Fetch `GET /orders/pending` to populate the initial list.
+- Listen for `newOrder` socket events to dynamically update the list.
+- **Accept Order**: Call `POST /orders/:id/accept` and navigate to [NavigationScreen](file:///d:/mart/baldia-mart/mobile-rider-app/src/screens/NavigationScreen.tsx#4-66).
+
+#### [MODIFY] [src/screens/NavigationScreen.tsx](file:///d:/mart/baldia-mart/mobile-rider-app/src/screens/NavigationScreen.tsx)
+- Refactor status update buttons to trigger the backend `PUT /orders/:id/status` endpoint, emitting real-time updates to the customer.
+
+### Mobile User App (`mobile-user-app`)
+
+#### [MODIFY] [src/screens/OrderTrackingScreen.tsx](file:///d:/mart/baldia-mart/mobile-user-app/src/screens/OrderTrackingScreen.tsx)
+- Upon fetching the order, dynamically display the Rider's Name and Phone Number (once assigned).
+
+---
+
+### 4. Cart Quantity Badge on Product Cards
+
+#### [MODIFY] [HomeScreen.tsx](file:///d:/mart/baldia-mart/mobile-user-app/src/screens/HomeScreen.tsx)
+- Use [useCart()](file:///d:/mart/baldia-mart/mobile-user-app/src/context/CartContext.tsx#73-80) to read the cart.
+- For each product card, look up the quantity in the cart.
+- If quantity > 0, show a badge (pill/circle with count) overlaid on the product card.
+
+---
+
+### 5. Out-of-Stock Disable
+
+#### [MODIFY] [HomeScreen.tsx](file:///d:/mart/baldia-mart/mobile-user-app/src/screens/HomeScreen.tsx)
+- Check `product.stock` (or `product.stockQuantity`) field.
+- If stock is 0, disable the `+` button and show an **"Out of Stock"** label instead.
+
+---
+
+### 6. Notifications Screen (Separate from Help)
+
+#### [NEW] [NotificationsScreen.tsx](file:///d:/mart/baldia-mart/mobile-user-app/src/screens/NotificationsScreen.tsx)
+- Create a dedicated notifications screen showing recent order activity notifications (e.g., order placed, confirmed, delivered).
+- Display order-related events in a clean list (with icon, title, time).
+
+#### [MODIFY] [App.tsx](file:///d:/mart/baldia-mart/mobile-user-app/App.tsx)
+- Replace [Notifications](file:///d:/mart/baldia-mart/mobile-user-app/src/screens/NotificationsScreen.tsx#52-119) stack screen from [HelpScreen](file:///d:/mart/baldia-mart/mobile-user-app/src/screens/HelpScreen.tsx#35-85) to new [NotificationsScreen](file:///d:/mart/baldia-mart/mobile-user-app/src/screens/NotificationsScreen.tsx#52-119).
+
+---
+
+## Verification Plan
+
+### Manual Verification
+1. Cancel an order → Tap "Track Order" → Verify "Cancelled by you" is shown and "Reorder" button works.
+2. Check MyOrders → Verified cancelled orders show red-tinted card.
+3. Scroll Home screen products → No flicker/dimming.
+4. Add a product to cart → Badge count shown on that product card.
+5. Check an out-of-stock product → "+" button disabled, "Out of Stock" shown.
+6. Navigate to Notifications → Different from Help & Support screen.

@@ -3,7 +3,11 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   SafeAreaView, ActivityIndicator, RefreshControl, Alert
 } from 'react-native';
-import { ordersApi } from '../api/api';
+import { ordersApi, authApi } from '../api/api';
+import io from 'socket.io-client';
+
+const BASE_IP = '192.168.100.142';
+const SOCKET_URL = `http://${BASE_IP}:3000`;
 
 const STATUS_CONFIG: Record<string, { color: string; bg: string; label: string; icon: string }> = {
   pending:    { color: '#F59E0B', bg: '#FFFBEB', label: 'Pending',    icon: '⏳' },
@@ -31,7 +35,7 @@ function OrderCard({ order, onTrack, onCancel }: any) {
     <View style={[styles.orderCard, order.status === 'cancelled' && styles.cancelledCard]}>
       <View style={styles.orderHeader}>
         <View>
-          <Text style={styles.orderId}>#{order.id?.slice(-8).toUpperCase()}</Text>
+          <Text style={styles.orderId}>#{order.id?.slice(0, 8).toUpperCase()}</Text>
           <Text style={styles.orderDate}>{formatDate(order.createdAt)}</Text>
         </View>
         <View style={[styles.statusBadge, { backgroundColor: cfg.bg }]}>
@@ -89,6 +93,40 @@ export default function MyOrdersScreen({ navigation }: any) {
 
   useEffect(() => {
     fetchOrders();
+
+    let socket: any;
+
+    const setupSocket = async () => {
+      try {
+        const userRes = await authApi.getMe();
+        const user = userRes.data;
+
+        socket = io(SOCKET_URL, {
+          transports: ['websocket'],
+          forceNew: true
+        });
+
+        socket.on('connect', () => {
+          console.log('MyOrders: Connected to socket');
+          if (user?.id) {
+            socket.emit('joinUserRoom', user.id);
+          }
+        });
+
+        socket.on('orderStatusUpdated', (data: any) => {
+          console.log('MyOrders: Received order update:', data);
+          fetchOrders();
+        });
+      } catch (e) {
+        console.error('Socket setup error:', e);
+      }
+    };
+
+    setupSocket();
+
+    return () => {
+      if (socket) socket.disconnect();
+    };
   }, [fetchOrders]);
 
   const onRefresh = useCallback(() => {

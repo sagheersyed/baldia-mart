@@ -15,7 +15,7 @@ const FAQ = [
 
 const CONTACT = [
   { icon: '📞', label: 'Call Support', value: '+92 21 111 222 333', action: () => Linking.openURL('tel:+922111222333') },
-  { icon: '💬', label: 'WhatsApp', value: '+92 316 0007564', action: () => Linking.openURL('https://wa.me/03160007564') },
+  { icon: '💬', label: 'WhatsApp', value: '+92 341 2248616', action: () => Linking.openURL('https://wa.me/03412248616') },
   { icon: '✉️', label: 'Email Us', value: 'support@baldiamart.pk', action: () => Linking.openURL('mailto:support@baldiamart.pk') },
 ];
 

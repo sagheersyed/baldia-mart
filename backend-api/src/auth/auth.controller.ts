@@ -48,6 +48,31 @@ export class AuthController {
     };
   }
 
+  // --- RIDER OTP LOGIN ---
+
+  @Post('rider/send-otp')
+  @Throttle({ default: { limit: 30, ttl: 3600000 } })
+  async sendRiderOtp(@Body('phoneNumber') phoneNumber: string) {
+    return this.otpService.sendOtp(phoneNumber);
+  }
+
+  @Post('rider/verify-otp')
+  async verifyRiderOtp(
+    @Body('phoneNumber') phoneNumber: string,
+    @Body('otpCode') otpCode: string,
+  ) {
+    const isValid = await this.otpService.verifyOtp(phoneNumber, otpCode);
+    if (!isValid) throw new UnauthorizedException('Invalid or expired OTP');
+
+    const { rider, isNew } = await this.authService.findOrCreateRiderByPhone(phoneNumber);
+    const authResponse = await this.authService.loginRider(rider);
+    
+    return {
+      ...authResponse,
+      isNewUser: isNew,
+    };
+  }
+
   @Get('me')
   @UseGuards(AuthGuard('jwt'))
   async getMe(@Req() req: Request) {

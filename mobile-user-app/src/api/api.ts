@@ -1,4 +1,5 @@
 import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // For Android Emulator, use 10.0.2.2. For iOS/Local, use localhost.
 // Replace with your local machine's IP (e.g., 192.168.1.10) for physical devices.
@@ -12,8 +13,10 @@ export const api = axios.create({
 export const setAuthToken = (token: string | null) => {
   if (token) {
     api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    AsyncStorage.setItem('userToken', token);
   } else {
     delete api.defaults.headers.common['Authorization'];
+    AsyncStorage.removeItem('userToken');
   }
 };
 
@@ -55,4 +58,16 @@ export const ordersApi = {
     api.put(`/orders/${orderId}/status`, { status }),
   cancelOrder: (orderId: string) => api.post(`/orders/${orderId}/cancel`),
   reorderOrder: (orderId: string) => api.post(`/orders/${orderId}/reorder`),
+  removeItem: (orderId: string, itemId: string) => api.delete(`/orders/${orderId}/items/${itemId}`),
+  updateQuantity: (orderId: string, itemId: string, quantity: number) => 
+    api.patch(`/orders/${orderId}/items/${itemId}`, { quantity }),
+  updateOrderItems: (orderId: string, items: { itemId: string; quantity: number }[]) =>
+    api.patch(`/orders/${orderId}/items`, { items }),
+  getTimeline: (orderId: string) => api.get(`/orders/${orderId}/timeline`),
+};
+
+export const ridersApi = {
+  getMe: () => api.get('/riders/me'),
+  postReview: (riderId: string, data: { rating: number; comment?: string; orderId: string }) => 
+    api.post(`/riders/${riderId}/reviews`, data),
 };

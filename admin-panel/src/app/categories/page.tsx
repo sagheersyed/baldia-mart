@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, X, RefreshCcw, Package } from 'lucide-react';
+import { Plus, Trash2, X, RefreshCcw, Package, Pencil } from 'lucide-react';
 
 interface Category {
   id: string;
@@ -17,7 +17,8 @@ export default function CategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [newCat, setNewCat] = useState({ name: '', description: '', imageUrl: '' });
+  const [formData, setFormData] = useState({ name: '', description: '', imageUrl: '' });
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -37,34 +38,49 @@ export default function CategoriesPage() {
     }
   };
 
-  const handleAddCategory = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const res = await fetch(API_URL, {
-        method: 'POST',
+      const url = editingCategory ? `${API_URL}/${editingCategory.id}` : API_URL;
+      const method = editingCategory ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newCat),
+        body: JSON.stringify(formData),
       });
+
       if (res.ok) {
         setShowModal(false);
-        setNewCat({ name: '', description: '', imageUrl: '' });
+        setEditingCategory(null);
+        setFormData({ name: '', description: '', imageUrl: '' });
         fetchCategories();
       }
     } catch (error) {
-      console.error('Failed to add category:', error);
+      console.error('Failed to save category:', error);
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const handleEdit = (category: Category) => {
+    setEditingCategory(category);
+    setFormData({
+      name: category.name,
+      description: category.description || '',
+      imageUrl: category.imageUrl || ''
+    });
+    setShowModal(true);
+  };
+
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this category?')) return;
+    if (!confirm('Are you sure you want to archive this category? It will no longer be visible to customers, but existing products will remain.')) return;
     try {
       await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
       fetchCategories();
     } catch (error) {
-      console.error('Failed to delete category:', error);
+      console.error('Failed to archive category:', error);
     }
   };
 
@@ -83,7 +99,11 @@ export default function CategoriesPage() {
             <RefreshCcw size={20} className={loading ? 'animate-spin' : ''} />
           </button>
           <button 
-            onClick={() => setShowModal(true)}
+            onClick={() => {
+              setEditingCategory(null);
+              setFormData({ name: '', description: '', imageUrl: '' });
+              setShowModal(true);
+            }}
             className="flex items-center space-x-2 bg-gradient-to-br from-primary to-orange-600 text-white px-6 py-3 rounded-2xl font-bold hover:shadow-lg hover:shadow-orange-500/30 transition-all active:scale-95 shadow-md shadow-orange-500/10"
           >
             <Plus size={20} />
@@ -113,20 +133,30 @@ export default function CategoriesPage() {
                    </div>
                  )}
                  <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                 <button 
-                  onClick={() => handleDelete(cat.id)}
-                  className="absolute top-4 right-4 p-2 bg-red-50 text-red-500 rounded-xl opacity-0 group-hover:opacity-100 hover:bg-red-500 hover:text-white transition-all transform hover:scale-110 shadow-lg"
-                 >
-                   <Trash2 size={16} />
-                 </button>
+                 <div className="absolute top-4 right-4 flex space-x-2">
+                   <button 
+                    onClick={() => handleEdit(cat)}
+                    className="p-2 bg-blue-50 text-blue-500 rounded-xl hover:bg-blue-500 hover:text-white transition-all transform hover:scale-110 shadow-lg"
+                   >
+                     <Pencil size={16} />
+                   </button>
+                   <button 
+                    onClick={() => handleDelete(cat.id)}
+                    className="p-2 bg-red-50 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all transform hover:scale-110 shadow-lg"
+                   >
+                     <Trash2 size={16} />
+                   </button>
+                 </div>
                </div>
                <div className="px-1">
                  <h3 className="font-extrabold text-xl text-gray-800 mb-1 group-hover:text-primary transition-colors">{cat.name}</h3>
                  <p className="text-sm text-gray-500 line-clamp-2 min-h-[2.5rem] font-medium leading-relaxed">{cat.description || 'No description provided.'}</p>
                  <div className="mt-4 flex items-center justify-between">
-                    <span className="text-xs font-bold px-3 py-1 bg-green-50 text-green-600 rounded-full border border-green-100 uppercase tracking-wider">Active</span>
+                    <span className={`text-xs font-bold px-3 py-1 rounded-full border border-green-100 uppercase tracking-wider ${cat.isActive ? 'bg-green-50 text-green-600' : 'bg-gray-50 text-gray-400 border-gray-100'}`}>
+                      {cat.isActive ? 'Active' : 'Archived'}
+                    </span>
                     <div className="h-1 w-12 bg-gray-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-primary w-1/3"></div>
+                      <div className={`h-full bg-primary ${cat.isActive ? 'w-full' : 'w-0'}`}></div>
                     </div>
                  </div>
                </div>
@@ -154,15 +184,15 @@ export default function CategoriesPage() {
             <div className="p-8">
               <div className="flex justify-between items-center mb-8">
                 <div>
-                  <h2 className="text-2xl font-black text-gray-800">New Category</h2>
-                  <p className="text-sm text-gray-500 font-medium">Add a fresh category to your store</p>
+                  <h2 className="text-2xl font-black text-gray-800">{editingCategory ? 'Edit Category' : 'New Category'}</h2>
+                  <p className="text-sm text-gray-500 font-medium">{editingCategory ? `Updating ${editingCategory.name}` : 'Add a fresh category to your store'}</p>
                 </div>
                 <button onClick={() => setShowModal(false)} className="p-2 bg-gray-100 text-gray-400 rounded-full hover:bg-gray-200 transition">
                   <X size={20} />
                 </button>
               </div>
 
-              <form onSubmit={handleAddCategory} className="space-y-6">
+              <form onSubmit={handleSubmit} className="space-y-6">
                 <div>
                   <label className="block text-sm font-bold text-gray-700 mb-2 px-1">Category Name</label>
                   <input
@@ -170,8 +200,8 @@ export default function CategoriesPage() {
                     type="text"
                     placeholder="e.g. Beverages"
                     className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-medium"
-                    value={newCat.name}
-                    onChange={(e) => setNewCat({ ...newCat, name: e.target.value })}
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   />
                 </div>
                 <div>
@@ -180,8 +210,8 @@ export default function CategoriesPage() {
                     rows={3}
                     placeholder="Brief description of the category..."
                     className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-medium"
-                    value={newCat.description}
-                    onChange={(e) => setNewCat({ ...newCat, description: e.target.value })}
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   />
                 </div>
                 <div>
@@ -190,8 +220,8 @@ export default function CategoriesPage() {
                     type="url"
                     placeholder="https://images.unsplash.com/..."
                     className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-medium"
-                    value={newCat.imageUrl}
-                    onChange={(e) => setNewCat({ ...newCat, imageUrl: e.target.value })}
+                    value={formData.imageUrl}
+                    onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
                   />
                 </div>
 
@@ -200,7 +230,7 @@ export default function CategoriesPage() {
                     disabled={isSubmitting}
                     className="w-full py-5 bg-gradient-to-r from-primary to-orange-600 text-white rounded-2xl font-black text-lg hover:shadow-xl hover:shadow-orange-500/30 transition-all active:scale-[0.98] disabled:opacity-50"
                   >
-                    {isSubmitting ? 'Creating...' : 'Create Category'}
+                    {isSubmitting ? 'Syncing...' : (editingCategory ? 'Save Changes' : 'Create Category')}
                   </button>
                 </div>
               </form>

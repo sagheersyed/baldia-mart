@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, X, RefreshCcw, Package, Filter, MoreHorizontal } from 'lucide-react';
+import { Plus, Trash2, X, RefreshCcw, Package, Filter, MoreHorizontal, Pencil } from 'lucide-react';
 
 interface Category {
   id: string;
@@ -32,8 +32,9 @@ export default function ProductsPage() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
-  const [newProd, setNewProd] = useState({
+  const [formData, setFormData] = useState({
     name: '',
     description: '',
     price: 0,
@@ -67,34 +68,53 @@ export default function ProductsPage() {
     }
   };
 
-  const handleAddProduct = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const res = await fetch(API_URL, {
-        method: 'POST',
+      const url = editingProduct ? `${API_URL}/${editingProduct.id}` : API_URL;
+      const method = editingProduct ? 'PUT' : 'POST';
+      
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newProd),
+        body: JSON.stringify(formData),
       });
+
       if (res.ok) {
         setShowModal(false);
-        setNewProd({ name: '', description: '', price: 0, discountPrice: 0, stockQuantity: 0, categoryId: '', imageUrl: '' });
+        setEditingProduct(null);
+        setFormData({ name: '', description: '', price: 0, discountPrice: 0, stockQuantity: 0, categoryId: '', imageUrl: '' });
         fetchData();
       }
     } catch (error) {
-      console.error('Failed to add product:', error);
+      console.error('Failed to save product:', error);
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const handleEdit = (product: Product) => {
+    setEditingProduct(product);
+    setFormData({
+      name: product.name,
+      description: product.description || '',
+      price: Number(product.price),
+      discountPrice: Number(product.discountPrice) || 0,
+      stockQuantity: product.stockQuantity,
+      categoryId: product.categoryId,
+      imageUrl: product.imageUrl || ''
+    });
+    setShowModal(true);
+  };
+
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this product?')) return;
+    if (!confirm('Are you sure you want to archive this product? It will no longer be visible to customers.')) return;
     try {
       await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
       fetchData();
     } catch (error) {
-      console.error('Failed to delete product:', error);
+      console.error('Failed to archive product:', error);
     }
   };
 
@@ -113,7 +133,11 @@ export default function ProductsPage() {
             <RefreshCcw size={20} className={loading ? 'animate-spin' : ''} />
           </button>
           <button 
-            onClick={() => setShowModal(true)}
+            onClick={() => {
+              setEditingProduct(null);
+              setFormData({ name: '', description: '', price: 0, discountPrice: 0, stockQuantity: 0, categoryId: '', imageUrl: '' });
+              setShowModal(true);
+            }}
             className="flex items-center space-x-2 bg-gradient-to-br from-primary to-orange-600 text-white px-6 py-3 rounded-2xl font-bold hover:shadow-lg hover:shadow-orange-500/30 transition-all active:scale-95 shadow-md shadow-orange-500/10"
           >
             <Plus size={20} />
@@ -158,7 +182,7 @@ export default function ProductsPage() {
                     </div>
                     <div>
                       <span className="block font-extrabold text-gray-800 text-lg">{prod.name}</span>
-                      <span className="text-xs text-gray-400 font-bold uppercase tracking-tight truncate max-w-[150px]">{prod.description || 'No description'}</span>
+                      <span className="text-xs text-gray-400 font-bold uppercase tracking-tight truncate max-w-[150px] text-ellipsis overflow-hidden whitespace-nowrap">{prod.description || 'No description'}</span>
                     </div>
                   </td>
                   <td className="py-6">
@@ -166,9 +190,9 @@ export default function ProductsPage() {
                       {prod.category?.name || 'Uncategorized'}
                     </span>
                   </td>
-                  <td className="py-6 text-center font-black text-gray-800">${Number(prod.price).toFixed(2)}</td>
+                  <td className="py-6 text-center font-black text-gray-800">Rs. {Number(prod.price).toFixed(2)}</td>
                   <td className="py-6 text-center font-bold text-orange-500">
-                    {prod.discountPrice ? `$${Number(prod.discountPrice).toFixed(2)}` : '-'}
+                    {prod.discountPrice ? `Rs. ${Number(prod.discountPrice).toFixed(2)}` : '-'}
                   </td>
                   <td className="py-6 text-center">
                     <span className={`font-bold ${prod.stockQuantity < 10 ? 'text-red-500' : 'text-gray-600'}`}>
@@ -177,18 +201,26 @@ export default function ProductsPage() {
                   </td>
                   <td className="py-6 text-center">
                     <div className="flex justify-center">
-                      <span className="px-4 py-1 bg-green-50 text-green-600 rounded-full text-[10px] font-black uppercase tracking-widest border border-green-100">
-                        In Stock
+                      <span className={`px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${prod.isActive ? 'bg-green-50 text-green-600 border-green-100' : 'bg-gray-50 text-gray-400 border-gray-100'}`}>
+                        {prod.isActive ? 'In Stock' : 'Archived'}
                       </span>
                     </div>
                   </td>
                   <td className="px-8 py-6 text-right">
-                    <button 
-                      onClick={() => handleDelete(prod.id)}
-                      className="p-2 bg-red-50 text-red-500 rounded-xl opacity-0 group-hover:opacity-100 hover:bg-red-500 hover:text-white transition-all transform hover:scale-110 shadow-lg inline-block"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    <div className="flex justify-end space-x-2">
+                      <button 
+                        onClick={() => handleEdit(prod)}
+                        className="p-2 bg-blue-50 text-blue-500 rounded-xl hover:bg-blue-500 hover:text-white transition-all transform hover:scale-110 shadow-lg"
+                      >
+                        <Pencil size={16} />
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(prod.id)}
+                        className="p-2 bg-red-50 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all transform hover:scale-110 shadow-lg"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -212,23 +244,23 @@ export default function ProductsPage() {
               <div className="px-10">
                 <div className="flex justify-between items-center mb-8">
                   <div>
-                    <h2 className="text-3xl font-black text-gray-800 tracking-tight">Add New Product</h2>
-                    <p className="text-sm text-gray-500 font-medium">Register a new item in your inventory</p>
+                    <h2 className="text-3xl font-black text-gray-800 tracking-tight">{editingProduct ? 'Edit Product' : 'Add New Product'}</h2>
+                    <p className="text-sm text-gray-500 font-medium">{editingProduct ? `Updating ${editingProduct.name}` : 'Register a new item in your inventory'}</p>
                   </div>
                   <button onClick={() => setShowModal(false)} className="p-3 bg-gray-100 text-gray-400 rounded-full hover:bg-gray-200 transition active:scale-90">
                     <X size={20} />
                   </button>
                 </div>
 
-                <form onSubmit={handleAddProduct} className="grid grid-cols-2 gap-6">
+                <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-6">
                   <div className="col-span-2">
                     <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Product Name</label>
                     <input
                       required
                       type="text"
                       className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-bold"
-                      value={newProd.name}
-                      onChange={(e) => setNewProd({ ...newProd, name: e.target.value })}
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     />
                   </div>
                   
@@ -237,8 +269,8 @@ export default function ProductsPage() {
                     <select
                       required
                       className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-bold appearance-none"
-                      value={newProd.categoryId}
-                      onChange={(e) => setNewProd({ ...newProd, categoryId: e.target.value })}
+                      value={formData.categoryId}
+                      onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
                     >
                       <option value="">Select a category</option>
                       {categories.map(cat => (
@@ -248,25 +280,25 @@ export default function ProductsPage() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Base Price ($)</label>
+                    <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Base Price (Rs.)</label>
                     <input
                       required
                       type="number"
                       step="0.01"
                       className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-bold"
-                      value={newProd.price}
-                      onChange={(e) => setNewProd({ ...newProd, price: parseFloat(e.target.value) })}
+                      value={formData.price}
+                      onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) })}
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Discount Price ($)</label>
+                    <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Discount Price (Rs.)</label>
                     <input
                       type="number"
                       step="0.01"
                       className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-bold"
-                      value={newProd.discountPrice}
-                      onChange={(e) => setNewProd({ ...newProd, discountPrice: parseFloat(e.target.value) || 0 })}
+                      value={formData.discountPrice}
+                      onChange={(e) => setFormData({ ...formData, discountPrice: parseFloat(e.target.value) || 0 })}
                     />
                   </div>
 
@@ -276,8 +308,8 @@ export default function ProductsPage() {
                       required
                       type="number"
                       className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-bold"
-                      value={newProd.stockQuantity}
-                      onChange={(e) => setNewProd({ ...newProd, stockQuantity: parseInt(e.target.value) })}
+                      value={formData.stockQuantity}
+                      onChange={(e) => setFormData({ ...formData, stockQuantity: parseInt(e.target.value) })}
                     />
                   </div>
 
@@ -286,8 +318,8 @@ export default function ProductsPage() {
                     <input
                       type="url"
                       className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-bold"
-                      value={newProd.imageUrl}
-                      onChange={(e) => setNewProd({ ...newProd, imageUrl: e.target.value })}
+                      value={formData.imageUrl}
+                      onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
                     />
                   </div>
 
@@ -296,7 +328,7 @@ export default function ProductsPage() {
                       disabled={isSubmitting}
                       className="w-full py-5 bg-gradient-to-r from-primary to-orange-600 text-white rounded-[2rem] font-black text-xl hover:shadow-2xl hover:shadow-orange-500/30 transition-all active:scale-[0.98] disabled:opacity-50"
                     >
-                      {isSubmitting ? 'Syncing...' : 'Add Product'}
+                      {isSubmitting ? 'Syncing...' : (editingProduct ? 'Save Changes' : 'Add Product')}
                     </button>
                   </div>
                 </form>

@@ -1,0 +1,26 @@
+# Walkthrough: Map Integration for Riders
+
+The Rider App now features a fully functional navigation system, replacing the static placeholders with interactive maps.
+
+## Key Map Features
+
+### 1. Interactive Navigation Map
+- **Live View**: The "Maps Navigation" screen now uses **Apple Maps (iOS) or Google Maps (Android)** natively inside the app.
+- **Rider Tracking**: A blue dot shows the rider's **exact real-time location**, helping them stay oriented during the delivery.
+
+### 2. Pickup & Drop-off Markers
+- **Mart Marker (Orange)**: Clearly marks the location of **Baldia Mart** for the order pickup.
+- **Customer Marker (Green)**: Pinpoints the customer's delivery address for the final drop-off.
+- **Visual Route**: A dashed line connects the pickup and drop-off points to give riders a clear visual of their journey.
+
+### 3. External Navigation Support
+- **🧭 Shortcut**: Added a new compass icon button in the header.
+- **One-Click Link**: Clicking it immediately opens the current destination in the **dedicated Google Maps app** for turn-by-turn voice navigation.
+
+## Verification
+- [x] **MapView**: Verified the map renders and follows the rider's movement.
+- [x] **Permissions**: Integrated `expo-location` to handle iOS/Android location permissions gracefully.
+- [x] **Overlay Sync**: Items checklist now sits as a smart overlay on the map, so riders can see the route and products simultaneously.
+
+---
+*Riders now have all the tools they need to navigate safely and efficiently to our customers!*

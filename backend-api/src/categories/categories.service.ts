@@ -33,6 +33,7 @@ export class CategoriesService {
 
   async remove(id: string): Promise<void> {
     const category = await this.findById(id);
-    await this.categoryRepository.remove(category);
+    category.isActive = false;
+    await this.categoryRepository.save(category);
   }
 }

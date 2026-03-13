@@ -1,6 +1,7 @@
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
 import { User } from '../users/user.entity';
 import { Address } from '../addresses/address.entity';
+import { Rider } from '../riders/rider.entity';
 import { OrderItem } from './order-item.entity';
 
 @Entity('orders')
@@ -17,6 +18,10 @@ export class Order {
 
   @Column({ name: 'rider_id', nullable: true })
   riderId: string;
+
+  @ManyToOne(() => Rider)
+  @JoinColumn({ name: 'rider_id' })
+  rider: Rider;
 
   @Column({ name: 'address_id' })
   addressId: string;
@@ -54,6 +59,9 @@ export class Order {
 
   @OneToMany(() => OrderItem, item => item.order)
   items: OrderItem[];
+
+  @Column({ name: 'is_rated', default: false })
+  isRated: boolean;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

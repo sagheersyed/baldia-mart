@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator, Modal, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import io from 'socket.io-client';
 import { ordersApi } from '../api/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Shared machine IP logic (ideally would be in a config file)
 const BASE_IP = '192.168.100.142';
@@ -20,33 +21,69 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
   const { orderId } = route.params;
   const [status, setStatus] = useState('pending');
   const [loading, setLoading] = useState(true);
+  const [rider, setRider] = useState<any>(null);
+  const [order, setOrder] = useState<any>(null);
+  const [localItems, setLocalItems] = useState<any[]>([]);
+  const [timeline, setTimeline] = useState<any[]>([]);
+  const [showRating, setShowRating] = useState(false);
+  const [rating, setRating] = useState(5);
+  const [comment, setComment] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
+
+  const fetchOrderDetails = async () => {
+    try {
+      const [orderRes, timelineRes] = await Promise.all([
+        ordersApi.getById(orderId),
+        ordersApi.getTimeline(orderId)
+      ]);
+      setOrder(orderRes.data);
+      setLocalItems(orderRes.data.items || []);
+      setTimeline(timelineRes.data);
+      setStatus(orderRes.data.status || 'pending');
+      if (orderRes.data.rider) {
+        setRider(orderRes.data.rider);
+      }
+
+      if (orderRes.data.status === 'delivered' && !orderRes.data.isRated) {
+        const dismissed = await AsyncStorage.getItem(`ratingDismissed_${orderId}`);
+        if (!dismissed) {
+          setShowRating(true);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to fetch order details:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    // Step 1: Fetch initial status from API
-    const fetchInitialStatus = async () => {
-      try {
-        const res = await ordersApi.getById(orderId);
-        setStatus(res.data.status || 'pending');
-      } catch (e) {
-        console.error('Failed to fetch order status:', e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchInitialStatus();
+    fetchOrderDetails();
 
-    // Step 2: Subscribe to real-time socket updates
-    const socket = io(SOCKET_URL);
+    const socket = io(SOCKET_URL, {
+      transports: ['websocket'],
+      forceNew: true
+    });
+
     socket.on('connect', () => {
+      console.log('User App: Connected to socket');
       socket.emit('joinOrder', orderId);
     });
-    socket.on('orderStatusUpdated', (data) => {
+
+    socket.on('connect_error', (err) => {
+      console.error('User App: Socket connection error:', err);
+    });
+
+    socket.on('orderStatusUpdated', async (data) => {
+      console.log('User App: Received status update:', data);
       if (data.orderId === orderId) {
         setStatus(data.status);
+        await fetchOrderDetails();
       }
     });
 
     return () => {
+      console.log('User App: Disconnecting socket');
       socket.disconnect();
     };
   }, [orderId]);
@@ -80,6 +117,106 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
         }
       ]
     );
+  };
+
+  const handleRemoveItem = (itemId: string, itemName: string) => {
+    Alert.alert(
+      'Remove Item',
+      `Are you sure you want to remove ${itemName} from your order?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const res = await ordersApi.removeItem(orderId, itemId);
+              if (res.data?.deleted) {
+                Alert.alert('Order Cancelled', 'All items were removed, so the order has been cancelled.', [
+                  { text: 'OK', onPress: () => navigation.navigate('MyOrders') }
+                ]);
+              } else {
+                fetchOrderDetails();
+              }
+            } catch (err: any) {
+              // Only alert if we didn't just delete the order (which might cause a background 404 in fetch)
+              const msg = err.response?.data?.message || 'Failed to remove item.';
+              Alert.alert('Error', msg);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleUpdateQuantityLocal = (itemId: string, newQuantity: number) => {
+    if (newQuantity < 0) return;
+    setLocalItems(prev => prev.map(item => 
+      item.id === itemId ? { ...item, quantity: newQuantity } : item
+    ));
+  };
+
+  const hasChanges = () => {
+    if (!order || !order.items) return false;
+    return JSON.stringify(localItems.map(i => ({ id: i.id, q: i.quantity }))) !== 
+           JSON.stringify(order.items.map(i => ({ id: i.id, q: i.quantity })));
+  };
+
+  const handleConfirmBatchUpdates = async () => {
+    try {
+      setLoading(true);
+      const updates = localItems.map(item => ({
+        itemId: item.id,
+        quantity: item.quantity
+      }));
+      const res = await ordersApi.updateOrderItems(orderId, updates);
+      
+      if (res.data?.deleted) {
+        Alert.alert('Order Cancelled', 'All items were removed, so the order has been cancelled.', [
+          { text: 'OK', onPress: () => navigation.navigate('MyOrders') }
+        ]);
+      } else {
+        setOrder(res.data);
+        setLocalItems(res.data.items || []);
+        Alert.alert('Success', 'Order updated successfully!');
+      }
+    } catch (err: any) {
+      const msg = err.response?.data?.message || 'Failed to update order. Please try again.';
+      Alert.alert('Error', msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDismissRating = async () => {
+    try {
+      await AsyncStorage.setItem(`ratingDismissed_${orderId}`, 'true');
+      setShowRating(false);
+    } catch (e) {
+      console.error('Failed to dismiss rating:', e);
+    }
+  };
+
+  const handleSubmitReview = async () => {
+    if (!rider) return;
+    setSubmittingReview(true);
+    try {
+      const { ridersApi } = require('../api/api');
+      await ridersApi.postReview(rider.id, {
+        rating,
+        comment,
+        orderId
+      });
+      // Mark as dismissed locally as well to prevent re-show before server sync if any
+      await AsyncStorage.setItem(`ratingDismissed_${orderId}`, 'true');
+      setShowRating(false);
+      Alert.alert('Thank You!', 'Your feedback helps us improve our service.');
+    } catch (e: any) {
+      const msg = e.response?.data?.message || 'Failed to submit review.';
+      Alert.alert('Error', msg);
+    } finally {
+      setSubmittingReview(false);
+    }
   };
 
   if (loading) {
@@ -134,13 +271,85 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
             </View>
           </View>
         )}
+        
+        {rider && (
+          <View style={styles.riderCard}>
+            <View style={styles.riderInfo}>
+              <View style={styles.riderAvatar}>
+                <Text style={styles.riderAvatarText}>{rider.name?.[0] || 'R'}</Text>
+              </View>
+              <View style={{ flex: 1, marginLeft: 15 }}>
+                <Text style={styles.riderName}>{rider.name || 'Your Rider'}</Text>
+                <Text style={styles.riderStatus}>Assign to your delivery</Text>
+              </View>
+              <TouchableOpacity 
+                style={styles.callBtn} 
+                onPress={() => {
+                  const { Linking } = require('react-native');
+                  Linking.openURL(`tel:${rider.phoneNumber}`);
+                }}
+              >
+                <Text style={styles.callIcon}>📞</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {order && order.items && order.items.length > 0 && (
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryTitle}>Order Summary</Text>
+            {localItems.map((item: any) => (
+              <View key={item.id} style={styles.itemRow}>
+                <View style={styles.itemInfo}>
+                  <Text style={styles.itemName}>
+                    {item.product?.name || 'Item'}
+                  </Text>
+                  <Text style={styles.itemPrice}>Rs. {item.priceAtTime} x {item.quantity}</Text>
+                </View>
+                {status === 'pending' || status === 'confirmed' ? (
+                  <View style={styles.quantityControls}>
+                    <TouchableOpacity 
+                      style={styles.qtyBtn}
+                      onPress={() => handleUpdateQuantityLocal(item.id, item.quantity - 1)}
+                    >
+                      <Text style={styles.qtyBtnText}>-</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.qtyText}>{item.quantity}</Text>
+                    <TouchableOpacity 
+                      style={styles.qtyBtn}
+                      onPress={() => handleUpdateQuantityLocal(item.id, item.quantity + 1)}
+                    >
+                      <Text style={styles.qtyBtnText}>+</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <Text style={styles.itemName}>{item.quantity}x</Text>
+                )}
+              </View>
+            ))}
+            {hasChanges() && (
+              <TouchableOpacity 
+                style={styles.confirmUpdatesBtn} 
+                onPress={handleConfirmBatchUpdates}
+              >
+                <Text style={styles.confirmUpdatesBtnText}>Confirm Changes</Text>
+              </TouchableOpacity>
+            )}
+            <View style={styles.summaryDivider} />
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Total</Text>
+              <Text style={styles.totalText}>Rs. {Number(order.total).toFixed(0)}</Text>
+            </View>
+          </View>
+        )}
 
         <View style={styles.timelineContainer}>
           {STATUS_STEPS.map((step, index) => {
-            const isCompleted = index < currentStepIndex;
+            const historyItem = timeline.find(h => h.status === step.key);
+            const isCompleted = !!historyItem;
             const isCurrent = index === currentStepIndex;
             const isLast = index === STATUS_STEPS.length - 1;
-            const isPassed = status !== 'cancelled' && (isCompleted || isCurrent);
+            const isPassed = isCompleted || isCurrent;
 
             return (
               <View key={step.key} style={styles.timelineItem}>
@@ -155,19 +364,70 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
                   {!isLast && <View style={[styles.connector, isCompleted && styles.passedConnector]} />}
                 </View>
                 <View style={styles.rightColumn}>
-                  <Text style={[
-                    styles.stepLabel, 
-                    isPassed && styles.passedStepLabel,
-                    isCurrent && styles.currentStepLabel
-                  ]}>
-                    {step.label}
-                  </Text>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={[
+                      styles.stepLabel, 
+                      isPassed && styles.passedStepLabel,
+                      isCurrent && styles.currentStepLabel
+                    ]}>
+                      {step.label}
+                    </Text>
+                    {historyItem && (
+                      <Text style={styles.timeLabel}>
+                        {new Date(historyItem.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </Text>
+                    )}
+                  </View>
                   <Text style={styles.stepDescription}>{step.description}</Text>
                 </View>
               </View>
             );
           })}
         </View>
+
+        {/* Rating Modal */}
+        <Modal visible={showRating} transparent animationType="slide">
+          <View style={styles.modalOverlay}>
+            <View style={styles.ratingBox}>
+              <Text style={styles.ratingTitle}>Rate your Rider</Text>
+              <Text style={styles.ratingSubtitle}>How was your delivery experience with {rider?.name}?</Text>
+              
+              <View style={styles.starsRow}>
+                {[1, 2, 3, 4, 5].map(s => (
+                  <TouchableOpacity key={s} onPress={() => setRating(s)}>
+                    <Text style={[styles.star, rating >= s && styles.activeStar]}>★</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <TextInput 
+                style={styles.commentInput}
+                placeholder="Share your feedback..."
+                placeholderTextColor="#999"
+                multiline
+                numberOfLines={3}
+                value={comment}
+                onChangeText={setComment}
+              />
+
+              <TouchableOpacity 
+                style={[styles.submitRatingBtn, submittingReview && { opacity: 0.7 }]} 
+                onPress={handleSubmitReview}
+                disabled={submittingReview}
+              >
+                {submittingReview ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.submitRatingText}>Submit Review</Text>
+                )}
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.closeRatingBtn} onPress={handleDismissRating}>
+                <Text style={styles.closeRatingText}>Maybe later</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       </ScrollView>
 
       <TouchableOpacity 
@@ -241,4 +501,65 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
   },
   homeBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  
+  riderCard: {
+    backgroundColor: '#fff', borderRadius: 20, padding: 20,
+    marginBottom: 25, shadowColor: '#000', shadowOpacity: 0.05,
+    shadowRadius: 10, elevation: 2,
+    borderWidth: 1, borderColor: '#F0F0F0',
+  },
+  riderInfo: { flexDirection: 'row', alignItems: 'center' },
+  riderAvatar: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#FF450015', justifyContent: 'center', alignItems: 'center' },
+  riderAvatarText: { color: '#FF4500', fontSize: 20, fontWeight: '800' },
+  riderName: { fontSize: 16, fontWeight: '700', color: '#2D3748' },
+  riderStatus: { fontSize: 13, color: '#A0AEC0', marginTop: 2 },
+  callBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#EDF2F7', justifyContent: 'center', alignItems: 'center' },
+  callIcon: { fontSize: 18 },
+
+  summaryCard: {
+    backgroundColor: '#fff', borderRadius: 20, padding: 20,
+    marginBottom: 25, shadowColor: '#000', shadowOpacity: 0.05,
+    shadowRadius: 10, elevation: 2,
+    borderWidth: 1, borderColor: '#F0F0F0',
+  },
+  summaryTitle: { fontSize: 16, fontWeight: '700', color: '#2D3748', marginBottom: 15 },
+  itemRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  itemInfo: { flex: 1 },
+  itemName: { fontSize: 14, color: '#2D3748', fontWeight: '500' },
+  itemPrice: { fontSize: 12, color: '#718096', marginTop: 2 },
+  removeItemBtn: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#FFF5F5', justifyContent: 'center', alignItems: 'center', marginLeft: 10 },
+  removeIcon: { color: '#E53E3E', fontSize: 10, fontWeight: 'bold' },
+  summaryDivider: { height: 1, backgroundColor: '#F0F0F0', marginVertical: 12 },
+  totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  totalLabel: { fontSize: 14, fontWeight: '600', color: '#718096' },
+  totalText: { fontSize: 18, fontWeight: '800', color: '#1A1A1A' },
+  
+  quantityControls: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F7FAFC', borderRadius: 10, padding: 4 },
+  qtyBtn: { width: 32, height: 32, backgroundColor: '#fff', borderRadius: 8, justifyContent: 'center', alignItems: 'center', elevation: 1, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2 },
+  qtyBtnText: { fontSize: 18, fontWeight: 'bold', color: '#FF4500' },
+  qtyText: { marginHorizontal: 12, fontSize: 15, fontWeight: '700', color: '#2D3748' },
+
+  timeLabel: { fontSize: 11, color: '#A0AEC0', fontWeight: '500' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 25 },
+  ratingBox: { backgroundColor: '#fff', borderRadius: 28, padding: 30, alignItems: 'center' },
+  ratingTitle: { fontSize: 22, fontWeight: '800', color: '#1A1A1A' },
+  ratingSubtitle: { fontSize: 14, color: '#718096', textAlign: 'center', marginTop: 8, marginBottom: 25 },
+  starsRow: { flexDirection: 'row', marginBottom: 25 },
+  star: { fontSize: 40, color: '#E2E8F0', marginHorizontal: 6 },
+  activeStar: { color: '#FFD700' },
+  commentInput: { width: '100%', backgroundColor: '#F7FAFC', borderRadius: 16, padding: 15, color: '#2D3748', fontSize: 15, height: 100, textAlignVertical: 'top', marginBottom: 25 },
+  submitRatingBtn: { width: '100%', height: 55, backgroundColor: '#FF4500', borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
+  submitRatingText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  closeRatingBtn: { marginTop: 15, padding: 10 },
+  closeRatingText: { color: '#718096', fontWeight: '600', fontSize: 14 },
+  confirmUpdatesBtn: {
+    marginTop: 15,
+    backgroundColor: '#FF450015',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FF450030',
+  },
+  confirmUpdatesBtnText: { color: '#FF4500', fontWeight: '700', fontSize: 14 },
 });
