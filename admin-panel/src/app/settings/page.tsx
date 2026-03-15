@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Save, RefreshCw, Truck, ArrowRight, Ruler } from 'lucide-react';
+import { Save, RefreshCw, Truck, ArrowRight, Ruler, Phone, Mail, MapPin, Building2 } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api';
 
 const SETTINGS_API_URL = 'http://localhost:3000/api/v1/settings';
@@ -175,20 +175,96 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* Other Settings Placeholder */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden opacity-60">
-           <div className="p-6 flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
-                  <ArrowRight size={20} className="text-gray-400" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-700">More configurations coming soon...</h3>
-                  <p className="text-xs text-gray-400">Store status, tax rates, and security preferences.</p>
+        {/* Store Information */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="bg-gray-50 p-6 border-b border-gray-100 flex items-center space-x-3">
+            <Building2 className="text-primary" size={24} />
+            <h2 className="text-xl font-semibold text-gray-800">Store Profile & Location</h2>
+          </div>
+          
+          <div className="p-6 space-y-8">
+            <p className="text-sm text-gray-500 bg-orange-50 p-4 rounded-xl border border-orange-100">
+              <strong>Public Info:</strong> This contact information and default location is used across the user and rider apps.
+            </p>
+
+            <div className="grid md:grid-cols-2 gap-8">
+              {/* Contact Phone */}
+              <div className="space-y-3">
+                <label className="text-sm font-medium text-gray-700">Support Phone Number</label>
+                <div className="flex space-x-2">
+                  <div className="relative flex-1">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><Phone size={16}/></span>
+                    <input
+                      type="text"
+                      value={settings.contact_phone || ''}
+                      onChange={(e) => handleSettingChange('contact_phone', e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition"
+                      placeholder="+92 300 0000000"
+                    />
+                  </div>
+                  <button 
+                    onClick={() => handleUpdate('contact_phone', settings.contact_phone)}
+                    disabled={saving}
+                    className="p-3 bg-primary text-white rounded-xl hover:bg-orange-600 transition disabled:opacity-50"
+                  >
+                    <Save size={20} />
+                  </button>
                 </div>
               </div>
-           </div>
+
+              {/* Contact Email */}
+              <div className="space-y-3">
+                <label className="text-sm font-medium text-gray-700">Support Email</label>
+                <div className="flex space-x-2">
+                  <div className="relative flex-1">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><Mail size={16}/></span>
+                    <input
+                      type="email"
+                      value={settings.contact_email || ''}
+                      onChange={(e) => handleSettingChange('contact_email', e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition"
+                      placeholder="support@baldiamart.com"
+                    />
+                  </div>
+                  <button 
+                    onClick={() => handleUpdate('contact_email', settings.contact_email)}
+                    disabled={saving}
+                    className="p-3 bg-primary text-white rounded-xl hover:bg-orange-600 transition disabled:opacity-50"
+                  >
+                    <Save size={20} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Mart Location */}
+              <div className="space-y-3 md:col-span-2">
+                <label className="text-sm font-medium text-gray-700">Primary Mart Location(s)</label>
+                <div className="flex space-x-2">
+                  <div className="relative flex-1">
+                    <span className="absolute left-3 top-3 text-gray-400"><MapPin size={16}/></span>
+                    <textarea
+                      value={settings.mart_location || ''}
+                      onChange={(e) => handleSettingChange('mart_location', e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition resize-none h-24"
+                      placeholder="Baldia Town, Sector 4, Karachi"
+                    />
+                  </div>
+                  <div className="flex flex-col justify-end pb-1">
+                    <button 
+                      onClick={() => handleUpdate('mart_location', settings.mart_location)}
+                      disabled={saving}
+                      className="p-3 bg-primary text-white rounded-xl hover:bg-orange-600 transition disabled:opacity-50 h-[46px]"
+                    >
+                      <Save size={20} />
+                    </button>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-400 italic">Displayed to riders for pickup validation. In the future, this will support a list of coordinates.</p>
+              </div>
+            </div>
+          </div>
         </div>
+
       </div>
     </div>
   );

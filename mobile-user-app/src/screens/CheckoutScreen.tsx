@@ -12,7 +12,12 @@ export default function CheckoutScreen({ navigation }: any) {
   const [addresses, setAddresses] = useState<any[]>([]);
   const [selectedAddress, setSelectedAddress] = useState<any>(null);
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(true);
-  const [showAddressModal, setShowAddressModal] = useState(false);
+  
+  // Modals state
+  const [showAddressListModal, setShowAddressListModal] = useState(false);
+  const [showAddressPickerModal, setShowAddressPickerModal] = useState(false);
+  const [editingAddressData, setEditingAddressData] = useState<any>(null);
+  
   const [deliveryFee, setDeliveryFee] = useState(0);
   const [isLoadingFee, setIsLoadingFee] = useState(false);
   const [isAddressValid, setIsAddressValid] = useState(true);
@@ -67,19 +72,31 @@ export default function CheckoutScreen({ navigation }: any) {
 
   const handleUpdateAddress = async (addrData: any) => {
     try {
-      if (selectedAddress?.id) {
-        await addressesApi.update(selectedAddress.id, { ...addrData, isDefault: true });
-        await fetchAddresses();
-        setShowAddressModal(false);
+      if (editingAddressData?.id) {
+        await addressesApi.update(editingAddressData.id, addrData);
       } else {
-        // Fallback for case where no address exists yet
-        await addressesApi.create({ ...addrData, isDefault: true });
-        await fetchAddresses();
-        setShowAddressModal(false);
+        await addressesApi.create({ ...addrData, isDefault: addresses.length === 0 });
       }
+      await fetchAddresses();
+      setShowAddressPickerModal(false);
     } catch (error) {
-      Alert.alert('Error', 'Failed to update address');
+      Alert.alert('Error', 'Failed to save address');
     }
+  };
+  
+  const handleOpenEdit = (addr?: any) => {
+    setEditingAddressData(addr || null);
+    setShowAddressListModal(false);
+    
+    // Give time for list modal to close before opening picker
+    setTimeout(() => {
+      setShowAddressPickerModal(true);
+    }, 300);
+  };
+
+  const handleSelectAddress = (addr: any) => {
+    setSelectedAddress(addr);
+    setShowAddressListModal(false);
   };
   
   const subtotal = getCartTotal();
@@ -143,7 +160,7 @@ export default function CheckoutScreen({ navigation }: any) {
         {isLoadingAddresses ? (
           <ActivityIndicator color="#FF4500" style={{ marginVertical: 20 }} />
         ) : selectedAddress ? (
-          <TouchableOpacity style={styles.addressBox} onPress={() => setShowAddressModal(true)}>
+          <TouchableOpacity style={styles.addressBox} onPress={() => setShowAddressListModal(true)}>
             <View style={styles.addressIcon}>
                <Text style={{ fontSize: 20 }}>🏠</Text>
             </View>
@@ -151,14 +168,18 @@ export default function CheckoutScreen({ navigation }: any) {
               <Text style={styles.addressLabel}>{selectedAddress.label || 'Home'}</Text>
               <Text style={styles.addressText}>{selectedAddress.streetAddress}</Text>
             </View>
-            <Text style={styles.changeBtn}>Edit</Text>
+            <Text style={styles.changeBtn}>Change</Text>
           </TouchableOpacity>
         ) : (
           <TouchableOpacity 
             style={styles.addressBox}
-            onPress={() => Alert.alert('Notice', 'Address selection coming soon. Using seeded address.')}
+            onPress={() => handleOpenEdit()}
           >
-            <Text style={{ color: '#666', textAlign: 'center', flex: 1 }}>No address found. Please add one.</Text>
+            <View style={[styles.addressIcon, { backgroundColor: '#f0f0f0' }]}>
+               <Text style={{ fontSize: 20 }}>📍</Text>
+            </View>
+            <Text style={{ color: '#1a1a1a', fontWeight: 'bold', flex: 1 }}>No address found. Add one now.</Text>
+            <Text style={styles.changeBtn}>Add</Text>
           </TouchableOpacity>
         )}
 
@@ -225,12 +246,55 @@ export default function CheckoutScreen({ navigation }: any) {
         </TouchableOpacity>
       </View>
 
+      {/* Address Selection Modal */}
+      {showAddressListModal && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.addressListContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Saved Addresses</Text>
+              <TouchableOpacity onPress={() => setShowAddressListModal(false)} style={styles.closeBtn}>
+                <Text style={styles.closeBtnText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.addressListScroll} showsVerticalScrollIndicator={false}>
+              {addresses.map((addr) => (
+                <View key={addr.id} style={[styles.addressItem, selectedAddress?.id === addr.id && styles.addressItemSelected]}>
+                  <TouchableOpacity style={styles.addressItemInfo} onPress={() => handleSelectAddress(addr)}>
+                    <View style={styles.addressIconItem}>
+                       <Text style={{ fontSize: 16 }}>{addr.label === 'Work' ? '🏢' : '🏠'}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.addressItemLabel}>{addr.label || 'Other'}</Text>
+                      <Text style={styles.addressItemText} numberOfLines={2}>{addr.streetAddress}</Text>
+                    </View>
+                    {selectedAddress?.id === addr.id && (
+                      <View style={styles.selectedCircle}>
+                        <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>✓</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.editAddressBtn} onPress={() => handleOpenEdit(addr)}>
+                    <Text style={styles.editAddressBtnText}>Edit</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </ScrollView>
+
+            <TouchableOpacity style={styles.addNewAddressBtn} onPress={() => handleOpenEdit()}>
+              <Text style={styles.addNewAddressText}>+ Add New Address</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {/* Actual Address Map/Form Modal */}
       <AddressPickerModal
-        visible={showAddressModal}
-        onClose={() => setShowAddressModal(false)}
+        visible={showAddressPickerModal}
+        onClose={() => setShowAddressPickerModal(false)}
         onSave={handleUpdateAddress}
-        initialData={selectedAddress}
-        title="Update Delivery Address"
+        initialData={editingAddressData}
+        title={editingAddressData ? "Edit Address" : "Add New Address"}
       />
     </SafeAreaView>
   );
@@ -265,6 +329,26 @@ const styles = StyleSheet.create({
   footer: { padding: 20, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#f0f0f0', paddingBottom: 30 },
   placeOrderBtn: { backgroundColor: '#FF4500', height: 60, borderRadius: 20, justifyContent: 'center', alignItems: 'center', elevation: 8, shadowColor: '#FF4500', shadowOpacity: 0.3, shadowRadius: 10 },
   disabledBtn: { opacity: 0.7 },
-  placeOrderText: { color: '#fff', fontSize: 18, fontWeight: 'bold' }
+  placeOrderText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+  
+  // Modal Styles
+  modalOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end', zIndex: 100 },
+  addressListContainer: { backgroundColor: '#fff', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, maxHeight: '80%', paddingBottom: 40 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  modalTitle: { fontSize: 20, fontWeight: '900', color: '#1a1a1a' },
+  closeBtn: { width: 36, height: 36, backgroundColor: '#f0f0f0', borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
+  closeBtnText: { fontSize: 16, fontWeight: 'bold', color: '#666' },
+  addressListScroll: { maxHeight: 400 },
+  addressItem: { flexDirection: 'row', flexWrap: 'nowrap', backgroundColor: '#f9f9f9', borderRadius: 20, marginBottom: 15, paddingRight: 15, borderBottomWidth: 0, borderWidth: 1, borderColor: '#f0f0f0' },
+  addressItemSelected: { borderColor: '#FF4500', backgroundColor: '#FFF5F0' },
+  addressItemInfo: { flex: 1, flexDirection: 'row', alignItems: 'center', padding: 15 },
+  addressIconItem: { width: 36, height: 36, backgroundColor: '#fff', borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: 15, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, elevation: 1 },
+  addressItemLabel: { fontWeight: 'bold', fontSize: 15, color: '#1a1a1a', marginBottom: 2 },
+  addressItemText: { color: '#888', fontSize: 12, paddingRight: 10 },
+  selectedCircle: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#FF4500', justifyContent: 'center', alignItems: 'center' },
+  editAddressBtn: { paddingVertical: 15, paddingLeft: 10, justifyContent: 'center', alignItems: 'center', borderLeftWidth: 1, borderLeftColor: '#f0f0f0' },
+  editAddressBtnText: { color: '#FF4500', fontWeight: 'bold', fontSize: 13 },
+  addNewAddressBtn: { marginTop: 10, backgroundColor: '#fff', borderWidth: 2, borderStyle: 'dashed', borderColor: '#ccc', borderRadius: 20, padding: 18, alignItems: 'center' },
+  addNewAddressText: { color: '#666', fontWeight: 'bold', fontSize: 15 }
 });
 

@@ -17,6 +17,11 @@ export class SettingsService implements OnModuleInit {
     await this.seedDefault('delivery_threshold_km', '3'); // Free up to 3km in base
     await this.seedDefault('delivery_per_km_fee', '20'); // Rs. 20 per extra km
     await this.seedDefault('tax_rate_percentage', '5.00');
+    
+    // New Global Configuration
+    await this.seedDefault('contact_phone', '+92 300 1234567');
+    await this.seedDefault('contact_email', 'support@baldiamart.com');
+    await this.seedDefault('mart_location', 'Baldia Town, Karachi');
   }
 
   private async seedDefault(key: string, value: string) {

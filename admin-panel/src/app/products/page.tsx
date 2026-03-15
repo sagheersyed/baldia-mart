@@ -241,28 +241,29 @@ export default function ProductsPage() {
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 animate-in fade-in duration-200 overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
           <div className="absolute inset-0 bg-gray-900/40 backdrop-blur-md" onClick={() => setShowModal(false)}></div>
-          <div className="relative bg-white w-full max-w-2xl rounded-[3rem] shadow-2xl border border-white py-10 my-10 animate-in zoom-in-95 duration-300">
-            <div className="px-10">
-              <div className="flex justify-between items-center mb-8">
-                <div>
-                  <h2 className="text-3xl font-black text-gray-800 tracking-tight">{editingProduct ? 'Edit Product' : 'Add New Product'}</h2>
-                  <p className="text-sm text-gray-500 font-medium">{editingProduct ? `Updating ${editingProduct.name}` : 'Register a new item in your inventory'}</p>
-                </div>
-                <button onClick={() => setShowModal(false)} className="p-3 bg-gray-100 text-gray-400 rounded-full hover:bg-gray-200 transition active:scale-90">
-                  <X size={20} />
-                </button>
+          <div className="relative bg-white w-full max-w-xl rounded-[2.5rem] shadow-2xl border border-white flex flex-col max-h-[95vh] sm:max-h-[90vh] animate-in zoom-in-95 duration-300">
+            
+            <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center shrink-0">
+              <div>
+                <h2 className="text-2xl font-black text-gray-800 tracking-tight">{editingProduct ? 'Edit Product' : 'Add New Product'}</h2>
+                <p className="text-xs text-gray-500 font-medium mt-1">{editingProduct ? `Updating ${editingProduct.name}` : 'Register a new item in your inventory'}</p>
               </div>
+              <button onClick={() => setShowModal(false)} className="p-2 bg-gray-100 text-gray-400 rounded-full hover:bg-gray-200 transition active:scale-90">
+                <X size={20} />
+              </button>
+            </div>
 
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="grid grid-cols-2 gap-6">
+            <div className="px-8 py-6 overflow-y-auto flex-1 custom-scrollbar">
+              <form id="productForm" onSubmit={handleSubmit} className="space-y-6">
+                <div className="grid grid-cols-2 gap-5">
                   <div className="col-span-2">
-                    <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Product Name</label>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 px-1">Product Name</label>
                     <input
                       required
                       type="text"
-                      className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-bold"
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-bold text-sm"
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       placeholder="e.g. Fresh Red Tomatoes"
@@ -270,11 +271,11 @@ export default function ProductsPage() {
                   </div>
 
                   <div className="col-span-2">
-                    <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Category</label>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 px-1">Category</label>
                     <div className="relative">
                       <select
                         required
-                        className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-bold appearance-none"
+                        className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-bold text-sm appearance-none"
                         value={formData.categoryId}
                         onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
                       >
@@ -283,107 +284,110 @@ export default function ProductsPage() {
                           <option key={cat.id} value={cat.id}>{cat.name}</option>
                         ))}
                       </select>
-                      <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                        <Filter size={16} />
+                      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                        <Filter size={14} />
                       </div>
                     </div>
                   </div>
 
                   <div className="col-span-2">
-                    <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Description</label>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 px-1">Description</label>
                     <textarea
                       rows={3}
-                      className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-bold resize-none"
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-bold text-sm resize-none"
                       value={formData.description}
                       onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                       placeholder="Tell customers more about this product..."
                     />
                   </div>
 
-                  <div className="bg-orange-50/50 p-6 rounded-[2rem] border border-orange-100 col-span-2 grid grid-cols-2 gap-4">
-                    <div className="col-span-2 mb-2">
-                      <h3 className="text-xs font-black text-orange-400 uppercase tracking-widest">Pricing & Status</h3>
+                  <div className="bg-orange-50/50 p-5 rounded-3xl border border-orange-100 col-span-2 grid grid-cols-2 gap-4">
+                    <div className="col-span-2 mb-1">
+                      <h3 className="text-[10px] font-black text-orange-400 uppercase tracking-widest">Pricing & Status</h3>
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-orange-900/60 uppercase tracking-widest mb-2 px-1">Base Price (Rs.)</label>
+                      <label className="block text-[10px] font-bold text-orange-900/60 uppercase tracking-widest mb-1.5 px-1">Base Price (Rs.)</label>
                       <input
                         required
                         type="number"
                         step="0.01"
-                        className="w-full px-5 py-3 bg-white border border-orange-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-black text-orange-900"
+                        className="w-full px-4 py-2.5 bg-white border border-orange-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-black text-orange-900 text-sm"
                         value={formData.price}
                         onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) || 0 })}
                       />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-orange-900/60 uppercase tracking-widest mb-2 px-1">Discount (Rs.)</label>
+                      <label className="block text-[10px] font-bold text-orange-900/60 uppercase tracking-widest mb-1.5 px-1">Discount (Rs.)</label>
                       <input
                         type="number"
                         step="0.01"
-                        className="w-full px-5 py-3 bg-white border border-orange-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-black text-orange-900"
+                        className="w-full px-4 py-2.5 bg-white border border-orange-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-black text-orange-900 text-sm"
                         value={formData.discount}
                         onChange={(e) => setFormData({ ...formData, discount: parseFloat(e.target.value) || 0 })}
                       />
                     </div>
 
-                    <div className="col-span-2 flex justify-between items-center pt-2 px-1">
-                      <span className="text-xs font-black text-orange-400 uppercase tracking-widest">Calculated Final Price:</span>
-                      <span className="text-xl font-black text-orange-600">Rs. {(formData.price - formData.discount).toFixed(2)}</span>
+                    <div className="col-span-2 flex justify-between items-center pt-2 px-1 border-t border-orange-100 mt-1">
+                      <span className="text-[10px] font-black text-orange-400 uppercase tracking-widest">Calculated Final Price:</span>
+                      <span className="text-lg font-black text-orange-600">Rs. {(formData.price - formData.discount).toFixed(2)}</span>
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Stock Quantity</label>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 px-1">Stock Quantity</label>
                     <input
                       required
                       type="number"
-                      className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-bold"
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-bold text-sm"
                       value={formData.stockQuantity}
                       onChange={(e) => setFormData({ ...formData, stockQuantity: parseInt(e.target.value) || 0 })}
                     />
                   </div>
 
-                  <div className="flex items-center space-x-4 h-full pt-6">
-                    <div className={`w-4 h-4 rounded-full ${formData.stockQuantity > 0 ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-red-500'}`}></div>
-                    <span className="text-xs font-black text-gray-500 uppercase tracking-widest">
+                  <div className="flex items-center space-x-3 h-full pt-6">
+                    <div className={`w-3 h-3 rounded-full ${formData.stockQuantity > 0 ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-red-500'}`}></div>
+                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">
                       {formData.stockQuantity > 0 ? 'In Stock' : 'Out of Stock'}
                     </span>
                   </div>
 
                   <div className="col-span-2">
-                    <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Product Image URL</label>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 px-1">Product Image URL</label>
                     <div className="flex space-x-4">
                       <div className="flex-1">
                         <input
                           type="url"
-                          className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-bold"
+                          className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-bold text-sm"
                           value={formData.imageUrl}
                           onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
                           placeholder="https://..."
                         />
                       </div>
-                      <div className="w-16 h-16 bg-gray-50 rounded-2xl border border-gray-100 flex items-center justify-center overflow-hidden shrink-0">
+                      <div className="w-12 h-12 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-center overflow-hidden shrink-0 mt-0.5">
                         {formData.imageUrl ? (
                           <img src={formData.imageUrl} alt="Preview" className="w-full h-full object-cover" />
                         ) : (
-                          <Package className="text-gray-200" size={24} />
+                          <Package className="text-gray-200" size={20} />
                         )}
                       </div>
                     </div>
                   </div>
                 </div>
-
-                <div className="pt-4">
-                  <button
-                    disabled={isSubmitting}
-                    className="w-full py-5 bg-gradient-to-r from-primary to-orange-600 text-white rounded-[2rem] font-black text-xl hover:shadow-2xl hover:shadow-orange-500/30 transition-all active:scale-[0.98] disabled:opacity-50"
-                  >
-                    {isSubmitting ? 'Syncing...' : (editingProduct ? 'Save Changes' : 'Add Product')}
-                  </button>
-                </div>
               </form>
             </div>
+            
+            <div className="px-8 py-5 border-t border-gray-100 shrink-0 bg-gray-50/50 rounded-b-[2.5rem]">
+              <button
+                type="submit"
+                form="productForm"
+                disabled={isSubmitting}
+                className="w-full py-3.5 bg-gradient-to-r from-primary to-orange-600 text-white rounded-2xl font-black text-lg hover:shadow-xl hover:shadow-orange-500/30 transition-all active:scale-[0.98] disabled:opacity-50"
+              >
+                {isSubmitting ? 'Syncing...' : (editingProduct ? 'Save Changes' : 'Add Product')}
+              </button>
+            </div>
+
           </div>
         </div>
       )}

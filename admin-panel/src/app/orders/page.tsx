@@ -59,6 +59,7 @@ const STATUS_UPDATE_URL = (id: string) => `http://localhost:3000/api/v1/orders/$
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [riders, setRiders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
@@ -66,9 +67,23 @@ export default function OrdersPage() {
 
   useEffect(() => {
     fetchOrders();
+    fetchRiders();
     const interval = setInterval(fetchOrders, 30000); // Poll every 30s
     return () => clearInterval(interval);
   }, []);
+
+  const fetchRiders = async () => {
+    try {
+      const res = await fetchWithAuth('http://localhost:3000/api/v1/riders/all');
+      if (res.ok) {
+        const body = await res.json();
+        // Only get active riders with complete profiles
+        setRiders(body.filter((r: any) => r.isActive && r.isProfileComplete));
+      }
+    } catch (e) {
+      console.error('Failed to get riders', e);
+    }
+  };
 
   const fetchOrders = async () => {
     try {
@@ -103,6 +118,31 @@ export default function OrdersPage() {
       }
     } catch (error) {
       console.error('Error updating status:', error);
+    }
+  };
+
+  const handleAssignRider = async (orderId: string, riderId: string) => {
+    if (!riderId) return;
+    try {
+      const res = await fetchWithAuth(`http://localhost:3000/api/v1/orders/${orderId}/assign`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ riderId }),
+      });
+      if (res.ok) {
+        const updatedOrder = await res.json();
+        const fullRider = riders.find(r => r.id === riderId);
+        
+        setOrders(orders.map(o => o.id === orderId ? { ...o, status: updatedOrder.status, rider: fullRider || o.rider } : o));
+        if (selectedOrder && selectedOrder.id === orderId) {
+          setSelectedOrder({ ...selectedOrder, status: updatedOrder.status, rider: fullRider || selectedOrder.rider });
+        }
+        alert('Rider assigned successfully.');
+      } else {
+        alert('Failed to assign rider.');
+      }
+    } catch (error) {
+      console.error('Error assigning rider:', error);
     }
   };
 
@@ -254,16 +294,32 @@ export default function OrdersPage() {
                 </div>
                 <div>
                   <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center"><Bike size={14} className="mr-2" /> Assigned Rider</h3>
-                  <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100">
+                  <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100 flex flex-col justify-between h-[84px]">
                     {selectedOrder.rider ? (
-                      <>
+                      <div>
                          <p className="font-extrabold text-gray-900">{selectedOrder.rider.name}</p>
                          <p className="text-sm text-gray-500 flex items-center mt-1"><Phone size={12} className="mr-2" /> {selectedOrder.rider.phoneNumber || '—'}</p>
-                      </>
+                      </div>
                     ) : (
                       <p className="font-bold text-gray-400 italic">No rider assigned yet.</p>
                     )}
                   </div>
+                  
+                  {/* Manual Assignment */}
+                  {['pending', 'confirmed'].includes(selectedOrder.status.toLowerCase()) && (
+                    <div className="mt-3">
+                      <select 
+                        className="w-full text-xs font-bold border-gray-200 rounded-xl focus:ring-primary focus:border-primary p-2 bg-white shadow-sm"
+                        value={selectedOrder.rider?.id || ''}
+                        onChange={(e) => handleAssignRider(selectedOrder.id, e.target.value)}
+                      >
+                        <option value="">Manually Assign Rider...</option>
+                        {riders.map(r => (
+                          <option key={r.id} value={r.id}>{r.name} ({r.vehicleNumber}) - {r.isOnline ? '🟢 Online' : '🔴 Offline'}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
               </div>
 

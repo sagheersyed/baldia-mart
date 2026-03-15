@@ -203,6 +203,38 @@ export class OrdersService {
     return updatedOrder;
   }
 
+  async assignRider(orderId: string, riderId: string): Promise<Order> {
+    const order = await this.ordersRepository.findOne({ 
+      where: { id: orderId }
+    });
+    
+    if (!order) throw new NotFoundException('Order not found');
+
+    const riderRepo = this.ordersRepository.manager.getRepository('Rider');
+    const rider = await riderRepo.findOne({ where: { id: riderId } }) as any;
+    if (!rider) throw new NotFoundException('Rider not found');
+
+    order.riderId = riderId;
+    if (order.status === 'pending') {
+      order.status = 'confirmed';
+    }
+    
+    const updatedOrder = await this.ordersRepository.save(order);
+
+    // Record History
+    await this.orderHistoryRepository.save(
+      this.orderHistoryRepository.create({ orderId, status: order.status, notes: `Admin manually assigned rider #${riderId.slice(0,8)}` })
+    );
+
+    // Notify User
+    this.ordersGateway.emitOrderStatusUpdate(orderId, order.status, order.userId);
+    
+    // Notify previous and new riders (by broadcasting to order room/all)
+    this.ordersGateway.emitOrderAccepted(orderId);
+
+    return updatedOrder;
+  }
+
   async getActiveOrdersForRider(riderId: string): Promise<Order[]> {
     return this.ordersRepository.createQueryBuilder('order')
       .leftJoinAndSelect('order.items', 'items')

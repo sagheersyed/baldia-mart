@@ -14,6 +14,15 @@ export class RidersController {
     return this.ridersService.findAll();
   }
 
+  @Patch(':id')
+  // TODO: Add AdminRoleGuard later
+  async updateRiderByAdmin(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: any
+  ) {
+    return this.ridersService.update(id, body);
+  }
+
   @Patch(':id/status')
   async updateStatus(
     @Param('id', ParseUUIDPipe) id: string,

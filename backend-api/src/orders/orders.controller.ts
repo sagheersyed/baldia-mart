@@ -74,6 +74,15 @@ export class OrdersController {
     return this.ordersService.updateStatus(id, status);
   }
 
+  @Put(':id/assign')
+  // TODO: Add AdminRoleGuard later
+  async assignRider(
+    @Param('id', ParseUUIDPipe) id: string, 
+    @Body('riderId') riderId: string
+  ) {
+    return this.ordersService.assignRider(id, riderId);
+  }
+
   @Post(':id/cancel')
   async cancelOrder(@Req() req: Request, @Param('id', ParseUUIDPipe) id: string) {
     const user = req.user as any;

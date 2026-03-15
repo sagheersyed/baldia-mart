@@ -9,7 +9,7 @@ interface Review {
   rating: number;
   comment: string;
   createdAt: string;
-  rider: { name: string; phoneNumber: string };
+  rider: { id: string; name: string; phoneNumber: string };
   user: { name: string; phoneNumber: string };
   order: { id: string; total: number };
 }
@@ -20,6 +20,7 @@ export default function RatingsPage() {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterRating, setFilterRating] = useState<number | 'all'>('all');
+  const [filterRider, setFilterRider] = useState<string | 'all'>('all');
 
   useEffect(() => {
     fetchReviews();
@@ -40,9 +41,14 @@ export default function RatingsPage() {
     }
   };
 
-  const filteredReviews = filterRating === 'all' 
-    ? reviews 
-    : reviews.filter(r => r.rating === filterRating);
+  const filteredReviews = reviews.filter(r => {
+    const matchesRating = filterRating === 'all' || r.rating === filterRating;
+    const matchesRider = filterRider === 'all' || r.rider.id === filterRider;
+    return matchesRating && matchesRider;
+  });
+
+  // Extract unique riders for the filter dropdown
+  const uniqueRiders = Array.from(new Map(reviews.map(r => [r.rider.id, r.rider])).values());
 
   const stats = {
     average: reviews.length > 0 ? (reviews.reduce((acc, curr) => acc + curr.rating, 0) / reviews.length).toFixed(1) : '5.0',
@@ -103,14 +109,24 @@ export default function RatingsPage() {
             Recent Feedback
           </h2>
           <div className="flex items-center space-x-2">
+            <select
+              value={filterRider}
+              onChange={(e) => setFilterRider(e.target.value)}
+              className="mr-2 h-10 px-3 rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/20"
+            >
+              <option value="all">All Riders</option>
+              {uniqueRiders.map((r: any) => (
+                <option key={r.id} value={r.id}>{r.name} ({r.phoneNumber})</option>
+              ))}
+            </select>
             <Filter size={16} className="text-gray-400 mr-2" />
             {[5, 4, 3, 2, 1].map(r => (
               <button 
                 key={r}
                 onClick={() => setFilterRating(filterRating === r ? 'all' : r)}
-                className={`w-10 h-10 rounded-xl font-bold transition-all ${filterRating === r ? 'bg-primary text-white scale-110' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                className={`w-10 h-10 rounded-xl font-bold transition-all flex items-center justify-center ${filterRating === r ? 'bg-primary text-white scale-110 shadow-md' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
               >
-                {r}
+                {r} <Star size={10} className="ml-1" fill={filterRating === r ? "currentColor" : "none"}/>
               </button>
             ))}
           </div>

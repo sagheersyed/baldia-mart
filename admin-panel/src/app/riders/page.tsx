@@ -32,6 +32,17 @@ export default function RidersPage() {
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'blocked' | 'pending'>('all');
   const [viewingDocs, setViewingDocs] = useState<Rider | null>(null);
   const [updating, setUpdating] = useState<string | null>(null);
+  
+  // Edit State
+  const [editingRider, setEditingRider] = useState<Rider | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editData, setEditData] = useState({
+    name: '',
+    phoneNumber: '',
+    email: '',
+    vehicleType: '',
+    vehicleNumber: ''
+  });
 
   useEffect(() => {
     fetchRiders();
@@ -66,6 +77,28 @@ export default function RidersPage() {
       console.error('Error updating rider status:', error);
     } finally {
       setUpdating(null);
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingRider) return;
+    setSavingEdit(true);
+    try {
+      const res = await fetchWithAuth(`${API_URL}/${editingRider.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editData),
+      });
+      if (res.ok) {
+        setRiders(prev => prev.map(r => r.id === editingRider.id ? { ...r, ...editData } : r));
+        setEditingRider(null);
+      } else {
+        alert('Failed to update rider info.');
+      }
+    } catch (error) {
+      console.error('Error updating rider data:', error);
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -203,10 +236,25 @@ export default function RidersPage() {
               </div>
 
               <div className="pt-4 border-t border-gray-100 flex gap-2">
+                <button 
+                  onClick={() => {
+                    setEditingRider(rider);
+                    setEditData({
+                      name: rider.name || '',
+                      phoneNumber: rider.phoneNumber || '',
+                      email: rider.email || '',
+                      vehicleType: rider.vehicleType || '',
+                      vehicleNumber: rider.vehicleNumber || ''
+                    });
+                  }}
+                  className="flex-1 py-2.5 bg-gray-50 text-gray-600 font-bold rounded-xl flex items-center justify-center hover:bg-gray-100 transition text-sm border border-gray-200"
+                >
+                  Edit Info
+                </button>
                 {rider.isProfileComplete && (
                   <button 
                     onClick={() => setViewingDocs(rider)}
-                    className="flex-1 py-2.5 bg-blue-50 text-blue-600 font-bold rounded-xl flex items-center justify-center hover:bg-blue-500 hover:text-white transition text-sm border border-blue-100"
+                    className="flex-[1.5] py-2.5 bg-blue-50 text-blue-600 font-bold rounded-xl flex items-center justify-center hover:bg-blue-500 hover:text-white transition text-sm border border-blue-100"
                   >
                     <FileText size={15} className="mr-1.5" /> View Docs
                   </button>
@@ -295,6 +343,93 @@ export default function RidersPage() {
                 }`}
               >
                 {viewingDocs.isActive ? <><ShieldX size={20} className="mr-2" /> Block This Rider</> : <><ShieldCheck size={20} className="mr-2" /> Approve & Unblock Rider</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Rider Info Modal */}
+      {editingRider && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 animate-in fade-in duration-200">
+          <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setEditingRider(null)}></div>
+          <div className="relative bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl border border-white p-8 animate-in zoom-in-95 duration-300">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h2 className="text-2xl font-black text-gray-900">Edit Rider Info</h2>
+                <p className="text-sm font-bold text-gray-400 mt-1">#{editingRider.id.slice(0, 8)}</p>
+              </div>
+              <button onClick={() => setEditingRider(null)} className="p-2 bg-gray-100 rounded-full text-gray-500 hover:bg-gray-200">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1.5 px-1">Full Name</label>
+                <input
+                  type="text"
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-bold"
+                  value={editData.name}
+                  onChange={(e) => setEditData({...editData, name: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1.5 px-1">Phone Number</label>
+                <input
+                  type="text"
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-bold"
+                  value={editData.phoneNumber}
+                  onChange={(e) => setEditData({...editData, phoneNumber: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1.5 px-1">Email</label>
+                <input
+                  type="email"
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-bold"
+                  value={editData.email}
+                  onChange={(e) => setEditData({...editData, email: e.target.value})}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1.5 px-1">Vehicle Type</label>
+                  <select
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-bold"
+                    value={editData.vehicleType}
+                    onChange={(e) => setEditData({...editData, vehicleType: e.target.value})}
+                  >
+                    <option value="Bike">Bike</option>
+                    <option value="Cycle">Cycle</option>
+                    <option value="Scooter">Scooter</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1.5 px-1">Plate Number</label>
+                  <input
+                    type="text"
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-bold uppercase"
+                    value={editData.vehicleNumber}
+                    onChange={(e) => setEditData({...editData, vehicleNumber: e.target.value})}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-8 pt-6 border-t border-gray-100 flex justify-end gap-3">
+              <button
+                onClick={() => setEditingRider(null)}
+                className="px-6 py-3 font-bold text-gray-500 hover:bg-gray-100 rounded-xl transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                disabled={savingEdit}
+                className="px-6 py-3 bg-primary text-white font-black rounded-xl hover:bg-orange-600 transition disabled:opacity-50 flex flex-1 items-center justify-center"
+              >
+                {savingEdit ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
           </div>
