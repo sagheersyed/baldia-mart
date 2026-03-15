@@ -11,12 +11,18 @@ export class User {
   @Column({ name: 'firebase_uid', unique: true, nullable: true })
   firebaseUid: string;
 
+  @Column({ name: 'fcm_token', nullable: true })
+  fcmToken: string;
+
   @Column({ nullable: true })
   name: string;
 
   // Nullable email for phone-only users
   @Column({ unique: true, nullable: true })
   email: string;
+
+  @Column({ nullable: true })
+  password?: string;
 
   @Column({ name: 'phone_number', nullable: true, unique: true })
   phoneNumber: string;
@@ -26,6 +32,9 @@ export class User {
 
   @Column({ default: 'customer' })
   role: string;
+
+  @Column({ name: 'is_active', default: true })
+  isActive: boolean;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

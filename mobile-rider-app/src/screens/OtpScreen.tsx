@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator, Alert } from 'react-native';
-import { authApi, setAuthToken } from '../api/api';
+import { authApi } from '../api/api';
+import { useAuth } from '../context/AuthContext';
 
 export default function OtpScreen(props: any) {
   const { route, navigation } = props;
   const { phoneNumber } = route.params;
+  const { loginSuccess } = useAuth();
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [countdown, setCountdown] = useState(30);
@@ -40,24 +42,21 @@ export default function OtpScreen(props: any) {
     setLoading(true);
     try {
       const res = await authApi.verifyOtp(phoneNumber, code);
-      setAuthToken(res.data.access_token);
+      const token = res.data.access_token;
       
       if (res.data.isNewUser || !res.data.rider.isProfileComplete) {
+        // We still need the token in memory to complete the profile
+        const { setAuthToken } = await import('../api/api');
+        setAuthToken(token);
         navigation.replace('CompleteProfile');
       } else {
-        if (props.onLoginSuccess) {
-          props.onLoginSuccess();
-        } else {
-          // Fallback if not using conditional navigator
-          navigation.replace('Main');
-        }
+        await loginSuccess(token);
       }
     } catch (e: any) {
       Alert.alert('Verification Failed', e.response?.data?.message || 'Invalid OTP');
     } finally {
       setLoading(false);
     }
-
   };
 
   return (

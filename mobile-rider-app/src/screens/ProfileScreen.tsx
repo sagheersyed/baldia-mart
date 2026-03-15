@@ -1,8 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ActivityIndicator, Alert, ScrollView } from 'react-native';
-import { ridersApi, setAuthToken } from '../api/api';
+import { ridersApi } from '../api/api';
+import { useAuth } from '../context/AuthContext';
 
 export default function ProfileScreen({ navigation }: any) {
+  const { logout } = useAuth();
   const [rider, setRider] = React.useState<any>(null);
   const [stats, setStats] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(true);
@@ -32,10 +34,7 @@ export default function ProfileScreen({ navigation }: any) {
       { 
         text: 'Log Out', 
         style: 'destructive', 
-        onPress: () => {
-          setAuthToken(null);
-          navigation.replace('Login');
-        } 
+        onPress: () => logout()
       }
     ]);
   };

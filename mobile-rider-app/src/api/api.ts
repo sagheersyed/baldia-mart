@@ -45,4 +45,7 @@ export const ordersApi = {
 export const ridersApi = {
   getMe: () => api.get('/riders/me'),
   getStats: () => api.get('/riders/stats'),
+  uploadFile: (formData: FormData) => api.post('/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
 };

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, Switch, ActivityIndicator, Alert, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, Switch, ActivityIndicator, Alert, RefreshControl, Vibration } from 'react-native';
 import { socket, ordersApi, ridersApi } from '../api/api';
 
 export default function DashboardScreen({ navigation }: any) {
@@ -17,8 +17,8 @@ export default function DashboardScreen({ navigation }: any) {
       
       const onConnect = () => {
         console.log('Rider App: Connected to socket');
-        socket.emit('joinRidersRoom');
         if (rider) {
+          socket.emit('joinRidersRoom', rider.id);
           socket.emit('joinRiderRoom', rider.id);
         }
       };
@@ -36,6 +36,8 @@ export default function DashboardScreen({ navigation }: any) {
       };
 
       const onOrderCancelled = ({ orderId }: any) => {
+        // Aggressive vibration pattern: wait 100ms, vibrate 500ms, repeat 3 times
+        Vibration.vibrate([100, 500, 100, 500, 100, 500]);
         Alert.alert('Order Cancelled 🛑', `Order #${orderId.slice(0, 8).toUpperCase()} has been cancelled by the customer.`);
         // Refresh everything to be safe
         fetchOrders();

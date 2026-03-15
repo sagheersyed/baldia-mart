@@ -25,6 +25,13 @@ export class AuthController {
     };
   }
 
+  @Post('admin/login')
+  async adminLogin(@Body() body: any) {
+    const { email, password } = body;
+    if (!email || !password) throw new UnauthorizedException('Missing credentials');
+    return this.authService.adminLogin(email, password);
+  }
+
   @Post('send-otp')
   @Throttle({ default: { limit: 30, ttl: 3600000 } })
   async sendOtp(@Body('phoneNumber') phoneNumber: string) {

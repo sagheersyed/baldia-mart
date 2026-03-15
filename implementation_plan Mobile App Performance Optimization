@@ -1,0 +1,41 @@
+# Mobile App Performance Optimization
+
+Improving the bundling speed and startup experience for both User and Rider mobile applications.
+
+## User Review Required
+
+> [!NOTE]
+> - **QR Code Loading**: The slow progress bar when scanning the QR code is mostly due to missing Babel/Metro configurations and the use of `--clear` which bypasses caching.
+> - **App Startup**: I will optimize the [App.tsx](file:///d:/mart/baldia-mart/mobile-user-app/App.tsx) logic to avoid blocking the UI while verifying tokens, making the app feel faster to open.
+
+## Proposed Changes
+
+---
+
+### Phase 27: Configuration Optimization (User & Rider Apps)
+
+#### [NEW] [babel.config.js](file:///d:/mart/baldia-mart/mobile-user-app/babel.config.js)
+#### [NEW] [babel.config.js](file:///d:/mart/baldia-mart/mobile-rider-app/babel.config.js)
+- Explicitly define `babel-preset-expo` to ensure stable and fast transformations.
+
+#### [NEW] [metro.config.js](file:///d:/mart/baldia-mart/mobile-user-app/metro.config.js)
+#### [NEW] [metro.config.js](file:///d:/mart/baldia-mart/mobile-rider-app/metro.config.js)
+- Extend default Expo Metro config with standard optimizations.
+
+---
+
+### Phase 28: Initialization Optimization
+
+#### [MODIFY] [App.tsx](file:///d:/mart/baldia-mart/mobile-user-app/App.tsx)
+#### [MODIFY] [App.tsx](file:///d:/mart/baldia-mart/mobile-rider-app/App.tsx)
+- Refactor [checkToken](file:///d:/mart/baldia-mart/mobile-rider-app/App.tsx#52-72) to set `isLoading(false)` immediately after checking local storage.
+- Perform the `authApi.getMe()` verification in the background or after the initial screen renders to reduce perceived wait time.
+
+## Verification Plan
+
+### Automated Tests
+- Run `npx expo start` (without `--clear`) and verify bundling speed on subsequent runs.
+
+### Manual Verification
+- Scan QR code and observe the Metro progress bar speed.
+- Verify that the app transitions from Splash/ActivityIndicator to the main screen faster.

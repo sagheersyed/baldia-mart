@@ -5,6 +5,9 @@ import { Rider } from './rider.entity';
 import { RiderReview } from './rider-review.entity';
 import { Order } from '../orders/order.entity';
 
+import { OrdersGateway } from '../orders/orders.gateway';
+import { Inject, forwardRef } from '@nestjs/common';
+
 @Injectable()
 export class RidersService {
   constructor(
@@ -12,6 +15,8 @@ export class RidersService {
     private ridersRepository: Repository<Rider>,
     @InjectRepository(Order)
     private ordersRepository: Repository<Order>,
+    @Inject(forwardRef(() => OrdersGateway))
+    private ordersGateway: OrdersGateway,
   ) {}
 
   async findByPhone(phoneNumber: string): Promise<Rider | null> {
@@ -22,6 +27,12 @@ export class RidersService {
     return this.ridersRepository.findOne({ where: { id } });
   }
 
+  async findAll(): Promise<Rider[]> {
+    return this.ridersRepository.find({
+      order: { createdAt: 'DESC' }
+    });
+  }
+
   async create(riderData: Partial<Rider>): Promise<Rider> {
     const rider = this.ridersRepository.create(riderData);
     return this.ridersRepository.save(rider);
@@ -29,6 +40,16 @@ export class RidersService {
 
   async update(id: string, updateData: Partial<Rider>): Promise<Rider | null> {
     await this.ridersRepository.update(id, updateData);
+    return this.ridersRepository.findOne({ where: { id } });
+  }
+
+  async updateStatus(id: string, status: { isActive?: boolean; isProfileComplete?: boolean }): Promise<Rider | null> {
+    await this.ridersRepository.update(id, status);
+    
+    if (status.isActive === false) {
+      this.ordersGateway.kickRider(id);
+    }
+
     return this.ridersRepository.findOne({ where: { id } });
   }
 
@@ -96,6 +117,14 @@ export class RidersService {
     }
 
     return savedReview;
+  }
+
+  async findAllReviews(): Promise<RiderReview[]> {
+    const reviewRepo = this.ridersRepository.manager.getRepository(RiderReview);
+    return reviewRepo.find({
+      relations: ['rider', 'user', 'order'],
+      order: { createdAt: 'DESC' }
+    });
   }
 }
 

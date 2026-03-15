@@ -7,6 +7,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Text } from 'react-native';
 import { CartProvider } from './src/context/CartContext';
+import { AuthProvider, useAuth } from './src/context/AuthContext';
 
 import LoginScreen from './src/screens/LoginScreen';
 import HomeScreen from './src/screens/HomeScreen';
@@ -22,8 +23,6 @@ import NotificationsScreen from './src/screens/NotificationsScreen';
 import OtpScreen from './src/screens/OtpScreen';
 import CompleteProfileScreen from './src/screens/CompleteProfileScreen';
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { setAuthToken, authApi } from './src/api/api';
 import { ActivityIndicator, View } from 'react-native';
 
 const Stack = createStackNavigator();
@@ -65,30 +64,8 @@ function MainTabs() {
   );
 }
 
-export default function App() {
-  const [isLoading, setIsLoading] = React.useState(true);
-  const [initialRoute, setInitialRoute] = React.useState('Login');
-
-  React.useEffect(() => {
-    const checkToken = async () => {
-      try {
-        const token = await AsyncStorage.getItem('userToken');
-        if (token) {
-          setAuthToken(token);
-          // Verify token with server
-          await authApi.getMe();
-          setInitialRoute('Main');
-        }
-      } catch (e) {
-        console.log('Session expired or invalid:', e);
-        setAuthToken(null); // Clear invalid token
-        setInitialRoute('Login');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    checkToken();
-  }, []);
+function Navigation() {
+  const { userToken, isLoading, userData } = useAuth();
 
   if (isLoading) {
     return (
@@ -98,27 +75,57 @@ export default function App() {
     );
   }
 
+  const isProfileComplete = 
+    userData && 
+    userData.name && 
+    userData.name !== 'Valued Customer' && 
+    userData.name !== 'New Customer' && 
+    userData.phoneNumber;
+
+  if (userToken && !userData) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
+        <ActivityIndicator size="large" color="#FF4500" />
+      </View>
+    );
+  }
+
   return (
-    <SafeAreaProvider>
-      <CartProvider>
-        <NavigationContainer>
-          <Stack.Navigator initialRouteName={initialRoute} screenOptions={{ headerShown: false }}>
+    <NavigationContainer>
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        {!userToken ? (
+          <>
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="Otp" component={OtpScreen} />
-            <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen} />
+          </>
+        ) : !isProfileComplete ? (
+          <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen} />
+        ) : (
+          <>
             <Stack.Screen name="Main" component={MainTabs} />
             <Stack.Screen name="Checkout" component={CheckoutScreen} />
             <Stack.Screen name="OrderTracking" component={OrderTrackingScreen} />
-            {/* Profile sub-screens */}
             <Stack.Screen name="MyOrders" component={MyOrdersScreen} />
             <Stack.Screen name="SavedAddresses" component={SavedAddressesScreen} />
             <Stack.Screen name="EditProfile" component={EditProfileScreen} />
             <Stack.Screen name="Notifications" component={NotificationsScreen} />
             <Stack.Screen name="Help" component={HelpScreen} />
-          </Stack.Navigator>
-        </NavigationContainer>
-        <StatusBar style="auto" />
-      </CartProvider>
+          </>
+        )}
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+}
+
+export default function App() {
+  return (
+    <SafeAreaProvider>
+      <AuthProvider>
+        <CartProvider>
+          <Navigation />
+          <StatusBar style="auto" />
+        </CartProvider>
+      </AuthProvider>
     </SafeAreaProvider>
   );
 }

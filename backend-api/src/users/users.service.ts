@@ -14,8 +14,18 @@ export class UsersService {
     return this.usersRepository.findOne({ where: { firebaseUid } });
   }
 
-  async findByPhone(phoneNumber: string): Promise<User | null> {
+  async findByPhoneNumber(phoneNumber: string): Promise<User | null> {
     return this.usersRepository.findOne({ where: { phoneNumber } });
+  }
+
+  async findByEmail(email: string): Promise<User | null> {
+    return this.usersRepository.findOne({ where: { email } });
+  }
+
+  async findAll(): Promise<User[]> {
+    return this.usersRepository.find({
+      order: { createdAt: 'DESC' }
+    });
   }
 
   async findById(id: string): Promise<User> {
@@ -30,7 +40,8 @@ export class UsersService {
   }
 
   async update(id: string, updateData: Partial<User>): Promise<User> {
-    await this.usersRepository.update(id, updateData);
-    return this.findById(id);
+    const user = await this.findById(id);
+    Object.assign(user, updateData);
+    return this.usersRepository.save(user);
   }
 }

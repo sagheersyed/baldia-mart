@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Alert, ActivityIndicator, ScrollView, Linking, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Alert, ActivityIndicator, ScrollView, Linking, Platform, Vibration } from 'react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import * as Location from 'expo-location';
-import { ordersApi } from '../api/api';
+import { ordersApi, socket } from '../api/api';
 
-const MART_COORDS = { latitude: 24.9144, longitude: 66.9748 };
+const MART_COORDS = { latitude: 24.91522600, longitude: 66.96431980 };
 
 export default function NavigationScreen({ navigation, route }: any) {
   const { orderId } = route.params || { orderId: 'Unknown' };
@@ -25,14 +25,19 @@ export default function NavigationScreen({ navigation, route }: any) {
         if (orderRes.data) {
           setOrder(orderRes.data);
           setStatus(orderRes.data.status);
+
+          if (orderRes.data.status === 'cancelled') {
+            Alert.alert('Order Cancelled', 'This order was cancelled by the customer.');
+            navigation.replace('Main');
+            return;
+          }
         }
 
         if (locStatus === 'granted') {
           setPermissionGranted(true);
           const location = await Location.getCurrentPositionAsync({});
           setUserLocation(location.coords);
-          
-          // Start watching location
+
           Location.watchPositionAsync(
             { accuracy: Location.Accuracy.High, distanceInterval: 10 },
             (newLoc) => setUserLocation(newLoc.coords)
@@ -45,6 +50,28 @@ export default function NavigationScreen({ navigation, route }: any) {
       }
     };
     init();
+
+    // Socket listeners for real-time cancellation
+    socket.connect();
+    socket.emit('joinOrder', orderId);
+
+    const onStatusUpdate = (data: any) => {
+      if (data.orderId === orderId && data.status === 'cancelled') {
+        // Aggressive vibration pattern: wait 100ms, vibrate 500ms, repeat 3 times
+        Vibration.vibrate([100, 500, 100, 500, 100, 500]);
+        Alert.alert(
+          'Order Cancelled 🛑',
+          'The customer has cancelled this order. Please return to the dashboard.',
+          [{ text: 'OK', onPress: () => navigation.replace('Main') }]
+        );
+      }
+    };
+
+    socket.on('orderStatusUpdated', onStatusUpdate);
+
+    return () => {
+      socket.off('orderStatusUpdated', onStatusUpdate);
+    };
   }, [orderId]);
 
   const handleUpdateStatus = async () => {
@@ -60,15 +87,23 @@ export default function NavigationScreen({ navigation, route }: any) {
         if (nextStatus === 'delivered') {
           Alert.alert('Success', 'Order delivered successfully.', [{ text: 'OK', onPress: () => navigation.replace('Main') }]);
         }
+        if (nextStatus === 'cancelled') {
+          Alert.alert('Order Cancelled', 'This order was cancelled by the customer.');
+          navigation.replace('Main');
+        }
       } catch (e) {
-        Alert.alert('Error', 'Failed to update status. Please try again.');
+        if (nextStatus === 'cancelled') {
+          Alert.alert('Order Cancelled', 'This order was cancelled by the customer.');
+          navigation.replace('Main');
+        }
+        Alert.alert('Order Cancelled', 'This order was cancelled by the customer.');
       }
     }
   };
 
   const openInExternalMaps = () => {
-    const dest = status === 'confirmed' || status === 'preparing' 
-      ? MART_COORDS 
+    const dest = status === 'confirmed' || status === 'preparing'
+      ? MART_COORDS
       : { latitude: Number(order.address?.latitude), longitude: Number(order.address?.longitude) };
 
     const label = status === 'confirmed' || status === 'preparing' ? 'Baldia Mart' : 'Customer Location';
@@ -105,7 +140,7 @@ export default function NavigationScreen({ navigation, route }: any) {
         </TouchableOpacity>
         <Text style={styles.title}>Order #{orderId.slice(0, 8).toUpperCase()}</Text>
         <TouchableOpacity onPress={openInExternalMaps} style={styles.navIconBtn}>
-           <Text style={{ fontSize: 20 }}>🧭</Text>
+          <Text style={{ fontSize: 20 }}>🧭</Text>
         </TouchableOpacity>
       </View>
 
@@ -138,15 +173,15 @@ export default function NavigationScreen({ navigation, route }: any) {
 
           {/* Line between if available */}
           {order?.address && (
-             <Polyline
-               coordinates={[MART_COORDS, customerCoords]}
-               strokeColor="#FF4500"
-               strokeWidth={3}
-               lineDashPattern={[5, 5]}
-             />
+            <Polyline
+              coordinates={[MART_COORDS, customerCoords]}
+              strokeColor="#FF4500"
+              strokeWidth={3}
+              lineDashPattern={[5, 5]}
+            />
           )}
         </MapView>
-        
+
         {order?.items && order.items.length > 0 && status !== 'out_for_delivery' && (
           <View style={styles.itemsOverlay}>
             <Text style={styles.itemsTitle}>Checklist ({order.items.length} Items)</Text>
@@ -171,13 +206,13 @@ export default function NavigationScreen({ navigation, route }: any) {
       <View style={styles.bottomSheet}>
         <View style={styles.customerInfo}>
           <View style={styles.avatar}>
-             <Text style={styles.avatarText}>{order?.user?.name?.[0] || 'C'}</Text>
+            <Text style={styles.avatarText}>{order?.user?.name?.[0] || 'C'}</Text>
           </View>
           <View style={styles.details}>
             <Text style={styles.name}>{order?.user?.name || 'Valued Customer'}</Text>
             <Text style={styles.address} numberOfLines={1}>{order?.address?.streetAddress || 'Baldia Town'}</Text>
           </View>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.callBtn}
             onPress={() => {
               const phone = order?.user?.phoneNumber || order?.user?.phone;
@@ -192,8 +227,8 @@ export default function NavigationScreen({ navigation, route }: any) {
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity 
-          style={[styles.statusBtn, status === 'delivered' && { backgroundColor: '#2ecc71' }]} 
+        <TouchableOpacity
+          style={[styles.statusBtn, status === 'delivered' && { backgroundColor: '#2ecc71' }]}
           onPress={handleUpdateStatus}
         >
           <Text style={styles.statusBtnText}>{statusText[status as keyof typeof statusText]}</Text>
@@ -223,14 +258,14 @@ const styles = StyleSheet.create({
   statusBtn: { backgroundColor: '#FF4500', height: 55, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
   statusBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
   loading: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' },
-  
+
   itemsOverlay: {
     position: 'absolute', top: 10, left: 10, right: 10, maxHeight: '40%',
     backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 15, padding: 15,
     borderWidth: 1, borderColor: '#eee', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5, elevation: 5
   },
   itemsTitle: { fontSize: 15, fontWeight: 'bold', color: '#1A1A1A', marginBottom: 10 },
-  itemsList: { },
+  itemsList: {},
   itemRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   itemQty: { fontSize: 14, fontWeight: '800', color: '#FF4500', width: 30 },
   itemName: { fontSize: 14, color: '#333' },

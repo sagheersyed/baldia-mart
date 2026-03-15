@@ -13,6 +13,9 @@ export default function CheckoutScreen({ navigation }: any) {
   const [selectedAddress, setSelectedAddress] = useState<any>(null);
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(true);
   const [showAddressModal, setShowAddressModal] = useState(false);
+  const [deliveryFee, setDeliveryFee] = useState(0);
+  const [isLoadingFee, setIsLoadingFee] = useState(false);
+  const [isAddressValid, setIsAddressValid] = useState(true);
 
   useEffect(() => {
     fetchAddresses();
@@ -35,6 +38,33 @@ export default function CheckoutScreen({ navigation }: any) {
     }
   };
 
+  useEffect(() => {
+    if (selectedAddress?.id) {
+      fetchDeliveryFee(selectedAddress.id);
+    }
+  }, [selectedAddress]);
+
+  const fetchDeliveryFee = async (addressId: string) => {
+    setIsLoadingFee(true);
+    try {
+      const res = await ordersApi.getDeliveryFee(addressId);
+      if (res.data.isValid === true) {
+        setDeliveryFee(res.data.deliveryFee);
+        setIsAddressValid(true);
+      } else {
+        setDeliveryFee(0);
+        setIsAddressValid(false);
+        Alert.alert('Out of Service Area', res.data.message || 'We do not deliver to this location yet.');
+      }
+    } catch (error) {
+      console.error('Failed to fetch delivery fee:', error);
+      setDeliveryFee(0);
+      setIsAddressValid(true); // Don't block on network error
+    } finally {
+      setIsLoadingFee(false);
+    }
+  };
+
   const handleUpdateAddress = async (addrData: any) => {
     try {
       if (selectedAddress?.id) {
@@ -53,7 +83,6 @@ export default function CheckoutScreen({ navigation }: any) {
   };
   
   const subtotal = getCartTotal();
-  const deliveryFee = 2.00;
   const total = subtotal + deliveryFee;
 
   const handlePlaceOrder = async () => {
@@ -64,6 +93,11 @@ export default function CheckoutScreen({ navigation }: any) {
 
     if (!selectedAddress) {
       Alert.alert('Error', 'Please select a delivery address');
+      return;
+    }
+
+    if (!isAddressValid) {
+      Alert.alert('Error', 'Your address is outside our delivery zone. Please choose another address.');
       return;
     }
 
@@ -153,29 +187,40 @@ export default function CheckoutScreen({ navigation }: any) {
            <Text style={styles.sectionTitle}>Order Summary</Text>
            <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Subtotal</Text>
-              <Text style={styles.summaryVal}>${(Number(subtotal) || 0).toFixed(2)}</Text>
+              <Text style={styles.summaryVal}>Rs. {(Number(subtotal) || 0).toFixed(0)}</Text>
            </View>
            <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Delivery Fee</Text>
-              <Text style={styles.summaryVal}>${(Number(deliveryFee) || 0).toFixed(2)}</Text>
+              {isLoadingFee ? (
+                <ActivityIndicator size="small" color="#FF4500" />
+              ) : !isAddressValid ? (
+                <Text style={[styles.summaryVal, { color: '#ff0000' }]}>Unavailable</Text>
+              ) : (
+                <Text style={styles.summaryVal}>Rs. {(Number(deliveryFee) || 0).toFixed(0)}</Text>
+              )}
            </View>
            <View style={[styles.summaryRow, styles.totalPadding]}>
               <Text style={styles.totalLabel}>Grand Total</Text>
-              <Text style={styles.totalVal}>${(Number(total) || 0).toFixed(2)}</Text>
+              <Text style={styles.totalVal}>Rs. {(Number(total) || 0).toFixed(0)}</Text>
            </View>
         </View>
       </ScrollView>
 
       <View style={styles.footer}>
         <TouchableOpacity 
-          style={[styles.placeOrderBtn, isPlacingOrder && styles.disabledBtn]} 
+          style={[
+            styles.placeOrderBtn, 
+            (isPlacingOrder || !isAddressValid || isLoadingFee) && styles.disabledBtn
+          ]} 
           onPress={handlePlaceOrder}
-          disabled={isPlacingOrder}
+          disabled={isPlacingOrder || !isAddressValid || isLoadingFee}
         >
           {isPlacingOrder ? (
             <ActivityIndicator color="#fff" />
+          ) : !isAddressValid ? (
+            <Text style={styles.placeOrderText}>Out of Service Area</Text>
           ) : (
-            <Text style={styles.placeOrderText}>Confirm Order - ${(Number(total) || 0).toFixed(2)}</Text>
+            <Text style={styles.placeOrderText}>Confirm Order - Rs. {(Number(total) || 0).toFixed(0)}</Text>
           )}
         </TouchableOpacity>
       </View>

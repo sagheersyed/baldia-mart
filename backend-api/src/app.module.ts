@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { LoggerModule } from 'nestjs-pino';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AnalyticsModule } from './analytics/analytics.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { UsersModule } from './users/users.module';
@@ -16,6 +17,8 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { RidersModule } from './riders/riders.module';
 import { AdminModule } from './admin/admin.module';
 import { OtpModule } from './otp/otp.module';
+import { SettingsModule } from './settings/settings.module';
+import { UploadModule } from './upload/upload.module';
 
 // Entities
 import { User } from './users/user.entity';
@@ -32,6 +35,7 @@ import { Rider } from './riders/rider.entity';
 import { RiderReview } from './riders/rider-review.entity';
 import { Otp } from './otp/otp.entity';
 import { OrderHistory } from './orders/order-history.entity';
+import { Setting } from './settings/setting.entity';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 
@@ -58,7 +62,7 @@ import { APP_GUARD } from '@nestjs/core';
       entities: [
         User, Address, DeliveryZone, Category, Product, 
         CartItem, Order, OrderItem, Payment, Notification, Rider, Otp,
-        OrderHistory, RiderReview
+        OrderHistory, RiderReview, Setting
       ],
       synchronize: process.env.NODE_ENV !== 'production',
     }),
@@ -75,6 +79,9 @@ import { APP_GUARD } from '@nestjs/core';
     RidersModule,
     AdminModule,
     OtpModule,
+    AnalyticsModule,
+    SettingsModule,
+    UploadModule,
   ],
   controllers: [AppController],
   providers: [

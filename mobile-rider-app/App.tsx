@@ -19,6 +19,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { setAuthToken, authApi } from './src/api/api';
 import { ActivityIndicator, View } from 'react-native';
 
+import { AuthProvider, useAuth } from './src/context/AuthContext';
+
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
@@ -44,37 +46,8 @@ function RiderTabs() {
   );
 }
 
-export default function App() {
-  const [isLoading, setIsLoading] = React.useState(true);
-  const [isAuthenticated, setIsAuthenticated] = React.useState(false);
-
-  React.useEffect(() => {
-    const checkToken = async () => {
-      try {
-        const token = await AsyncStorage.getItem('riderToken');
-        if (token) {
-          setAuthToken(token);
-          // Verify token with server
-          const res = await authApi.getMe();
-          // We could set rider state here if needed
-          setIsAuthenticated(true);
-        } else {
-          setIsAuthenticated(false);
-        }
-      } catch (e) {
-        console.log('Session expired or invalid:', e);
-        setAuthToken(null);
-        setIsAuthenticated(false);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    checkToken();
-  }, []);
-
-  const handleLoginSuccess = () => {
-    setIsAuthenticated(true);
-  };
+function AppInner() {
+  const { isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) {
     return (
@@ -85,26 +58,32 @@ export default function App() {
   }
 
   return (
+    <NavigationContainer>
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        {!isAuthenticated ? (
+          <>
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="Otp" component={OtpScreen} />
+            <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen} />
+          </>
+        ) : (
+          <>
+            <Stack.Screen name="Main" component={RiderTabs} />
+            <Stack.Screen name="OrderDetails" component={OrderDetailsScreen} />
+            <Stack.Screen name="Navigation" component={NavigationScreen} />
+          </>
+        )}
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+}
+
+export default function App() {
+  return (
     <SafeAreaProvider>
-      <NavigationContainer>
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
-          {!isAuthenticated ? (
-            <>
-              <Stack.Screen name="Login" component={LoginScreen} />
-              <Stack.Screen name="Otp">
-                {(props) => <OtpScreen {...props} onLoginSuccess={handleLoginSuccess} />}
-              </Stack.Screen>
-              <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen} />
-            </>
-          ) : (
-            <>
-              <Stack.Screen name="Main" component={RiderTabs} />
-              <Stack.Screen name="OrderDetails" component={OrderDetailsScreen} />
-              <Stack.Screen name="Navigation" component={NavigationScreen} />
-            </>
-          )}
-        </Stack.Navigator>
-      </NavigationContainer>
+      <AuthProvider>
+        <AppInner />
+      </AuthProvider>
       <StatusBar style="auto" />
     </SafeAreaProvider>
   );

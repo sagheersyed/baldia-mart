@@ -15,6 +15,25 @@ export class AddressesService {
   }
 
   async create(userId: string, data: Partial<Address>): Promise<Address> {
+    // Check if an identical address was previously soft-deleted
+    const existing = await this.addressRepository.findOne({
+      where: {
+        userId,
+        streetAddress: data.streetAddress,
+        label: data.label,
+      },
+      withDeleted: true,
+    });
+
+    if (existing && existing.deletedAt) {
+      // Restore the address
+      await this.addressRepository.restore(existing.id);
+      // Update any other fields (city, postal code, coords) if they changed
+      Object.assign(existing, data);
+      existing.isDefault = data.isDefault || false;
+      return this.addressRepository.save(existing);
+    }
+
     const address = this.addressRepository.create({ ...data, userId });
     return this.addressRepository.save(address);
   }
@@ -28,7 +47,7 @@ export class AddressesService {
   async delete(id: string, userId: string): Promise<{ message: string }> {
     const address = await this.findOne(id);
     if (address.userId !== userId) throw new ForbiddenException('Not your address');
-    await this.addressRepository.delete(id);
+    await this.addressRepository.softDelete(id);
     return { message: 'Address deleted' };
   }
 

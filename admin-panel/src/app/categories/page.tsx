@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, X, RefreshCcw, Package, Pencil } from 'lucide-react';
+import { fetchWithAuth, BASE_URL } from '@/lib/api';
 
 interface Category {
   id: string;
@@ -11,7 +12,7 @@ interface Category {
   isActive: boolean;
 }
 
-const API_URL = 'http://localhost:3000/api/v1/categories';
+const API_URL = `${BASE_URL}/categories`;
 
 export default function CategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -28,7 +29,7 @@ export default function CategoriesPage() {
   const fetchCategories = async () => {
     setLoading(true);
     try {
-      const res = await fetch(API_URL);
+      const res = await fetchWithAuth(API_URL);
       const data = await res.json();
       setCategories(data);
     } catch (error) {
@@ -45,7 +46,7 @@ export default function CategoriesPage() {
       const url = editingCategory ? `${API_URL}/${editingCategory.id}` : API_URL;
       const method = editingCategory ? 'PUT' : 'POST';
 
-      const res = await fetch(url, {
+      const res = await fetchWithAuth(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
@@ -77,7 +78,7 @@ export default function CategoriesPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to archive this category? It will no longer be visible to customers, but existing products will remain.')) return;
     try {
-      await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
+      await fetchWithAuth(`${API_URL}/${id}`, { method: 'DELETE' });
       fetchCategories();
     } catch (error) {
       console.error('Failed to archive category:', error);

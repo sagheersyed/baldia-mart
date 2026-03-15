@@ -1,18 +1,4 @@
 services:
-  postgres:
-    image: postgres:15-alpine
-    container_name: baldia_mart_db
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: baldia_mart
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    networks:
-      - baldia_net
-
   redis:
     image: redis:7-alpine
     container_name: baldia_mart_cache
@@ -29,7 +15,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - DB_HOST=postgres
+      - DB_HOST=host.docker.internal
       - DB_PORT=5432
       - DB_USERNAME=postgres
       - DB_PASSWORD=postgres
@@ -38,7 +24,6 @@ services:
       - REDIS_PORT=6379
       - NODE_ENV=development
     depends_on:
-      - postgres
       - redis
     networks:
       - baldia_net
@@ -56,9 +41,6 @@ services:
       - backend-api
     networks:
       - baldia_net
-
-volumes:
-  pgdata:
 
 networks:
   baldia_net:

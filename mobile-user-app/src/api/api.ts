@@ -30,7 +30,7 @@ export const authApi = {
 };
 
 export const usersApi = {
-  updateMe: (data: { name?: string; phoneNumber?: string; email?: string }) => api.patch('/users/me', data),
+  updateMe: (data: { name?: string; phoneNumber?: string; email?: string; fcmToken?: string }) => api.patch('/users/me', data),
 };
 
 export const addressesApi = {
@@ -64,6 +64,11 @@ export const ordersApi = {
   updateOrderItems: (orderId: string, items: { itemId: string; quantity: number }[]) =>
     api.patch(`/orders/${orderId}/items`, { items }),
   getTimeline: (orderId: string) => api.get(`/orders/${orderId}/timeline`),
+  getDeliveryFee: (addressId: string) => api.get(`/orders/preview-fee/${addressId}`),
+};
+
+export const settingsApi = {
+  getPublicSettings: () => api.get('/settings/public'),
 };
 
 export const ridersApi = {

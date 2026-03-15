@@ -8,6 +8,9 @@ export class Rider {
   @Column({ name: 'firebase_uid', unique: true, nullable: true })
   firebaseUid: string;
 
+  @Column({ name: 'fcm_token', nullable: true })
+  fcmToken: string;
+
   @Column({ nullable: true })
   name: string;
 
@@ -52,6 +55,9 @@ export class Rider {
 
   @Column({ name: 'total_reviews', default: 0 })
   totalReviews: number;
+
+  @Column({ name: 'is_active', default: true })
+  isActive: boolean;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

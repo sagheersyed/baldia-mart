@@ -8,6 +8,20 @@ import { Request } from 'express';
 export class RidersController {
   constructor(private readonly ridersService: RidersService) {}
 
+  @Get('all')
+  // TODO: Add AdminRoleGuard later
+  async getAllRiders() {
+    return this.ridersService.findAll();
+  }
+
+  @Patch(':id/status')
+  async updateStatus(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { isActive?: boolean; isProfileComplete?: boolean }
+  ) {
+    return this.ridersService.updateStatus(id, body);
+  }
+
   @Get('me')
   async getProfile(@Req() req: Request) {
     const authUser = req.user as any;
@@ -63,5 +77,10 @@ export class RidersController {
       rating: body.rating,
       comment: body.comment
     });
+  }
+
+  @Get('reviews/all')
+  async getAllReviews() {
+    return this.ridersService.findAllReviews();
   }
 }

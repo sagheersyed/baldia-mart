@@ -3,7 +3,8 @@ import {
   View, Text, StyleSheet, TouchableOpacity, SafeAreaView,
   ActivityIndicator, ScrollView, RefreshControl, Image, Alert
 } from 'react-native';
-import { authApi, addressesApi, ordersApi, setAuthToken } from '../api/api';
+import { authApi, addressesApi, ordersApi } from '../api/api';
+import { useAuth } from '../context/AuthContext';
 
 const AVATAR_COLORS = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD'];
 
@@ -46,6 +47,7 @@ const MENU_SECTIONS = [
 ];
 
 export default function ProfileScreen({ navigation }: any) {
+  const { signOut } = useAuth();
   const [user, setUser] = useState<any>(null);
   const [addresses, setAddresses] = useState<any[]>([]);
   const [orderCount, setOrderCount] = useState(0);
@@ -105,8 +107,7 @@ export default function ProfileScreen({ navigation }: any) {
         text: 'Log Out', 
         style: 'destructive', 
         onPress: () => {
-          setAuthToken(null);
-          navigation.replace('Login');
+          signOut();
         } 
       },
     ]);

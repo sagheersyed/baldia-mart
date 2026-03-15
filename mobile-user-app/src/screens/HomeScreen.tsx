@@ -14,7 +14,7 @@ const ProductCard = memo(({ prod, cartQty, onAdd }: { prod: any; cartQty: number
     <View style={styles.prodCard}>
       <View style={styles.prodImageContainer}>
         {prod.imageUrl ? (
-          <Image source={{ uri: prod.imageUrl }} style={styles.fullImage} fadeDuration={0} />
+          <Image source={{ uri: prod.imageUrl }} style={styles.fullImage} />
         ) : (
           <View style={styles.prodPlaceholder} />
         )}
@@ -33,9 +33,9 @@ const ProductCard = memo(({ prod, cartQty, onAdd }: { prod: any; cartQty: number
       <Text style={styles.prodCat}>{prod.category?.name}</Text>
       <View style={styles.priceRow}>
         <View>
-          <Text style={styles.price}>Rs. {(Number(prod.discountPrice || prod.price) || 0).toFixed(0)}</Text>
-          {Number(prod.discountPrice) > 0 && Number(prod.discountPrice) < Number(prod.price) && (
-            <Text style={styles.oldPrice}>Rs. {(Number(prod.price) || 0).toFixed(0)}</Text>
+          <Text style={styles.price}>Rs. {(Number(prod.price) - Number(prod.discount || 0)).toFixed(0)}</Text>
+          {Number(prod.discount) > 0 && (
+            <Text style={styles.oldPrice}>Rs. {Number(prod.price).toFixed(0)}</Text>
           )}
         </View>
         <TouchableOpacity
@@ -47,6 +47,28 @@ const ProductCard = memo(({ prod, cartQty, onAdd }: { prod: any; cartQty: number
         </TouchableOpacity>
       </View>
     </View>
+  );
+});
+
+const CategoryItem = memo(({ cat, isSelected, onPress }: { cat: any; isSelected: boolean; onPress: () => void }) => {
+  return (
+    <TouchableOpacity
+      style={[styles.catCard, isSelected && styles.catCardActive]}
+      onPress={onPress}
+    >
+      <View style={[styles.catImageContainer, isSelected && styles.catActiveBorder]}>
+        {cat.imageUrl ? (
+          <Image 
+            source={{ uri: cat.imageUrl }} 
+            style={styles.fullImage} 
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={styles.catPlaceholder} />
+        )}
+      </View>
+      <Text style={styles.catText} numberOfLines={1}>{cat.name}</Text>
+    </TouchableOpacity>
   );
 });
 
@@ -114,7 +136,7 @@ export default function HomeScreen({ navigation }: any) {
     addToCart(product);
   };
 
-  const filteredProducts = selectedCategoryId 
+  const filteredProducts = selectedCategoryId
     ? products.filter(p => p.categoryId === selectedCategoryId)
     : products;
 
@@ -132,14 +154,14 @@ export default function HomeScreen({ navigation }: any) {
       <View style={styles.header}>
         <TouchableOpacity style={styles.locationBox} onPress={loadData}>
           <Text style={styles.deliveryText}>Delivering to</Text>
-          <Text style={styles.locationText}>{address ? `${address.label}: ${address.streetAddress.substring(0,20)}...` : 'Select Location'}</Text>
+          <Text style={styles.locationText}>{address ? `${address.label}: ${address.streetAddress.substring(0, 20)}...` : 'Select Location'}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.cartBtn} onPress={() => navigation.navigate('Cart')}>
           <Text style={styles.cartCount}>{getCartCount()}</Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView 
+      <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FF4500" />
@@ -152,30 +174,22 @@ export default function HomeScreen({ navigation }: any) {
 
         <Text style={styles.sectionTitle}>Categories</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categories}>
-          <TouchableOpacity 
-            style={[styles.catCard, !selectedCategoryId && styles.catCardActive]}
+          <CategoryItem
+            cat={{ 
+              id: 'all', 
+              name: 'All', 
+              imageUrl: "https://images.unsplash.com/photo-1542838132-92c53300491e?q=80&w=200" 
+            }}
+            isSelected={!selectedCategoryId}
             onPress={() => setSelectedCategoryId(null)}
-          >
-            <View style={[styles.catImageContainer, !selectedCategoryId && styles.catActiveBorder]}>
-              <Text style={{ fontSize: 24 }}>🏠</Text>
-            </View>
-            <Text style={styles.catText}>All</Text>
-          </TouchableOpacity>
+          />
           {categories.map(cat => (
-            <TouchableOpacity 
-              key={cat.id} 
-              style={[styles.catCard, selectedCategoryId === cat.id && styles.catCardActive]}
+            <CategoryItem
+              key={cat.id}
+              cat={cat}
+              isSelected={selectedCategoryId === cat.id}
               onPress={() => setSelectedCategoryId(cat.id)}
-            >
-              <View style={[styles.catImageContainer, selectedCategoryId === cat.id && styles.catActiveBorder]}>
-                {cat.imageUrl ? (
-                  <Image source={{ uri: cat.imageUrl }} style={styles.fullImage} fadeDuration={0} />
-                ) : (
-                  <View style={styles.catPlaceholder} />
-                )}
-              </View>
-              <Text style={styles.catText} numberOfLines={1}>{cat.name}</Text>
-            </TouchableOpacity>
+            />
           ))}
         </ScrollView>
 
@@ -215,7 +229,21 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 18, fontWeight: 'bold', marginHorizontal: 20, marginBottom: 15, color: '#1a1a1a' },
   categories: { paddingHorizontal: 15, marginBottom: 30 },
   catCard: { alignItems: 'center', marginHorizontal: 8, width: 80 },
-  catImageContainer: { width: 70, height: 70, backgroundColor: '#fff', borderRadius: 35, marginBottom: 8, overflow: 'hidden', elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 5 },
+  catCardActive: { transform: [{ scale: 1.05 }] },
+  catImageContainer: { 
+    width: 70, height: 70, 
+    backgroundColor: '#fff', 
+    borderRadius: 35, 
+    marginBottom: 8, 
+    overflow: 'hidden', 
+    elevation: 2, 
+    shadowColor: '#000', 
+    shadowOpacity: 0.1, 
+    shadowRadius: 5,
+    borderWidth: 2,
+    borderColor: 'transparent'
+  },
+  catActiveBorder: { borderColor: '#FF4500' },
   catPlaceholder: { flex: 1, backgroundColor: '#f0f0f0' },
   fullImage: { width: '100%', height: '100%' },
   catText: { fontSize: 12, fontWeight: '700', color: '#444' },
@@ -231,8 +259,6 @@ const styles = StyleSheet.create({
   addBtn: { width: 32, height: 32, backgroundColor: '#FF4500', borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
   addBtnDisabled: { backgroundColor: '#ccc' },
   addBtnText: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
-  catCardActive: { opacity: 1 },
-  catActiveBorder: { borderColor: '#FF4500', borderWidth: 2 },
   cartBadge: {
     position: 'absolute', top: 6, right: 6,
     backgroundColor: '#FF4500', borderRadius: 12,

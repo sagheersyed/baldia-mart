@@ -1,5 +1,6 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import * as bcrypt from 'bcryptjs';
 import { UsersService } from '../users/users.service';
 import { User } from '../users/user.entity';
 import { RidersService } from '../riders/riders.service';
@@ -32,7 +33,7 @@ export class AuthService {
   }
 
   async findOrCreateByPhone(phoneNumber: string): Promise<{ user: User; isNew: boolean }> {
-    let user = await this.usersService.findByPhone(phoneNumber);
+    let user = await this.usersService.findByPhoneNumber(phoneNumber);
     let isNew = false;
     if (!user) {
       user = await this.usersService.create({
@@ -61,8 +62,30 @@ export class AuthService {
         id: user.id,
         email: user.email,
         name: user.name,
-        role: user.role
+        role: user.role,
+        phoneNumber: user.phoneNumber,
       }
+    };
+  }
+
+  async adminLogin(email: string, pass: string) {
+    const user = await this.usersService.findByEmail(email);
+    if (!user || user.role !== 'admin' || !user.password) {
+      throw new UnauthorizedException('Invalid admin credentials');
+    }
+    const isMatch = await bcrypt.compare(pass, user.password);
+    if (!isMatch) {
+      throw new UnauthorizedException('Invalid admin credentials');
+    }
+    const payload = { sub: user.id, email: user.email, role: 'admin' };
+    return {
+      access_token: this.jwtService.sign(payload),
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: 'admin',
+      },
     };
   }
 

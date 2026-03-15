@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, KeyboardAvoidingView, ScrollView, Platform, Image, ActivityIndicator, Alert } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { api } from '../api/api';
+import { useAuth } from '../context/AuthContext';
 
 export default function CompleteProfileScreen({ navigation }: any) {
+  const { loginSuccess } = useAuth();
   const [name, setName] = useState('');
   const [vehicleType, setVehicleType] = useState('Bike');
   const [vehicleNumber, setVehicleNumber] = useState('');
@@ -51,9 +53,27 @@ export default function CompleteProfileScreen({ navigation }: any) {
     }
   };
 
-  const uploadToStorageMock = async (uri: string, path: string) => {
-    // Mock upload: In a real app, you upload this URI to Firebase or S3 and return the public URL.
-    return `mock_url_for_${path}`;
+  const uploadImage = async (uri: string, fieldName: string) => {
+    const formData = new FormData();
+    const filename = uri.split('/').pop();
+    const match = /\.(\w+)$/.exec(filename || '');
+    const type = match ? `image/${match[1]}` : `image`;
+
+    formData.append('file', {
+      uri: Platform.OS === 'ios' ? uri.replace('file://', '') : uri,
+      name: filename,
+      type,
+    } as any);
+
+    try {
+      const res = await api.post('/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return res.data.url;
+    } catch (error) {
+      console.error(`Upload failed for ${fieldName}:`, error);
+      throw new Error(`Failed to upload ${fieldName}`);
+    }
   };
 
   const handleSubmit = async () => {
@@ -64,10 +84,12 @@ export default function CompleteProfileScreen({ navigation }: any) {
 
     setLoading(true);
     try {
-      // In reality, you'd trigger 3 parallel uploads here first
-      const cnicFrontUrl = await uploadToStorageMock(cnicFront, 'cnic_front');
-      const cnicBackUrl = await uploadToStorageMock(cnicBack, 'cnic_back');
-      const selfieUrl = await uploadToStorageMock(selfie, 'selfie');
+      // Parallel uploads
+      const [cnicFrontUrl, cnicBackUrl, selfieUrl] = await Promise.all([
+        uploadImage(cnicFront, 'CNIC Front'),
+        uploadImage(cnicBack, 'CNIC Back'),
+        uploadImage(selfie, 'Selfie')
+      ]);
 
       await api.patch('/riders/me', {
         name,
@@ -79,9 +101,16 @@ export default function CompleteProfileScreen({ navigation }: any) {
       });
       
       // Successfully updated and marked as complete on the backend
-      navigation.replace('Main');
+      const token = api.defaults.headers.common['Authorization']?.toString().split(' ')[1];
+      if (token) {
+        await loginSuccess(token);
+      } else {
+        // Fallback
+        Alert.alert('Success', 'Profile completed. Please log in.');
+      }
     } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.message || 'Failed to complete profile.');
+      const errorMsg = error.response?.data?.message || error.message || 'Failed to complete profile.';
+      Alert.alert('Error', errorMsg);
     } finally {
       setLoading(false);
     }

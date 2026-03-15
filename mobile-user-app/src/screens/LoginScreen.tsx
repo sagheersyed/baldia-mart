@@ -3,13 +3,15 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, KeyboardAvo
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import * as AuthSession from 'expo-auth-session';
-import { authApi, setAuthToken } from '../api/api';
+import { authApi } from '../api/api';
+import { useAuth } from '../context/AuthContext';
 import { auth } from '../firebaseConfig';
 import { GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
 
 WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen({ navigation }: any) {
+  const { signIn } = useAuth();
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -44,15 +46,8 @@ export default function LoginScreen({ navigation }: any) {
       const res = await authApi.login(firebaseToken);
       
       if (res.data.access_token) {
-        setAuthToken(res.data.access_token);
-        // Check if user is new or has incomplete profile
-        const isNew = res.data.isNewUser || !res.data.user?.name || res.data.user?.name === 'Valued Customer';
-        
-        if (isNew) {
-           navigation.replace('CompleteProfile');
-        } else {
-           navigation.replace('Main');
-        }
+        await signIn(res.data.access_token, res.data.user);
+        // Navigation will happen automatically in App.tsx based on userToken & userData
       }
     } catch (error: any) {
        console.error('Firebase/Backend Google login failed:', error);

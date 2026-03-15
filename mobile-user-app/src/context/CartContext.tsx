@@ -24,6 +24,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   const [cart, setCart] = useState<CartItem[]>([]);
 
   const addToCart = (product: any) => {
+    const effectivePrice = Number(product.price) - Number(product.discount || 0);
     setCart(prevCart => {
       const existingItem = prevCart.find(item => item.id === product.id);
       if (existingItem) {
@@ -31,7 +32,13 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
           item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
         );
       }
-      return [...prevCart, { ...product, quantity: 1 }];
+      return [...prevCart, { 
+        id: product.id, 
+        name: product.name, 
+        price: effectivePrice, 
+        imageUrl: product.imageUrl,
+        quantity: 1 
+      }];
     });
   };
 

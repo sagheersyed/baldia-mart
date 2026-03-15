@@ -1,14 +1,56 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCart } from '../context/CartContext';
+import { settingsApi, addressesApi, ordersApi } from '../api/api';
 
 export default function CartScreen({ navigation }: any) {
   const { cart, updateQuantity, removeFromCart, getCartTotal } = useCart();
-  
+  const [deliveryFee, setDeliveryFee] = React.useState(0);
+  const [isLoadingFee, setIsLoadingFee] = React.useState(false);
+  const [isValidAddress, setIsValidAddress] = React.useState(true);
+
+  React.useEffect(() => {
+    fetchInitialData();
+  }, [cart.length]);
+
+  const fetchInitialData = async () => {
+    if (cart.length === 0) return;
+
+    setIsLoadingFee(true);
+    try {
+      // 1. Try to get default address for accurate fee
+      const addrRes = await addressesApi.getAll();
+      const defaultAddr = addrRes.data.find((a: any) => a.isDefault) || addrRes.data[0];
+
+      if (defaultAddr) {
+        const feeRes = await ordersApi.getDeliveryFee(defaultAddr.id);
+        if (feeRes.data.isValid) {
+          setDeliveryFee(Number(feeRes.data.deliveryFee) || 0);
+          setIsValidAddress(true);
+        } else {
+          // If not valid (out of zone), show 0 or handle UI
+          setDeliveryFee(0);
+          setIsValidAddress(false);
+        }
+      } else {
+        // 2. Fallback to base fee if no address found
+        const settingsRes = await settingsApi.getPublicSettings();
+        setDeliveryFee(Number(settingsRes.data.delivery_base_fee) || 150);
+        setIsValidAddress(true); // Default to true if no address yet
+      }
+    } catch (error) {
+      console.error('Failed to fetch initial pricing data:', error);
+      // Final fallback
+      setDeliveryFee(150);
+      setIsValidAddress(true);
+    } finally {
+      setIsLoadingFee(false);
+    }
+  };
+
   const subtotal = getCartTotal();
-  const deliveryFee = subtotal > 0 ? 2.00 : 0;
-  const total = subtotal + deliveryFee;
+  const total = subtotal + (subtotal > 0 ? deliveryFee : 0);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -30,7 +72,7 @@ export default function CartScreen({ navigation }: any) {
                 </View>
                 <View style={styles.itemDetails}>
                   <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
-                  <Text style={styles.itemPrice}>${(Number(item.price) || 0).toFixed(2)}</Text>
+                  <Text style={styles.itemPrice}>Rs. {(Number(item.price) || 0).toFixed(0)}</Text>
                 </View>
                 <View style={styles.qtyBox}>
                   <TouchableOpacity onPress={() => updateQuantity(item.id, item.quantity - 1)}>
@@ -45,38 +87,51 @@ export default function CartScreen({ navigation }: any) {
             ))}
 
             <View style={styles.summaryBox}>
-               <View style={styles.row}>
-                 <Text style={styles.summaryLabel}>Subtotal</Text>
-                 <Text style={styles.summaryVal}>${(Number(subtotal) || 0).toFixed(2)}</Text>
-               </View>
-               <View style={styles.row}>
-                 <Text style={styles.summaryLabel}>Delivery Fee</Text>
-                 <Text style={styles.summaryVal}>${(Number(deliveryFee) || 0).toFixed(2)}</Text>
-               </View>
-               <View style={[styles.row, styles.totalRow]}>
-                 <Text style={styles.totalLabel}>Total</Text>
-                 <Text style={styles.totalVal}>${(Number(total) || 0).toFixed(2)}</Text>
-               </View>
+              <View style={styles.row}>
+                <Text style={styles.summaryLabel}>Subtotal</Text>
+                <Text style={styles.summaryVal}>Rs. {(Number(subtotal) || 0).toFixed(0)}</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.summaryLabel}>Delivery Fee</Text>
+                {isLoadingFee ? (
+                  <ActivityIndicator size="small" color="#FF4500" />
+                ) : !isValidAddress ? (
+                  <Text style={[styles.summaryVal, { color: '#ff0000' }]}>Unavailable</Text>
+                ) : (
+                  <Text style={styles.summaryVal}>Rs. {(Number(deliveryFee) || 0).toFixed(0)}</Text>
+                )}
+              </View>
+              <View style={[styles.row, styles.totalRow]}>
+                <Text style={styles.totalLabel}>Total</Text>
+                <Text style={styles.totalVal}>
+                  {!isValidAddress ? 'N/A' : `Rs. ${(Number(total) || 0).toFixed(0)}`}
+                </Text>
+              </View>
+              {!isValidAddress && (
+                <Text style={{ color: '#ff0000', fontSize: 12, fontWeight: 'bold', marginTop: 5, textAlign: 'center' }}>
+                  Selected address is outside our delivery zone.
+                </Text>
+              )}
             </View>
           </ScrollView>
 
           <View style={styles.footer}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.checkoutBtn}
               onPress={() => navigation.navigate('Checkout')}
             >
-              <Text style={styles.checkoutText}>Proceed to Checkout (${(Number(total) || 0).toFixed(2)})</Text>
+              <Text style={styles.checkoutText}>Proceed to Checkout (Rs. {(Number(total) || 0).toFixed(0)})</Text>
             </TouchableOpacity>
           </View>
         </>
       ) : (
         <View style={styles.empty}>
           <View style={styles.emptyIcon}>
-             <Text style={{ fontSize: 50 }}>🛒</Text>
+            <Text style={{ fontSize: 50 }}>🛒</Text>
           </View>
           <Text style={styles.emptyText}>Your cart is empty.</Text>
-          <TouchableOpacity 
-            style={styles.browseBtn} 
+          <TouchableOpacity
+            style={styles.browseBtn}
             onPress={() => navigation.navigate('Home')}
           >
             <Text style={styles.browseBtnText}>Browse Products</Text>

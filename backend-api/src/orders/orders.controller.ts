@@ -8,6 +8,12 @@ import { Request } from 'express';
 export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
+  @Get('all')
+  // TODO: Add AdminRoleGuard later
+  async getAllOrders() {
+    return this.ordersService.getAllOrdersForAdmin();
+  }
+
   @Get('pending')
   async getPendingOrders(@Req() req: Request) {
     const user = req.user as any;
@@ -38,6 +44,11 @@ export class OrdersController {
       body.notes,
       body.items
     );
+  }
+
+  @Get('preview-fee/:addressId')
+  async previewFee(@Param('addressId', ParseUUIDPipe) addressId: string) {
+    return this.ordersService.calculateDeliveryFee(addressId);
   }
 
   @Post(':id/accept')

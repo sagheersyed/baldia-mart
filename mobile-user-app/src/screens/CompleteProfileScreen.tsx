@@ -5,9 +5,11 @@ import {
   ScrollView
 } from 'react-native';
 import * as Location from 'expo-location';
-import { usersApi, addressesApi } from '../api/api';
+import { usersApi, addressesApi, authApi } from '../api/api';
+import { useAuth } from '../context/AuthContext';
 
 export default function CompleteProfileScreen({ navigation }: any) {
+  const { updateUserData } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [address, setAddress] = useState('');
@@ -78,9 +80,12 @@ export default function CompleteProfileScreen({ navigation }: any) {
         isDefault: true
       });
 
-      Alert.alert('Success', 'Profile completed successfully!', [
-        { text: 'OK', onPress: () => navigation.replace('Main') }
-      ]);
+      // 3. Update local user data from server
+      const res = await authApi.getMe();
+      updateUserData(res.data);
+
+      Alert.alert('Success', 'Profile completed successfully!');
+      // Navigation will happen automatically in App.tsx
     } catch (error: any) {
       console.error('Registration completion error:', error);
       const msg = error.response?.data?.message || 'Failed to complete profile';

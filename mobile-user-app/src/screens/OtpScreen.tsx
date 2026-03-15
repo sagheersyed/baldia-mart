@@ -4,9 +4,11 @@ import {
   KeyboardAvoidingView, Platform, Alert, ActivityIndicator,
   Keyboard
 } from 'react-native';
-import { authApi, setAuthToken } from '../api/api';
+import { authApi } from '../api/api';
+import { useAuth } from '../context/AuthContext';
 
 export default function OtpScreen({ navigation, route }: any) {
+  const { signIn } = useAuth();
   const { phoneNumber } = route.params || {};
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
@@ -50,13 +52,8 @@ export default function OtpScreen({ navigation, route }: any) {
     try {
       const res = await authApi.verifyOtp(phoneNumber, otpCode);
       if (res.data.access_token) {
-        setAuthToken(res.data.access_token);
-        
-        if (res.data.isNewUser) {
-          navigation.replace('CompleteProfile');
-        } else {
-          navigation.replace('Main');
-        }
+        await signIn(res.data.access_token, res.data.user);
+        // Navigation will happen automatically in App.tsx
       }
     } catch (error: any) {
       const msg = error.response?.data?.message || 'Verification failed';
