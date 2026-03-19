@@ -26,6 +26,13 @@ export class SettingsService implements OnModuleInit {
       { id: '1', name: 'Baldia Town Main', address: 'Plot 12, Sector 5, Baldia Town', lat: 24.9123, lng: 66.9876 },
       { id: '2', name: 'Orangi Express', address: 'Shop 4, Orangi Town', lat: 24.9345, lng: 67.0123 },
     ]));
+
+    // Auth Configuration
+    await this.seedDefault('auth_customer_mpin_enabled', 'true');
+    await this.seedDefault('auth_customer_otp_enabled', 'true');
+    await this.seedDefault('auth_customer_google_enabled', 'true');
+    await this.seedDefault('auth_rider_mpin_enabled', 'true');
+    await this.seedDefault('auth_rider_otp_enabled', 'true');
   }
 
   private async seedDefault(key: string, value: string) {
@@ -45,6 +52,11 @@ export class SettingsService implements OnModuleInit {
       contact_phone: await this.getByKey('contact_phone', '+92 341 2248616'),
       contact_email: await this.getByKey('contact_email', 'support@baldiamart.com'),
       mart_locations: JSON.parse(await this.getByKey('mart_locations_list', '[]') as string),
+      auth_customer_mpin_enabled: (await this.getByKey('auth_customer_mpin_enabled', 'true')) === 'true',
+      auth_customer_otp_enabled: (await this.getByKey('auth_customer_otp_enabled', 'true')) === 'true',
+      auth_customer_google_enabled: (await this.getByKey('auth_customer_google_enabled', 'true')) === 'true',
+      auth_rider_mpin_enabled: (await this.getByKey('auth_rider_mpin_enabled', 'true')) === 'true',
+      auth_rider_otp_enabled: (await this.getByKey('auth_rider_otp_enabled', 'true')) === 'true',
     };
   }
 

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Save, RefreshCw, Truck, ArrowRight, Ruler, Phone, Mail, MapPin, Building2 } from 'lucide-react';
+import { Save, RefreshCw, Truck, ArrowRight, Ruler, Phone, Mail, MapPin, Building2, Shield, ToggleLeft, ToggleRight } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api';
 
 const SETTINGS_API_URL = 'http://localhost:3000/api/v1/settings';
@@ -265,6 +265,70 @@ export default function SettingsPage() {
           </div>
         </div>
 
+      </div>
+
+      {/* Authentication Configuration */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-8">
+        <div className="bg-gray-50 p-6 border-b border-gray-100 flex items-center space-x-3">
+          <Shield className="text-purple-600" size={24} />
+          <h2 className="text-xl font-semibold text-gray-800">Authentication Configuration</h2>
+        </div>
+        
+        <div className="p-6 space-y-8">
+          <p className="text-sm text-gray-500 bg-purple-50 p-4 rounded-xl border border-purple-100">
+            <strong>Security & Cost:</strong> Toggle login methods for Customers and Riders. Disabling expensive methods like OTP or Google Auth can reduce costs. MPIN is highly recommended as the primary login.
+          </p>
+
+          <div className="grid md:grid-cols-2 gap-8">
+            {/* Customer Settings */}
+            <div className="space-y-6">
+              <h3 className="font-semibold text-gray-700 border-b pb-2">Customer App</h3>
+              
+              {['auth_customer_mpin_enabled', 'auth_customer_otp_enabled', 'auth_customer_google_enabled'].map(key => {
+                const label = key.includes('mpin') ? 'MPIN Login' : key.includes('otp') ? 'OTP Login' : 'Google Auth';
+                const isEnabled = settings[key] === 'true' || settings[key] === true;
+                return (
+                  <div key={key} className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-sm text-gray-800">{label}</p>
+                    </div>
+                    <button
+                      disabled={saving}
+                      onClick={() => handleUpdate(key, isEnabled ? 'false' : 'true')}
+                      className={`transition ${isEnabled ? 'text-green-600' : 'text-gray-400 hover:text-gray-600'} disabled:opacity-50`}
+                    >
+                      {isEnabled ? <ToggleRight size={36} /> : <ToggleLeft size={36} />}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Rider Settings */}
+            <div className="space-y-6">
+              <h3 className="font-semibold text-gray-700 border-b pb-2">Rider App</h3>
+              
+              {['auth_rider_mpin_enabled', 'auth_rider_otp_enabled'].map(key => {
+                const label = key.includes('mpin') ? 'MPIN Login' : 'OTP Login';
+                const isEnabled = settings[key] === 'true' || settings[key] === true;
+                return (
+                  <div key={key} className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-sm text-gray-800">{label}</p>
+                    </div>
+                    <button
+                      disabled={saving}
+                      onClick={() => handleUpdate(key, isEnabled ? 'false' : 'true')}
+                      className={`transition ${isEnabled ? 'text-green-600' : 'text-gray-400 hover:text-gray-600'} disabled:opacity-50`}
+                    >
+                      {isEnabled ? <ToggleRight size={36} /> : <ToggleLeft size={36} />}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

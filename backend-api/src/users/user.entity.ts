@@ -24,6 +24,12 @@ export class User {
   @Column({ nullable: true })
   password?: string;
 
+  @Column({ nullable: true })
+  mpin?: string;
+
+  @Column({ name: 'mpin_attempts', default: 0 })
+  mpinAttempts: number;
+
   @Column({ name: 'phone_number', nullable: true, unique: true })
   phoneNumber: string;
 

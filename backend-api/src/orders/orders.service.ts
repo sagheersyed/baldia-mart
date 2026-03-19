@@ -180,11 +180,16 @@ export class OrdersService {
   }
 
   async getRiderOrderHistory(riderId: string): Promise<Order[]> {
-    return this.ordersRepository.find({
-      where: { riderId, status: In(['delivered', 'cancelled']) },
-      relations: ['items', 'items.product', 'address', 'user'],
-      order: { updatedAt: 'DESC' }
-    });
+    return this.ordersRepository.createQueryBuilder('order')
+      .leftJoinAndSelect('order.items', 'items')
+      .leftJoinAndSelect('items.product', 'product')
+      .leftJoinAndSelect('order.address', 'address')
+      .leftJoinAndSelect('order.user', 'user')
+      .where('order.riderId = :riderId', { riderId })
+      .andWhere('order.status IN (:...statuses)', { statuses: ['delivered', 'cancelled'] })
+      .orderBy('order.updatedAt', 'DESC')
+      .withDeleted() // Ensure we see orders even if address/products are soft-deleted
+      .getMany();
   }
 
   async acceptOrder(orderId: string, riderId: string): Promise<Order> {
@@ -338,7 +343,8 @@ export class OrdersService {
       const riderRepo = this.ordersRepository.manager.getRepository('Rider');
       const rider = await riderRepo.findOne({ where: { id: order.riderId } }) as any;
       if (rider) {
-        rider.totalEarnings = Number(rider.totalEarnings || 0) + Number(order.total);
+        // Rider only gets the delivery fee, not the total order amount
+        rider.totalEarnings = Number(rider.totalEarnings || 0) + Number(order.deliveryFee);
         await riderRepo.save(rider);
       }
     }

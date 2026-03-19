@@ -21,6 +21,11 @@ export const setAuthToken = (token: string | null) => {
 };
 
 export const authApi = {
+  getConfig: () => api.get('/auth/config'),
+  checkStatus: (phoneNumber: string, role: string) => api.post('/auth/check-status', { phoneNumber, role }),
+  setupMpin: (mpin: string) => api.post('/auth/setup-mpin', { mpin }),
+  loginMpin: (phoneNumber: string, mpin: string) => api.post('/auth/login-mpin', { phoneNumber, mpin }),
+  registerMpin: (phoneNumber: string, mpin: string) => api.post('/auth/register-mpin', { phoneNumber, mpin }),
   login: (firebaseToken: string) =>
     api.post('/auth/login', {}, { headers: { Authorization: `Bearer ${firebaseToken}` } }),
   getMe: () => api.get('/auth/me'),

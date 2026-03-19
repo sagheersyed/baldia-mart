@@ -43,9 +43,20 @@ export default function OtpScreen(props: any) {
     try {
       const res = await authApi.verifyOtp(phoneNumber, code);
       const token = res.data.access_token;
-      
-      if (res.data.isNewUser || !res.data.rider.isProfileComplete) {
-        // We still need the token in memory to complete the profile
+      const isNewUser = res.data.isNewUser;
+      const isProfileComplete = res.data.rider?.isProfileComplete;
+
+      try {
+        const configRes = await authApi.getConfig();
+        if (configRes.data.auth_rider_mpin_enabled) {
+          navigation.replace('MpinSetup', { token, isNewUser, isProfileComplete });
+          return;
+        }
+      } catch (e) {
+        console.log('Failed to fetch config, skipping MPIN setup');
+      }
+
+      if (isNewUser || !isProfileComplete) {
         const { setAuthToken } = await import('../api/api');
         setAuthToken(token);
         navigation.replace('CompleteProfile');

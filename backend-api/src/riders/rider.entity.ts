@@ -20,6 +20,12 @@ export class Rider {
   @Column({ name: 'phone_number' })
   phoneNumber: string;
 
+  @Column({ nullable: true })
+  mpin?: string;
+
+  @Column({ name: 'mpin_attempts', default: 0 })
+  mpinAttempts: number;
+
   @Column({ name: 'vehicle_type', nullable: true })
   vehicleType: string;
 

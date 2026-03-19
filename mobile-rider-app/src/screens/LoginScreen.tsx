@@ -5,19 +5,46 @@ import { authApi } from '../api/api';
 export default function LoginScreen({ navigation }: any) {
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
+  const [config, setConfig] = useState<any>({
+    auth_rider_mpin_enabled: true,
+    auth_rider_otp_enabled: true,
+  });
+
+  React.useEffect(() => {
+    fetchConfig();
+  }, []);
+
+  const fetchConfig = async () => {
+    try {
+      const res = await authApi.getConfig();
+      setConfig(res.data);
+    } catch (e) {
+      console.log('Failed to load auth config', e);
+    }
+  };
 
   const handleLogin = async () => {
     if (phone.length < 10) {
       Alert.alert('Error', 'Please enter a valid phone number');
       return;
     }
-    
     setLoading(true);
     try {
-      await authApi.sendOtp(phone);
-      navigation.navigate('Otp', { phoneNumber: phone });
+      const statusRes = await authApi.checkStatus(phone, 'rider');
+      const { exists, hasMpin } = statusRes.data;
+
+      if (config.auth_rider_mpin_enabled && hasMpin) {
+        navigation.navigate('MpinLogin', { phoneNumber: phone });
+      } else if (config.auth_rider_otp_enabled) {
+        await authApi.sendOtp(phone);
+        navigation.navigate('Otp', { phoneNumber: phone });
+      } else if (config.auth_rider_mpin_enabled) {
+        navigation.navigate('MpinSetupDirect', { phoneNumber: phone });
+      } else {
+        Alert.alert('Error', 'No login methods enabled for riders. Contact admin.');
+      }
     } catch (e: any) {
-      Alert.alert('Error', e.response?.data?.message || 'Failed to send OTP');
+      Alert.alert('Error', e.response?.data?.message || 'Login attempt failed');
     } finally {
       setLoading(false);
     }

@@ -8,12 +8,14 @@ import { JwtStrategy } from './jwt.strategy';
 import { FirebaseStrategy } from './firebase.strategy';
 import { OtpModule } from '../otp/otp.module';
 import { RidersModule } from '../riders/riders.module';
+import { SettingsModule } from '../settings/settings.module';
 
 @Module({
   imports: [
     UsersModule,
     OtpModule,
     RidersModule,
+    SettingsModule,
     PassportModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET || 'super_secret_jwt_key',

@@ -27,9 +27,15 @@ export const setAuthToken = (token: string | null) => {
 };
 
 export const authApi = {
+  getConfig: () => api.get('/auth/config'),
+  checkStatus: (phoneNumber: string, role: string) => api.post('/auth/check-status', { phoneNumber, role }),
+  setupMpin: (mpin: string) => api.post('/auth/rider/setup-mpin', { mpin }),
+  loginMpin: (phoneNumber: string, mpin: string) => api.post('/auth/rider/login-mpin', { phoneNumber, mpin }),
+  registerMpin: (phoneNumber: string, mpin: string) => api.post('/auth/rider/register-mpin', { phoneNumber, mpin }),
   sendOtp: (phoneNumber: string) => api.post('/auth/rider/send-otp', { phoneNumber }),
   verifyOtp: (phoneNumber: string, otpCode: string) =>
     api.post('/auth/rider/verify-otp', { phoneNumber, otpCode }),
+  login: (firebaseToken: string) => api.post('/auth/login', { firebaseToken }),
   getMe: () => api.get('/auth/me'),
 };
 

@@ -14,6 +14,24 @@ export default function LoginScreen({ navigation }: any) {
   const { signIn } = useAuth();
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
+  const [config, setConfig] = useState<any>({
+    auth_customer_mpin_enabled: true,
+    auth_customer_otp_enabled: true,
+    auth_customer_google_enabled: true,
+  });
+
+  useEffect(() => {
+    fetchConfig();
+  }, []);
+
+  const fetchConfig = async () => {
+    try {
+      const res = await authApi.getConfig();
+      setConfig(res.data);
+    } catch (e) {
+      console.log('Failed to fetch auth config', e);
+    }
+  };
 
   const [request, response, promptAsync] = Google.useAuthRequest({
     androidClientId: '293399332795-tqfg57qr3qsu4l2a3gl97stssbic9k76.apps.googleusercontent.com',
@@ -65,14 +83,28 @@ export default function LoginScreen({ navigation }: any) {
 
     setLoading(true);
     try {
-      // Step 1: Request OTP from backend
-      await authApi.sendOtp(phone);
-      
-      // Step 2: Navigate to OTP verification screen
-      navigation.navigate('Otp', { phoneNumber: phone });
+      // Step 1: Check status to see if user has MPIN
+      const statusRes = await authApi.checkStatus(phone, 'customer');
+      const { exists, hasMpin } = statusRes.data;
+
+      // Step 2: Routing Logic
+      if (config.auth_customer_mpin_enabled && hasMpin) {
+        // Route to MPIN Login
+        navigation.navigate('MpinLogin', { phoneNumber: phone });
+      } else if (config.auth_customer_otp_enabled) {
+        // Route to OTP fallback / new user registration
+        await authApi.sendOtp(phone);
+        navigation.navigate('Otp', { phoneNumber: phone });
+      } else if (config.auth_customer_mpin_enabled) {
+        // Fallback: OTP disabled, but MPIN enabled, and user has no MPIN. 
+        // Route directly to setup!
+        navigation.navigate('MpinSetupDirect', { phoneNumber: phone });
+      } else {
+        Alert.alert('Error', 'No authentication methods available. Please contact admin.');
+      }
     } catch (error: any) {
       console.error('Login request failed:', error);
-      const msg = error.response?.data?.message || 'Unable to send OTP. Please try again.';
+      const msg = error.response?.data?.message || 'Unable to process login. Please try again.';
       Alert.alert('Error', msg);
     } finally {
       setLoading(false);
@@ -112,22 +144,26 @@ export default function LoginScreen({ navigation }: any) {
           onPress={handleLogin}
           disabled={loading}
         >
-          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Continue with Phone</Text>}
+          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Continue</Text>}
         </TouchableOpacity>
 
-        <View style={styles.divider}>
-          <View style={styles.line} />
-          <Text style={styles.orText}>OR</Text>
-          <View style={styles.line} />
-        </View>
+        {config.auth_customer_google_enabled && (
+          <>
+            <View style={styles.divider}>
+              <View style={styles.line} />
+              <Text style={styles.orText}>OR</Text>
+              <View style={styles.line} />
+            </View>
 
-        <TouchableOpacity 
-          style={[styles.button, styles.googleButton, loading && styles.disabledBtn]} 
-          onPress={handleGoogleLogin}
-          disabled={loading}
-        >
-          <Text style={styles.googleText}>Continue with Google</Text>
-        </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.button, styles.googleButton, loading && styles.disabledBtn]} 
+              onPress={handleGoogleLogin}
+              disabled={loading}
+            >
+              <Text style={styles.googleText}>Continue with Google</Text>
+            </TouchableOpacity>
+          </>
+        )}
       </View>
     </KeyboardAvoidingView>
   );

@@ -22,6 +22,9 @@ import HelpScreen from './src/screens/HelpScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
 import OtpScreen from './src/screens/OtpScreen';
 import CompleteProfileScreen from './src/screens/CompleteProfileScreen';
+import MpinLoginScreen from './src/screens/MpinLoginScreen';
+import MpinSetupScreen from './src/screens/MpinSetupScreen';
+import MpinSetupDirectScreen from './src/screens/MpinSetupDirectScreen';
 
 import { ActivityIndicator, View } from 'react-native';
 
@@ -97,6 +100,9 @@ function Navigation() {
           <>
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="Otp" component={OtpScreen} />
+            <Stack.Screen name="MpinLogin" component={MpinLoginScreen} />
+            <Stack.Screen name="MpinSetup" component={MpinSetupScreen} />
+            <Stack.Screen name="MpinSetupDirect" component={MpinSetupDirectScreen} />
           </>
         ) : !isProfileComplete ? (
           <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen} />

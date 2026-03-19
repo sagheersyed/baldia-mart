@@ -52,8 +52,22 @@ export default function OtpScreen({ navigation, route }: any) {
     try {
       const res = await authApi.verifyOtp(phoneNumber, otpCode);
       if (res.data.access_token) {
+        // Fetch config to check if MPIN setup is required
+        try {
+          const configRes = await authApi.getConfig();
+          if (configRes.data.auth_customer_mpin_enabled) {
+            navigation.navigate('MpinSetup', {
+              access_token: res.data.access_token,
+              user: res.data.user
+            });
+            return;
+          }
+        } catch (e) {
+          console.log('Failed to fetch config, skipping MPIN setup');
+        }
+
+        // Fallback or MPIN disabled
         await signIn(res.data.access_token, res.data.user);
-        // Navigation will happen automatically in App.tsx
       }
     } catch (error: any) {
       const msg = error.response?.data?.message || 'Verification failed';

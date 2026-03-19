@@ -13,6 +13,9 @@ import ProfileScreen from './src/screens/ProfileScreen';
 import NavigationScreen from './src/screens/NavigationScreen';
 import OtpScreen from './src/screens/OtpScreen';
 import CompleteProfileScreen from './src/screens/CompleteProfileScreen';
+import MpinLoginScreen from './src/screens/MpinLoginScreen';
+import MpinSetupScreen from './src/screens/MpinSetupScreen';
+import MpinSetupDirectScreen from './src/screens/MpinSetupDirectScreen';
 import OrderDetailsScreen from './src/screens/OrderDetailsScreen';
 import OrderHistoryScreen from './src/screens/OrderHistoryScreen';
 
@@ -65,6 +68,9 @@ function AppInner() {
           <>
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="Otp" component={OtpScreen} />
+            <Stack.Screen name="MpinLogin" component={MpinLoginScreen} />
+            <Stack.Screen name="MpinSetup" component={MpinSetupScreen} />
+            <Stack.Screen name="MpinSetupDirect" component={MpinSetupDirectScreen} />
             <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen} />
           </>
         ) : (

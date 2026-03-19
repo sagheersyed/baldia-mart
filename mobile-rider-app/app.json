@@ -2,6 +2,7 @@
   "expo": {
     "name": "Baldia Mart Rider",
     "slug": "baldia-mart-rider",
+    "scheme": "baldia-mart-rider",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -27,6 +28,9 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-web-browser"
+    ]
   }
 }
