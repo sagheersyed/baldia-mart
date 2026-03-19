@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, Switch, ActivityIndicator, Alert, RefreshControl, Vibration } from 'react-native';
-import { socket, ordersApi, ridersApi } from '../api/api';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, Switch, ActivityIndicator, Alert, RefreshControl, Vibration, Modal, FlatList } from 'react-native';
+import { socket, ordersApi, ridersApi, settingsApi } from '../api/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function DashboardScreen({ navigation }: any) {
   const [isOnline, setIsOnline] = useState(false);
@@ -10,6 +11,9 @@ export default function DashboardScreen({ navigation }: any) {
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [martLocations, setMartLocations] = useState<any[]>([]);
+  const [selectedMart, setSelectedMart] = useState<any>(null);
+  const [showMartModal, setShowMartModal] = useState(false);
 
   useEffect(() => {
     if (isOnline) {
@@ -47,6 +51,7 @@ export default function DashboardScreen({ navigation }: any) {
       socket.on('newOrder', onNewOrder);
       socket.on('orderAccepted', onOrderAccepted);
       socket.on('orderCancelled', onOrderCancelled);
+      socket.on('orderUpdated', fetchOrders);
 
       // Trigger initial fetch if rider is already set
       if (rider) {
@@ -61,12 +66,48 @@ export default function DashboardScreen({ navigation }: any) {
         socket.off('newOrder', onNewOrder);
         socket.off('orderAccepted', onOrderAccepted);
         socket.off('orderCancelled', onOrderCancelled);
+        socket.off('orderUpdated', fetchOrders);
         socket.disconnect();
       };
     } else {
       socket.disconnect();
     }
   }, [isOnline, rider?.id]);
+
+  useEffect(() => {
+    fetchRiderInfo();
+    fetchMartLocations();
+    loadSelectedMart();
+  }, []);
+
+  const fetchMartLocations = async () => {
+    try {
+      const res = await settingsApi.getPublicSettings();
+      if (res.data.mart_locations) {
+        setMartLocations([
+          { id: 'all', name: 'All Orders', address: 'Show orders from everywhere' },
+          ...res.data.mart_locations
+        ]);
+      }
+    } catch (e) {
+      console.error('Fetch mart locations error:', e);
+    }
+  };
+
+  const loadSelectedMart = async () => {
+    try {
+      const saved = await AsyncStorage.getItem('selectedMart');
+      if (saved) {
+        setSelectedMart(JSON.parse(saved));
+      }
+    } catch (e) {}
+  };
+
+  const handleSelectMart = async (mart: any) => {
+    setSelectedMart(mart);
+    await AsyncStorage.setItem('selectedMart', JSON.stringify(mart));
+    setShowMartModal(false);
+  };
 
   const fetchRiderInfo = async () => {
     try {
@@ -112,17 +153,47 @@ export default function DashboardScreen({ navigation }: any) {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={styles.name}>Welcome, {rider?.name || 'Rider'}</Text>
-          <Text style={styles.statusText}>{isOnline ? 'Online & Ready' : 'Offline'}</Text>
+          <TouchableOpacity onPress={() => setShowMartModal(true)} style={styles.martSelector}>
+            <Text style={styles.martText}>📍 {selectedMart?.name || 'Select Nearby Mart'}</Text>
+            <Text style={styles.chevron}>▼</Text>
+          </TouchableOpacity>
         </View>
         <Switch
           value={isOnline}
           onValueChange={setIsOnline}
-          trackColor={{ false: "#767577", true: "#FF4500" }}
-          thumbColor={isOnline ? "#fff" : "#f4f3f4"}
+          trackColor={{ false: "#444", true: "#FF4500" }}
+          thumbColor={isOnline ? "#fff" : "#888"}
         />
       </View>
+
+      {/* Mart Selection Modal */}
+      <Modal visible={showMartModal} animationType="slide" transparent={true}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.martModal}>
+            <Text style={styles.modalTitle}>Select Nearby Mart</Text>
+            <Text style={styles.modalSub}>Select your base mart to see relevant orders</Text>
+            <FlatList
+              data={martLocations}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <TouchableOpacity 
+                  style={[styles.martItem, selectedMart?.id === item.id && styles.martItemSelected]} 
+                  onPress={() => handleSelectMart(item)}
+                >
+                  <Text style={[styles.martItemName, selectedMart?.id === item.id && { color: '#FF4500' }]}>{item.name}</Text>
+                  <Text style={styles.martItemAddr}>{item.address}</Text>
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={<Text style={{ textAlign: 'center', color: '#888', marginTop: 20 }}>No marts available</Text>}
+            />
+            <TouchableOpacity onPress={() => setShowMartModal(false)} style={styles.closeBtn}>
+              <Text style={styles.closeBtnText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       <View style={styles.statsRow}>
         <View style={styles.statBox}>
@@ -173,7 +244,10 @@ export default function DashboardScreen({ navigation }: any) {
             {loading && pendingOrders.length === 0 && activeOrders.length === 0 ? (
               <ActivityIndicator size="large" color="#FF4500" style={{ marginTop: 50 }} />
             ) : pendingOrders.length > 0 ? (
-              pendingOrders.filter(p => !activeOrders.find(a => a.id === p.id)).map(order => (
+              pendingOrders
+                .filter(p => !activeOrders.find(a => a.id === p.id))
+                .filter(p => !selectedMart || selectedMart.id === 'all' || !p.martId || p.martId === selectedMart.id)
+                .map(order => (
                 <View key={order.id} style={styles.orderCard}>
                   <View style={styles.orderHeader}>
                     <Text style={styles.orderId}>#ORD-{order.id.slice(0, 8).toUpperCase()}</Text>
@@ -213,6 +287,10 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5f5f5' },
   header: { padding: 20, backgroundColor: '#1E1E1E', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   name: { fontSize: 20, fontWeight: 'bold', color: '#fff' },
+  backBtn: { fontSize: 24, fontWeight: 'bold', color: '#333' },
+  martSelector: { flexDirection: 'row', alignItems: 'center', marginTop: 4, backgroundColor: '#2A2A2A', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, alignSelf: 'flex-start' },
+  martText: { color: '#FF4500', fontSize: 12, fontWeight: '700' },
+  chevron: { color: '#666', fontSize: 10, marginLeft: 5 },
   statusText: { color: '#aaa', marginTop: 5 },
   statsRow: { flexDirection: 'row', padding: 15, backgroundColor: '#1E1E1E' },
   statBox: { flex: 1, backgroundColor: '#2A2A2A', padding: 15, borderRadius: 12, marginHorizontal: 5 },
@@ -239,5 +317,16 @@ const styles = StyleSheet.create({
   activeBadge: { backgroundColor: '#FF4500', color: '#fff', fontSize: 11, fontWeight: 'bold', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, textTransform: 'uppercase' },
   continueBtn: { height: 45, backgroundColor: '#1A1A1A', borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginTop: 5 },
   continueBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
-  divider: { height: 1, backgroundColor: '#eee' }
+  divider: { height: 1, backgroundColor: '#eee' },
+  // Modal styles
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'flex-end' },
+  martModal: { backgroundColor: '#fff', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, minHeight: '50%' },
+  modalTitle: { fontSize: 22, fontWeight: '900', color: '#1A1A1A' },
+  modalSub: { fontSize: 14, color: '#888', marginBottom: 20 },
+  martItem: { padding: 20, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
+  martItemSelected: { backgroundColor: '#FFF5F0', borderRadius: 15 },
+  martItemName: { fontSize: 16, fontWeight: '700', color: '#333' },
+  martItemAddr: { fontSize: 13, color: '#888', marginTop: 4 },
+  closeBtn: { marginTop: 20, backgroundColor: '#F0F0F0', padding: 15, borderRadius: 15, alignItems: 'center' },
+  closeBtnText: { fontWeight: 'bold', color: '#666' }
 });

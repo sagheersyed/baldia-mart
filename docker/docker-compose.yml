@@ -14,12 +14,10 @@ services:
     container_name: baldia_mart_api
     ports:
       - "3000:3000"
+    env_file:
+      - ../backend-api/.env
     environment:
-      - DB_HOST=host.docker.internal
-      - DB_PORT=5432
-      - DB_USERNAME=postgres
-      - DB_PASSWORD=postgres
-      - DB_DATABASE=baldia_mart
+      - DB_HOST=host.docker.internal # Override localhost from .env for Docker
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - NODE_ENV=development

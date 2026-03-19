@@ -61,6 +61,8 @@ export const ordersApi = {
   removeItem: (orderId: string, itemId: string) => api.delete(`/orders/${orderId}/items/${itemId}`),
   updateQuantity: (orderId: string, itemId: string, quantity: number) => 
     api.patch(`/orders/${orderId}/items/${itemId}`, { quantity }),
+  addItem: (orderId: string, productId: string, quantity: number) =>
+    api.post(`/orders/${orderId}/items`, { productId, quantity }),
   updateOrderItems: (orderId: string, items: { itemId: string; quantity: number }[]) =>
     api.patch(`/orders/${orderId}/items`, { items }),
   getTimeline: (orderId: string) => api.get(`/orders/${orderId}/timeline`),

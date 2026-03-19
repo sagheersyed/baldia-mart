@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
 import { LoggerModule } from 'nestjs-pino';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { TerminusModule } from '@nestjs/terminus';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AppController } from './app.controller';
+import { HealthController } from './common/health.controller';
 import { AppService } from './app.service';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
@@ -66,6 +68,7 @@ import { APP_GUARD } from '@nestjs/core';
       ],
       synchronize: process.env.NODE_ENV !== 'production',
     }),
+    TerminusModule,
     UsersModule,
     AuthModule,
     AddressesModule,
@@ -83,7 +86,7 @@ import { APP_GUARD } from '@nestjs/core';
     SettingsModule,
     UploadModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, HealthController],
   providers: [
     AppService,
     {

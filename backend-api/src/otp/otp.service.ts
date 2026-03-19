@@ -5,6 +5,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, MoreThan } from 'typeorm';
 import { Otp } from './otp.entity';
 import * as bcrypt from 'bcryptjs';
+import { SmsService } from './sms.service';
 
 const OTP_EXPIRY_MINUTES = 5;
 const MAX_ATTEMPTS_PER_HOUR = 25;
@@ -17,9 +18,22 @@ export class OtpService {
   constructor(
     @InjectRepository(Otp)
     private otpRepository: Repository<Otp>,
+    private smsService: SmsService,
   ) { }
 
+  private formatPhoneNumber(phoneNumber: string): string {
+    const cleaned = phoneNumber.trim();
+    if (cleaned.startsWith('0')) {
+      return '+92' + cleaned.substring(1);
+    }
+    if (!cleaned.startsWith('+')) {
+      return '+' + cleaned;
+    }
+    return cleaned;
+  }
+
   async sendOtp(phoneNumber: string): Promise<{ message: string }> {
+    const formattedPhone = this.formatPhoneNumber(phoneNumber);
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
     const recentCount = await this.otpRepository.count({
       where: { phoneNumber, createdAt: MoreThan(oneHourAgo) as any },
@@ -50,8 +64,11 @@ export class OtpService {
       this.otpRepository.create({ phoneNumber, otpHash, expiresAt }),
     );
 
+    const message = `Your Baldia Mart verification code is: ${otpCode}. Valid for ${OTP_EXPIRY_MINUTES} minutes.`;
+    await this.smsService.sendSms(formattedPhone, message);
+
     this.logger.log(
-      `[DEV] OTP for ${phoneNumber} → ${otpCode} (expires in ${OTP_EXPIRY_MINUTES} min)`,
+      `OTP generated for ${formattedPhone} → ${otpCode} (expires in ${OTP_EXPIRY_MINUTES} min)`,
     );
 
     return { message: `OTP sent to ${phoneNumber}` };

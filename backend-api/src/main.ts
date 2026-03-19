@@ -3,8 +3,9 @@ import { AppModule } from './app.module';
 import helmet from 'helmet';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
-
+import { ValidationPipe } from '@nestjs/common';
 import { Logger } from 'nestjs-pino';
+import { GlobalHttpExceptionFilter } from './common/global-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
@@ -25,8 +26,19 @@ async function bootstrap() {
 
   // Global Prefix for API endpoints
   app.setGlobalPrefix('api/v1');
+
+  // Global Validation Pipe — strips unknown fields & validates DTOs automatically
+  app.useGlobalPipes(new ValidationPipe({
+    whitelist: true,        // strip properties not in DTO
+    forbidNonWhitelisted: false, // soft mode — don't error on extra fields (safer for mobile)
+    transform: true,        // auto-transform payloads to DTO instances
+  }));
+
+  // Global Exception Filter — ensures all errors return consistent JSON shape
+  app.useGlobalFilters(new GlobalHttpExceptionFilter());
   
   await app.listen(3000, '0.0.0.0');
   console.log(`Application is running on: ${await app.getUrl()}`);
 }
 bootstrap();
+

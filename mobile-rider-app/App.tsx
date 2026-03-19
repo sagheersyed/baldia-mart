@@ -14,6 +14,7 @@ import NavigationScreen from './src/screens/NavigationScreen';
 import OtpScreen from './src/screens/OtpScreen';
 import CompleteProfileScreen from './src/screens/CompleteProfileScreen';
 import OrderDetailsScreen from './src/screens/OrderDetailsScreen';
+import OrderHistoryScreen from './src/screens/OrderHistoryScreen';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { setAuthToken, authApi } from './src/api/api';
@@ -71,6 +72,7 @@ function AppInner() {
             <Stack.Screen name="Main" component={RiderTabs} />
             <Stack.Screen name="OrderDetails" component={OrderDetailsScreen} />
             <Stack.Screen name="Navigation" component={NavigationScreen} />
+            <Stack.Screen name="OrderHistory" component={OrderHistoryScreen} />
           </>
         )}
       </Stack.Navigator>

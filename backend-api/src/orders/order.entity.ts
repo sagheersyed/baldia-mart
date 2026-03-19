@@ -30,6 +30,9 @@ export class Order {
   @JoinColumn({ name: 'address_id' })
   address: Address;
 
+  @Column({ name: 'mart_id', nullable: true })
+  martId: string;
+
   @Column({ default: 'pending' })
   status: string; // pending, confirmed, out_for_delivery, delivered, cancelled
 

@@ -1,13 +1,12 @@
 import { Module } from '@nestjs/common';
-import { UploadController } from './upload.controller';
 import { MulterModule } from '@nestjs/platform-express';
-import { mkdirSync } from 'fs';
-
-// Ensure upload directory exists
-try { mkdirSync('./public/uploads', { recursive: true }); } catch {}
+import { UploadController } from './upload.controller';
+import { S3StorageService } from './s3-storage.service';
 
 @Module({
-  imports: [MulterModule.register({ dest: './public/uploads' })],
+  imports: [MulterModule.register({})],
   controllers: [UploadController],
+  providers: [S3StorageService],
+  exports: [S3StorageService],
 })
 export class UploadModule {}

@@ -1,6 +1,11 @@
-import { Controller, Post, Get, Put, Body, Req, Param, UseGuards, BadRequestException, ParseUUIDPipe, Delete, Patch } from '@nestjs/common';
+import { Controller, Post, Get, Put, Body, Req, Param, UseGuards, BadRequestException, ParseUUIDPipe, Delete, Patch, ForbiddenException } from '@nestjs/common';
 import { OrdersService } from './orders.service';
 import { AuthGuard } from '@nestjs/passport';
+import { AdminRoleGuard } from '../auth/admin-role.guard';
+import { PlaceOrderDto } from './dto/place-order.dto';
+import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
+import { AssignRiderDto } from './dto/assign-rider.dto';
+import { AddItemToOrderDto } from './dto/add-item-to-order.dto';
 import { Request } from 'express';
 
 @Controller('orders')
@@ -9,7 +14,7 @@ export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
   @Get('all')
-  // TODO: Add AdminRoleGuard later
+  @UseGuards(AdminRoleGuard)
   async getAllOrders() {
     return this.ordersService.getAllOrdersForAdmin();
   }
@@ -34,8 +39,15 @@ export class OrdersController {
     return this.ordersService.getOrderHistory(user.id);
   }
 
+  @Get('history/rider')
+  async getRiderHistory(@Req() req: Request) {
+    const user = req.user as any;
+    if (user.role !== 'rider') throw new BadRequestException('Only riders can access rider history');
+    return this.ordersService.getRiderOrderHistory(user.id);
+  }
+
   @Post('checkout')
-  async placeOrder(@Req() req: Request, @Body() body: any) {
+  async placeOrder(@Req() req: Request, @Body() body: PlaceOrderDto) {
     const user = req.user as any;
     return this.ordersService.placeOrder(
       user.id,
@@ -70,23 +82,46 @@ export class OrdersController {
   }
 
   @Put(':id/status')
-  async updateStatus(@Param('id', ParseUUIDPipe) id: string, @Body('status') status: string) {
-    return this.ordersService.updateStatus(id, status);
+  @UseGuards(AdminRoleGuard)
+  async updateStatus(@Param('id', ParseUUIDPipe) id: string, @Body() body: UpdateOrderStatusDto) {
+    return this.ordersService.updateStatus(id, body.status);
   }
 
   @Put(':id/assign')
-  // TODO: Add AdminRoleGuard later
+  @UseGuards(AdminRoleGuard)
   async assignRider(
     @Param('id', ParseUUIDPipe) id: string, 
-    @Body('riderId') riderId: string
+    @Body() body: AssignRiderDto
   ) {
-    return this.ordersService.assignRider(id, riderId);
+    return this.ordersService.assignRider(id, body.riderId);
   }
 
   @Post(':id/cancel')
   async cancelOrder(@Req() req: Request, @Param('id', ParseUUIDPipe) id: string) {
     const user = req.user as any;
     return this.ordersService.cancelOrder(id, user.id);
+  }
+
+  /**
+   * Rider-only: progress an order through rider-controlled statuses.
+   * Admins use PUT /:id/status for full control.
+   */
+  @Patch(':id/rider-status')
+  async updateRiderStatus(
+    @Req() req: Request,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body('status') status: string,
+  ) {
+    const user = req.user as any;
+    if (user.role !== 'rider') {
+      throw new ForbiddenException('Only riders can use this endpoint.');
+    }
+    // Allowed rider transitions: preparing → out_for_delivery → delivered
+    const riderAllowedStatuses = ['confirmed', 'preparing', 'out_for_delivery', 'delivered'];
+    if (!riderAllowedStatuses.includes(status)) {
+      throw new BadRequestException(`Riders cannot set status to "${status}". Allowed: ${riderAllowedStatuses.join(', ')}`);
+    }
+    return this.ordersService.updateStatus(id, status);
   }
 
   @Post(':id/reorder')
@@ -111,5 +146,15 @@ export class OrdersController {
     @Body('items') items: { itemId: string; quantity: number }[],
   ) {
     return this.ordersService.batchUpdateItems(id, items);
+  }
+
+  @Post(':id/items')
+  async addItemToOrder(
+    @Req() req: Request,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: AddItemToOrderDto
+  ) {
+    const user = req.user as any;
+    return this.ordersService.addItemToOrder(id, user.id, body.productId, body.quantity);
   }
 }

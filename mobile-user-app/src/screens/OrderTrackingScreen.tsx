@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator, Modal, TextInput } from 'react-native';
+import React, { useState, useEffect, useMemo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator, Modal, TextInput, FlatList, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import io from 'socket.io-client';
-import { ordersApi } from '../api/api';
+import { ordersApi, productsApi } from '../api/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Shared machine IP logic (ideally would be in a config file)
@@ -29,6 +29,12 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState('');
   const [submittingReview, setSubmittingReview] = useState(false);
+
+  // Add Products Feature state
+  const [showAddProduct, setShowAddProduct] = useState(false);
+  const [allProducts, setAllProducts] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [addingProductId, setAddingProductId] = useState<string | null>(null);
 
   const fetchOrderDetails = async () => {
     try {
@@ -57,8 +63,18 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
     }
   };
 
+  const fetchProductsList = async () => {
+    try {
+      const res = await productsApi.getAll();
+      setAllProducts(res.data);
+    } catch (e) {
+      console.error('Failed to fetch products for adding:', e);
+    }
+  };
+
   useEffect(() => {
     fetchOrderDetails();
+    fetchProductsList();
 
     const socket = io(SOCKET_URL, {
       transports: ['websocket'],
@@ -187,6 +203,28 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
       setLoading(false);
     }
   };
+
+  const handleAddNewProductToOrder = async (productId: string) => {
+    try {
+      setAddingProductId(productId);
+      await ordersApi.addItem(orderId, productId, 1);
+      Alert.alert('Success', 'Product added to your order!');
+      await fetchOrderDetails();
+      setShowAddProduct(false); // OPTIONAL: keep open if they want to add multiple? Closing for now.
+    } catch (err: any) {
+      const msg = err.response?.data?.message || 'Failed to add product.';
+      Alert.alert('Error', msg);
+    } finally {
+      setAddingProductId(null);
+    }
+  };
+
+  const filteredProducts = useMemo(() => {
+    if (!searchQuery) return allProducts;
+    return allProducts.filter(p => 
+      p.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [searchQuery, allProducts]);
 
   const handleDismissRating = async () => {
     try {
@@ -327,14 +365,26 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
                 )}
               </View>
             ))}
-            {hasChanges() && (
-              <TouchableOpacity 
-                style={styles.confirmUpdatesBtn} 
-                onPress={handleConfirmBatchUpdates}
-              >
-                <Text style={styles.confirmUpdatesBtnText}>Confirm Changes</Text>
-              </TouchableOpacity>
+            
+            {(status === 'pending' || status === 'confirmed') && (
+              <View style={styles.summaryActionsRow}>
+                {hasChanges() && (
+                  <TouchableOpacity 
+                    style={[styles.actionBtn, styles.confirmBtn]} 
+                    onPress={handleConfirmBatchUpdates}
+                  >
+                    <Text style={styles.confirmBtnText}>Confirm Changes</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity 
+                  style={[styles.actionBtn, styles.addBtn, !hasChanges() && { flex: 1 }]} 
+                  onPress={() => setShowAddProduct(true)}
+                >
+                  <Text style={styles.addBtnText}>+ Add Product</Text>
+                </TouchableOpacity>
+              </View>
             )}
+
             <View style={styles.summaryDivider} />
             <View style={styles.totalRow}>
               <Text style={styles.totalLabel}>Total</Text>
@@ -426,6 +476,72 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
                 <Text style={styles.closeRatingText}>Maybe later</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </Modal>
+
+        {/* Add Product Modal */}
+        <Modal visible={showAddProduct} transparent animationType="slide">
+          <View style={styles.addProductOverlay}>
+            <SafeAreaView style={styles.addProductCardWrapper}>
+              <View style={styles.addProductCard}>
+                <View style={styles.addProductHeader}>
+                  <Text style={styles.addProductTitle}>Add Items to Order</Text>
+                  <TouchableOpacity style={styles.addProductCloseBtn} onPress={() => setShowAddProduct(false)}>
+                    <Text style={styles.addProductCloseText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+                
+                <View style={styles.searchBox}>
+                  <Text style={styles.searchIcon}>🔍</Text>
+                  <TextInput
+                    style={styles.searchInput}
+                    placeholder="Search fresh products..."
+                    placeholderTextColor="#999"
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                  />
+                </View>
+
+                <FlatList
+                  data={filteredProducts}
+                  keyExtractor={item => item.id}
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={{ paddingBottom: 20 }}
+                  ListEmptyComponent={() => (
+                    <Text style={{ textAlign: 'center', marginTop: 30, color: '#999' }}>No products found!</Text>
+                  )}
+                  renderItem={({ item }) => {
+                    const price = Number(item.price) - Number(item.discount || 0);
+                    return (
+                      <View style={styles.addProductRow}>
+                        <View style={styles.addProdPic}>
+                          {item.imageUrl ? (
+                            <Image source={{ uri: item.imageUrl }} style={styles.addProdImg} />
+                          ) : (
+                            <Text>📦</Text>
+                          )}
+                        </View>
+                        <View style={styles.addProdInfo}>
+                          <Text style={styles.addProdName}>{item.name}</Text>
+                          <Text style={styles.addProdPrice}>Rs. {price.toFixed(0)}</Text>
+                        </View>
+                        <TouchableOpacity
+                          style={[styles.addBtnSmall, item.stockQuantity < 1 && { opacity: 0.5 }]}
+                          disabled={item.stockQuantity < 1 || addingProductId === item.id}
+                          onPress={() => handleAddNewProductToOrder(item.id)}
+                        >
+                          {addingProductId === item.id ? (
+                            <ActivityIndicator size="small" color="#fff" />
+                          ) : (
+                            <Text style={styles.addBtnSmallText}>{item.stockQuantity > 0 ? '+ Add' : 'Out'}</Text>
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  }}
+                />
+              </View>
+            </SafeAreaView>
           </View>
         </Modal>
       </ScrollView>
@@ -562,4 +678,33 @@ const styles = StyleSheet.create({
     borderColor: '#FF450030',
   },
   confirmUpdatesBtnText: { color: '#FF4500', fontWeight: '700', fontSize: 14 },
+  
+  summaryActionsRow: { flexDirection: 'row', gap: 10, marginTop: 15 },
+  actionBtn: { flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  confirmBtn: { backgroundColor: '#FF450015', borderWidth: 1, borderColor: '#FF450030' },
+  addBtn: { backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#BBF7D0' },
+  confirmBtnText: { color: '#FF4500', fontWeight: '700', fontSize: 13 },
+  addBtnText: { color: '#16A34A', fontWeight: '700', fontSize: 13 },
+
+  addProductOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  addProductCardWrapper: { flex: 1, justifyContent: 'flex-end' },
+  addProductCard: { backgroundColor: '#fff', borderTopLeftRadius: 32, borderTopRightRadius: 32, height: '80%', padding: 20 },
+  addProductHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  addProductTitle: { fontSize: 20, fontWeight: '800', color: '#1A1A1A' },
+  addProductCloseBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F5F5F5', justifyContent: 'center', alignItems: 'center' },
+  addProductCloseText: { fontSize: 16, color: '#666', fontWeight: 'bold' },
+  
+  searchBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5F6FA', borderRadius: 16, paddingHorizontal: 15, marginBottom: 20 },
+  searchIcon: { fontSize: 18, marginRight: 10 },
+  searchInput: { flex: 1, height: 50, fontSize: 16, color: '#1A1A1A', fontWeight: '500' },
+  
+  addProductRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
+  addProdPic: { width: 50, height: 50, borderRadius: 12, backgroundColor: '#F5F5F5', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+  addProdImg: { width: '100%', height: '100%' },
+  addProdInfo: { flex: 1, marginLeft: 15 },
+  addProdName: { fontSize: 16, fontWeight: '600', color: '#2D3748', marginBottom: 4 },
+  addProdPrice: { fontSize: 14, fontWeight: '800', color: '#FF4500' },
+  addBtnSmall: { backgroundColor: '#FF4500', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, minWidth: 70, alignItems: 'center' },
+  addBtnSmallText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+
 });

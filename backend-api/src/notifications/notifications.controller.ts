@@ -8,10 +8,10 @@ export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
   @Post('broadcast')
-  async broadcast(@Body() body: { title: string; message: string }) {
+  async broadcast(@Body() body: { title: string; message: string; imageUrl?: string }) {
     // Note: In a real app, we'd check req.user.role === 'admin'
     // For now assuming the admin panel handles this check or the API is only used by admins
-    await this.notificationsService.sendToAllUsers(body.title, body.message);
+    await this.notificationsService.sendToAllUsers(body.title, body.message, body.imageUrl);
     return { success: true, message: 'Broadcast sent to all customers' };
   }
 }

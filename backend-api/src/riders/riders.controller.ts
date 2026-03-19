@@ -1,6 +1,8 @@
 import { Controller, Patch, Body, Req, UseGuards, Get, Post, Param, ParseUUIDPipe } from '@nestjs/common';
 import { RidersService } from './riders.service';
 import { AuthGuard } from '@nestjs/passport';
+import { AdminRoleGuard } from '../auth/admin-role.guard';
+import { UpdateRiderDto } from './dto/update-rider.dto';
 import { Request } from 'express';
 
 @Controller('riders')
@@ -9,16 +11,16 @@ export class RidersController {
   constructor(private readonly ridersService: RidersService) {}
 
   @Get('all')
-  // TODO: Add AdminRoleGuard later
+  @UseGuards(AdminRoleGuard)
   async getAllRiders() {
     return this.ridersService.findAll();
   }
 
   @Patch(':id')
-  // TODO: Add AdminRoleGuard later
+  @UseGuards(AdminRoleGuard)
   async updateRiderByAdmin(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() body: any
+    @Body() body: UpdateRiderDto
   ) {
     return this.ridersService.update(id, body);
   }
@@ -41,6 +43,12 @@ export class RidersController {
   async getStats(@Req() req: Request) {
     const authUser = req.user as any;
     return this.ridersService.getRiderStats(authUser.id);
+  }
+
+  @Get('me/earnings')
+  async getEarnings(@Req() req: Request) {
+    const authUser = req.user as any;
+    return this.ridersService.getMonthlyEarnings(authUser.id);
   }
 
   @Patch('me')
@@ -89,6 +97,7 @@ export class RidersController {
   }
 
   @Get('reviews/all')
+  @UseGuards(AdminRoleGuard)
   async getAllReviews() {
     return this.ridersService.findAllReviews();
   }

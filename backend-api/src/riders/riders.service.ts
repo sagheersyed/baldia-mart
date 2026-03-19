@@ -91,6 +91,26 @@ export class RidersService {
     };
   }
 
+  async getMonthlyEarnings(riderId: string) {
+    // Generate a breakdown of earnings and deliveries grouped by month for the last 6 months
+    const stats = await this.ordersRepository.createQueryBuilder('order')
+      .select("TO_CHAR(order.updated_at, 'YYYY-MM')", 'month')
+      .addSelect('SUM(order.delivery_fee)', 'earnings') // Rider gets delivery fee
+      .addSelect('COUNT(order.id)', 'deliveries')
+      .where('order.rider_id = :riderId', { riderId })
+      .andWhere("order.status = 'delivered'")
+      .groupBy("TO_CHAR(order.updated_at, 'YYYY-MM')")
+      .orderBy("TO_CHAR(order.updated_at, 'YYYY-MM')", 'DESC')
+      .limit(6)
+      .getRawMany();
+
+    return stats.map(s => ({
+      month: s.month,
+      earnings: Number(s.earnings) || 0,
+      deliveries: Number(s.deliveries) || 0
+    }));
+  }
+
   async createReview(reviewData: Partial<RiderReview>): Promise<RiderReview> {
     const { riderId, orderId, rating } = reviewData;
     

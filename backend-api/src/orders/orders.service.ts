@@ -62,6 +62,27 @@ export class OrdersService {
       throw new BadRequestException(`Delivery not available: ${pricing.message}`);
     }
 
+    // 2.5 Find Nearest Mart
+    let nearestMartId = null;
+    try {
+      const martsStr = await this.settingsService.getByKey('mart_locations_list', '[]');
+      const marts = JSON.parse(martsStr || '[]');
+      if (marts && marts.length > 0) {
+        let minDist = Infinity;
+        for (const mart of marts) {
+          if (mart.lat && mart.lng) {
+            const dist = this.deliveryZonesService.calculateDistance(Number(address.latitude), Number(address.longitude), Number(mart.lat), Number(mart.lng));
+            if (dist < minDist) {
+              minDist = dist;
+              nearestMartId = mart.id;
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to calculate nearest mart', err);
+    }
+
     // 3. Calculate Totals
     let subtotal = 0;
     for (const item of cartItems) {
@@ -77,6 +98,7 @@ export class OrdersService {
     const order = this.ordersRepository.create({
       userId,
       addressId,
+      martId: nearestMartId || undefined,
       subtotal,
       deliveryFee: pricing.deliveryFee,
       total: subtotal + pricing.deliveryFee,
@@ -154,6 +176,14 @@ export class OrdersService {
     return this.ordersRepository.find({
       relations: ['items', 'items.product', 'address', 'user', 'rider'],
       order: { createdAt: 'DESC' }
+    });
+  }
+
+  async getRiderOrderHistory(riderId: string): Promise<Order[]> {
+    return this.ordersRepository.find({
+      where: { riderId, status: In(['delivered', 'cancelled']) },
+      relations: ['items', 'items.product', 'address', 'user'],
+      order: { updatedAt: 'DESC' }
     });
   }
 
@@ -323,12 +353,17 @@ export class OrdersService {
     const order = await this.ordersRepository.findOne({ where: { id, userId } });
     if (!order) throw new NotFoundException('Order not found or access denied');
 
-    if (order.status === 'out_for_delivery' || order.status === 'delivered') {
-      throw new BadRequestException('Order cannot be cancelled. It is already out for delivery or delivered.');
-    }
-
     if (order.status === 'cancelled') {
       throw new BadRequestException('Order is already cancelled.');
+    }
+
+    // Only allow cancellation for the first 2 steps: pending & confirmed
+    // Once the mart starts preparing, the order cannot be cancelled by the customer
+    const cancellableStatuses = ['pending', 'confirmed'];
+    if (!cancellableStatuses.includes(order.status)) {
+      throw new BadRequestException(
+        'This order can no longer be cancelled. It is already being prepared or out for delivery.'
+      );
     }
 
     order.status = 'cancelled';
@@ -366,7 +401,7 @@ export class OrdersService {
     const updatedOrder = await this.ordersRepository.save(order);
 
     // Emit real-time update so tracking screen reflects instantly
-    this.ordersGateway.emitOrderStatusUpdate(id, 'pending', userId);
+    this.ordersGateway.emitOrderStatusUpdate(id, 'pending', userId, order.riderId);
 
     return updatedOrder;
   }
@@ -412,8 +447,8 @@ export class OrdersService {
       return { ...updatedOrder, deleted: true } as any;
     }
 
-    // Notify tracking screen to refresh
-    this.ordersGateway.emitOrderStatusUpdate(orderId, updatedOrder.status);
+    // Notify tracking screen and rider
+    await this.emitUpdateNotifications(orderId, updatedOrder.status, userId, updatedOrder.riderId);
 
     return updatedOrder;
   }
@@ -457,8 +492,8 @@ export class OrdersService {
     order.total = Number(subtotal) + Number(order.deliveryFee) - Number(order.discountAmount);
     const updatedOrder = await this.ordersRepository.save(order);
 
-    // Notify tracking screen
-    this.ordersGateway.emitOrderStatusUpdate(orderId, updatedOrder.status);
+    // Notify tracking screen and rider
+    await this.emitUpdateNotifications(orderId, updatedOrder.status, order.userId, updatedOrder.riderId);
 
     return updatedOrder;
   }
@@ -517,10 +552,83 @@ export class OrdersService {
     
     const updatedOrder = await this.ordersRepository.save(order);
 
-    // Notify tracking screen
-    this.ordersGateway.emitOrderStatusUpdate(orderId, updatedOrder.status);
+    // Notify tracking screen and rider
+    await this.emitUpdateNotifications(orderId, updatedOrder.status, order.userId, updatedOrder.riderId);
 
     return updatedOrder;
+  }
+
+
+
+  async addItemToOrder(orderId: string, userId: string, productId: string, quantity: number): Promise<Order> {
+    return this.ordersRepository.manager.transaction(async (manager) => {
+      const order = await manager.findOne(Order, {
+        where: { id: orderId },
+        relations: ['items'],
+      });
+
+      if (!order) throw new NotFoundException('Order not found');
+      if (order.userId !== userId) throw new ForbiddenException('Access denied');
+
+      const editableStatuses = ['pending', 'confirmed'];
+      if (!editableStatuses.includes(order.status)) {
+        throw new BadRequestException('Items can only be added while the order is pending or confirmed.');
+      }
+
+      // Fetch product to get current price and check stock
+      const product = await manager.getRepository('Product').findOne({ where: { id: productId } }) as any;
+      if (!product) throw new NotFoundException('Product not found');
+      if (product.stockQuantity < quantity) {
+        throw new BadRequestException(`Only ${product.stockQuantity} units available in stock.`);
+      }
+
+      const unitPrice = Number(product.price) - Number(product.discount || 0);
+
+      // Check if product already exists in this order
+      let item = order.items.find(i => i.productId === productId);
+
+      if (item) {
+        item.quantity += quantity;
+        await manager.save(OrderItem, item);
+      } else {
+        // Explicitly create with IDs to avoid relation sync issues
+        item = manager.create(OrderItem, {
+          order: { id: orderId } as any, // Use relation object for TypeORM preference
+          orderId: orderId,
+          product: { id: productId } as any,
+          productId: productId,
+          quantity,
+          priceAtTime: unitPrice,
+        });
+        await manager.save(OrderItem, item);
+      }
+
+      // Recalculate totals from all items in this order
+      const allItems = await manager.find(OrderItem, { where: { orderId } });
+      const subtotal = allItems.reduce((sum, i) => sum + Number(i.priceAtTime) * i.quantity, 0);
+      
+      const subtotalVal = Number(subtotal);
+      const deliveryFee = Number(order.deliveryFee);
+      const discountAmount = Number(order.discountAmount || 0);
+      const total = subtotalVal + deliveryFee - discountAmount;
+
+      // Use explicit update to Order to ensure consistency without full entity save cascades
+      await manager.update(Order, orderId, {
+        subtotal: subtotalVal,
+        total: total,
+      });
+
+      // Notify through gateway and push notifications
+      await this.emitUpdateNotifications(orderId, order.status, userId, order.riderId ?? undefined);
+
+      const finalOrder = await manager.findOne(Order, {
+        where: { id: orderId },
+        relations: ['items', 'items.product', 'address'],
+      });
+
+      if (!finalOrder) throw new NotFoundException('Order not found after update');
+      return finalOrder;
+    });
   }
 
   async calculateDeliveryFee(addressId: string) {
@@ -543,11 +651,12 @@ export class OrdersService {
     
     if (!validation.isValid) {
       console.warn(`Delivery validation failed for Address: ${addressId}. Distance: ${validation.distance}`);
+      const maxRad = (validation as any).maxRadius || 50;
       return {
         isValid: false,
         deliveryFee: 0,
         distance: validation.distance,
-        message: 'Delivery not available for this location. You might be outside our 50km service zone.',
+        message: `Delivery not available for this location. You might be outside our ${maxRad}km service zone.`,
       };
     }
 
@@ -571,5 +680,32 @@ export class OrdersService {
       distance: distanceVal,
       message: 'Service is available.',
     };
+  }
+
+  private async emitUpdateNotifications(orderId: string, status: string, userId: string, riderId?: string) {
+    // Notify through gateway for tracking screens
+    this.ordersGateway.emitOrderStatusUpdate(orderId, status, userId, riderId);
+    
+    // Emit 'orderUpdated' for specific order room (User/Rider details refresh)
+    this.ordersGateway.server.to(`order_${orderId}`).emit('orderUpdated', { orderId });
+
+    if (riderId) {
+      // Emit 'orderUpdated' specifically to the rider (Dashboard refresh)
+      this.ordersGateway.server.to(`rider_${riderId}`).emit('orderUpdated', { orderId });
+      
+      try {
+        const rider = await this.ridersRepository.findOne({ where: { id: riderId } });
+        if (rider && rider.fcmToken) {
+          await this.notificationsService.sendToRider(
+            rider.id,
+            rider.fcmToken,
+            'Order Updated!',
+            `Customer modified items in order #${orderId.slice(0, 8)}. Please review.`
+          );
+        }
+      } catch (error) {
+        console.error('Failed to notify rider of order update:', error);
+      }
+    }
   }
 }

@@ -12,12 +12,12 @@ export default function CheckoutScreen({ navigation }: any) {
   const [addresses, setAddresses] = useState<any[]>([]);
   const [selectedAddress, setSelectedAddress] = useState<any>(null);
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(true);
-  
+
   // Modals state
   const [showAddressListModal, setShowAddressListModal] = useState(false);
   const [showAddressPickerModal, setShowAddressPickerModal] = useState(false);
   const [editingAddressData, setEditingAddressData] = useState<any>(null);
-  
+
   const [deliveryFee, setDeliveryFee] = useState(0);
   const [isLoadingFee, setIsLoadingFee] = useState(false);
   const [isAddressValid, setIsAddressValid] = useState(true);
@@ -83,11 +83,11 @@ export default function CheckoutScreen({ navigation }: any) {
       Alert.alert('Error', 'Failed to save address');
     }
   };
-  
+
   const handleOpenEdit = (addr?: any) => {
     setEditingAddressData(addr || null);
     setShowAddressListModal(false);
-    
+
     // Give time for list modal to close before opening picker
     setTimeout(() => {
       setShowAddressPickerModal(true);
@@ -98,7 +98,7 @@ export default function CheckoutScreen({ navigation }: any) {
     setSelectedAddress(addr);
     setShowAddressListModal(false);
   };
-  
+
   const subtotal = getCartTotal();
   const total = subtotal + deliveryFee;
 
@@ -131,7 +131,7 @@ export default function CheckoutScreen({ navigation }: any) {
       };
 
       const res = await ordersApi.checkout(orderData);
-      
+
       if (res.data && res.data.id) {
         clearCart();
         navigation.replace('OrderTracking', { orderId: res.data.id });
@@ -162,7 +162,7 @@ export default function CheckoutScreen({ navigation }: any) {
         ) : selectedAddress ? (
           <TouchableOpacity style={styles.addressBox} onPress={() => setShowAddressListModal(true)}>
             <View style={styles.addressIcon}>
-               <Text style={{ fontSize: 20 }}>🏠</Text>
+              <Text style={{ fontSize: 20 }}>🏠</Text>
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.addressLabel}>{selectedAddress.label || 'Home'}</Text>
@@ -171,12 +171,12 @@ export default function CheckoutScreen({ navigation }: any) {
             <Text style={styles.changeBtn}>Change</Text>
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.addressBox}
             onPress={() => handleOpenEdit()}
           >
             <View style={[styles.addressIcon, { backgroundColor: '#f0f0f0' }]}>
-               <Text style={{ fontSize: 20 }}>📍</Text>
+              <Text style={{ fontSize: 20 }}>📍</Text>
             </View>
             <Text style={{ color: '#1a1a1a', fontWeight: 'bold', flex: 1 }}>No address found. Add one now.</Text>
             <Text style={styles.changeBtn}>Add</Text>
@@ -184,17 +184,17 @@ export default function CheckoutScreen({ navigation }: any) {
         )}
 
         <Text style={styles.sectionTitle}>Payment Method</Text>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[styles.paymentBox, selectedPayment === 'cod' && styles.paymentSelected]}
           onPress={() => setSelectedPayment('cod')}
         >
           <View style={styles.paymentRow}>
-             <View style={[styles.radio, selectedPayment === 'cod' && styles.radioActive]} />
-             <Text style={styles.paymentText}>Cash on Delivery (COD)</Text>
+            <View style={[styles.radio, selectedPayment === 'cod' && styles.radioActive]} />
+            <Text style={styles.paymentText}>Cash on Delivery (COD)</Text>
           </View>
         </TouchableOpacity>
-        
-        <TouchableOpacity 
+
+        {/* <TouchableOpacity 
           style={[styles.paymentBox, selectedPayment === 'card' && styles.paymentSelected]}
           onPress={() => setSelectedPayment('card')}
         >
@@ -202,37 +202,37 @@ export default function CheckoutScreen({ navigation }: any) {
              <View style={[styles.radio, selectedPayment === 'card' && styles.radioActive]} />
              <Text style={styles.paymentText}>Credit/Debit Card (Stripe)</Text>
           </View>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
 
         <View style={styles.summaryContainer}>
-           <Text style={styles.sectionTitle}>Order Summary</Text>
-           <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Subtotal</Text>
-              <Text style={styles.summaryVal}>Rs. {(Number(subtotal) || 0).toFixed(0)}</Text>
-           </View>
-           <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Delivery Fee</Text>
-              {isLoadingFee ? (
-                <ActivityIndicator size="small" color="#FF4500" />
-              ) : !isAddressValid ? (
-                <Text style={[styles.summaryVal, { color: '#ff0000' }]}>Unavailable</Text>
-              ) : (
-                <Text style={styles.summaryVal}>Rs. {(Number(deliveryFee) || 0).toFixed(0)}</Text>
-              )}
-           </View>
-           <View style={[styles.summaryRow, styles.totalPadding]}>
-              <Text style={styles.totalLabel}>Grand Total</Text>
-              <Text style={styles.totalVal}>Rs. {(Number(total) || 0).toFixed(0)}</Text>
-           </View>
+          <Text style={styles.sectionTitle}>Order Summary</Text>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Subtotal</Text>
+            <Text style={styles.summaryVal}>Rs. {(Number(subtotal) || 0).toFixed(0)}</Text>
+          </View>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Delivery Fee</Text>
+            {isLoadingFee ? (
+              <ActivityIndicator size="small" color="#FF4500" />
+            ) : !isAddressValid ? (
+              <Text style={[styles.summaryVal, { color: '#ff0000' }]}>Unavailable</Text>
+            ) : (
+              <Text style={styles.summaryVal}>Rs. {(Number(deliveryFee) || 0).toFixed(0)}</Text>
+            )}
+          </View>
+          <View style={[styles.summaryRow, styles.totalPadding]}>
+            <Text style={styles.totalLabel}>Grand Total</Text>
+            <Text style={styles.totalVal}>Rs. {(Number(total) || 0).toFixed(0)}</Text>
+          </View>
         </View>
       </ScrollView>
 
       <View style={styles.footer}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[
-            styles.placeOrderBtn, 
+            styles.placeOrderBtn,
             (isPlacingOrder || !isAddressValid || isLoadingFee) && styles.disabledBtn
-          ]} 
+          ]}
           onPress={handlePlaceOrder}
           disabled={isPlacingOrder || !isAddressValid || isLoadingFee}
         >
@@ -262,7 +262,7 @@ export default function CheckoutScreen({ navigation }: any) {
                 <View key={addr.id} style={[styles.addressItem, selectedAddress?.id === addr.id && styles.addressItemSelected]}>
                   <TouchableOpacity style={styles.addressItemInfo} onPress={() => handleSelectAddress(addr)}>
                     <View style={styles.addressIconItem}>
-                       <Text style={{ fontSize: 16 }}>{addr.label === 'Work' ? '🏢' : '🏠'}</Text>
+                      <Text style={{ fontSize: 16 }}>{addr.label === 'Work' ? '🏢' : '🏠'}</Text>
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.addressItemLabel}>{addr.label || 'Other'}</Text>
@@ -330,7 +330,7 @@ const styles = StyleSheet.create({
   placeOrderBtn: { backgroundColor: '#FF4500', height: 60, borderRadius: 20, justifyContent: 'center', alignItems: 'center', elevation: 8, shadowColor: '#FF4500', shadowOpacity: 0.3, shadowRadius: 10 },
   disabledBtn: { opacity: 0.7 },
   placeOrderText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
-  
+
   // Modal Styles
   modalOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end', zIndex: 100 },
   addressListContainer: { backgroundColor: '#fff', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, maxHeight: '80%', paddingBottom: 40 },

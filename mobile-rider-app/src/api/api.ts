@@ -39,7 +39,8 @@ export const ordersApi = {
   acceptOrder: (orderId: string) => api.post(`/orders/${orderId}/accept`),
   getById: (orderId: string) => api.get(`/orders/${orderId}`),
   updateStatus: (orderId: string, status: string) =>
-    api.put(`/orders/${orderId}/status`, { status }),
+    api.patch(`/orders/${orderId}/rider-status`, { status }),
+  getHistory: () => api.get('/orders/history/rider'),
 };
 
 export const ridersApi = {
@@ -48,4 +49,9 @@ export const ridersApi = {
   uploadFile: (formData: FormData) => api.post('/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   }),
+  getEarnings: () => api.get('/riders/me/earnings'),
+};
+
+export const settingsApi = {
+  getPublicSettings: () => api.get('/settings/public'),
 };

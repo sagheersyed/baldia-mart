@@ -49,7 +49,7 @@ export class DeliveryZonesService {
     return distance;
   }
 
-  async validateAddressInZone(lat: number, lng: number): Promise<{ isValid: boolean, distance: number, zone?: DeliveryZone }> {
+  async validateAddressInZone(lat: number, lng: number): Promise<{ isValid: boolean, distance: number, zone?: DeliveryZone, maxRadius?: number }> {
     const activeZones = await this.findAllActive();
     
     console.log(`Validating coordinates (${lat}, ${lng}) against ${activeZones.length} active zones`);
@@ -58,8 +58,13 @@ export class DeliveryZonesService {
       console.warn('NO ACTIVE DELIVERY ZONES FOUND IN DATABASE');
     }
 
+    let maxRadius = 0;
     // For Baldia Town standard setup, we want max 50km
     for (const zone of activeZones) {
+      if (Number(zone.radiusKm) > maxRadius) {
+        maxRadius = Number(zone.radiusKm);
+      }
+      
       const distance = this.calculateDistance(lat, lng, Number(zone.centerLat), Number(zone.centerLng));
       console.log(`Zone "${zone.name}": Distance to center is ${distance.toFixed(2)}km (Radius: ${zone.radiusKm}km)`);
       
@@ -68,6 +73,6 @@ export class DeliveryZonesService {
       }
     }
     
-    return { isValid: false, distance: -1 };
+    return { isValid: false, distance: -1, maxRadius };
   }
 }

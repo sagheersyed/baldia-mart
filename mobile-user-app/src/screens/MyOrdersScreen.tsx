@@ -10,12 +10,12 @@ const BASE_IP = '192.168.100.142';
 const SOCKET_URL = `http://${BASE_IP}:3000`;
 
 const STATUS_CONFIG: Record<string, { color: string; bg: string; label: string; icon: string }> = {
-  pending:    { color: '#F59E0B', bg: '#FFFBEB', label: 'Pending',    icon: '⏳' },
-  confirmed:  { color: '#3B82F6', bg: '#EFF6FF', label: 'Confirmed',  icon: '✅' },
-  preparing:  { color: '#8B5CF6', bg: '#F5F3FF', label: 'Preparing',  icon: '👨‍🍳' },
-  shipped:    { color: '#06B6D4', bg: '#ECFEFF', label: 'Shipped',    icon: '🚴' },
-  delivered:  { color: '#10B981', bg: '#ECFDF5', label: 'Delivered',  icon: '📦' },
-  cancelled:  { color: '#EF4444', bg: '#FEF2F2', label: 'Cancelled',  icon: '❌' },
+  pending:          { color: '#F59E0B', bg: '#FFFBEB', label: 'Pending',          icon: '⏳' },
+  confirmed:        { color: '#3B82F6', bg: '#EFF6FF', label: 'Confirmed',        icon: '✅' },
+  preparing:        { color: '#8B5CF6', bg: '#F5F3FF', label: 'Preparing',        icon: '👨‍🍳' },
+  out_for_delivery: { color: '#06B6D4', bg: '#ECFEFF', label: 'Out for Delivery', icon: '🚴' },
+  delivered:        { color: '#10B981', bg: '#ECFDF5', label: 'Delivered',        icon: '📦' },
+  cancelled:        { color: '#EF4444', bg: '#FEF2F2', label: 'Cancelled',        icon: '❌' },
 };
 
 function formatDate(dateStr: string) {
@@ -28,8 +28,9 @@ function OrderCard({ order, onTrack, onCancel }: any) {
   const itemCount = order.items?.length || 0;
   const firstItem = order.items?.[0]?.product?.name || 'Order';
 
-  // Can cancel if NOT shipped (out_for_delivery), delivered, or already cancelled
-  const canCancel = order.status !== 'shipped' && order.status !== 'delivered' && order.status !== 'cancelled';
+  // Cancel is only allowed in the first 2 stages: pending & confirmed
+  // Once preparing begins, the mart is already working on the order
+  const canCancel = order.status === 'pending' || order.status === 'confirmed';
 
   return (
     <View style={[styles.orderCard, order.status === 'cancelled' && styles.cancelledCard]}>

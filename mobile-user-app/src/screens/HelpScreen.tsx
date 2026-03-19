@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, SafeAreaView,
-  ScrollView, Linking, Alert
+  ScrollView, Linking, Alert, ActivityIndicator
 } from 'react-native';
 
 const FAQ = [
@@ -13,11 +13,7 @@ const FAQ = [
   { q: 'How do I change my delivery address?', a: 'Tap "Saved Addresses" in your profile to add or modify your delivery locations.' },
 ];
 
-const CONTACT = [
-  { icon: '📞', label: 'Call Support', value: '+92 21 111 222 333', action: () => Linking.openURL('tel:+922111222333') },
-  { icon: '💬', label: 'WhatsApp', value: '+92 341 2248616', action: () => Linking.openURL('https://wa.me/03412248616') },
-  { icon: '✉️', label: 'Email Us', value: 'support@baldiamart.pk', action: () => Linking.openURL('mailto:support@baldiamart.pk') },
-];
+import { settingsApi } from '../api/api';
 
 function FAQItem({ item }: any) {
   const [open, setOpen] = React.useState(false);
@@ -33,6 +29,50 @@ function FAQItem({ item }: any) {
 }
 
 export default function HelpScreen({ navigation }: any) {
+  const [settings, setSettings] = React.useState<any>(null);
+  const [isLoading, setIsLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    fetchSettings();
+  }, []);
+
+  const fetchSettings = async () => {
+    try {
+      const res = await settingsApi.getPublicSettings();
+      setSettings(res.data);
+    } catch (error) {
+      console.error('Failed to fetch settings:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const contactPhone = settings?.contact_phone || '+92 341 2248616';
+  const contactEmail = settings?.contact_email || 'support@baldiamart.pk';
+
+  const CONTACT = [
+    { icon: '📞', label: 'Call Support', value: contactPhone, action: () => Linking.openURL(`tel:${contactPhone.replace(/\s/g, '')}`) },
+    { icon: '💬', label: 'WhatsApp', value: contactPhone, action: () => Linking.openURL(`https://wa.me/${contactPhone.replace(/[\s+]/g, '')}`) },
+    { icon: '✉️', label: 'Email Us', value: contactEmail, action: () => Linking.openURL(`mailto:${contactEmail}`) },
+  ];
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <Text style={styles.backIcon}>←</Text>
+          </TouchableOpacity>
+          <Text style={styles.title}>Help & Support</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color="#FF4500" />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>

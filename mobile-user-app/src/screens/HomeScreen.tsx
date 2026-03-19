@@ -58,9 +58,9 @@ const CategoryItem = memo(({ cat, isSelected, onPress }: { cat: any; isSelected:
     >
       <View style={[styles.catImageContainer, isSelected && styles.catActiveBorder]}>
         {cat.imageUrl ? (
-          <Image 
-            source={{ uri: cat.imageUrl }} 
-            style={styles.fullImage} 
+          <Image
+            source={{ uri: cat.imageUrl }}
+            style={styles.fullImage}
             resizeMode="cover"
           />
         ) : (
@@ -175,10 +175,10 @@ export default function HomeScreen({ navigation }: any) {
         <Text style={styles.sectionTitle}>Categories</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categories}>
           <CategoryItem
-            cat={{ 
-              id: 'all', 
-              name: 'All', 
-              imageUrl: "https://images.unsplash.com/photo-1542838132-92c53300491e?q=80&w=200" 
+            cat={{
+              id: 'all',
+              name: 'All',
+              imageUrl: "https://images.unsplash.com/photo-1542838132-92c53300491e?q=80&w=200"
             }}
             isSelected={!selectedCategoryId}
             onPress={() => setSelectedCategoryId(null)}
@@ -223,22 +223,22 @@ const styles = StyleSheet.create({
   locationText: { fontSize: 15, fontWeight: 'bold', color: '#FF4500' },
   cartBtn: { width: 44, height: 44, backgroundColor: '#FFF5F0', borderRadius: 22, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#FFE4D1' },
   cartCount: { fontWeight: 'bold', color: '#FF4500' },
-  banner: { margin: 20, padding: 20, backgroundColor: '#FF4500', borderRadius: 20, elevation: 5, shadowColor: '#FF4500', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 10 },
+  banner: { margin: 15, padding: 20, backgroundColor: '#FF4500', borderRadius: 20, elevation: 5, shadowColor: '#FF4500', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 10 },
   bannerSmall: { color: '#FFE4D1', fontWeight: 'bold', fontSize: 12, marginBottom: 5 },
   bannerText: { fontSize: 24, fontWeight: 'bold', color: '#fff' },
   sectionTitle: { fontSize: 18, fontWeight: 'bold', marginHorizontal: 20, marginBottom: 15, color: '#1a1a1a' },
-  categories: { paddingHorizontal: 15, marginBottom: 30 },
+  categories: { paddingHorizontal: 15, marginBottom: 15, paddingTop: 10, paddingBottom: 10 },
   catCard: { alignItems: 'center', marginHorizontal: 8, width: 80 },
   catCardActive: { transform: [{ scale: 1.05 }] },
-  catImageContainer: { 
-    width: 70, height: 70, 
-    backgroundColor: '#fff', 
-    borderRadius: 35, 
-    marginBottom: 8, 
-    overflow: 'hidden', 
-    elevation: 2, 
-    shadowColor: '#000', 
-    shadowOpacity: 0.1, 
+  catImageContainer: {
+    width: 70, height: 70,
+    backgroundColor: '#fff',
+    borderRadius: 35,
+    marginBottom: 8,
+    overflow: 'hidden',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
     shadowRadius: 5,
     borderWidth: 2,
     borderColor: 'transparent'

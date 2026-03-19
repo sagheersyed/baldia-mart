@@ -67,10 +67,23 @@ export default function NavigationScreen({ navigation, route }: any) {
       }
     };
 
+    const onOrderUpdated = (data: any) => {
+      if (data.orderId === orderId) {
+        ordersApi.getById(orderId).then(res => {
+          if (res.data) {
+            setOrder(res.data);
+            setStatus(res.data.status);
+          }
+        });
+      }
+    };
+
     socket.on('orderStatusUpdated', onStatusUpdate);
+    socket.on('orderUpdated', onOrderUpdated);
 
     return () => {
       socket.off('orderStatusUpdated', onStatusUpdate);
+      socket.off('orderUpdated', onOrderUpdated);
     };
   }, [orderId]);
 
@@ -198,6 +211,11 @@ export default function NavigationScreen({ navigation, route }: any) {
                   </View>
                 </View>
               ))}
+              <View style={styles.divider} />
+              <View style={styles.totalRow}>
+                <Text style={styles.totalLabel}>Total Bill (COD)</Text>
+                <Text style={styles.totalVal}>Rs. {order.total}</Text>
+              </View>
             </ScrollView>
           </View>
         )}
@@ -270,5 +288,9 @@ const styles = StyleSheet.create({
   itemQty: { fontSize: 14, fontWeight: '800', color: '#FF4500', width: 30 },
   itemName: { fontSize: 14, color: '#333' },
   itemPrice: { fontSize: 13, color: '#333', fontWeight: 'bold' },
-  itemRate: { fontSize: 10, color: '#888' }
+  itemRate: { fontSize: 10, color: '#888' },
+  divider: { height: 1, backgroundColor: '#eee', marginVertical: 10 },
+  totalRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 },
+  totalLabel: { fontSize: 14, fontWeight: 'bold' },
+  totalVal: { fontSize: 16, fontWeight: 'bold', color: '#2ecc71' }
 });

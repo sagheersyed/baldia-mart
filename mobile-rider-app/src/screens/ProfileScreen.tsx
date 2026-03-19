@@ -39,12 +39,25 @@ export default function ProfileScreen({ navigation }: any) {
     ]);
   };
 
-  const showEarnings = () => {
-    Alert.alert(
-      'Earnings History',
-      `Your total lifetime earnings: Rs. ${rider?.totalEarnings || 0}\n\nIndividual order history is coming soon in the next update!`,
-      [{ text: 'Dismiss' }]
-    );
+  const showEarnings = async () => {
+    try {
+      const res = await ridersApi.getEarnings();
+      const earningsData: any[] = res.data;
+      
+      let msg = `Your total lifetime earnings: Rs. ${rider?.totalEarnings || 0}\n\n`;
+      if (earningsData && earningsData.length > 0) {
+        msg += 'Monthly Breakdown:\n';
+        earningsData.forEach(e => {
+          msg += `• ${e.month}: Rs. ${e.earnings} (${e.deliveries} orders)\n`;
+        });
+      } else {
+        msg += 'No monthly data available yet.';
+      }
+
+      Alert.alert('Earnings History', msg, [{ text: 'Dismiss' }]);
+    } catch (e: any) {
+      Alert.alert('Error', 'Failed to load earnings history');
+    }
   };
 
   const showVehicle = () => {
@@ -61,6 +74,10 @@ export default function ProfileScreen({ navigation }: any) {
       'Need assistance? Contact our support team:\n\n📞 0315-0258004\n📧 support@baldiamart.pk\n\nWe are available 24/7!',
       [{ text: 'Got it' }]
     );
+  };
+
+  const goToHistory = () => {
+    navigation.navigate('OrderHistory');
   };
 
   if (loading) {

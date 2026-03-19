@@ -86,8 +86,8 @@ export default function OrderDetailsScreen({ route, navigation }: any) {
       </ScrollView>
 
       <View style={styles.footer}>
-        <TouchableOpacity 
-          style={[styles.acceptBtn, accepting && styles.disabledBtn]} 
+        <TouchableOpacity
+          style={[styles.acceptBtn, accepting && styles.disabledBtn]}
           onPress={handleAccept}
           disabled={accepting}
         >
