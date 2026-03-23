@@ -15,7 +15,7 @@ interface User {
   createdAt: string;
 }
 
-const API_URL = 'http://localhost:3000/api/v1/users/all';
+const API_URL = 'http://192.168.100.142:3000/api/v1/users/all';
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -44,7 +44,7 @@ export default function UsersPage() {
   const handleToggleActive = async (user: User) => {
     setUpdating(user.id);
     try {
-      const res = await fetchWithAuth(`http://localhost:3000/api/v1/users/${user.id}/status`, {
+      const res = await fetchWithAuth(`http://192.168.100.142:3000/api/v1/users/${user.id}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isActive: !user.isActive }),
@@ -77,7 +77,7 @@ export default function UsersPage() {
             Manage your platform's user base ({customers.length} customers)
           </p>
         </div>
-        
+
         <div className="flex items-center space-x-3">
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
@@ -97,9 +97,9 @@ export default function UsersPage() {
 
       <div className="bg-white rounded-[2.5rem] shadow-xl shadow-gray-200/40 border border-gray-100 overflow-hidden">
         {loading ? (
-           <div className="py-20 flex justify-center">
-             <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-           </div>
+          <div className="py-20 flex justify-center">
+            <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+          </div>
         ) : customers.length === 0 ? (
           <div className="py-20 text-center text-gray-400">
             <UsersIcon size={48} className="mx-auto mb-4 opacity-50" />
@@ -168,11 +168,10 @@ export default function UsersPage() {
                       <button
                         disabled={updating === user.id}
                         onClick={() => handleToggleActive(user)}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
-                          user.isActive
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${user.isActive
                             ? 'bg-red-50 border-red-100 text-red-600 hover:bg-red-500 hover:text-white'
                             : 'bg-green-50 border-green-100 text-green-600 hover:bg-green-500 hover:text-white'
-                        } ${updating === user.id ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          } ${updating === user.id ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
                         {updating === user.id ? (
                           <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />

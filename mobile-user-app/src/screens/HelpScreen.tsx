@@ -1,8 +1,10 @@
 import React from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, SafeAreaView,
+  View, Text, StyleSheet, TouchableOpacity,
   ScrollView, Linking, Alert, ActivityIndicator
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
 
 const FAQ = [
   { q: 'How do I track my order?', a: 'Go to My Orders and tap "Track Order" to see real-time updates.' },

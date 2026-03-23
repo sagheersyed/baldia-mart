@@ -165,8 +165,19 @@ export default function DashboardScreen({ navigation }: any) {
           onValueChange={setIsOnline}
           trackColor={{ false: "#444", true: "#FF4500" }}
           thumbColor={isOnline ? "#fff" : "#888"}
+          disabled={!rider?.isActive}
         />
       </View>
+
+      {rider && !rider.isActive && rider.isProfileComplete && (
+        <View style={styles.approvalNotice}>
+          <Text style={styles.approvalIcon}>⏳</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.approvalTitle}>Awaiting Admin Approval</Text>
+            <Text style={styles.approvalText}>Our team is reviewing your documents. You'll be able to go online once approved.</Text>
+          </View>
+        </View>
+      )}
 
       {/* Mart Selection Modal */}
       <Modal visible={showMartModal} animationType="slide" transparent={true}>
@@ -220,10 +231,33 @@ export default function DashboardScreen({ navigation }: any) {
                 {activeOrders.map(order => (
                   <View key={order.id} style={[styles.orderCard, styles.activeCard]}>
                     <View style={styles.orderHeader}>
-                      <Text style={styles.orderId}>#ORD-{order.id.slice(0, 8).toUpperCase()}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={styles.orderId}>#ORD-{order.id.slice(0, 8).toUpperCase()}</Text>
+                        {order.orderType === 'food' && (
+                          <View style={[styles.typeBadge, { backgroundColor: '#FFF5E0' }]}>
+                            <Text style={[styles.typeBadgeText, { color: '#FF8C00' }]}>🍽️ Food</Text>
+                          </View>
+                        )}
+                        {order.orderType === 'mart' && (
+                          <View style={[styles.typeBadge, { backgroundColor: '#E8F5E9' }]}>
+                            <Text style={[styles.typeBadgeText, { color: '#2E7D32' }]}>🛒 Mart</Text>
+                          </View>
+                        )}
+                      </View>
                       <Text style={styles.activeBadge}>{order.status === 'confirmed' ? 'Assigned' : order.status.replace('_', ' ')}</Text>
                     </View>
                     <View style={styles.orderDetails}>
+                      {order.orderType === 'food' ? (
+                          order.subOrders?.length > 1 ? (
+                              <Text style={[styles.detailText, { fontWeight: 'bold', color: '#FF4500' }]}>
+                                  👨‍🍳 Batched: {order.subOrders.length} Restaurant Stops
+                              </Text>
+                          ) : order.restaurant ? (
+                              <Text style={[styles.detailText, { fontWeight: 'bold', color: '#FF4500' }]}>
+                                  👨‍🍳 {order.restaurant.name}
+                              </Text>
+                          ) : null
+                      ) : null}
                       <Text style={styles.detailText}>📍 {order.address?.streetAddress || 'Local Area'}</Text>
                       <Text style={styles.detailText}>📦 {order.items?.length || 0} Items to deliver</Text>
                     </View>
@@ -250,10 +284,33 @@ export default function DashboardScreen({ navigation }: any) {
                 .map(order => (
                 <View key={order.id} style={styles.orderCard}>
                   <View style={styles.orderHeader}>
-                    <Text style={styles.orderId}>#ORD-{order.id.slice(0, 8).toUpperCase()}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={styles.orderId}>#ORD-{order.id.slice(0, 8).toUpperCase()}</Text>
+                      {order.orderType === 'food' && (
+                        <View style={[styles.typeBadge, { backgroundColor: '#FFF5E0' }]}>
+                          <Text style={[styles.typeBadgeText, { color: '#FF8C00' }]}>🍽️ Food</Text>
+                        </View>
+                      )}
+                      {order.orderType === 'mart' && (
+                        <View style={[styles.typeBadge, { backgroundColor: '#E8F5E9' }]}>
+                          <Text style={[styles.typeBadgeText, { color: '#2E7D32' }]}>🛒 Mart</Text>
+                        </View>
+                      )}
+                    </View>
                     <Text style={styles.earnings}>Rs. {order.total}</Text>
                   </View>
                   <View style={styles.orderDetails}>
+                    {order.orderType === 'food' ? (
+                        order.subOrders?.length > 1 ? (
+                            <Text style={[styles.detailText, { fontWeight: 'bold', color: '#FF4500' }]}>
+                                👨‍🍳 Batched: {order.subOrders.length} Restaurant Stops
+                            </Text>
+                        ) : order.restaurant ? (
+                            <Text style={[styles.detailText, { fontWeight: 'bold', color: '#FF4500' }]}>
+                                👨‍🍳 {order.restaurant.name}
+                            </Text>
+                        ) : null
+                    ) : null}
                     <Text style={styles.detailText}>🚚 {order.deliveryDistanceKm} km away • {order.items?.length || 0} Items</Text>
                     <Text style={styles.addressText} numberOfLines={1}>📍 {order.address?.streetAddress || 'Local Area'}</Text>
                   </View>
@@ -315,9 +372,26 @@ const styles = StyleSheet.create({
   activeSection: { marginBottom: 10 },
   activeCard: { borderColor: '#FF450033', borderWidth: 1, backgroundColor: '#FFF5F0' },
   activeBadge: { backgroundColor: '#FF4500', color: '#fff', fontSize: 11, fontWeight: 'bold', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, textTransform: 'uppercase' },
+  typeBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 },
+  typeBadgeText: { fontSize: 10, fontWeight: '800' },
   continueBtn: { height: 45, backgroundColor: '#1A1A1A', borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginTop: 5 },
   continueBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
   divider: { height: 1, backgroundColor: '#eee' },
+  // Approval Notice
+  approvalNotice: {
+    backgroundColor: '#FFF5E0',
+    margin: 15,
+    borderRadius: 12,
+    padding: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FF8C0033',
+    gap: 12,
+  },
+  approvalIcon: { fontSize: 24 },
+  approvalTitle: { fontSize: 14, fontWeight: 'bold', color: '#B45309', marginBottom: 2 },
+  approvalText: { fontSize: 12, color: '#92400E', lineHeight: 18 },
   // Modal styles
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'flex-end' },
   martModal: { backgroundColor: '#fff', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, minHeight: '50%' },

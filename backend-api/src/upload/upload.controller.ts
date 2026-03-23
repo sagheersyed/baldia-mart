@@ -6,7 +6,7 @@ import { S3StorageService } from './s3-storage.service';
 @Controller('upload')
 @UseGuards(AuthGuard('jwt'))
 export class UploadController {
-  constructor(private readonly s3StorageService: S3StorageService) {}
+  constructor(private readonly s3StorageService: S3StorageService) { }
 
   @Post()
   @UseInterceptors(
@@ -17,7 +17,7 @@ export class UploadController {
   )
   async uploadFile(@UploadedFile() file: any) {
     // If using multer-s3, file.location is the URL. Otherwise we use local host.
-    const host = process.env.BACKEND_URL || 'http://localhost:3000';
+    const host = process.env.BACKEND_URL || 'http://192.168.100.142:3000';
     const url = file.location || `${host}/uploads/${file.filename}`;
 
     return {

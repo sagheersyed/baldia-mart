@@ -1,16 +1,21 @@
 import 'react-native-gesture-handler';
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { Text } from 'react-native';
-import { CartProvider } from './src/context/CartContext';
+import { Text, ActivityIndicator, View } from 'react-native';
+
+
+import { CartProvider, useCart } from './src/context/CartContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
+import { categoriesApi, productsApi, addressesApi, settingsApi } from './src/api/api';
 
 import LoginScreen from './src/screens/LoginScreen';
 import HomeScreen from './src/screens/HomeScreen';
+import FoodScreen from './src/screens/FoodScreen';
+import BrandsScreen from './src/screens/BrandsScreen';
 import CartScreen from './src/screens/CartScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import CheckoutScreen from './src/screens/CheckoutScreen';
@@ -25,44 +30,104 @@ import CompleteProfileScreen from './src/screens/CompleteProfileScreen';
 import MpinLoginScreen from './src/screens/MpinLoginScreen';
 import MpinSetupScreen from './src/screens/MpinSetupScreen';
 import MpinSetupDirectScreen from './src/screens/MpinSetupDirectScreen';
-
-import { ActivityIndicator, View } from 'react-native';
+import SearchScreen from './src/screens/SearchScreen';
+import BrandDetailScreen from './src/screens/BrandDetailScreen';
+import RestaurantDetailScreen from './src/screens/RestaurantDetailScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
+import { Ionicons } from '@expo/vector-icons';
+
 function MainTabs() {
+  const { setActiveMode, currentCount } = useCart();
+  const [showFood, setShowFood] = useState(true);
+  const [showBrands, setShowBrands] = useState(true);
+
+  useEffect(() => {
+    const fetchConfigs = async () => {
+      try {
+        const res = await settingsApi.getPublicSettings();
+        if (res.data) {
+          // Default to true if not specified, otherwise follow setting
+          setShowFood(res.data.feature_show_restaurants !== 'false');
+          setShowBrands(res.data.feature_show_brands !== 'false');
+        }
+      } catch (error) {
+        console.error('Failed to fetch feature configs:', error);
+        // On error, keep them visible
+        setShowFood(true);
+        setShowBrands(true);
+      }
+    };
+    fetchConfigs();
+  }, []);
+
   return (
     <Tab.Navigator
+      backBehavior="history"
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarActiveTintColor: '#FF4500',
-        tabBarInactiveTintColor: '#999',
+        tabBarInactiveTintColor: '#8E8E93',
         tabBarStyle: {
-          height: 60,
-          paddingBottom: 8,
-          paddingTop: 4,
-          borderTopWidth: 1,
-          borderTopColor: '#F0F0F0',
-          elevation: 10,
+          height: 64,
+          paddingBottom: 10,
+          paddingTop: 8,
+          borderTopLeftRadius: 24,
+          borderTopRightRadius: 24,
+          position: 'absolute',
+          backgroundColor: '#fff',
+          borderTopWidth: 0,
+          elevation: 20,
           shadowColor: '#000',
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.08,
-          shadowRadius: 8,
+          shadowOpacity: 0.1,
+          shadowRadius: 10
         },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
-        tabBarIcon: ({ focused, color }) => {
-          let icon = '🏠';
-          if (route.name === 'Home') icon = focused ? '🏠' : '🏡';
-          if (route.name === 'Cart') icon = focused ? '🛒' : '🛍️';
-          if (route.name === 'Profile') icon = focused ? '👤' : '🙂';
-          return <Text style={{ fontSize: 22 }}>{icon}</Text>;
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '700' },
+        tabBarIcon: ({ color, focused }) => {
+          let iconName: any;
+          if (route.name === 'Home') iconName = focused ? 'home' : 'home-outline';
+          else if (route.name === 'Food') iconName = focused ? 'restaurant' : 'restaurant-outline';
+          else if (route.name === 'Brands') iconName = focused ? 'grid' : 'grid-outline';
+          else if (route.name === 'Cart') iconName = focused ? 'cart' : 'cart-outline';
+          else if (route.name === 'Orders') iconName = focused ? 'receipt' : 'receipt-outline';
+          else if (route.name === 'Profile') iconName = focused ? 'person' : 'person-outline';
+          return <Ionicons name={iconName} size={24} color={color} />;
         },
       })}
     >
-      <Tab.Screen name="Home" component={HomeScreen} />
-      <Tab.Screen name="Cart" component={CartScreen} />
-      <Tab.Screen name="Profile" component={ProfileScreen} />
+      <Tab.Screen
+        name="Home"
+        component={HomeScreen}
+        options={{ tabBarLabel: 'Mart' }}
+        listeners={{ focus: () => setActiveMode('mart') }}
+      />
+      {showFood && (
+        <Tab.Screen
+          name="Food"
+          component={FoodScreen}
+          options={{ tabBarLabel: 'Food' }}
+          listeners={{ focus: () => setActiveMode('food') }}
+        />
+      )}
+      {showBrands && (
+        <Tab.Screen
+          name="Brands"
+          component={BrandsScreen}
+          options={{ tabBarLabel: 'Brands' }}
+        />
+      )}
+      <Tab.Screen
+        name="Cart"
+        component={CartScreen}
+        options={{
+          tabBarLabel: 'Cart',
+          tabBarBadge: currentCount > 0 ? currentCount : undefined
+        }}
+      />
+      <Tab.Screen name="Orders" component={MyOrdersScreen} options={{ tabBarLabel: 'Orders' }} />
+      <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: 'Profile' }} />
     </Tab.Navigator>
   );
 }
@@ -78,11 +143,11 @@ function Navigation() {
     );
   }
 
-  const isProfileComplete = 
-    userData && 
-    userData.name && 
-    userData.name !== 'Valued Customer' && 
-    userData.name !== 'New Customer' && 
+  const isProfileComplete =
+    userData &&
+    userData.name &&
+    userData.name !== 'Valued Customer' &&
+    userData.name !== 'New Customer' &&
     userData.phoneNumber;
 
   if (userToken && !userData) {
@@ -109,6 +174,10 @@ function Navigation() {
         ) : (
           <>
             <Stack.Screen name="Main" component={MainTabs} />
+            <Stack.Screen name="BrandsList" component={BrandsScreen} />
+            <Stack.Screen name="BrandDetail" component={BrandDetailScreen} />
+            <Stack.Screen name="RestaurantDetail" component={RestaurantDetailScreen} />
+            <Stack.Screen name="Search" component={SearchScreen} />
             <Stack.Screen name="Checkout" component={CheckoutScreen} />
             <Stack.Screen name="OrderTracking" component={OrderTrackingScreen} />
             <Stack.Screen name="MyOrders" component={MyOrdersScreen} />

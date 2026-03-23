@@ -48,12 +48,14 @@ export default function OtpScreen(props: any) {
 
       try {
         const configRes = await authApi.getConfig();
-        if (configRes.data.auth_rider_mpin_enabled) {
+        const hasMpin = res.data.rider?.hasMpin;
+
+        if (configRes.data.auth_rider_mpin_enabled && !hasMpin) {
           navigation.replace('MpinSetup', { token, isNewUser, isProfileComplete });
           return;
         }
       } catch (e) {
-        console.log('Failed to fetch config, skipping MPIN setup');
+        console.log('Failed to fetch config or check MPIN, skipping MPIN setup');
       }
 
       if (isNewUser || !isProfileComplete) {

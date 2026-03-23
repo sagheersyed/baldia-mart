@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/common';
 import { CategoriesService } from './categories.service';
 import { Category } from './category.entity';
 
@@ -7,8 +7,8 @@ export class CategoriesController {
   constructor(private readonly categoriesService: CategoriesService) {}
 
   @Get()
-  async getAllActive() {
-    return this.categoriesService.findAllActive();
+  async getAllActive(@Query('section') section?: string) {
+    return this.categoriesService.findAllActive(section);
   }
 
   @Get(':id')

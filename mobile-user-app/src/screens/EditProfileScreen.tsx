@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, SafeAreaView,
+  View, Text, StyleSheet, TouchableOpacity,
   ActivityIndicator, Alert, TextInput, ScrollView, KeyboardAvoidingView, Platform
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
 import { authApi, usersApi } from '../api/api';
 
 export default function EditProfileScreen({ navigation }: any) {

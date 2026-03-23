@@ -21,6 +21,10 @@ import { AdminModule } from './admin/admin.module';
 import { OtpModule } from './otp/otp.module';
 import { SettingsModule } from './settings/settings.module';
 import { UploadModule } from './upload/upload.module';
+import { BrandsModule } from './brands/brands.module';
+import { BannersModule } from './banners/banners.module';
+import { RestaurantsModule } from './restaurants/restaurants.module';
+import { MenuItemsModule } from './menu-items/menu-items.module';
 
 // Entities
 import { User } from './users/user.entity';
@@ -37,7 +41,12 @@ import { Rider } from './riders/rider.entity';
 import { RiderReview } from './riders/rider-review.entity';
 import { Otp } from './otp/otp.entity';
 import { OrderHistory } from './orders/order-history.entity';
+import { SubOrder } from './orders/sub-order.entity';
 import { Setting } from './settings/setting.entity';
+import { Brand } from './brands/brand.entity';
+import { Banner } from './banners/banner.entity';
+import { Restaurant } from './restaurants/restaurant.entity';
+import { MenuItem } from './menu-items/menu-item.entity';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 
@@ -64,8 +73,9 @@ import { APP_GUARD } from '@nestjs/core';
       entities: [
         User, Address, DeliveryZone, Category, Product, 
         CartItem, Order, OrderItem, Payment, Notification, Rider, Otp,
-        OrderHistory, RiderReview, Setting
+        OrderHistory, RiderReview, Setting, Brand, Banner, Restaurant, MenuItem, SubOrder
       ],
+
       synchronize: process.env.NODE_ENV !== 'production',
     }),
     TerminusModule,
@@ -85,6 +95,10 @@ import { APP_GUARD } from '@nestjs/core';
     AnalyticsModule,
     SettingsModule,
     UploadModule,
+    BrandsModule,
+    BannersModule,
+    RestaurantsModule,
+    MenuItemsModule,
   ],
   controllers: [AppController, HealthController],
   providers: [

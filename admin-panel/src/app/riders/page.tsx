@@ -23,7 +23,7 @@ interface Rider {
   createdAt: string;
 }
 
-const API_URL = 'http://localhost:3000/api/v1/riders';
+const API_URL = 'http://192.168.100.142:3000/api/v1/riders';
 
 export default function RidersPage() {
   const [riders, setRiders] = useState<Rider[]>([]);
@@ -32,7 +32,7 @@ export default function RidersPage() {
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'blocked' | 'pending'>('all');
   const [viewingDocs, setViewingDocs] = useState<Rider | null>(null);
   const [updating, setUpdating] = useState<string | null>(null);
-  
+
   // Edit State
   const [editingRider, setEditingRider] = useState<Rider | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
@@ -107,7 +107,7 @@ export default function RidersPage() {
       rider.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       rider.phoneNumber?.includes(searchTerm) ||
       rider.vehicleNumber?.toLowerCase().includes(searchTerm.toLowerCase());
-    
+
     if (filterStatus === 'all') return matchesSearch;
     if (filterStatus === 'active') return matchesSearch && rider.isActive && rider.isProfileComplete;
     if (filterStatus === 'blocked') return matchesSearch && !rider.isActive;
@@ -132,12 +132,12 @@ export default function RidersPage() {
             Manage riders, approvals and verification ({riders.length} total)
           </p>
         </div>
-        
+
         <div className="flex items-center space-x-3">
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-            <input 
-              type="text" 
+            <input
+              type="text"
               placeholder="Search rider..."
               className="pl-12 pr-4 py-3 bg-white border border-gray-100 rounded-2xl w-full md:w-64 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-medium"
               value={searchTerm}
@@ -166,9 +166,9 @@ export default function RidersPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {loading ? (
-           <div className="col-span-full py-20 flex justify-center">
-             <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-           </div>
+          <div className="col-span-full py-20 flex justify-center">
+            <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+          </div>
         ) : filteredRiders.length === 0 ? (
           <div className="col-span-full py-20 text-center text-gray-400 bg-white rounded-[2.5rem] border border-gray-100">
             <Bike size={48} className="mx-auto mb-4 opacity-50" />
@@ -177,7 +177,7 @@ export default function RidersPage() {
         ) : (
           filteredRiders.map((rider) => (
             <div key={rider.id} className={`bg-white rounded-[2rem] p-6 shadow-xl shadow-gray-200/40 border flex flex-col hover:-translate-y-1 transition-transform duration-300 ${!rider.isActive ? 'border-red-100 opacity-80' : 'border-gray-100'}`}>
-              
+
               <div className="flex justify-between items-start mb-4">
                 <div className="flex items-center space-x-3">
                   <div className="relative">
@@ -203,7 +203,7 @@ export default function RidersPage() {
                   <span className="text-gray-500 flex items-center font-medium"><Phone size={14} className="mr-2" /> Phone</span>
                   <span className="font-bold text-gray-900">{rider.phoneNumber || '—'}</span>
                 </div>
-                
+
                 {rider.isProfileComplete ? (
                   <>
                     <div className="flex items-center justify-between text-sm p-2.5 bg-gray-50 rounded-xl">
@@ -236,7 +236,7 @@ export default function RidersPage() {
               </div>
 
               <div className="pt-4 border-t border-gray-100 flex gap-2">
-                <button 
+                <button
                   onClick={() => {
                     setEditingRider(rider);
                     setEditData({
@@ -252,7 +252,7 @@ export default function RidersPage() {
                   Edit Info
                 </button>
                 {rider.isProfileComplete && (
-                  <button 
+                  <button
                     onClick={() => setViewingDocs(rider)}
                     className="flex-[1.5] py-2.5 bg-blue-50 text-blue-600 font-bold rounded-xl flex items-center justify-center hover:bg-blue-500 hover:text-white transition text-sm border border-blue-100"
                   >
@@ -262,11 +262,10 @@ export default function RidersPage() {
                 <button
                   disabled={updating === rider.id}
                   onClick={() => handleToggleActive(rider)}
-                  className={`flex-1 py-2.5 font-bold rounded-xl flex items-center justify-center transition text-sm border ${
-                    rider.isActive
+                  className={`flex-1 py-2.5 font-bold rounded-xl flex items-center justify-center transition text-sm border ${rider.isActive
                       ? 'bg-red-50 border-red-100 text-red-600 hover:bg-red-500 hover:text-white'
                       : 'bg-green-50 border-green-100 text-green-600 hover:bg-green-500 hover:text-white'
-                  } ${updating === rider.id ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    } ${updating === rider.id ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   {updating === rider.id ? (
                     <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
@@ -336,11 +335,10 @@ export default function RidersPage() {
                   handleToggleActive(viewingDocs);
                   setViewingDocs(null);
                 }}
-                className={`w-full py-4 font-black rounded-2xl flex items-center justify-center text-lg transition ${
-                  viewingDocs.isActive
+                className={`w-full py-4 font-black rounded-2xl flex items-center justify-center text-lg transition ${viewingDocs.isActive
                     ? 'bg-red-500 hover:bg-red-600 text-white'
                     : 'bg-green-500 hover:bg-green-600 text-white'
-                }`}
+                  }`}
               >
                 {viewingDocs.isActive ? <><ShieldX size={20} className="mr-2" /> Block This Rider</> : <><ShieldCheck size={20} className="mr-2" /> Approve & Unblock Rider</>}
               </button>
@@ -371,7 +369,7 @@ export default function RidersPage() {
                   type="text"
                   className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-bold"
                   value={editData.name}
-                  onChange={(e) => setEditData({...editData, name: e.target.value})}
+                  onChange={(e) => setEditData({ ...editData, name: e.target.value })}
                 />
               </div>
               <div>
@@ -380,7 +378,7 @@ export default function RidersPage() {
                   type="text"
                   className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-bold"
                   value={editData.phoneNumber}
-                  onChange={(e) => setEditData({...editData, phoneNumber: e.target.value})}
+                  onChange={(e) => setEditData({ ...editData, phoneNumber: e.target.value })}
                 />
               </div>
               <div>
@@ -389,7 +387,7 @@ export default function RidersPage() {
                   type="email"
                   className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-bold"
                   value={editData.email}
-                  onChange={(e) => setEditData({...editData, email: e.target.value})}
+                  onChange={(e) => setEditData({ ...editData, email: e.target.value })}
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -398,7 +396,7 @@ export default function RidersPage() {
                   <select
                     className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-bold"
                     value={editData.vehicleType}
-                    onChange={(e) => setEditData({...editData, vehicleType: e.target.value})}
+                    onChange={(e) => setEditData({ ...editData, vehicleType: e.target.value })}
                   >
                     <option value="Bike">Bike</option>
                     <option value="Cycle">Cycle</option>
@@ -411,7 +409,7 @@ export default function RidersPage() {
                     type="text"
                     className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-bold uppercase"
                     value={editData.vehicleNumber}
-                    onChange={(e) => setEditData({...editData, vehicleNumber: e.target.value})}
+                    onChange={(e) => setEditData({ ...editData, vehicleNumber: e.target.value })}
                   />
                 </div>
               </div>

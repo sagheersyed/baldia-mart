@@ -14,7 +14,7 @@ interface Review {
   order: { id: string; total: number };
 }
 
-const API_URL = 'http://localhost:3000/api/v1/riders/reviews/all';
+const API_URL = 'http://192.168.100.142:3000/api/v1/riders/reviews/all';
 
 export default function RatingsPage() {
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -89,7 +89,7 @@ export default function RatingsPage() {
           <span className="text-xs font-black text-gray-400 uppercase tracking-widest block mb-1">Total Reviews</span>
           <span className="text-4xl font-black text-gray-900">{stats.total}</span>
           <div className="mt-4 flex items-center text-sm font-bold text-green-500">
-             <Calendar size={14} className="mr-1" /> Last 30 days
+            <Calendar size={14} className="mr-1" /> Last 30 days
           </div>
         </div>
 
@@ -97,7 +97,7 @@ export default function RatingsPage() {
           <span className="text-xs font-black text-gray-400 uppercase tracking-widest block mb-1">Perfect 5 Stars</span>
           <span className="text-4xl font-black text-gray-900">{stats.fives}</span>
           <div className="mt-4 w-full bg-gray-100 h-2 rounded-full overflow-hidden">
-             <div className="bg-green-500 h-full rounded-full" style={{ width: `${(stats.fives / (stats.total || 1)) * 100}%` }}></div>
+            <div className="bg-green-500 h-full rounded-full" style={{ width: `${(stats.fives / (stats.total || 1)) * 100}%` }}></div>
           </div>
         </div>
       </div>
@@ -121,12 +121,12 @@ export default function RatingsPage() {
             </select>
             <Filter size={16} className="text-gray-400 mr-2" />
             {[5, 4, 3, 2, 1].map(r => (
-              <button 
+              <button
                 key={r}
                 onClick={() => setFilterRating(filterRating === r ? 'all' : r)}
                 className={`w-10 h-10 rounded-xl font-bold transition-all flex items-center justify-center ${filterRating === r ? 'bg-primary text-white scale-110 shadow-md' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
               >
-                {r} <Star size={10} className="ml-1" fill={filterRating === r ? "currentColor" : "none"}/>
+                {r} <Star size={10} className="ml-1" fill={filterRating === r ? "currentColor" : "none"} />
               </button>
             ))}
           </div>
@@ -135,12 +135,12 @@ export default function RatingsPage() {
         <div className="divide-y divide-gray-50">
           {loading ? (
             <div className="py-20 flex justify-center">
-               <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+              <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
             </div>
           ) : filteredReviews.length === 0 ? (
             <div className="py-20 text-center">
-               <Star size={48} className="mx-auto text-gray-200 mb-4" />
-               <p className="font-bold text-gray-400 text-lg">No reviews found matching this filter</p>
+              <Star size={48} className="mx-auto text-gray-200 mb-4" />
+              <p className="font-bold text-gray-400 text-lg">No reviews found matching this filter</p>
             </div>
           ) : filteredReviews.map(review => (
             <div key={review.id} className="p-8 hover:bg-gray-50/50 transition-colors">

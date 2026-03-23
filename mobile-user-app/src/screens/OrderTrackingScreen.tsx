@@ -2,19 +2,19 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator, Modal, TextInput, FlatList, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import io from 'socket.io-client';
-import { ordersApi, productsApi } from '../api/api';
+import { ordersApi, productsApi, menuItemsApi } from '../api/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Shared machine IP logic (ideally would be in a config file)
 const BASE_IP = '192.168.100.142';
 const SOCKET_URL = `http://${BASE_IP}:3000`;
 
-const STATUS_STEPS = [
-  { key: 'pending',           label: 'Order Placed',    icon: '📝', description: 'We have received your order' },
-  { key: 'confirmed',         label: 'Confirmed',       icon: '✅', description: 'The store has confirmed your order' },
-  { key: 'preparing',         label: 'Preparing',       icon: '👨‍🍳', description: 'Your food is being prepared' },
+const GET_STATUS_STEPS = (orderType: string = 'mart') => [
+  { key: 'pending',           label: 'Order Placed',    icon: '📝', description: orderType === 'food' ? 'Restaurant has received your order' : 'We have received your order' },
+  { key: 'confirmed',         label: 'Confirmed',       icon: '✅', description: orderType === 'food' ? 'Restaurant has confirmed your order' : 'The store has confirmed your order' },
+  { key: 'preparing',         label: 'Preparing',       icon: orderType === 'food' ? '👨‍🍳' : '📦', description: orderType === 'food' ? 'Your food is being prepared' : 'Your items are being packed' },
   { key: 'out_for_delivery',  label: 'Out for Delivery',icon: '🚴', description: 'Our rider is on the way' },
-  { key: 'delivered',         label: 'Delivered',       icon: '📦', description: 'Enjoy your meal!' },
+  { key: 'delivered',         label: 'Delivered',       icon: '🎁', description: orderType === 'food' ? 'Enjoy your meal!' : 'Your package has been delivered' },
 ];
 
 export default function OrderTrackingScreen({ route, navigation }: any) {
@@ -50,6 +50,8 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
         setRider(orderRes.data.rider);
       }
 
+      await fetchProductsList(orderRes.data);
+
       if (orderRes.data.status === 'delivered' && !orderRes.data.isRated) {
         const dismissed = await AsyncStorage.getItem(`ratingDismissed_${orderId}`);
         if (!dismissed) {
@@ -63,18 +65,22 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
     }
   };
 
-  const fetchProductsList = async () => {
+  const fetchProductsList = async (currentOrder: any) => {
     try {
-      const res = await productsApi.getAll();
-      setAllProducts(res.data);
+      if (currentOrder?.orderType === 'food' && currentOrder?.restaurantId) {
+        const res = await menuItemsApi.getByRestaurant(currentOrder.restaurantId);
+        setAllProducts(res.data);
+      } else {
+        const res = await productsApi.getAll();
+        setAllProducts(res.data);
+      }
     } catch (e) {
-      console.error('Failed to fetch products for adding:', e);
+      console.error('Failed to fetch products/dishes for adding:', e);
     }
   };
 
   useEffect(() => {
     fetchOrderDetails();
-    fetchProductsList();
 
     const socket = io(SOCKET_URL, {
       transports: ['websocket'],
@@ -104,9 +110,11 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
     };
   }, [orderId]);
 
+  const steps = useMemo(() => GET_STATUS_STEPS(order?.orderType), [order?.orderType]);
+
   const getCurrentStepIndex = () => {
     if (status === 'cancelled') return -1;
-    return STATUS_STEPS.findIndex(step => step.key === status);
+    return steps.findIndex(step => step.key === status);
   };
 
   const currentStepIndex = getCurrentStepIndex();
@@ -301,15 +309,48 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
             <Text style={styles.orderIdValue}>#{orderId.slice(-8).toUpperCase()}</Text>
             <View style={styles.mainStatusContainer}>
               <Text style={styles.mainStatusText}>
-                {STATUS_STEPS[currentStepIndex]?.label || 'Processing...'}
+                {steps[currentStepIndex]?.label || 'Processing...'}
               </Text>
               <Text style={styles.mainStatusDesc}>
-                {STATUS_STEPS[currentStepIndex]?.description}
+                {steps[currentStepIndex]?.description}
               </Text>
             </View>
           </View>
         )}
         
+        {order?.subOrders && order.subOrders.length > 1 && (
+          <View style={[styles.statusCard, { marginTop: 15, paddingVertical: 15 }]}>
+            <Text style={[styles.orderIdLabel, { color: '#FF4500', marginBottom: 5 }]}>
+              Batch Order ({order.subOrders.length} Restaurant Stops)
+            </Text>
+            {order.subOrders.map((sub: any, idx: number) => (
+              <View key={sub.id || idx} style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
+                <Text style={{ fontSize: 22, marginRight: 12 }}>{sub.status === 'delivered' ? '🎁' : sub.status === 'picked_up' ? '🚴' : '👨‍🍳'}</Text>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={{ fontWeight: 'bold', color: '#1a1a1a', fontSize: 14 }}>
+                      [Stop {idx+1}] {sub.restaurant?.name || 'Restaurant'}
+                    </Text>
+                    <View style={{ backgroundColor: sub.status === 'picked_up' ? '#2ecc7120' : sub.status === 'ready' ? '#3498db20' : '#f1f2f6', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                       <Text style={{ fontSize: 9, fontWeight: 'bold', color: sub.status === 'picked_up' ? '#27ae60' : sub.status === 'ready' ? '#2980b9' : '#7f8c8d' }}>
+                         {sub.status.toUpperCase()}
+                       </Text>
+                    </View>
+                  </View>
+                  <Text style={{ fontSize: 12, color: '#666', marginTop: 2 }} numberOfLines={1}>
+                    {sub.restaurant?.location}
+                  </Text>
+                  {sub.status === 'preparing' && sub.estimatedPrepTimeMinutes > 0 && (
+                    <Text style={{ fontSize: 11, color: '#FF4500', fontWeight: 'bold', marginTop: 4 }}>
+                      ⏳ Estimated Prep: {sub.estimatedPrepTimeMinutes} mins
+                    </Text>
+                  )}
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
         {rider && (
           <View style={styles.riderCard}>
             <View style={styles.riderInfo}>
@@ -340,11 +381,13 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
               <View key={item.id} style={styles.itemRow}>
                 <View style={styles.itemInfo}>
                   <Text style={styles.itemName}>
-                    {item.product?.name || 'Item'}
+                    {order?.orderType === 'food' 
+                      ? (item.menuItem?.name || 'Dish') 
+                      : (item.product?.name || 'Item')}
                   </Text>
                   <Text style={styles.itemPrice}>Rs. {item.priceAtTime} x {item.quantity}</Text>
                 </View>
-                {status === 'pending' || status === 'confirmed' ? (
+                {(status === 'pending' || status === 'confirmed') && order?.orderType !== 'food' ? (
                   <View style={styles.quantityControls}>
                     <TouchableOpacity 
                       style={styles.qtyBtn}
@@ -366,7 +409,7 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
               </View>
             ))}
             
-            {(status === 'pending' || status === 'confirmed') && (
+            {(status === 'pending' || status === 'confirmed') && order?.orderType !== 'food' && (
               <View style={styles.summaryActionsRow}>
                 {hasChanges() && (
                   <TouchableOpacity 
@@ -380,7 +423,9 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
                   style={[styles.actionBtn, styles.addBtn, !hasChanges() && { flex: 1 }]} 
                   onPress={() => setShowAddProduct(true)}
                 >
-                  <Text style={styles.addBtnText}>+ Add Product</Text>
+                  <Text style={styles.addBtnText}>
+                    + Add {order?.orderType === 'food' ? 'Dish' : 'Product'}
+                  </Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -394,11 +439,11 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
         )}
 
         <View style={styles.timelineContainer}>
-          {STATUS_STEPS.map((step, index) => {
+          {steps.map((step, index) => {
             const historyItem = timeline.find(h => h.status === step.key);
             const isCompleted = !!historyItem;
             const isCurrent = index === currentStepIndex;
-            const isLast = index === STATUS_STEPS.length - 1;
+            const isLast = index === steps.length - 1;
             const isPassed = isCompleted || isCurrent;
 
             return (
@@ -485,7 +530,7 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
             <SafeAreaView style={styles.addProductCardWrapper}>
               <View style={styles.addProductCard}>
                 <View style={styles.addProductHeader}>
-                  <Text style={styles.addProductTitle}>Add Items to Order</Text>
+                  <Text style={styles.addProductTitle}>Add {order?.orderType === 'food' ? 'Dishes' : 'Items'} to Order</Text>
                   <TouchableOpacity style={styles.addProductCloseBtn} onPress={() => setShowAddProduct(false)}>
                     <Text style={styles.addProductCloseText}>✕</Text>
                   </TouchableOpacity>
@@ -495,7 +540,7 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
                   <Text style={styles.searchIcon}>🔍</Text>
                   <TextInput
                     style={styles.searchInput}
-                    placeholder="Search fresh products..."
+                    placeholder={order?.orderType === 'food' ? "Search dishes..." : "Search fresh products..."}
                     placeholderTextColor="#999"
                     value={searchQuery}
                     onChangeText={setSearchQuery}

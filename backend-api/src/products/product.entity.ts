@@ -1,5 +1,6 @@
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { Category } from '../categories/category.entity';
+import { Brand } from '../brands/brand.entity';
 
 @Entity('products')
 export class Product {
@@ -12,6 +13,13 @@ export class Product {
   @ManyToOne(() => Category)
   @JoinColumn({ name: 'category_id' })
   category: Category;
+
+  @Column({ name: 'brand_id', nullable: true })
+  brandId: string;
+
+  @ManyToOne(() => Brand, brand => brand.products)
+  @JoinColumn({ name: 'brand_id' })
+  brand: Brand;
 
   @Column()
   name: string;
@@ -33,6 +41,9 @@ export class Product {
 
   @Column({ name: 'is_active', default: true })
   isActive: boolean;
+
+  @Column({ name: 'max_quantity_per_order', default: 0 })
+  maxQuantityPerOrder: number;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

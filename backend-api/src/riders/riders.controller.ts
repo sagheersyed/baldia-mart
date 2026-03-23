@@ -16,21 +16,26 @@ export class RidersController {
     return this.ridersService.findAll();
   }
 
-  @Patch(':id')
-  @UseGuards(AdminRoleGuard)
-  async updateRiderByAdmin(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() body: UpdateRiderDto
-  ) {
-    return this.ridersService.update(id, body);
-  }
+  @Patch('me')
+  async updateProfile(@Req() req: Request, @Body() body: any) {
+    const user = req.user as any;
+    
+    console.log(`[DEBUG] Updating profile for rider ${user.id}:`, JSON.stringify(body, null, 2));
 
-  @Patch(':id/status')
-  async updateStatus(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() body: { isActive?: boolean; isProfileComplete?: boolean }
-  ) {
-    return this.ridersService.updateStatus(id, body);
+    const hasAllFields = !!(
+      body.name && 
+      body.vehicleType && 
+      body.vehicleNumber && 
+      body.cnicFrontUrl && 
+      body.cnicBackUrl && 
+      body.selfieUrl
+    );
+
+    if (hasAllFields) {
+      body.isProfileComplete = true;
+    }
+
+    return this.ridersService.update(user.id, body);
   }
 
   @Get('me')
@@ -51,33 +56,22 @@ export class RidersController {
     return this.ridersService.getMonthlyEarnings(authUser.id);
   }
 
-  @Patch('me')
-  async updateProfile(@Req() req: Request, @Body() body: any) {
-    const user = req.user as any;
-    
-    console.log(`[DEBUG] Updating profile for rider ${user.id}:`, JSON.stringify(body, null, 2));
+  @Patch(':id/status')
+  @UseGuards(AdminRoleGuard)
+  async updateStatus(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { isActive?: boolean; isProfileComplete?: boolean }
+  ) {
+    return this.ridersService.updateStatus(id, body);
+  }
 
-    // Determine if we should mark profile as complete based on minimum required fields
-    const hasAllFields = !!(
-      body.name && 
-      body.vehicleType && 
-      body.vehicleNumber && 
-      body.cnicFrontUrl && 
-      body.cnicBackUrl && 
-      body.selfieUrl
-    );
-
-    console.log(`[DEBUG] Rider ${user.id} has all required fields: ${hasAllFields}`);
-
-    if (hasAllFields) {
-      body.isProfileComplete = true;
-      console.log(`[DEBUG] Marking profile as COMPLETE for rider ${user.id}`);
-    }
-
-    const updatedRider = await this.ridersService.update(user.id, body);
-    console.log(`[DEBUG] Profile updated result for ${user.id}. isProfileComplete: ${updatedRider?.isProfileComplete}`);
-    
-    return updatedRider;
+  @Patch(':id')
+  @UseGuards(AdminRoleGuard)
+  async updateRiderByAdmin(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: UpdateRiderDto
+  ) {
+    return this.ridersService.update(id, body);
   }
 
   @Post(':id/reviews')

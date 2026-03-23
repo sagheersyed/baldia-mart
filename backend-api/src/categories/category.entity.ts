@@ -14,6 +14,9 @@ export class Category {
   @Column({ name: 'image_url', nullable: true })
   imageUrl: string;
 
+  @Column({ name: 'section', default: 'mart' })
+  section: string; // mart, restaurant
+
   @Column({ name: 'is_active', default: true })
   isActive: boolean;
 

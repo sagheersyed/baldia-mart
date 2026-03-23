@@ -6,6 +6,7 @@ import { join } from 'path';
 import { ValidationPipe } from '@nestjs/common';
 import { Logger } from 'nestjs-pino';
 import { GlobalHttpExceptionFilter } from './common/global-exception.filter';
+import { LoggingInterceptor } from './common/logging.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
@@ -36,6 +37,9 @@ async function bootstrap() {
 
   // Global Exception Filter — ensures all errors return consistent JSON shape
   app.useGlobalFilters(new GlobalHttpExceptionFilter());
+  
+  // Global Logging Interceptor
+  app.useGlobalInterceptors(new LoggingInterceptor());
   
   await app.listen(3000, '0.0.0.0');
   console.log(`Application is running on: ${await app.getUrl()}`);

@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Put, Body, Req, Param, UseGuards, BadRequestException, ParseUUIDPipe, Delete, Patch, ForbiddenException } from '@nestjs/common';
+import { Controller, Post, Get, Put, Body, Req, Param, UseGuards, BadRequestException, ParseUUIDPipe, Delete, Patch, ForbiddenException, Query } from '@nestjs/common';
 import { OrdersService } from './orders.service';
 import { AuthGuard } from '@nestjs/passport';
 import { AdminRoleGuard } from '../auth/admin-role.guard';
@@ -54,13 +54,18 @@ export class OrdersController {
       body.addressId,
       body.paymentMethod,
       body.notes,
-      body.items
+      body.items,
+      body.orderType,
+      body.restaurantId
     );
   }
 
   @Get('preview-fee/:addressId')
-  async previewFee(@Param('addressId', ParseUUIDPipe) addressId: string) {
-    return this.ordersService.calculateDeliveryFee(addressId);
+  async previewFee(
+    @Param('addressId', ParseUUIDPipe) addressId: string,
+    @Query('restaurantId') restaurantId?: string
+  ) {
+    return this.ordersService.calculateDeliveryFee(addressId, restaurantId);
   }
 
   @Post(':id/accept')
@@ -156,5 +161,12 @@ export class OrdersController {
   ) {
     const user = req.user as any;
     return this.ordersService.addItemToOrder(id, user.id, body.productId, body.quantity);
+  }
+  @Patch('sub-orders/:subOrderId/status')
+  async updateSubOrderStatus(
+    @Param('subOrderId', ParseUUIDPipe) subOrderId: string,
+    @Body('status') status: string,
+  ) {
+    return this.ordersService.updateSubOrderStatus(subOrderId, status);
   }
 }

@@ -17,7 +17,7 @@ services:
     env_file:
       - ../backend-api/.env
     environment:
-      - DB_HOST=host.docker.internal # Override localhost from .env for Docker
+      - DB_HOST=host.docker.internal # Connect to Windows host PG 17
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - NODE_ENV=development
@@ -34,7 +34,7 @@ services:
     ports:
       - "3001:3000" # Maps Next.js to 3001
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:3000/api/v1
+      - NEXT_PUBLIC_API_URL=http://192.168.100.142:3000/api/v1
     depends_on:
       - backend-api
     networks:

@@ -58,20 +58,81 @@ export default function OrderDetailsScreen({ route, navigation }: any) {
 
       <ScrollView style={styles.content}>
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Customer & Address</Text>
-          <Text style={styles.customerName}>{order.user?.name || 'Customer'}</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <Text style={styles.sectionTitle}>Pickup From</Text>
+            {order.orderType === 'food' ? (
+              <View style={[styles.typeBadge, { backgroundColor: '#FFF5E0' }]}>
+                <Text style={{ color: '#FF8C00', fontSize: 10, fontWeight: 'bold' }}>🍽️ FOOD ORDER</Text>
+              </View>
+            ) : (
+              <View style={[styles.typeBadge, { backgroundColor: '#E8F5E9' }]}>
+                <Text style={{ color: '#2E7D32', fontSize: 10, fontWeight: 'bold' }}>🛒 MART ORDER</Text>
+              </View>
+            )}
+          </View>
+          {order.orderType === 'food' ? (
+             order.subOrders && order.subOrders.length > 0 ? (
+                 order.subOrders.map((sub: any, idx: number) => (
+                    <View key={sub.id || idx} style={{ marginBottom: order.subOrders.length > 1 ? 15 : 0 }}>
+                       <Text style={styles.customerName}>
+                          👨‍🍳 {order.subOrders.length > 1 ? `[Stop ${idx + 1}] ` : ''}{sub.restaurant?.name || 'Restaurant'}
+                       </Text>
+                       <Text style={styles.address}>📍 {sub.restaurant?.location}</Text>
+                    </View>
+                 ))
+             ) : order.restaurant ? (
+                 <>
+                   <Text style={styles.customerName}>👨‍🍳 {order.restaurant.name}</Text>
+                   <Text style={styles.address}>📍 {order.restaurant.location}</Text>
+                 </>
+             ) : null
+          ) : (
+            <>
+              <Text style={styles.customerName}>🏬 Baldia Mart</Text>
+              <Text style={styles.address}>📍 Main Colony, Baldia Town</Text>
+            </>
+          )}
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Customer & Delivery</Text>
+          <Text style={styles.customerName}>👤 {order.user?.name || 'Customer'}</Text>
           <Text style={styles.address}>📍 {order.address?.streetAddress || 'Local Area'}</Text>
           <Text style={styles.distance}>🚚 {order.deliveryDistanceKm} km distance</Text>
         </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Order Items</Text>
-          {order.items?.map((item: any, idx: number) => (
-            <View key={idx} style={styles.itemRow}>
-              <Text style={styles.itemText}>{item.quantity}x {item.product?.name || 'Product'}</Text>
-              <Text style={styles.itemPrice}>Rs. {item.priceAtTime * item.quantity}</Text>
-            </View>
-          ))}
+          {order.items && (
+            Object.entries(
+              order.items.reduce((acc: any, item: any) => {
+                const groupName = (order.orderType === 'food' || item.menuItem) 
+                  ? (item.menuItem?.restaurant?.name || order.restaurant?.name || 'Restaurant')
+                  : 'Baldia Mart';
+                if (!acc[groupName]) acc[groupName] = [];
+                acc[groupName].push(item);
+                return acc;
+              }, {})
+            ).map(([groupName, items]: [any, any], groupIdx) => (
+              <View key={groupIdx} style={{ marginBottom: 15 }}>
+                <Text style={styles.groupHeader}>{groupName}</Text>
+                {items.map((item: any, idx: number) => {
+                  const itemName = item.orderType === 'food' || item.menuItem ? item.menuItem?.name : item.product?.name;
+                  return (
+                    <View key={idx} style={styles.itemRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.itemText}>{item.quantity}x {itemName || 'Item'}</Text>
+                        {(order.orderType === 'food' || item.menuItem) && item.menuItem?.prepTimeMinutes > 0 && (
+                          <Text style={{ fontSize: 11, color: '#FF8C00', marginTop: 2 }}>⏳ {item.menuItem.prepTimeMinutes} mins prep</Text>
+                        )}
+                      </View>
+                      <Text style={styles.itemPrice}>Rs. {item.priceAtTime * item.quantity}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            ))
+          )}
           <View style={styles.divider} />
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>Total Bill (COD)</Text>
@@ -81,7 +142,11 @@ export default function OrderDetailsScreen({ route, navigation }: any) {
 
         <View style={styles.infoBox}>
           <Ionicons name="information-circle-outline" size={20} color="#666" />
-          <Text style={styles.infoText}>Please verify all products with the merchant before picking up.</Text>
+          <Text style={styles.infoText}>
+            {order.orderType === 'food' 
+              ? "Pickup food carefully. Ensure it's hot and packaged well."
+              : "Please verify all products with the merchant before picking up."}
+          </Text>
         </View>
       </ScrollView>
 
@@ -114,6 +179,11 @@ const styles = StyleSheet.create({
   customerName: { fontSize: 18, fontWeight: 'bold', marginBottom: 5 },
   address: { fontSize: 16, color: '#444', marginBottom: 5 },
   distance: { fontSize: 14, color: '#FF4500', fontWeight: 'bold' },
+  groupHeader: {
+    fontSize: 14, fontWeight: 'bold', color: '#B45309',
+    backgroundColor: '#FFFBEB', padding: 8, borderRadius: 8,
+    marginBottom: 10, marginTop: 5, borderLeftWidth: 3, borderLeftColor: '#F59E0B'
+  },
   itemRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
   itemText: { fontSize: 15, color: '#333' },
   itemPrice: { fontSize: 15, color: '#666' },
@@ -126,5 +196,6 @@ const styles = StyleSheet.create({
   footer: { padding: 20, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#eee' },
   acceptBtn: { backgroundColor: '#FF4500', padding: 18, borderRadius: 15, alignItems: 'center' },
   acceptBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  disabledBtn: { opacity: 0.7 }
+  disabledBtn: { opacity: 0.7 },
+  typeBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }
 });

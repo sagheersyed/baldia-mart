@@ -10,8 +10,12 @@ export class CategoriesService {
     private categoryRepository: Repository<Category>,
   ) {}
 
-  async findAllActive(): Promise<Category[]> {
-    return this.categoryRepository.find({ where: { isActive: true } });
+  async findAllActive(section?: string): Promise<Category[]> {
+    const where: any = { isActive: true };
+    if (section && section !== 'all') {
+      where.section = section.toLowerCase();
+    }
+    return this.categoryRepository.find({ where });
   }
 
   async findById(id: string): Promise<Category> {

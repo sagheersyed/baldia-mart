@@ -55,7 +55,9 @@ export default function OtpScreen({ navigation, route }: any) {
         // Fetch config to check if MPIN setup is required
         try {
           const configRes = await authApi.getConfig();
-          if (configRes.data.auth_customer_mpin_enabled) {
+          const userHasMpin = res.data.user?.hasMpin;
+
+          if (configRes.data.auth_customer_mpin_enabled && !userHasMpin) {
             navigation.navigate('MpinSetup', {
               access_token: res.data.access_token,
               user: res.data.user
@@ -63,7 +65,7 @@ export default function OtpScreen({ navigation, route }: any) {
             return;
           }
         } catch (e) {
-          console.log('Failed to fetch config, skipping MPIN setup');
+          console.log('Failed to fetch config or check MPIN, skipping MPIN setup');
         }
 
         // Fallback or MPIN disabled

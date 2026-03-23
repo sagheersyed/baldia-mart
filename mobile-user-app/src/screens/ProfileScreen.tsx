@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, SafeAreaView,
+  View, Text, StyleSheet, TouchableOpacity,
   ActivityIndicator, ScrollView, RefreshControl, Image, Alert
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { authApi, addressesApi, ordersApi } from '../api/api';
 import { useAuth } from '../context/AuthContext';
 
@@ -103,12 +104,12 @@ export default function ProfileScreen({ navigation }: any) {
   const handleLogout = () => {
     Alert.alert('Log Out', 'Are you sure you want to log out?', [
       { text: 'Cancel', style: 'cancel' },
-      { 
-        text: 'Log Out', 
-        style: 'destructive', 
+      {
+        text: 'Log Out',
+        style: 'destructive',
         onPress: () => {
           signOut();
-        } 
+        }
       },
     ]);
   };
@@ -191,7 +192,7 @@ export default function ProfileScreen({ navigation }: any) {
         ))}
 
         {/* Logout */}
-        <View style={{ paddingHorizontal: 20, paddingBottom: 40, marginTop: 10 }}>
+        <View style={{ paddingHorizontal: 16, paddingBottom: 40, marginTop: 10 }}>
           <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.8}>
             <Text style={styles.logoutIcon}>🚪</Text>
             <Text style={styles.logoutText}>Log Out</Text>
@@ -204,7 +205,7 @@ export default function ProfileScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F6FA' },
+  container: { flex: 1, backgroundColor: '#F5F6FA', marginBottom: 20 },
   loaderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F5F6FA' },
   loaderText: { marginTop: 12, color: '#999', fontSize: 14 },
 
@@ -299,7 +300,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#fff',
-    borderRadius: 16,
+    borderRadius: 10,
     paddingVertical: 16,
     elevation: 2,
     shadowColor: '#000',
@@ -309,5 +310,5 @@ const styles = StyleSheet.create({
   },
   logoutIcon: { fontSize: 18, marginRight: 8 },
   logoutText: { color: '#FF3B30', fontSize: 16, fontWeight: '700' },
-  versionText: { textAlign: 'center', color: '#CCC', fontSize: 11, marginTop: 16 },
+  versionText: { textAlign: 'center', color: '#9d9d9dff', fontSize: 11, marginTop: 16 },
 });

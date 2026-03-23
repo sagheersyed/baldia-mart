@@ -7,6 +7,7 @@ import { fetchWithAuth } from '@/lib/api';
 interface Category {
   id: string;
   name: string;
+  section?: string;
 }
 
 interface Product {
@@ -18,18 +19,30 @@ interface Product {
   stockQuantity: number;
   imageUrl: string;
   categoryId: string;
+  brandId?: string;
   category: {
+    name: string;
+    section?: string;
+  };
+  brand?: {
     name: string;
   };
   isActive: boolean;
+  maxQuantityPerOrder: number;
 }
 
-const API_URL = 'http://localhost:3000/api/v1/products';
-const CAT_URL = 'http://localhost:3000/api/v1/categories';
+interface Brand {
+  id: string;
+  name: string;
+}
+
+const API_URL = 'http://192.168.100.142:3000/api/v1/products';
+const CAT_URL = 'http://192.168.100.142:3000/api/v1/categories';
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [brands, setBrands] = useState<Brand[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -42,7 +55,9 @@ export default function ProductsPage() {
     discount: 0,
     stockQuantity: 0,
     categoryId: '',
-    imageUrl: ''
+    brandId: '',
+    imageUrl: '',
+    maxQuantityPerOrder: 0
   });
 
   useEffect(() => {
@@ -52,16 +67,19 @@ export default function ProductsPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [prodRes, catRes] = await Promise.all([
+      const [prodRes, catRes, brandRes] = await Promise.all([
         fetchWithAuth(API_URL),
-        fetchWithAuth(CAT_URL)
+        fetchWithAuth(CAT_URL),
+        fetchWithAuth('http://192.168.100.142:3000/api/v1/brands')
       ]);
-      const [prodData, catData] = await Promise.all([
+      const [prodData, catData, brandData] = await Promise.all([
         prodRes.json(),
-        catRes.json()
+        catRes.json(),
+        brandRes.json()
       ]);
       setProducts(prodData);
       setCategories(catData);
+      setBrands(brandData);
     } catch (error) {
       console.error('Failed to fetch data:', error);
     } finally {
@@ -76,16 +94,22 @@ export default function ProductsPage() {
       const url = editingProduct ? `${API_URL}/${editingProduct.id}` : API_URL;
       const method = editingProduct ? 'PUT' : 'POST';
 
+      const body = {
+        ...formData,
+        brandId: formData.brandId === '' ? null : formData.brandId,
+        categoryId: formData.categoryId === '' ? null : formData.categoryId,
+      };
+
       const res = await fetchWithAuth(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(body),
       });
 
       if (res.ok) {
         setShowModal(false);
         setEditingProduct(null);
-        setFormData({ name: '', description: '', price: 0, discount: 0, stockQuantity: 0, categoryId: '', imageUrl: '' });
+        setFormData({ name: '', description: '', price: 0, discount: 0, stockQuantity: 0, categoryId: '', brandId: '', imageUrl: '', maxQuantityPerOrder: 0 });
         fetchData();
       }
     } catch (error) {
@@ -104,7 +128,9 @@ export default function ProductsPage() {
       discount: Number(product.discount) || 0,
       stockQuantity: product.stockQuantity,
       categoryId: product.categoryId,
-      imageUrl: product.imageUrl || ''
+      brandId: product.brandId || '',
+      imageUrl: product.imageUrl || '',
+      maxQuantityPerOrder: product.maxQuantityPerOrder || 0
     });
     setShowModal(true);
   };
@@ -136,7 +162,7 @@ export default function ProductsPage() {
           <button
             onClick={() => {
               setEditingProduct(null);
-              setFormData({ name: '', description: '', price: 0, discount: 0, stockQuantity: 0, categoryId: '', imageUrl: '' });
+              setFormData({ name: '', description: '', price: 0, discount: 0, stockQuantity: 0, categoryId: '', brandId: '', imageUrl: '', maxQuantityPerOrder: 0 });
               setShowModal(true);
             }}
             className="flex items-center space-x-2 bg-gradient-to-br from-primary to-orange-600 text-white px-6 py-3 rounded-2xl font-bold hover:shadow-lg hover:shadow-orange-500/30 transition-all active:scale-95 shadow-md shadow-orange-500/10"
@@ -189,8 +215,13 @@ export default function ProductsPage() {
                   </td>
                   <td className="py-6">
                     <span className="px-4 py-1.5 bg-gray-100 text-gray-600 rounded-full text-xs font-black border border-gray-200">
-                      {prod.category?.name || 'Uncategorized'}
+                      {prod.category?.name || 'Uncategorized'} ({prod.category?.section || 'mart'})
                     </span>
+                    {prod.brand?.name && (
+                      <span className="ml-2 px-4 py-1.5 bg-blue-50 text-blue-600 rounded-full text-xs font-black border border-blue-100">
+                        {prod.brand.name}
+                      </span>
+                    )}
                   </td>
                   <td className="py-6 text-center font-black text-gray-400 line-through text-sm">Rs. {Number(prod.price || 0).toFixed(2)}</td>
                   <td className="py-6 text-center font-bold text-orange-500">- Rs. {Number(prod.discount || 0).toFixed(2)}</td>
@@ -244,7 +275,7 @@ export default function ProductsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
           <div className="absolute inset-0 bg-gray-900/40 backdrop-blur-md" onClick={() => setShowModal(false)}></div>
           <div className="relative bg-white w-full max-w-xl rounded-[2.5rem] shadow-2xl border border-white flex flex-col max-h-[95vh] sm:max-h-[90vh] animate-in zoom-in-95 duration-300">
-            
+
             <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center shrink-0">
               <div>
                 <h2 className="text-2xl font-black text-gray-800 tracking-tight">{editingProduct ? 'Edit Product' : 'Add New Product'}</h2>
@@ -281,11 +312,30 @@ export default function ProductsPage() {
                       >
                         <option value="">Select a category</option>
                         {categories.map(cat => (
-                          <option key={cat.id} value={cat.id}>{cat.name}</option>
+                          <option key={cat.id} value={cat.id}>{cat.name} ({cat.section || 'mart'})</option>
                         ))}
                       </select>
                       <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
                         <Filter size={14} />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="col-span-2">
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 px-1">Brand (Optional)</label>
+                    <div className="relative">
+                      <select
+                        className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-bold text-sm appearance-none"
+                        value={formData.brandId}
+                        onChange={(e) => setFormData({ ...formData, brandId: e.target.value })}
+                      >
+                        <option value="">Select a brand</option>
+                        {brands.map(brand => (
+                          <option key={brand.id} value={brand.id}>{brand.name}</option>
+                        ))}
+                      </select>
+                      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                        <Package size={14} />
                       </div>
                     </div>
                   </div>
@@ -345,6 +395,16 @@ export default function ProductsPage() {
                     />
                   </div>
 
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 px-1">Order Limit (0=No Limit)</label>
+                    <input
+                      type="number"
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-bold text-sm"
+                      value={formData.maxQuantityPerOrder}
+                      onChange={(e) => setFormData({ ...formData, maxQuantityPerOrder: parseInt(e.target.value) || 0 })}
+                    />
+                  </div>
+
                   <div className="flex items-center space-x-3 h-full pt-6">
                     <div className={`w-3 h-3 rounded-full ${formData.stockQuantity > 0 ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-red-500'}`}></div>
                     <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">
@@ -376,7 +436,7 @@ export default function ProductsPage() {
                 </div>
               </form>
             </div>
-            
+
             <div className="px-8 py-5 border-t border-gray-100 shrink-0 bg-gray-50/50 rounded-b-[2.5rem]">
               <button
                 type="submit"

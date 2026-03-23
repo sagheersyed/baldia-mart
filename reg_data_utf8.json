@@ -1,0 +1,1 @@
+﻿{"statusCode":400,"error":"Bad Request","message":"Unexpected end of JSON input","timestamp":"2026-03-23T13:57:18.169Z","path":"/api/v1/auth/rider/register-mpin"}

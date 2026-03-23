@@ -17,7 +17,7 @@ export class Rider {
   @Column({ unique: true, nullable: true })
   email: string;
 
-  @Column({ name: 'phone_number' })
+  @Column({ name: 'phone_number', unique: true })
   phoneNumber: string;
 
   @Column({ nullable: true })
@@ -62,7 +62,7 @@ export class Rider {
   @Column({ name: 'total_reviews', default: 0 })
   totalReviews: number;
 
-  @Column({ name: 'is_active', default: true })
+  @Column({ name: 'is_active', default: false })
   isActive: boolean;
 
   @CreateDateColumn({ name: 'created_at' })

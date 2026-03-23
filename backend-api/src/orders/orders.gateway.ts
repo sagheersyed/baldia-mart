@@ -111,9 +111,12 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  emitNewOrder(order: any) {
-    this.server.to('riders_room').emit('newOrder', order);
+  emitNewOrderToAdmin(order: any) {
     this.server.to('admin_room').emit('newOrder', order);
+  }
+
+  emitNewOrderToRiders(order: any) {
+    this.server.to('riders_room').emit('newOrder', order);
   }
 
   emitOrderAccepted(orderId: string) {

@@ -3,6 +3,8 @@ import { User } from '../users/user.entity';
 import { Address } from '../addresses/address.entity';
 import { Rider } from '../riders/rider.entity';
 import { OrderItem } from './order-item.entity';
+import { Restaurant } from '../restaurants/restaurant.entity';
+import { SubOrder } from './sub-order.entity';
 
 @Entity('orders')
 export class Order {
@@ -33,6 +35,13 @@ export class Order {
   @Column({ name: 'mart_id', nullable: true })
   martId: string;
 
+  @Column({ name: 'restaurant_id', nullable: true })
+  restaurantId: string;
+
+  @ManyToOne(() => Restaurant)
+  @JoinColumn({ name: 'restaurant_id' })
+  restaurant: Restaurant;
+
   @Column({ default: 'pending' })
   status: string; // pending, confirmed, out_for_delivery, delivered, cancelled
 
@@ -60,8 +69,14 @@ export class Order {
   @Column({ type: 'text', nullable: true })
   notes: string;
 
+  @Column({ name: 'order_type', default: 'mart' })
+  orderType: string; // mart, food
+
   @OneToMany(() => OrderItem, item => item.order)
   items: OrderItem[];
+
+  @OneToMany(() => SubOrder, subOrder => subOrder.order)
+  subOrders: SubOrder[];
 
   @Column({ name: 'is_rated', default: false })
   isRated: boolean;

@@ -1,7 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Home, ShoppingBag, List, Users, Bike, Map, Tag, Settings, LogOut, Star, Megaphone } from 'lucide-react';
+import { Home, ShoppingBag, List, Users, Bike, Map, Tag, Settings, LogOut, Star, Megaphone, Layers, UtensilsCrossed } from 'lucide-react';
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -18,6 +18,9 @@ export default function Sidebar() {
     { name: 'Dashboard', icon: Home, path: '/' },
     { name: 'Products', icon: ShoppingBag, path: '/products' },
     { name: 'Categories', icon: List, path: '/categories' },
+    { name: 'Brands', icon: Tag, path: '/brands' },
+    { name: 'Restaurants', icon: UtensilsCrossed, path: '/restaurants' },
+    { name: 'Banners', icon: Layers, path: '/banners' },
     { name: 'Orders', icon: ShoppingBag, path: '/orders' },
     { name: 'Users', icon: Users, path: '/users' },
     { name: 'Riders', icon: Bike, path: '/riders' },
@@ -26,6 +29,7 @@ export default function Sidebar() {
     { name: 'Ratings', icon: Star, path: '/ratings' },
     { name: 'Settings', icon: Settings, path: '/settings' },
   ];
+
 
   return (
     <div className="w-64 bg-secondary text-white min-h-screen p-4 flex flex-col">

@@ -2,8 +2,13 @@ import { IsString, IsOptional, IsNumber, IsArray, ValidateNested, IsUUID, Min } 
 import { Type } from 'class-transformer';
 
 export class CheckoutItemDto {
+  @IsOptional()
   @IsUUID()
-  productId: string;
+  productId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  menuItemId?: string;
 
   @IsNumber()
   @Min(1)
@@ -20,6 +25,14 @@ export class PlaceOrderDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsString()
+  orderType?: string; // mart, food
+
+  @IsOptional()
+  @IsUUID()
+  restaurantId?: string;
 
   @IsOptional()
   @IsArray()

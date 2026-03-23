@@ -11,6 +11,19 @@ export const socket = io(SOCKET_URL, {
 // Replace with your local machine's IP
 const BASE_URL = 'http://192.168.100.142:3000/api/v1';
 
+export const normalizePhone = (phone: string): string => {
+  if (!phone) return phone;
+  let cleaned = phone.replace(/[^\d+]/g, '');
+  if (cleaned.startsWith('0')) {
+    cleaned = '+92' + cleaned.substring(1);
+  }
+  if (!cleaned.startsWith('+')) {
+    if (cleaned.length === 10) cleaned = '+92' + cleaned;
+    else cleaned = '+' + cleaned;
+  }
+  return cleaned;
+};
+
 export const api = axios.create({
   baseURL: BASE_URL,
   timeout: 10000,
@@ -28,13 +41,13 @@ export const setAuthToken = (token: string | null) => {
 
 export const authApi = {
   getConfig: () => api.get('/auth/config'),
-  checkStatus: (phoneNumber: string, role: string) => api.post('/auth/check-status', { phoneNumber, role }),
+  checkStatus: (phoneNumber: string, role: string) => api.post('/auth/check-status', { phoneNumber: normalizePhone(phoneNumber), role }),
   setupMpin: (mpin: string) => api.post('/auth/rider/setup-mpin', { mpin }),
-  loginMpin: (phoneNumber: string, mpin: string) => api.post('/auth/rider/login-mpin', { phoneNumber, mpin }),
-  registerMpin: (phoneNumber: string, mpin: string) => api.post('/auth/rider/register-mpin', { phoneNumber, mpin }),
-  sendOtp: (phoneNumber: string) => api.post('/auth/rider/send-otp', { phoneNumber }),
+  loginMpin: (phoneNumber: string, mpin: string) => api.post('/auth/rider/login-mpin', { phoneNumber: normalizePhone(phoneNumber), mpin }),
+  registerMpin: (phoneNumber: string, mpin: string) => api.post('/auth/rider/register-mpin', { phoneNumber: normalizePhone(phoneNumber), mpin }),
+  sendOtp: (phoneNumber: string) => api.post('/auth/rider/send-otp', { phoneNumber: normalizePhone(phoneNumber) }),
   verifyOtp: (phoneNumber: string, otpCode: string) =>
-    api.post('/auth/rider/verify-otp', { phoneNumber, otpCode }),
+    api.post('/auth/rider/verify-otp', { phoneNumber: normalizePhone(phoneNumber), otpCode }),
   login: (firebaseToken: string) => api.post('/auth/login', { firebaseToken }),
   getMe: () => api.get('/auth/me'),
 };
@@ -46,6 +59,8 @@ export const ordersApi = {
   getById: (orderId: string) => api.get(`/orders/${orderId}`),
   updateStatus: (orderId: string, status: string) =>
     api.patch(`/orders/${orderId}/rider-status`, { status }),
+  updateSubOrderStatus: (subOrderId: string, status: string) =>
+    api.patch(`/orders/sub-orders/${subOrderId}/status`, { status }),
   getHistory: () => api.get('/orders/history/rider'),
 };
 

@@ -8,6 +8,22 @@ import { Rider } from '../riders/rider.entity';
 
 @Injectable()
 export class AuthService {
+  private normalizePhone(phone: string): string {
+    if (!phone) return phone;
+    // Remove all non-numeric characters except +
+    let cleaned = phone.replace(/[^\d+]/g, '');
+    // If starts with 0 (standard Pakistani mobile format), replace with +92
+    if (cleaned.startsWith('0')) {
+      cleaned = '+92' + cleaned.substring(1);
+    }
+    // If doesn't start with +, assume it's just a number and add + (defaulting to +92 if it looks like a local number)
+    if (!cleaned.startsWith('+')) {
+      if (cleaned.length === 10) cleaned = '+92' + cleaned;
+      else cleaned = '+' + cleaned;
+    }
+    return cleaned;
+  }
+
   constructor(
     private usersService: UsersService,
     private ridersService: RidersService,
@@ -36,11 +52,12 @@ export class AuthService {
   }
 
   async findOrCreateByPhone(phoneNumber: string): Promise<{ user: User; isNew: boolean }> {
-    let user = await this.usersService.findByPhoneNumber(phoneNumber);
+    const normalized = this.normalizePhone(phoneNumber);
+    let user = await this.usersService.findByPhoneNumber(normalized);
     let isNew = false;
     if (!user) {
       user = await this.usersService.create({
-        phoneNumber,
+        phoneNumber: normalized,
         name: 'New Customer',
         isPhoneVerified: false,
       });
@@ -69,6 +86,7 @@ export class AuthService {
         name: user.name,
         role: user.role,
         phoneNumber: user.phoneNumber,
+        hasMpin: !!user.mpin,
       }
     };
   }
@@ -97,13 +115,14 @@ export class AuthService {
   // --- RIDER AUTHENTICATION ---
 
   async findOrCreateRiderByPhone(phoneNumber: string): Promise<{ rider: Rider; isNew: boolean }> {
-    let rider = await this.ridersService.findByPhone(phoneNumber);
+    const normalized = this.normalizePhone(phoneNumber);
+    let rider = await this.ridersService.findByPhone(normalized);
     let isNew = false;
     if (!rider) {
       rider = await this.ridersService.create({
-        phoneNumber,
+        phoneNumber: normalized,
         name: 'New Rider',
-        firebaseUid: `rider_${Date.now()}`, // Placeholder since we don't have proper firebase rider setup yet
+        firebaseUid: `rider_${Date.now()}`,
         email: `rider_${Date.now()}@baldia.mart`
       });
       isNew = true;
@@ -124,7 +143,9 @@ export class AuthService {
         phoneNumber: rider.phoneNumber,
         name: rider.name,
         role: 'rider',
-        isProfileComplete: rider.isProfileComplete
+        isProfileComplete: rider.isProfileComplete,
+        isActive: rider.isActive,
+        hasMpin: !!rider.mpin,
       }
     };
   }
@@ -141,12 +162,13 @@ export class AuthService {
   }
 
   async loginWithMpin(phoneNumber: string, mpin: string, role: 'customer' | 'rider') {
+    const normalized = this.normalizePhone(phoneNumber);
     let userOrRider: User | Rider | null = null;
     
     if (role === 'customer') {
-      userOrRider = await this.usersService.findByPhoneNumber(phoneNumber);
+      userOrRider = await this.usersService.findByPhoneNumber(normalized);
     } else {
-      userOrRider = await this.ridersService.findByPhone(phoneNumber);
+      userOrRider = await this.ridersService.findByPhone(normalized);
     }
 
     if (!userOrRider) throw new UnauthorizedException('User not found');
@@ -186,11 +208,12 @@ export class AuthService {
   }
 
   async checkStatus(phoneNumber: string, role: string) {
+    const normalized = this.normalizePhone(phoneNumber);
     let userOrRider: any;
     if (role === 'rider') {
-      userOrRider = await this.ridersService.findByPhone(phoneNumber);
+      userOrRider = await this.ridersService.findByPhone(normalized);
     } else {
-      userOrRider = await this.usersService.findByPhoneNumber(phoneNumber);
+      userOrRider = await this.usersService.findByPhoneNumber(normalized);
     }
     return {
       exists: !!userOrRider,
@@ -200,17 +223,18 @@ export class AuthService {
 
   async registerWithMpin(phoneNumber: string, mpin: string, role: 'customer' | 'rider') {
     const hashedMpin = await bcrypt.hash(mpin, 10);
+    const normalized = this.normalizePhone(phoneNumber);
     let userOrRider: User | Rider | null = null;
     let isNew = false;
 
     if (role === 'customer') {
-      userOrRider = await this.usersService.findByPhoneNumber(phoneNumber);
+      userOrRider = await this.usersService.findByPhoneNumber(normalized);
       if (userOrRider && userOrRider.mpin) {
         throw new UnauthorizedException('Customer already has an MPIN. Please use it to log in.');
       }
       if (!userOrRider) {
         userOrRider = await this.usersService.create({
-          phoneNumber,
+          phoneNumber: normalized,
           name: 'New Customer',
           isPhoneVerified: false,
           mpin: hashedMpin
@@ -220,13 +244,13 @@ export class AuthService {
         await this.usersService.update(userOrRider.id, { mpin: hashedMpin });
       }
     } else {
-      userOrRider = await this.ridersService.findByPhone(phoneNumber);
+      userOrRider = await this.ridersService.findByPhone(normalized);
       if (userOrRider && userOrRider.mpin) {
         throw new UnauthorizedException('Rider already has an MPIN. Please use it to log in.');
       }
       if (!userOrRider) {
         userOrRider = await this.ridersService.create({
-          phoneNumber,
+          phoneNumber: normalized,
           name: 'New Rider',
           firebaseUid: `rider_${Date.now()}`,
           email: `rider_${Date.now()}@baldia.mart`,

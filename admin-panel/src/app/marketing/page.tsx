@@ -14,14 +14,14 @@ export default function MarketingPage() {
     if (!title || !message) return;
     try {
       setSaving(true);
-      const res = await fetchWithAuth('http://localhost:3000/api/v1/notifications/broadcast', {
+      const res = await fetchWithAuth('http://192.168.100.142:3000/api/v1/notifications/broadcast', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title, message }),
       });
-      
+
       if (!res.ok) throw new Error('Broadcast failed');
-      
+
       setStatus('Success! Notification sent to all customers.');
       setTitle('');
       setMessage('');
@@ -56,7 +56,7 @@ export default function MarketingPage() {
                 Global Notification Composer
               </h2>
             </div>
-            
+
             <div className="p-8 space-y-6">
               {status && (
                 <div className={`p-4 rounded-2xl flex items-center space-x-3 font-bold text-sm ${status.includes('Error') ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-green-50 text-green-600 border border-green-100'}`}>
@@ -86,7 +86,7 @@ export default function MarketingPage() {
                     placeholder="Componse your message here for all customers..."
                   />
                 </div>
-                <button 
+                <button
                   onClick={handleBroadcast}
                   disabled={saving || !title || !message}
                   className="w-full py-5 bg-gradient-to-r from-primary to-orange-600 text-white rounded-[2rem] font-black text-xl hover:shadow-2xl hover:shadow-orange-500/30 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center space-x-3"
@@ -119,10 +119,10 @@ export default function MarketingPage() {
             <History className="text-gray-400 mb-4" size={32} />
             <h3 className="text-lg font-black text-gray-900 mb-2 underline decoration-gray-100 underline-offset-4">Recent Activity</h3>
             <div className="space-y-3 mt-4 text-xs font-bold text-gray-400">
-               <div className="flex justify-between items-center py-2 border-b border-gray-50 italic">
-                  <span>No recent broadcasts</span>
-                  <span>--:--</span>
-               </div>
+              <div className="flex justify-between items-center py-2 border-b border-gray-50 italic">
+                <span>No recent broadcasts</span>
+                <span>--:--</span>
+              </div>
             </div>
           </div>
         </div>

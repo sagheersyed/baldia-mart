@@ -19,7 +19,7 @@ docker-compose up -d
 This will run:
 - **PostgreSQL Database** on `localhost:5432` (auto-seeded with `schema.sql`)
 - **Redis Cache** on `localhost:6379`
-- **NestJS Backend** on `localhost:3000`
+- **NestJS Backend** on `192.168.100.142:3000`
 - **Next.js Admin Dashboard** on `localhost:3001`
 
 ## 2. Running the Mobile Applications

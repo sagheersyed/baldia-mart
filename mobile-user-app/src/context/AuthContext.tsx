@@ -30,14 +30,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const token = await AsyncStorage.getItem('userToken');
       const savedUser = await AsyncStorage.getItem('userData');
-      
+
       if (token) {
         setAuthToken(token);
         setUserToken(token);
         if (savedUser) {
           setUserData(JSON.parse(savedUser));
         }
-        
+
         // Background verify
         try {
           const res = await authApi.getMe();
@@ -63,7 +63,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setAuthToken(token);
       setUserToken(token);
       await AsyncStorage.setItem('userToken', token);
-      
+
       if (user) {
         setUserData(user);
         await AsyncStorage.setItem('userData', JSON.stringify(user));

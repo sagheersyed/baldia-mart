@@ -1,5 +1,5 @@
 config:
-  target: "http://localhost:3000/api/v1"
+  target: "http://192.168.100.142:3000/api/v1"
   phases:
     - duration: 60
       arrivalRate: 5

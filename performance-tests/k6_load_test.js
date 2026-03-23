@@ -18,7 +18,7 @@ export const options = {
   },
 };
 
-const BASE_URL = __ENV.API_URL || 'http://localhost:3000/api/v1';
+const BASE_URL = __ENV.API_URL || 'http://192.168.100.142:3000/api/v1';
 
 // Mock data
 const PHONE_NUMBERS = ['+923452621787', '+923118438350', '+923412248616'];

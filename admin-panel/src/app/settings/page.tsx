@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Save, RefreshCw, Truck, ArrowRight, Ruler, Phone, Mail, MapPin, Building2, Shield, ToggleLeft, ToggleRight } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api';
 
-const SETTINGS_API_URL = 'http://localhost:3000/api/v1/settings';
+const SETTINGS_API_URL = 'http://192.168.100.142:3000/api/v1/settings';
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<any>({});
@@ -41,9 +41,9 @@ export default function SettingsPage() {
         },
         body: JSON.stringify({ value }),
       });
-      
+
       if (!res.ok) throw new Error('Update failed');
-      
+
       setMessage(`${key} updated successfully!`);
       setTimeout(() => setMessage(''), 3000);
       fetchSettings();
@@ -88,7 +88,7 @@ export default function SettingsPage() {
             <Truck className="text-blue-600" size={24} />
             <h2 className="text-xl font-semibold text-gray-800">Delivery Fee Structure</h2>
           </div>
-          
+
           <div className="p-6 space-y-8">
             <p className="text-sm text-gray-500 bg-blue-50 p-4 rounded-xl">
               <strong>Dynamic Formula:</strong> Delivery Fee = Base Fee + ( (Distance - Threshold) × Per KM Fee )
@@ -111,7 +111,7 @@ export default function SettingsPage() {
                       placeholder="150"
                     />
                   </div>
-                  <button 
+                  <button
                     onClick={() => handleUpdate('delivery_base_fee', settings.delivery_base_fee)}
                     disabled={saving}
                     className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition disabled:opacity-50"
@@ -127,7 +127,7 @@ export default function SettingsPage() {
                 <label className="text-sm font-medium text-gray-700">Base Distance Threshold (KM)</label>
                 <div className="flex space-x-2">
                   <div className="relative flex-1">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><Ruler size={16}/></span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><Ruler size={16} /></span>
                     <input
                       type="number"
                       value={settings.delivery_threshold_km || ''}
@@ -136,7 +136,7 @@ export default function SettingsPage() {
                       placeholder="3"
                     />
                   </div>
-                  <button 
+                  <button
                     onClick={() => handleUpdate('delivery_threshold_km', settings.delivery_threshold_km)}
                     disabled={saving}
                     className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition disabled:opacity-50"
@@ -161,7 +161,7 @@ export default function SettingsPage() {
                       placeholder="20"
                     />
                   </div>
-                  <button 
+                  <button
                     onClick={() => handleUpdate('delivery_per_km_fee', settings.delivery_per_km_fee)}
                     disabled={saving}
                     className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition disabled:opacity-50"
@@ -181,7 +181,7 @@ export default function SettingsPage() {
             <Building2 className="text-primary" size={24} />
             <h2 className="text-xl font-semibold text-gray-800">Store Profile & Location</h2>
           </div>
-          
+
           <div className="p-6 space-y-8">
             <p className="text-sm text-gray-500 bg-orange-50 p-4 rounded-xl border border-orange-100">
               <strong>Public Info:</strong> This contact information and default location is used across the user and rider apps.
@@ -193,7 +193,7 @@ export default function SettingsPage() {
                 <label className="text-sm font-medium text-gray-700">Support Phone Number</label>
                 <div className="flex space-x-2">
                   <div className="relative flex-1">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><Phone size={16}/></span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><Phone size={16} /></span>
                     <input
                       type="text"
                       value={settings.contact_phone || ''}
@@ -202,7 +202,7 @@ export default function SettingsPage() {
                       placeholder="+92 300 0000000"
                     />
                   </div>
-                  <button 
+                  <button
                     onClick={() => handleUpdate('contact_phone', settings.contact_phone)}
                     disabled={saving}
                     className="p-3 bg-primary text-white rounded-xl hover:bg-orange-600 transition disabled:opacity-50"
@@ -217,7 +217,7 @@ export default function SettingsPage() {
                 <label className="text-sm font-medium text-gray-700">Support Email</label>
                 <div className="flex space-x-2">
                   <div className="relative flex-1">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><Mail size={16}/></span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><Mail size={16} /></span>
                     <input
                       type="email"
                       value={settings.contact_email || ''}
@@ -226,7 +226,7 @@ export default function SettingsPage() {
                       placeholder="support@baldiamart.com"
                     />
                   </div>
-                  <button 
+                  <button
                     onClick={() => handleUpdate('contact_email', settings.contact_email)}
                     disabled={saving}
                     className="p-3 bg-primary text-white rounded-xl hover:bg-orange-600 transition disabled:opacity-50"
@@ -241,7 +241,7 @@ export default function SettingsPage() {
                 <label className="text-sm font-medium text-gray-700">Primary Mart Location(s)</label>
                 <div className="flex space-x-2">
                   <div className="relative flex-1">
-                    <span className="absolute left-3 top-3 text-gray-400"><MapPin size={16}/></span>
+                    <span className="absolute left-3 top-3 text-gray-400"><MapPin size={16} /></span>
                     <textarea
                       value={settings.mart_location || ''}
                       onChange={(e) => handleSettingChange('mart_location', e.target.value)}
@@ -250,7 +250,7 @@ export default function SettingsPage() {
                     />
                   </div>
                   <div className="flex flex-col justify-end pb-1">
-                    <button 
+                    <button
                       onClick={() => handleUpdate('mart_location', settings.mart_location)}
                       disabled={saving}
                       className="p-3 bg-primary text-white rounded-xl hover:bg-orange-600 transition disabled:opacity-50 h-[46px]"
@@ -273,7 +273,7 @@ export default function SettingsPage() {
           <Shield className="text-purple-600" size={24} />
           <h2 className="text-xl font-semibold text-gray-800">Authentication Configuration</h2>
         </div>
-        
+
         <div className="p-6 space-y-8">
           <p className="text-sm text-gray-500 bg-purple-50 p-4 rounded-xl border border-purple-100">
             <strong>Security & Cost:</strong> Toggle login methods for Customers and Riders. Disabling expensive methods like OTP or Google Auth can reduce costs. MPIN is highly recommended as the primary login.
@@ -283,7 +283,7 @@ export default function SettingsPage() {
             {/* Customer Settings */}
             <div className="space-y-6">
               <h3 className="font-semibold text-gray-700 border-b pb-2">Customer App</h3>
-              
+
               {['auth_customer_mpin_enabled', 'auth_customer_otp_enabled', 'auth_customer_google_enabled'].map(key => {
                 const label = key.includes('mpin') ? 'MPIN Login' : key.includes('otp') ? 'OTP Login' : 'Google Auth';
                 const isEnabled = settings[key] === 'true' || settings[key] === true;
@@ -307,7 +307,7 @@ export default function SettingsPage() {
             {/* Rider Settings */}
             <div className="space-y-6">
               <h3 className="font-semibold text-gray-700 border-b pb-2">Rider App</h3>
-              
+
               {['auth_rider_mpin_enabled', 'auth_rider_otp_enabled'].map(key => {
                 const label = key.includes('mpin') ? 'MPIN Login' : 'OTP Login';
                 const isEnabled = settings[key] === 'true' || settings[key] === true;
@@ -327,6 +327,42 @@ export default function SettingsPage() {
                 );
               })}
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Feature Configuration */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-8">
+        <div className="bg-gray-50 p-6 border-b border-gray-100 flex items-center space-x-3">
+          <Save className="text-blue-600" size={24} />
+          <h2 className="text-xl font-semibold text-gray-800">Feature Visibility</h2>
+        </div>
+
+        <div className="p-6 space-y-8">
+          <p className="text-sm text-gray-500 bg-blue-50 p-4 rounded-xl border border-blue-100">
+            <strong>App Modules:</strong> Enable or disable major sections of the mobile apps in real-time.
+          </p>
+
+          <div className="grid md:grid-cols-2 gap-8">
+            {['feature_show_restaurants', 'feature_show_brands'].map(key => {
+              const label = key.includes('restaurants') ? 'Restaurant Section' : 'Brand Carousel';
+              const isEnabled = settings[key] === 'true' || settings[key] === true;
+              return (
+                <div key={key} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                  <div>
+                    <p className="font-semibold text-gray-800">{label}</p>
+                    <p className="text-xs text-gray-500">{isEnabled ? 'Visible in Mobile Apps' : 'Hidden from Users'}</p>
+                  </div>
+                  <button
+                    disabled={saving}
+                    onClick={() => handleUpdate(key, isEnabled ? 'false' : 'true')}
+                    className={`transition ${isEnabled ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'} disabled:opacity-50`}
+                  >
+                    {isEnabled ? <ToggleRight size={44} /> : <ToggleLeft size={44} />}
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

@@ -5,8 +5,11 @@ import { useCart } from '../context/CartContext';
 import { ordersApi, addressesApi } from '../api/api';
 import AddressPickerModal from '../components/AddressPickerModal';
 
-export default function CheckoutScreen({ navigation }: any) {
-  const { cart, getCartTotal, clearCart } = useCart();
+export default function CheckoutScreen({ navigation, route }: any) {
+  const mode = route.params?.mode || 'mart';
+  const { martCart, foodCart, getCartTotal, clearCart } = useCart();
+  const cart = mode === 'mart' ? martCart : foodCart;
+  
   const [selectedPayment, setSelectedPayment] = useState('cod');
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [addresses, setAddresses] = useState<any[]>([]);
@@ -31,7 +34,6 @@ export default function CheckoutScreen({ navigation }: any) {
       const res = await addressesApi.getAll();
       setAddresses(res.data);
       if (res.data.length > 0) {
-        // If we have a selected address, try to keep it, otherwise pick default
         const currentId = selectedAddress?.id;
         const found = res.data.find((a: any) => a.id === currentId) || res.data.find((a: any) => a.isDefault) || res.data[0];
         setSelectedAddress(found);
@@ -45,14 +47,15 @@ export default function CheckoutScreen({ navigation }: any) {
 
   useEffect(() => {
     if (selectedAddress?.id) {
-      fetchDeliveryFee(selectedAddress.id);
+      const restaurantId = mode === 'food' ? cart[0]?.restaurantId : undefined;
+      fetchDeliveryFee(selectedAddress.id, restaurantId);
     }
-  }, [selectedAddress]);
+  }, [selectedAddress, cart, mode]);
 
-  const fetchDeliveryFee = async (addressId: string) => {
+  const fetchDeliveryFee = async (addressId: string, restaurantId?: string) => {
     setIsLoadingFee(true);
     try {
-      const res = await ordersApi.getDeliveryFee(addressId);
+      const res = await ordersApi.getDeliveryFee(addressId, restaurantId);
       if (res.data.isValid === true) {
         setDeliveryFee(res.data.deliveryFee);
         setIsAddressValid(true);
@@ -64,7 +67,7 @@ export default function CheckoutScreen({ navigation }: any) {
     } catch (error) {
       console.error('Failed to fetch delivery fee:', error);
       setDeliveryFee(0);
-      setIsAddressValid(true); // Don't block on network error
+      setIsAddressValid(true);
     } finally {
       setIsLoadingFee(false);
     }
@@ -87,8 +90,6 @@ export default function CheckoutScreen({ navigation }: any) {
   const handleOpenEdit = (addr?: any) => {
     setEditingAddressData(addr || null);
     setShowAddressListModal(false);
-
-    // Give time for list modal to close before opening picker
     setTimeout(() => {
       setShowAddressPickerModal(true);
     }, 300);
@@ -99,8 +100,16 @@ export default function CheckoutScreen({ navigation }: any) {
     setShowAddressListModal(false);
   };
 
-  const subtotal = getCartTotal();
-  const total = subtotal + deliveryFee;
+  const subtotal = getCartTotal(mode);
+  
+  // Calculate multi-stop surcharge for food orders
+  const uniqueRestaurants = mode === 'food' 
+    ? [...new Set(cart.map((item: any) => item.restaurantId).filter(Boolean))] 
+    : [];
+  const multiStopCount = uniqueRestaurants.length > 1 ? uniqueRestaurants.length - 1 : 0;
+  const multiStopSurcharge = multiStopCount * 50;
+  
+  const total = subtotal + deliveryFee + multiStopSurcharge;
 
   const handlePlaceOrder = async () => {
     if (cart.length === 0) {
@@ -120,12 +129,16 @@ export default function CheckoutScreen({ navigation }: any) {
 
     setIsPlacingOrder(true);
     try {
+      const restaurantId = mode === 'food' ? cart[0]?.restaurantId : undefined;
+      
       const orderData = {
         addressId: selectedAddress.id,
         paymentMethod: selectedPayment,
-        notes: '', // Optional notes field
+        orderType: mode, // Identifies if it's a Mart or Food order
+        restaurantId,
+        notes: '',
         items: cart.map(item => ({
-          productId: item.id,
+          [mode === 'food' ? 'menuItemId' : 'productId']: item.id,
           quantity: item.quantity
         }))
       };
@@ -133,7 +146,7 @@ export default function CheckoutScreen({ navigation }: any) {
       const res = await ordersApi.checkout(orderData);
 
       if (res.data && res.data.id) {
-        clearCart();
+        clearCart(mode);
         navigation.replace('OrderTracking', { orderId: res.data.id });
       }
     } catch (error: any) {
@@ -220,6 +233,12 @@ export default function CheckoutScreen({ navigation }: any) {
               <Text style={styles.summaryVal}>Rs. {(Number(deliveryFee) || 0).toFixed(0)}</Text>
             )}
           </View>
+          {multiStopSurcharge > 0 && (
+            <View style={styles.summaryRow}>
+              <Text style={[styles.summaryLabel, { color: '#FF4500' }]}>Batch Routing ({multiStopCount} extra stop{multiStopCount > 1 ? 's' : ''})</Text>
+              <Text style={[styles.summaryVal, { color: '#FF4500' }]}>Rs. {multiStopSurcharge}</Text>
+            </View>
+          )}
           <View style={[styles.summaryRow, styles.totalPadding]}>
             <Text style={styles.totalLabel}>Grand Total</Text>
             <Text style={styles.totalVal}>Rs. {(Number(total) || 0).toFixed(0)}</Text>

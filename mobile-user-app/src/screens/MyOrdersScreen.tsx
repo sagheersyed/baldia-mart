@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  SafeAreaView, ActivityIndicator, RefreshControl, Alert
+  ActivityIndicator, RefreshControl, Alert
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { ordersApi, authApi } from '../api/api';
 import io from 'socket.io-client';
 
@@ -10,12 +11,12 @@ const BASE_IP = '192.168.100.142';
 const SOCKET_URL = `http://${BASE_IP}:3000`;
 
 const STATUS_CONFIG: Record<string, { color: string; bg: string; label: string; icon: string }> = {
-  pending:          { color: '#F59E0B', bg: '#FFFBEB', label: 'Pending',          icon: '⏳' },
-  confirmed:        { color: '#3B82F6', bg: '#EFF6FF', label: 'Confirmed',        icon: '✅' },
-  preparing:        { color: '#8B5CF6', bg: '#F5F3FF', label: 'Preparing',        icon: '👨‍🍳' },
+  pending: { color: '#F59E0B', bg: '#FFFBEB', label: 'Pending', icon: '⏳' },
+  confirmed: { color: '#3B82F6', bg: '#EFF6FF', label: 'Confirmed', icon: '✅' },
+  preparing: { color: '#8B5CF6', bg: '#F5F3FF', label: 'Preparing', icon: '👨‍🍳' },
   out_for_delivery: { color: '#06B6D4', bg: '#ECFEFF', label: 'Out for Delivery', icon: '🚴' },
-  delivered:        { color: '#10B981', bg: '#ECFDF5', label: 'Delivered',        icon: '📦' },
-  cancelled:        { color: '#EF4444', bg: '#FEF2F2', label: 'Cancelled',        icon: '❌' },
+  delivered: { color: '#10B981', bg: '#ECFDF5', label: 'Delivered', icon: '📦' },
+  cancelled: { color: '#EF4444', bg: '#FEF2F2', label: 'Cancelled', icon: '❌' },
 };
 
 function formatDate(dateStr: string) {
@@ -43,6 +44,13 @@ function OrderCard({ order, onTrack, onCancel }: any) {
           <Text style={[styles.statusText, { color: cfg.color }]}>{cfg.icon} {cfg.label}</Text>
         </View>
       </View>
+      <View style={styles.orderTypeRow}>
+        <View style={[styles.typeBadge, { backgroundColor: order.orderType === 'food' ? '#FFF5F0' : '#F0FFF4' }]}>
+          <Text style={[styles.typeText, { color: order.orderType === 'food' ? '#FF4500' : '#2F855A' }]}>
+            {order.orderType === 'food' ? '🍔 Food Order' : '🛒 Mart Order'}
+          </Text>
+        </View>
+      </View>
       <View style={styles.orderDivider} />
       <View style={styles.orderBody}>
         <Text style={styles.orderItems} numberOfLines={1}>
@@ -63,7 +71,7 @@ function OrderCard({ order, onTrack, onCancel }: any) {
           <Text style={styles.trackBtnText}>Track Order</Text>
         </TouchableOpacity>
         {canCancel && (
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.cancelBtn}
             onPress={() => onCancel(order.id)}
           >
@@ -79,6 +87,9 @@ export default function MyOrdersScreen({ navigation }: any) {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [activeFilter, setActiveFilter] = useState('All');
+
+  const filters = ['All', 'Pending', 'Confirmed', 'Preparing', 'Out for Delivery', 'Delivered', 'Cancelled'];
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -145,8 +156,8 @@ export default function MyOrdersScreen({ navigation }: any) {
       'Are you sure you want to cancel this order?',
       [
         { text: 'No', style: 'cancel' },
-        { 
-          text: 'Yes, Cancel', 
+        {
+          text: 'Yes, Cancel',
           style: 'destructive',
           onPress: async () => {
             try {
@@ -174,6 +185,13 @@ export default function MyOrdersScreen({ navigation }: any) {
     );
   }
 
+  const filteredOrders = activeFilter === 'All'
+    ? orders
+    : orders.filter(o => {
+      const mappedStatus = activeFilter.toLowerCase().replace(/ /g, '_');
+      return o.status === mappedStatus;
+    });
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -183,27 +201,49 @@ export default function MyOrdersScreen({ navigation }: any) {
         <Text style={styles.title}>My Orders</Text>
         <View style={{ width: 40 }} />
       </View>
-      {orders.length === 0 ? (
+
+      <View style={styles.filterWrap}>
+        <FlatList
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          data={filters}
+          keyExtractor={(item) => item}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12, gap: 10 }}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={[styles.filterChip, activeFilter === item && styles.filterChipActive]}
+              onPress={() => setActiveFilter(item)}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.filterTxt, activeFilter === item && styles.filterTxtActive]}>
+                {item}
+              </Text>
+            </TouchableOpacity>
+          )}
+        />
+      </View>
+
+      {filteredOrders.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyIcon}>📦</Text>
-          <Text style={styles.emptyTitle}>No orders yet</Text>
-          <Text style={styles.emptySubtitle}>When you place an order, it will appear here.</Text>
+          <Text style={styles.emptyTitle}>No orders found</Text>
+          <Text style={styles.emptySubtitle}>Try changing your filter or place a new order.</Text>
           <TouchableOpacity style={styles.shopBtn} onPress={() => navigation.navigate('Main')}>
             <Text style={styles.shopBtnText}>Start Shopping</Text>
           </TouchableOpacity>
         </View>
       ) : (
         <FlatList
-          data={orders}
+          data={filteredOrders}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ padding: 16 }}
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FF4500" />}
           renderItem={({ item }) => (
-            <OrderCard 
-              order={item} 
-              onTrack={handleTrack} 
-              onCancel={handleCancel} 
+            <OrderCard
+              order={item}
+              onTrack={handleTrack}
+              onCancel={handleCancel}
             />
           )}
           ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
@@ -214,7 +254,7 @@ export default function MyOrdersScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F6FA' },
+  container: { flex: 1, backgroundColor: '#F5F6FA', paddingBottom: 35 },
   loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -225,6 +265,13 @@ const styles = StyleSheet.create({
   backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 20, backgroundColor: '#F5F5F5' },
   backIcon: { fontSize: 20, color: '#333' },
   title: { fontSize: 18, fontWeight: '700', color: '#1A1A1A' },
+
+  filterWrap: { backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
+  filterChip: { paddingHorizontal: 18, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F5F5F5', borderWidth: 1, borderColor: '#E5E5E5' },
+  filterChipActive: { backgroundColor: '#FF4500', borderColor: '#FF4500' },
+  filterTxt: { fontSize: 13, fontWeight: '700', color: '#555' },
+  filterTxtActive: { color: '#fff' },
+
   orderCard: {
     backgroundColor: '#fff', borderRadius: 16, padding: 16,
     elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4,
@@ -243,7 +290,10 @@ const styles = StyleSheet.create({
   orderBody: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   orderItems: { flex: 1, fontSize: 14, color: '#555', marginRight: 8 },
   orderTotal: { fontSize: 16, fontWeight: '800', color: '#FF4500' },
-  orderAddress: { fontSize: 12, color: '#999', marginTop: 6 },
+  orderTypeRow: { marginTop: 8, flexDirection: 'row' },
+  typeBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  typeText: { fontSize: 11, fontWeight: 'bold', textTransform: 'uppercase' },
+  orderAddress: { fontSize: 12, color: '#999', marginTop: 10 },
   orderActions: { flexDirection: 'row', gap: 10, marginTop: 14 },
   trackBtn: {
     flex: 1, backgroundColor: '#FF4500', paddingVertical: 10,

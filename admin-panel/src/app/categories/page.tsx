@@ -10,6 +10,7 @@ interface Category {
   description: string;
   imageUrl: string;
   isActive: boolean;
+  section: string;
 }
 
 const API_URL = `${BASE_URL}/categories`;
@@ -18,7 +19,7 @@ export default function CategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [formData, setFormData] = useState({ name: '', description: '', imageUrl: '' });
+  const [formData, setFormData] = useState({ name: '', description: '', imageUrl: '', section: 'mart' });
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -55,7 +56,7 @@ export default function CategoriesPage() {
       if (res.ok) {
         setShowModal(false);
         setEditingCategory(null);
-        setFormData({ name: '', description: '', imageUrl: '' });
+        setFormData({ name: '', description: '', imageUrl: '', section: 'mart' });
         fetchCategories();
       }
     } catch (error) {
@@ -70,7 +71,8 @@ export default function CategoriesPage() {
     setFormData({
       name: category.name,
       description: category.description || '',
-      imageUrl: category.imageUrl || ''
+      imageUrl: category.imageUrl || '',
+      section: category.section || 'mart'
     });
     setShowModal(true);
   };
@@ -102,7 +104,7 @@ export default function CategoriesPage() {
           <button 
             onClick={() => {
               setEditingCategory(null);
-              setFormData({ name: '', description: '', imageUrl: '' });
+              setFormData({ name: '', description: '', imageUrl: '', section: 'mart' });
               setShowModal(true);
             }}
             className="flex items-center space-x-2 bg-gradient-to-br from-primary to-orange-600 text-white px-6 py-3 rounded-2xl font-bold hover:shadow-lg hover:shadow-orange-500/30 transition-all active:scale-95 shadow-md shadow-orange-500/10"
@@ -155,6 +157,9 @@ export default function CategoriesPage() {
                  <div className="mt-4 flex items-center justify-between">
                     <span className={`text-xs font-bold px-3 py-1 rounded-full border border-green-100 uppercase tracking-wider ${cat.isActive ? 'bg-green-50 text-green-600' : 'bg-gray-50 text-gray-400 border-gray-100'}`}>
                       {cat.isActive ? 'Active' : 'Archived'}
+                    </span>
+                    <span className="text-[10px] font-black px-2 py-0.5 bg-gray-100 text-gray-500 rounded-md uppercase tracking-tighter">
+                      {cat.section || 'mart'}
                     </span>
                     <div className="h-1 w-12 bg-gray-100 rounded-full overflow-hidden">
                       <div className={`h-full bg-primary ${cat.isActive ? 'w-full' : 'w-0'}`}></div>
@@ -224,6 +229,19 @@ export default function CategoriesPage() {
                     value={formData.imageUrl}
                     onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
                   />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2 px-1">App Section</label>
+                  <select
+                    className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-bold"
+                    value={formData.section}
+                    onChange={(e) => setFormData({ ...formData, section: e.target.value })}
+                  >
+                    <option value="mart">🛒 Quick Mart (Grocery)</option>
+                    <option value="restaurant">🍕 Restaurant (Food)</option>
+                  </select>
+                  <p className="text-[10px] text-gray-400 mt-2 px-1">Determines where this category appears in the User app.</p>
                 </div>
 
                 <div className="pt-2">

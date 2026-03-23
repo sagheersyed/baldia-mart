@@ -16,6 +16,11 @@ export class ProductsController {
     return this.productsService.findByCategory(categoryId);
   }
 
+  @Get('brand/:brandId')
+  async getByBrand(@Param('brandId') brandId: string) {
+    return this.productsService.findByBrand(brandId);
+  }
+
   @Get(':id')
   async getById(@Param('id') id: string) {
     return this.productsService.findById(id);
