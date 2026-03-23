@@ -5,6 +5,7 @@ import { Rider } from '../riders/rider.entity';
 import { OrderItem } from './order-item.entity';
 import { Restaurant } from '../restaurants/restaurant.entity';
 import { SubOrder } from './sub-order.entity';
+import { Brand } from '../brands/brand.entity';
 
 @Entity('orders')
 export class Order {
@@ -38,9 +39,16 @@ export class Order {
   @Column({ name: 'restaurant_id', nullable: true })
   restaurantId: string;
 
+  @Column({ name: 'brand_id', nullable: true })
+  brandId: string;
+
   @ManyToOne(() => Restaurant)
   @JoinColumn({ name: 'restaurant_id' })
   restaurant: Restaurant;
+
+  @ManyToOne(() => Brand)
+  @JoinColumn({ name: 'brand_id' })
+  brand: Brand;
 
   @Column({ default: 'pending' })
   status: string; // pending, confirmed, out_for_delivery, delivered, cancelled
@@ -80,6 +88,9 @@ export class Order {
 
   @Column({ name: 'is_rated', default: false })
   isRated: boolean;
+
+  @Column({ name: 'is_business_rated', default: false })
+  isBusinessRated: boolean;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

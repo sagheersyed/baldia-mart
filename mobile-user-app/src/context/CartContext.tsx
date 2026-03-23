@@ -27,6 +27,8 @@ interface CartContext {
   currentCount: number;
   activeMode: 'mart' | 'food';
   setActiveMode: (mode: 'mart' | 'food') => void;
+  activeOrdersCount: number;
+  setActiveOrdersCount: (count: number) => void;
 }
 
 const CartContext = createContext<CartContext | undefined>(undefined);
@@ -35,6 +37,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   const [martCart, setMartCart] = useState<CartItem[]>([]);
   const [foodCart, setFoodCart] = useState<CartItem[]>([]);
   const [activeMode, setActiveMode] = useState<'mart' | 'food'>('mart');
+  const [activeOrdersCount, setActiveOrdersCount] = useState(0);
 
   const currentCart = activeMode === 'mart' ? martCart : foodCart;
 
@@ -116,7 +119,8 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     <CartContext.Provider value={{ 
       martCart, foodCart, currentCart, addToCart, removeFromCart, updateQuantity, clearCart, 
       getCartTotal, getCartCount, currentTotal, currentCount,
-      activeMode, setActiveMode
+      activeMode, setActiveMode,
+      activeOrdersCount, setActiveOrdersCount
     }}>
       {children}
     </CartContext.Provider>

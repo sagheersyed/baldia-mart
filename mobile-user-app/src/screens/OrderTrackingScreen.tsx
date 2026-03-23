@@ -26,8 +26,13 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
   const [localItems, setLocalItems] = useState<any[]>([]);
   const [timeline, setTimeline] = useState<any[]>([]);
   const [showRating, setShowRating] = useState(false);
+  const [ratingStep, setRatingStep] = useState(1); // 1: Rider, 2+: Business Reviews
+  const [businessesToRate, setBusinessesToRate] = useState<any[]>([]);
+  const [currentBusinessIndex, setCurrentBusinessIndex] = useState(0);
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState('');
+  const [businessRating, setBusinessRating] = useState(5);
+  const [businessComment, setBusinessComment] = useState('');
   const [submittingReview, setSubmittingReview] = useState(false);
 
   // Add Products Feature state
@@ -52,10 +57,38 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
 
       await fetchProductsList(orderRes.data);
 
-      if (orderRes.data.status === 'delivered' && !orderRes.data.isRated) {
+      if (orderRes.data.status === 'delivered') {
         const dismissed = await AsyncStorage.getItem(`ratingDismissed_${orderId}`);
         if (!dismissed) {
-          setShowRating(true);
+          const toRate: any[] = [];
+          if (orderRes.data.orderType === 'food' && orderRes.data.subOrders?.length > 0) {
+            orderRes.data.subOrders.forEach((so: any) => {
+              toRate.push({
+                id: so.restaurantId,
+                name: so.restaurant?.name || 'Restaurant',
+                type: 'restaurant',
+                subOrderId: so.id
+              });
+            });
+          } else if (orderRes.data.restaurantId) {
+            toRate.push({ 
+              id: orderRes.data.restaurantId, 
+              name: orderRes.data.restaurant?.name || 'Restaurant',
+              type: 'restaurant' 
+            });
+          } else if (orderRes.data.brandId) {
+            toRate.push({ 
+              id: orderRes.data.brandId, 
+              name: orderRes.data.brand?.name || 'Brand',
+              type: 'brand' 
+            });
+          }
+          setBusinessesToRate(toRate);
+          
+          // Only show if not fully rated
+          if (!orderRes.data.isRated || !orderRes.data.isBusinessRated) {
+            setShowRating(true);
+          }
         }
       }
     } catch (e) {
@@ -244,19 +277,55 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
   };
 
   const handleSubmitReview = async () => {
-    if (!rider) return;
     setSubmittingReview(true);
     try {
-      const { ridersApi } = require('../api/api');
-      await ridersApi.postReview(rider.id, {
-        rating,
-        comment,
-        orderId
-      });
-      // Mark as dismissed locally as well to prevent re-show before server sync if any
-      await AsyncStorage.setItem(`ratingDismissed_${orderId}`, 'true');
-      setShowRating(false);
-      Alert.alert('Thank You!', 'Your feedback helps us improve our service.');
+      const { ridersApi, businessReviewsApi } = require('../api/api');
+      
+      if (ratingStep === 1) {
+        // Submit Rider Review
+        if (rider) {
+          await ridersApi.postReview(rider.id, {
+            rating,
+            comment,
+            orderId
+          });
+        }
+        
+        if (businessesToRate.length > 0) {
+          setRatingStep(2);
+          setCurrentBusinessIndex(0);
+        } else {
+          await AsyncStorage.setItem(`ratingDismissed_${orderId}`, 'true');
+          setShowRating(false);
+          Alert.alert('Thank You!', 'Your feedback helps us improve our service.');
+        }
+      } else {
+        // Submit Business Review (Restaurant or Brand)
+        const currentBiz = businessesToRate[currentBusinessIndex];
+        
+        if (currentBiz) {
+          await businessReviewsApi.create({
+            orderId,
+            subOrderId: currentBiz.subOrderId,
+            businessId: currentBiz.id,
+            businessType: currentBiz.type,
+            rating: businessRating,
+            comment: businessComment
+          });
+        }
+        
+        if (currentBusinessIndex < businessesToRate.length - 1) {
+          // Move to next business
+          setCurrentBusinessIndex(prev => prev + 1);
+          setBusinessRating(5);
+          setBusinessComment('');
+        } else {
+          // Finished all ratings
+          await AsyncStorage.setItem(`ratingDismissed_${orderId}`, 'true');
+          setShowRating(false);
+          Alert.alert('Thank You!', 'Your feedback helps us improve our service.');
+        }
+      }
     } catch (e: any) {
       const msg = e.response?.data?.message || 'Failed to submit review.';
       Alert.alert('Error', msg);
@@ -480,30 +549,60 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
           })}
         </View>
 
-        {/* Rating Modal */}
         <Modal visible={showRating} transparent animationType="slide">
           <View style={styles.modalOverlay}>
             <View style={styles.ratingBox}>
-              <Text style={styles.ratingTitle}>Rate your Rider</Text>
-              <Text style={styles.ratingSubtitle}>How was your delivery experience with {rider?.name}?</Text>
-              
-              <View style={styles.starsRow}>
-                {[1, 2, 3, 4, 5].map(s => (
-                  <TouchableOpacity key={s} onPress={() => setRating(s)}>
-                    <Text style={[styles.star, rating >= s && styles.activeStar]}>★</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              {ratingStep === 1 ? (
+                <>
+                  <Text style={styles.ratingTitle}>Rate your Rider</Text>
+                  <Text style={styles.ratingSubtitle}>How was your delivery experience with {rider?.name || 'your rider'}?</Text>
+                  
+                  <View style={styles.starsRow}>
+                    {[1, 2, 3, 4, 5].map(s => (
+                      <TouchableOpacity key={s} onPress={() => setRating(s)}>
+                        <Text style={[styles.star, rating >= s && styles.activeStar]}>★</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
 
-              <TextInput 
-                style={styles.commentInput}
-                placeholder="Share your feedback..."
-                placeholderTextColor="#999"
-                multiline
-                numberOfLines={3}
-                value={comment}
-                onChangeText={setComment}
-              />
+                  <TextInput 
+                    style={styles.commentInput}
+                    placeholder="Share your delivery experience..."
+                    placeholderTextColor="#999"
+                    multiline
+                    numberOfLines={3}
+                    value={comment}
+                    onChangeText={setComment}
+                  />
+                </>
+              ) : (
+                <>
+                  <Text style={styles.ratingTitle}>
+                    Rate {businessesToRate[currentBusinessIndex]?.name || (order?.orderType === 'food' ? 'Restaurant' : 'Products')}
+                  </Text>
+                  <Text style={styles.ratingSubtitle}>
+                    Step {currentBusinessIndex + 1} of {businessesToRate.length}: How was the quality of your {order?.orderType === 'food' ? 'meal' : 'items'}?
+                  </Text>
+                  
+                  <View style={styles.starsRow}>
+                    {[1, 2, 3, 4, 5].map(s => (
+                      <TouchableOpacity key={s} onPress={() => setBusinessRating(s)}>
+                        <Text style={[styles.star, businessRating >= s && styles.activeStar]}>★</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <TextInput 
+                    style={styles.commentInput}
+                    placeholder={`Tell us about the ${order?.orderType === 'food' ? 'food' : 'products'}...`}
+                    placeholderTextColor="#999"
+                    multiline
+                    numberOfLines={3}
+                    value={businessComment}
+                    onChangeText={setBusinessComment}
+                  />
+                </>
+              )}
 
               <TouchableOpacity 
                 style={[styles.submitRatingBtn, submittingReview && { opacity: 0.7 }]} 
@@ -513,7 +612,11 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
                 {submittingReview ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={styles.submitRatingText}>Submit Review</Text>
+                   <Text style={styles.submitRatingText}>
+                    {ratingStep === 1 
+                      ? (businessesToRate.length > 0 ? 'Next: Rate Business' : 'Finish') 
+                      : (currentBusinessIndex < businessesToRate.length - 1 ? 'Next Business' : 'Submit Feedback')}
+                  </Text>
                 )}
               </TouchableOpacity>
               

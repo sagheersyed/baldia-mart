@@ -35,8 +35,12 @@ const MenuItemCard = memo(({ item, cartQty, onAdd }: any) => {
           <Text style={styles.itemPrice}>Rs {finalPrice}</Text>
           {item.discount > 0 && <Text style={styles.itemOldPrice}>Rs {Number(item.price).toFixed(0)}</Text>}
         </View>
-        <TouchableOpacity style={styles.addCircle} onPress={() => onAdd(item)}>
-          <Text style={styles.addCircleTxt}>+</Text>
+        <TouchableOpacity 
+          style={[styles.addCircle, item.disabled && styles.addCircleDisabled]} 
+          onPress={() => onAdd(item)}
+          disabled={item.disabled}
+        >
+          <Text style={styles.addCircleText}>{item.disabled ? '×' : '+'}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -60,6 +64,30 @@ export default function RestaurantDetailScreen({ route, navigation }: any) {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
+  const isRestaurantOpen = (openTime?: string, closeTime?: string) => {
+    if (!openTime || !closeTime) return true; // Default to open if not set
+    
+    // Parse times (HH:mm)
+    const now = new Date();
+    const [nowH, nowM] = [now.getHours(), now.getMinutes()];
+    const nowMinutes = nowH * 60 + nowM;
+    
+    const [openH, openM] = openTime.split(':').map(Number);
+    const [closeH, closeM] = closeTime.split(':').map(Number);
+    const openMinutes = openH * 60 + openM;
+    const closeMinutes = closeH * 60 + closeM;
+    
+    if (closeMinutes > openMinutes) {
+      // Normal day hours (e.g., 09:00 to 22:00)
+      return nowMinutes >= openMinutes && nowMinutes < closeMinutes;
+    } else {
+      // Overnight hours (e.g., 20:00 to 04:00)
+      return nowMinutes >= openMinutes || nowMinutes < closeMinutes;
+    }
+  };
+
+  const isOpen = isRestaurantOpen(restaurant?.openingTime, restaurant?.closingTime);
+
   const loadData = useCallback(async () => {
     try {
       const [restRes, menuRes] = await Promise.all([
@@ -81,6 +109,7 @@ export default function RestaurantDetailScreen({ route, navigation }: any) {
   const onRefresh = useCallback(() => { setRefreshing(true); loadData(); }, [loadData]);
 
   const handleAddToCart = (item: any) => {
+    if (!isOpen) return;
     addToCart({ 
       ...item, 
       restaurantId: restaurant?.id || restaurantId,
@@ -118,7 +147,7 @@ export default function RestaurantDetailScreen({ route, navigation }: any) {
           {logoUri && <Image source={{ uri: logoUri }} style={styles.headerLogo} resizeMode="contain" />}
           <Text style={styles.headerTitle} numberOfLines={1}>{restaurant?.name}</Text>
         </View>
-        <TouchableOpacity style={styles.cartBtn} onPress={() => navigation.navigate('Cart', { mode: 'food' })}>
+        <TouchableOpacity style={styles.cartBtn} onPress={() => navigation.navigate('Cart')}>
           <Text style={styles.cartIcon}>🛒</Text>
           {cartCount > 0 && (
             <View style={styles.cartBadge}><Text style={styles.cartBadgeTxt}>{cartCount}</Text></View>
@@ -155,6 +184,13 @@ export default function RestaurantDetailScreen({ route, navigation }: any) {
           )}
           {restaurant?.description && (
             <Text style={styles.descTxt}>{restaurant.description}</Text>
+          )}
+
+          {!isOpen && (
+            <View style={styles.closedBanner}>
+              <Text style={styles.closedBannerTxt}>🚫 This restaurant is currently closed</Text>
+              <Text style={styles.closedReopenTxt}>Opening Hours: {restaurant?.openingHours || `${restaurant?.openingTime} - ${restaurant?.closingTime}`}</Text>
+            </View>
           )}
         </View>
 
@@ -203,7 +239,8 @@ export default function RestaurantDetailScreen({ route, navigation }: any) {
                 key={item.id}
                 item={item}
                 cartQty={foodCart.find((c: any) => c.id === item.id)?.quantity || 0}
-                onAdd={handleAddToCart}
+                onAdd={isOpen ? handleAddToCart : () => {}}
+                disabled={!isOpen}
               />
             ))}
           </View>
@@ -269,4 +306,35 @@ const styles = StyleSheet.create({
 
   emptyState: { paddingVertical: 60, alignItems: 'center' },
   emptyTxt: { fontSize: 16, color: '#999', fontWeight: '600' },
+
+  closedBanner: {
+    backgroundColor: '#FFF1F1',
+    padding: 15,
+    borderRadius: 15,
+    marginTop: 15,
+    borderWidth: 1,
+    borderColor: '#FFE0E0',
+    alignItems: 'center',
+  },
+  closedBannerTxt: {
+    color: '#D32F2F',
+    fontWeight: '900',
+    fontSize: 14,
+  },
+  closedReopenTxt: {
+    color: '#666',
+    fontSize: 12,
+    marginTop: 4,
+    fontWeight: '600',
+  },
+  addCircleDisabled: {
+    backgroundColor: '#E2E8F0',
+    opacity: 0.6,
+  },
+  addCircleText: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: '700',
+    lineHeight: 26,
+  },
 });

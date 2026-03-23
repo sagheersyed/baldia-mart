@@ -195,7 +195,7 @@ export default function FoodScreen({ navigation }: any) {
             <Text style={styles.headerTitle}>Food Delivery</Text>
             <Text style={styles.headerSub}>Order from best restaurants</Text>
           </View>
-          <TouchableOpacity style={styles.cartBtn} onPress={() => navigation.navigate('Cart', { mode: 'food' })}>
+          <TouchableOpacity style={styles.cartBtn} onPress={() => navigation.navigate('Cart')}>
             <Text style={styles.cartIcon}>🛒</Text>
             {cartCount > 0 && <View style={styles.cartBadge}><Text style={styles.cartBadgeTxt}>{cartCount}</Text></View>}
           </TouchableOpacity>
@@ -224,7 +224,18 @@ export default function FoodScreen({ navigation }: any) {
           onPress={(b: any) => {
             if (b.linkType === 'restaurant' && b.linkId) {
               const resto = restaurants.find((r: any) => r.id === b.linkId);
-              if (resto) navigation.navigate('RestaurantDetail', { restaurantData: resto });
+              navigation.navigate('RestaurantDetail', { 
+                restaurantId: b.linkId,
+                restaurantData: resto 
+              });
+            } else if (b.linkType === 'product' && b.linkId) {
+              // Food mode product usually belongs to a restaurant, 
+              // but for now we'll just navigate to the search if detail isn't clear
+              navigation.navigate('Search', { mode: 'food', query: b.linkId });
+            } else if (b.linkType === 'category' && b.linkId) {
+              setActiveCuisine(b.linkId);
+            } else if (b.linkType === 'brand' && b.linkId) {
+              navigation.navigate('BrandDetail', { brandId: b.linkId });
             }
           }}
         />

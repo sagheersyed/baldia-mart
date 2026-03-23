@@ -212,11 +212,18 @@ export class OrdersService {
     }
     
     // 5. Create Parent Order
+    let orderBrandId = undefined;
+    if (orderType === 'mart') {
+      const brandItem = cartItems.find(i => i.product && i.product.brandId);
+      if (brandItem) orderBrandId = brandItem.product.brandId;
+    }
+
     const order = this.ordersRepository.create({
       userId,
       addressId,
       martId: martId || undefined,
       restaurantId: orderType === 'food' && distinctRestaurants.length === 1 ? distinctRestaurants[0].id : undefined,
+      brandId: orderBrandId,
       subtotal,
       deliveryFee: finalDeliveryFee,
       total: subtotal + finalDeliveryFee,

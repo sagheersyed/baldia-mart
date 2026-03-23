@@ -26,10 +26,36 @@ export default function BannersPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingBanner, setEditingBanner] = useState<Partial<Banner> | null>(null);
   const [saving, setSaving] = useState(false);
+  const [linkEntities, setLinkEntities] = useState<{ id: string, name: string }[]>([]);
 
   useEffect(() => {
     fetchBanners();
   }, []);
+
+  useEffect(() => {
+    if (isModalOpen && editingBanner?.linkType && editingBanner.linkType !== 'none') {
+      fetchLinkEntities(editingBanner.linkType);
+    } else {
+      setLinkEntities([]);
+    }
+  }, [isModalOpen, editingBanner?.linkType]);
+
+  const fetchLinkEntities = async (type: string) => {
+    try {
+      let endpoint = '';
+      if (type === 'product') endpoint = 'http://192.168.100.142:3000/api/v1/products';
+      else if (type === 'restaurant') endpoint = 'http://192.168.100.142:3000/api/v1/restaurants';
+      else if (type === 'brand') endpoint = 'http://192.168.100.142:3000/api/v1/brands';
+      else if (type === 'category') endpoint = 'http://192.168.100.142:3000/api/v1/categories';
+
+      if (!endpoint) return;
+      const res = await fetchWithAuth(endpoint);
+      const data = await res.json();
+      setLinkEntities(Array.isArray(data) ? data.map((item: any) => ({ id: item.id, name: item.name || item.title || item.id })) : []);
+    } catch (error) {
+      console.error('Failed to fetch link entities:', error);
+    }
+  };
 
   const fetchBanners = async () => {
     try {
@@ -264,22 +290,34 @@ export default function BannersPage() {
                   <div className="flex gap-2">
                     <select
                       value={editingBanner?.linkType || 'none'}
-                      onChange={e => setEditingBanner({ ...editingBanner!, linkType: e.target.value })}
+                      onChange={e => setEditingBanner({ ...editingBanner!, linkType: e.target.value, linkId: '' })}
                       className="p-3 bg-gray-50 border rounded-xl font-bold text-sm w-1/2"
                     >
                       <option value="none">None</option>
                       <option value="product">Product</option>
                       <option value="brand">Brand</option>
                       <option value="restaurant">Restaurant</option>
+                      <option value="category">Category</option>
                     </select>
-                    <input
-                      type="text"
-                      value={editingBanner?.linkId || ''}
-                      onChange={e => setEditingBanner({ ...editingBanner!, linkId: e.target.value })}
-                      className="w-1/2 p-3 bg-gray-50 border rounded-xl font-bold"
-                      placeholder="Entity ID..."
-                      disabled={!editingBanner?.linkType || editingBanner.linkType === 'none'}
-                    />
+                    {editingBanner?.linkType && editingBanner.linkType !== 'none' ? (
+                      <select
+                        value={editingBanner?.linkId || ''}
+                        onChange={e => setEditingBanner({ ...editingBanner!, linkId: e.target.value })}
+                        className="w-1/2 p-3 bg-gray-50 border rounded-xl font-bold text-sm"
+                      >
+                        <option value="">-- Select --</option>
+                        {linkEntities.map(entity => (
+                          <option key={entity.id} value={entity.id}>{entity.name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        disabled
+                        placeholder="N/A"
+                        className="w-1/2 p-3 bg-gray-100 border rounded-xl font-bold"
+                      />
+                    )}
                   </div>
                 </div>
               </div>

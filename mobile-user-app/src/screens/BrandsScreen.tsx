@@ -136,7 +136,7 @@ export default function BrandsScreen({ navigation }: any) {
               : null}
             <Text style={styles.headerTitle} numberOfLines={1}>{selectedBrand.name}</Text>
           </View>
-          <TouchableOpacity style={styles.cartBtn} onPress={() => navigation.navigate('Cart', { mode: 'mart' })}>
+          <TouchableOpacity style={styles.cartBtn} onPress={() => navigation.navigate('Cart')}>
             <Text style={styles.cartIcon}>🛒</Text>
             {cartCount > 0 && (
               <View style={styles.cartBadge}><Text style={styles.cartBadgeTxt}>{cartCount}</Text></View>

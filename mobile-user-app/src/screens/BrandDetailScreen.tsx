@@ -102,7 +102,7 @@ export default function BrandDetailScreen({ navigation, route }: any) {
           <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{brand?.name || 'Brand'}</Text>
-        <TouchableOpacity style={styles.cartBtn} onPress={() => navigation.navigate('Cart', { mode: 'mart' })}>
+        <TouchableOpacity style={styles.cartBtn} onPress={() => navigation.navigate('Cart')}>
            <Text style={styles.cartCount}>{martCart.reduce((sum, i) => sum + i.quantity, 0)}</Text>
         </TouchableOpacity>
       </View>

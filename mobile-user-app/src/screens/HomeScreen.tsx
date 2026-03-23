@@ -81,7 +81,7 @@ const BrandChip = memo(({ brand, onPress }: any) => {
       </View>
       <Text style={styles.brandChipName} numberOfLines={1}>{brand.name}</Text>
     </TouchableOpacity>
-  );
+  ); r
 });
 
 // ════════════════ MAIN SCREEN ════════════════
@@ -206,7 +206,7 @@ export default function HomeScreen({ navigation }: any) {
             <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Notifications')}>
               <Text style={styles.iconEmoji}>🔔</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.cartIconBtn} onPress={() => navigation.navigate('Cart', { mode: 'mart' })}>
+            <TouchableOpacity style={styles.cartIconBtn} onPress={() => navigation.navigate('Cart')}>
               <Text style={styles.iconEmoji}>🛒</Text>
               {cartCount > 0 && (
                 <View style={styles.cartBadge}>
@@ -265,10 +265,12 @@ export default function HomeScreen({ navigation }: any) {
               if (product) handleAddToCart(product);
             } else if (b.linkType === 'brand' && b.linkId) {
               const brand = brands.find(br => br.id === b.linkId);
-              if (brand) navigation.navigate('BrandDetail', { brand });
+              if (brand) navigation.navigate('BrandDetail', { brandId: brand.id });
             } else if (b.linkType === 'category' && b.linkId) {
               setSelectedCatId(b.linkId);
               loadData(b.linkId);
+            } else if (b.linkType === 'restaurant' && b.linkId) {
+              navigation.navigate('RestaurantDetail', { restaurantId: b.linkId });
             }
           }}
         />

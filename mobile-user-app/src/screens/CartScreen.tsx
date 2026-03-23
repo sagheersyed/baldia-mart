@@ -1,21 +1,15 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCart } from '../context/CartContext';
 import { settingsApi, addressesApi, ordersApi } from '../api/api';
+import { useFocusEffect } from '@react-navigation/native';
 
 export default function CartScreen({ navigation, route }: any) {
   const { martCart, foodCart, updateQuantity, removeFromCart, getCartTotal, activeMode: contextMode, setActiveMode } = useCart();
   
-  // Use mode from params if available, otherwise fallback to context, then default 'mart'
-  const mode = route.params?.mode || contextMode || 'mart';
+  const mode = contextMode || 'mart';
   const cart = mode === 'mart' ? martCart : foodCart;
-
-  React.useEffect(() => {
-    if (route.params?.mode && route.params.mode !== contextMode) {
-      setActiveMode(route.params.mode);
-    }
-  }, [route.params?.mode]);
 
   const [deliveryFee, setDeliveryFee] = React.useState(0);
   const [isLoadingFee, setIsLoadingFee] = React.useState(false);

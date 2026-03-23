@@ -132,3 +132,15 @@ export const menuItemsApi = {
   getAll: () => api.get('/menu-items'),
   getByRestaurant: (restaurantId: string) => api.get(`/menu-items?restaurantId=${restaurantId}`),
 };
+
+export const businessReviewsApi = {
+  create: (data: {
+    orderId: string;
+    subOrderId?: string;
+    businessId: string;
+    businessType: 'restaurant' | 'brand';
+    rating: number;
+    comment?: string;
+  }) => api.post('/business-reviews', data),
+  getAll: () => api.get('/business-reviews/all'),
+};

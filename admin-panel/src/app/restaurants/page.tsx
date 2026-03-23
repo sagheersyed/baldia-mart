@@ -11,6 +11,8 @@ interface Restaurant {
   description?: string;
   cuisineType?: string;
   openingHours?: string;
+  openingTime?: string;
+  closingTime?: string;
   location?: string;
   latitude?: number;
   longitude?: number;
@@ -37,7 +39,8 @@ const MENU_API_URL = `${BASE_URL}/menu-items`;
 
 const emptyRestaurantForm = {
   name: '', description: '', logoUrl: '', cuisineType: '',
-  openingHours: '', location: '', latitude: '', longitude: ''
+  openingHours: '', openingTime: '', closingTime: '',
+  location: '', latitude: '', longitude: ''
 };
 
 const emptyMenuItemForm = {
@@ -152,6 +155,7 @@ export default function RestaurantsPage() {
     setRestaurantForm({
       name: r.name, description: r.description || '', logoUrl: r.logoUrl || '',
       cuisineType: r.cuisineType || '', openingHours: r.openingHours || '',
+      openingTime: r.openingTime || '', closingTime: r.closingTime || '',
       location: r.location || '',
       latitude: r.latitude ? r.latitude.toString() : '',
       longitude: r.longitude ? r.longitude.toString() : '',
@@ -317,10 +321,20 @@ export default function RestaurantsPage() {
                   <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Cuisine Type</label>
                   <input placeholder="e.g., Pakistani, BBQ" className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 font-bold" value={restaurantForm.cuisineType} onChange={e => setRestaurantForm({ ...restaurantForm, cuisineType: e.target.value })} />
                 </div>
+              <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Opening Hours</label>
+                  <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Display Hours</label>
                   <input placeholder="e.g., 9AM - 11PM" className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 font-bold" value={restaurantForm.openingHours} onChange={e => setRestaurantForm({ ...restaurantForm, openingHours: e.target.value })} />
                 </div>
+                <div>
+                  <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Open Time</label>
+                  <input type="time" className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 font-bold" value={restaurantForm.openingTime} onChange={e => setRestaurantForm({ ...restaurantForm, openingTime: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Close Time</label>
+                  <input type="time" className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 font-bold" value={restaurantForm.closingTime} onChange={e => setRestaurantForm({ ...restaurantForm, closingTime: e.target.value })} />
+                </div>
+              </div>
               </div>
               <div>
                 <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Location Address</label>

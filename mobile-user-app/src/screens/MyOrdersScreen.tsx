@@ -4,6 +4,8 @@ import {
   ActivityIndicator, RefreshControl, Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
+import { useCart } from '../context/CartContext';
 import { ordersApi, authApi } from '../api/api';
 import io from 'socket.io-client';
 
@@ -68,7 +70,11 @@ function OrderCard({ order, onTrack, onCancel }: any) {
           style={styles.trackBtn}
           onPress={() => onTrack(order.id)}
         >
-          <Text style={styles.trackBtnText}>Track Order</Text>
+          <Text style={styles.trackBtnText}>
+            {order.status === 'delivered' 
+              ? ((order.isRated && order.isBusinessRated) ? 'Order Details' : 'Rate Order') 
+              : 'Track Order'}
+          </Text>
         </TouchableOpacity>
         {canCancel && (
           <TouchableOpacity
@@ -84,6 +90,7 @@ function OrderCard({ order, onTrack, onCancel }: any) {
 }
 
 export default function MyOrdersScreen({ navigation }: any) {
+  const { setActiveOrdersCount } = useCart();
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -94,14 +101,27 @@ export default function MyOrdersScreen({ navigation }: any) {
   const fetchOrders = useCallback(async () => {
     try {
       const res = await ordersApi.getHistory();
-      setOrders(res.data || []);
+      const orderList = res.data || [];
+      setOrders(orderList);
+      
+      // Update active orders count for badge
+      const activeCount = orderList.filter((o: any) => 
+        ['pending', 'confirmed', 'preparing', 'out_for_delivery'].includes(o.status)
+      ).length;
+      setActiveOrdersCount(activeCount);
     } catch (error) {
       console.error('Failed to fetch orders:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [setActiveOrdersCount]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchOrders();
+    }, [fetchOrders])
+  );
 
   useEffect(() => {
     fetchOrders();

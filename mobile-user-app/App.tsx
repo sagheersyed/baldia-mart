@@ -40,7 +40,7 @@ const Tab = createBottomTabNavigator();
 import { Ionicons } from '@expo/vector-icons';
 
 function MainTabs() {
-  const { setActiveMode, currentCount } = useCart();
+  const { setActiveMode, currentCount, activeOrdersCount } = useCart();
   const [showFood, setShowFood] = useState(true);
   const [showBrands, setShowBrands] = useState(true);
 
@@ -126,7 +126,14 @@ function MainTabs() {
           tabBarBadge: currentCount > 0 ? currentCount : undefined
         }}
       />
-      <Tab.Screen name="Orders" component={MyOrdersScreen} options={{ tabBarLabel: 'Orders' }} />
+      <Tab.Screen 
+        name="Orders" 
+        component={MyOrdersScreen} 
+        options={{ 
+          tabBarLabel: 'Orders',
+          tabBarBadge: activeOrdersCount > 0 ? activeOrdersCount : undefined
+        }} 
+      />
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: 'Profile' }} />
     </Tab.Navigator>
   );
