@@ -34,7 +34,7 @@ const MENU_SECTIONS = [
     title: 'Orders',
     items: [
       { icon: '📦', label: 'My Orders', screen: 'MyOrders', desc: 'Track and view past orders' },
-      { icon: '❤️', label: 'Favourites', screen: null, desc: 'Your saved items' },
+      { icon: '❤️', label: 'Favourites', screen: 'Favourites', desc: 'Your saved items' },
     ],
   },
   {
@@ -42,7 +42,7 @@ const MENU_SECTIONS = [
     items: [
       { icon: '🔔', label: 'Notifications', screen: 'Notifications', desc: 'Manage your alerts' },
       { icon: '❓', label: 'Help & Support', screen: 'Help', desc: 'FAQs and contact us' },
-      { icon: 'ℹ️', label: 'About App', screen: null, desc: 'Version 1.0.0' },
+      { icon: 'ℹ️', label: 'About App', screen: 'About', desc: 'Version 1.0.0' },
     ],
   },
 ];

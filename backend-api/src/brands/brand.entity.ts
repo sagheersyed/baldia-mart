@@ -33,6 +33,12 @@ export class Brand {
   @Column({ type: 'numeric', precision: 10, scale: 6, nullable: true })
   longitude: number;
 
+  @Column({ type: 'numeric', precision: 3, scale: 2, default: 0, name: 'rating' })
+  rating: number;
+
+  @Column({ name: 'rating_count', default: 0 })
+  ratingCount: number;
+
   @OneToMany(() => Product, product => product.brand)
   products: Product[];
 

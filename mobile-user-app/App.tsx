@@ -33,6 +33,8 @@ import MpinSetupDirectScreen from './src/screens/MpinSetupDirectScreen';
 import SearchScreen from './src/screens/SearchScreen';
 import BrandDetailScreen from './src/screens/BrandDetailScreen';
 import RestaurantDetailScreen from './src/screens/RestaurantDetailScreen';
+import FavouritesScreen from './src/screens/FavouritesScreen';
+import AboutScreen from './src/screens/AboutScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -192,6 +194,8 @@ function Navigation() {
             <Stack.Screen name="EditProfile" component={EditProfileScreen} />
             <Stack.Screen name="Notifications" component={NotificationsScreen} />
             <Stack.Screen name="Help" component={HelpScreen} />
+            <Stack.Screen name="Favourites" component={FavouritesScreen} />
+            <Stack.Screen name="About" component={AboutScreen} />
           </>
         )}
       </Stack.Navigator>

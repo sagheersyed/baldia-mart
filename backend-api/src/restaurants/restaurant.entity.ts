@@ -42,6 +42,9 @@ export class Restaurant {
   @Column({ type: 'numeric', precision: 3, scale: 2, default: 0 })
   rating: number;
 
+  @Column({ name: 'rating_count', default: 0 })
+  ratingCount: number;
+
   @OneToMany(() => MenuItem, item => item.restaurant)
   menuItems: MenuItem[];
 

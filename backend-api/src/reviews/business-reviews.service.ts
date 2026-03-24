@@ -3,6 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { BusinessReview } from '../common/business-review.entity';
 import { Order } from '../orders/order.entity';
+import { Restaurant } from '../restaurants/restaurant.entity';
+import { Brand } from '../brands/brand.entity';
 
 @Injectable()
 export class BusinessReviewsService {
@@ -11,6 +13,10 @@ export class BusinessReviewsService {
     private reviewRepo: Repository<BusinessReview>,
     @InjectRepository(Order)
     private orderRepo: Repository<Order>,
+    @InjectRepository(Restaurant)
+    private restaurantRepo: Repository<Restaurant>,
+    @InjectRepository(Brand)
+    private brandRepo: Repository<Brand>,
   ) {}
 
   async create(data: {
@@ -66,13 +72,39 @@ export class BusinessReviewsService {
     }
 
     const review = this.reviewRepo.create(reviewData);
-
     const saved = await this.reviewRepo.save(review);
 
     // Mark order as business rated
     await this.orderRepo.update(data.orderId, { isBusinessRated: true });
 
+    // Recalculate and persist the average rating for the business entity
+    await this.recalculateRating(data.businessType, data.businessId);
+
     return saved;
+  }
+
+  private async recalculateRating(businessType: string, businessId: string): Promise<void> {
+    const where = businessType === 'restaurant'
+      ? { restaurantId: businessId }
+      : { brandId: businessId };
+
+    const reviews = await this.reviewRepo.find({ where });
+    if (reviews.length === 0) return;
+
+    const avg = reviews.reduce((sum, r) => sum + Number(r.rating), 0) / reviews.length;
+    const rounded = Math.round(avg * 10) / 10; // e.g. 4.3
+
+    if (businessType === 'restaurant') {
+      await this.restaurantRepo.update(businessId, {
+        rating: rounded,
+        ratingCount: reviews.length,
+      } as any);
+    } else {
+      await this.brandRepo.update(businessId, {
+        rating: rounded,
+        ratingCount: reviews.length,
+      } as any);
+    }
   }
 
   async findAll() {

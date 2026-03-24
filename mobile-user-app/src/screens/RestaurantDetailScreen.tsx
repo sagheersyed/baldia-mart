@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { restaurantsApi, menuItemsApi, normalizeUrl } from '../api/api';
 import { useCart } from '../context/CartContext';
+import { useFavourites } from '../hooks/useFavourites';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_W = (SCREEN_WIDTH - 44) / 2;
@@ -51,6 +52,7 @@ const MenuItemCard = memo(({ item, cartQty, onAdd }: any) => {
 export default function RestaurantDetailScreen({ route, navigation }: any) {
   const { restaurantId, restaurantData } = route.params || {};
   const { foodCart, addToCart, getCartCount, setActiveMode } = useCart();
+  const { isFavourite, toggleFavourite } = useFavourites();
 
   useFocusEffect(
     useCallback(() => {
@@ -152,6 +154,17 @@ export default function RestaurantDetailScreen({ route, navigation }: any) {
           {cartCount > 0 && (
             <View style={styles.cartBadge}><Text style={styles.cartBadgeTxt}>{cartCount}</Text></View>
           )}
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.heartBtn}
+          onPress={() => restaurant && toggleFavourite(
+            { id: restaurant.id, name: restaurant.name, logoUrl: restaurant.logoUrl, cuisineType: restaurant.cuisineType, rating: restaurant.rating },
+            'restaurants'
+          )}
+        >
+          <Text style={styles.heartBtnIcon}>
+            {restaurant && isFavourite(restaurant.id, 'restaurants') ? '❤️' : '🤍'}
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -337,4 +350,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     lineHeight: 26,
   },
+  heartBtn: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: '#FFF0F0', justifyContent: 'center', alignItems: 'center',
+    borderWidth: 1, borderColor: '#FFD8C4', marginLeft: 8,
+  },
+  heartBtnIcon: { fontSize: 20 },
 });
