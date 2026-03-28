@@ -1,5 +1,5 @@
 const axios = require('axios');
-const BASE_URL = 'http://192.168.100.142:3000/api/v1';
+const BASE_URL = 'https://c2e9-175-107-236-228.ngrok-free.app/api/v1';
 
 async function test() {
   try {
@@ -9,7 +9,7 @@ async function test() {
       role: 'customer'
     });
     console.log('Status Response:', JSON.stringify(res.data, null, 2));
-    
+
     if (res.data.hasOwnProperty('hasMpin')) {
       console.log('SUCCESS: hasMpin field is present in response');
     } else {

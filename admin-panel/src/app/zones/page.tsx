@@ -14,7 +14,7 @@ interface DeliveryZone {
   createdAt: string;
 }
 
-const API_URL = `${BASE_URL}/zones`;
+const API_URL = `${BASE_URL}/delivery-zones`;
 
 export default function ZonesPage() {
   const [zones, setZones] = useState<DeliveryZone[]>([]);

@@ -2,14 +2,14 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { io } from 'socket.io-client';
 
-const SOCKET_URL = 'http://192.168.100.142:3000'; // No /api/v1 suffix
+const SOCKET_URL = 'https://c2e9-175-107-236-228.ngrok-free.app'; // No /api/v1 suffix
 export const socket = io(SOCKET_URL, {
   autoConnect: false,
   transports: ['websocket'],
 });
 
 // Replace with your local machine's IP
-const BASE_URL = 'http://192.168.100.142:3000/api/v1';
+const BASE_URL = 'https://c2e9-175-107-236-228.ngrok-free.app/api/v1';
 
 export const normalizePhone = (phone: string): string => {
   if (!phone) return phone;
@@ -67,6 +67,7 @@ export const ordersApi = {
 export const ridersApi = {
   getMe: () => api.get('/riders/me'),
   getStats: () => api.get('/riders/stats'),
+  updateProfile: (data: any) => api.patch('/riders/me', data),
   uploadFile: (formData: FormData) => api.post('/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   }),

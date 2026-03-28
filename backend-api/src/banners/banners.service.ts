@@ -12,7 +12,7 @@ export class BannersService {
     private bannersGateway: BannersGateway,
   ) {}
 
-  async findAll(section?: string): Promise<Banner[]> {
+  async findAll(section?: string, zoneId?: string): Promise<Banner[]> {
     const query = this.bannerRepository.createQueryBuilder('banner')
       .where('banner.isActive = :isActive', { isActive: true })
       .orderBy('banner.sortOrder', 'ASC')
@@ -28,7 +28,11 @@ export class BannersService {
       // Only returns global banners
       query.andWhere('banner.section = :all', { all: 'all' });
     }
-    // If no section provided, returns everything (useful for admin panel)
+
+    if (zoneId) {
+      // Only show banners for this zone OR banners with no zone (global)
+      query.andWhere('(banner.zoneId = :zoneId OR banner.zoneId IS NULL)', { zoneId });
+    }
 
     return query.getMany();
   }

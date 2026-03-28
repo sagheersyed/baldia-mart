@@ -1,83 +1,190 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, Switch, ActivityIndicator, Alert, RefreshControl, Vibration, Modal, FlatList } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  View, Text, StyleSheet, TouchableOpacity, Switch, Alert, RefreshControl,
+  Vibration, Modal, FlatList, Animated, PanResponder, Dimensions, ScrollView,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import MapView, { Marker, Circle } from 'react-native-maps';
+import * as Location from 'expo-location';
 import { socket, ordersApi, ridersApi, settingsApi } from '../api/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+const DEFAULT_REGION = { latitude: 24.91522600, longitude: 66.96431980, latitudeDelta: 0.05, longitudeDelta: 0.05 };
+
+// ─── Swipe-to-Accept Slider ──────────────────────────────────────────────────
+function SwipeToAccept({ onAccept, label = 'Swipe to Accept' }: { onAccept: () => void; label?: string }) {
+  const swipeX = useRef(new Animated.Value(0)).current;
+  const TRACK_W = SCREEN_W - 72;
+  const THUMB_W = 68;
+  const MAX = TRACK_W - THUMB_W - 8;
+
+  const panResponder = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onPanResponderMove: (_, g) => {
+      const val = Math.max(0, Math.min(g.dx, MAX));
+      swipeX.setValue(val);
+    },
+    onPanResponderRelease: (_, g) => {
+      if (g.dx >= MAX * 0.75) {
+        Animated.timing(swipeX, { toValue: MAX, duration: 120, useNativeDriver: false }).start(() => {
+          onAccept();
+          swipeX.setValue(0);
+        });
+      } else {
+        Animated.spring(swipeX, { toValue: 0, useNativeDriver: false }).start();
+      }
+    },
+  })).current;
+
+  const opacity = swipeX.interpolate({ inputRange: [0, MAX], outputRange: [1, 0] });
+
+  return (
+    <View style={sw.track}>
+      <Animated.View style={[sw.labelWrap, { opacity }]}>
+        <Text style={sw.label}>{label}</Text>
+        <Text style={sw.arrow}>›  ›  ›</Text>
+      </Animated.View>
+      <Animated.View style={[sw.thumb, { transform: [{ translateX: swipeX }] }]} {...panResponder.panHandlers}>
+        <Text style={sw.thumbIcon}>🚴</Text>
+      </Animated.View>
+    </View>
+  );
+}
+
+// ─── Main Dashboard ───────────────────────────────────────────────────────────
 export default function DashboardScreen({ navigation }: any) {
   const [isOnline, setIsOnline] = useState(false);
   const [pendingOrders, setPendingOrders] = useState<any[]>([]);
   const [activeOrders, setActiveOrders] = useState<any[]>([]);
   const [rider, setRider] = useState<any>(null);
   const [stats, setStats] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [riderLoc, setRiderLoc] = useState<any>(null);
   const [martLocations, setMartLocations] = useState<any[]>([]);
   const [selectedMart, setSelectedMart] = useState<any>(null);
   const [showMartModal, setShowMartModal] = useState(false);
 
+  // Animated bottom sheet for new order popup
+  const [incomingOrder, setIncomingOrder] = useState<any>(null);
+  const sheetY = useRef(new Animated.Value(350)).current;
+  const [sheetVisible, setSheetVisible] = useState(false);
+
+  // ── Location tracking ───────────────────────────────────────────────
   useEffect(() => {
-    if (isOnline) {
-      socket.connect();
-      
-      const onConnect = () => {
-        console.log('Rider App: Connected to socket');
-        if (rider) {
-          socket.emit('joinRidersRoom', rider.id);
-          socket.emit('joinRiderRoom', rider.id);
-        }
-      };
+    (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') return;
+      Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.High, distanceInterval: 15 },
+        (loc) => {
+          setRiderLoc(loc.coords);
+          if (isOnline) {
+            syncRiderStatus(true, loc.coords);
+          }
+        },
+      );
+    })();
+  }, [isOnline]);
 
-      const onNewOrder = (order: any) => {
-        setPendingOrders(prev => {
-          if (prev.find(o => o.id === order.id)) return prev;
-          return [order, ...prev];
-        });
-        Alert.alert('New Order! 🔔', `A new delivery request for Rs. ${order.total} is available.`);
-      };
+  // ── Socket lifecycle ────────────────────────────────────────────────
+  useEffect(() => {
+    if (!isOnline) { socket.disconnect(); return; }
 
-      const onOrderAccepted = ({ orderId }: any) => {
-        setPendingOrders(prev => prev.filter(o => o.id !== orderId));
-      };
-
-      const onOrderCancelled = ({ orderId }: any) => {
-        // Aggressive vibration pattern: wait 100ms, vibrate 500ms, repeat 3 times
-        Vibration.vibrate([100, 500, 100, 500, 100, 500]);
-        Alert.alert('Order Cancelled 🛑', `Order #${orderId.slice(0, 8).toUpperCase()} has been cancelled by the customer.`);
-        // Refresh everything to be safe
-        fetchOrders();
-      };
-
-      socket.on('connect', onConnect);
-      socket.on('newOrder', onNewOrder);
-      socket.on('orderAccepted', onOrderAccepted);
-      socket.on('orderCancelled', onOrderCancelled);
-      socket.on('orderUpdated', fetchOrders);
-
-      // Trigger initial fetch if rider is already set
+    socket.connect();
+    const onConnect = () => {
       if (rider) {
-        fetchOrders();
-        fetchRiderInfo();
-      } else {
-        fetchRiderInfo();
+        socket.emit('joinRidersRoom', rider.id);
+        socket.emit('joinRiderRoom', rider.id);
       }
+    };
 
-      return () => {
-        socket.off('connect', onConnect);
-        socket.off('newOrder', onNewOrder);
-        socket.off('orderAccepted', onOrderAccepted);
-        socket.off('orderCancelled', onOrderCancelled);
-        socket.off('orderUpdated', fetchOrders);
-        socket.disconnect();
-      };
-    } else {
+    const onNewOrder = (order: any) => {
+      Vibration.vibrate([0, 400, 200, 400]);
+      setPendingOrders(prev => prev.find(o => o?.id === order?.id) ? prev : [order, ...prev]);
+      showIncoming(order);
+    };
+
+    const onOrderAccepted = ({ orderId }: any) =>
+      setPendingOrders(prev => prev.filter(o => o?.id !== orderId));
+
+    const onOrderCancelled = ({ orderId }: any) => {
+      Vibration.vibrate([100, 500, 100, 500, 100, 500]);
+      Alert.alert('Order Cancelled 🛑', `Order #${(orderId || '').slice(0, 8).toUpperCase()} was cancelled.`);
+      fetchOrders();
+    };
+
+    socket.on('connect', onConnect);
+    socket.on('newOrder', onNewOrder);
+    socket.on('orderAccepted', onOrderAccepted);
+    socket.on('orderCancelled', onOrderCancelled);
+    socket.on('orderUpdated', fetchOrders);
+
+    fetchOrders();
+    if (!rider) fetchRiderInfo();
+
+    return () => {
+      socket.off('connect', onConnect);
+      socket.off('newOrder', onNewOrder);
+      socket.off('orderAccepted', onOrderAccepted);
+      socket.off('orderCancelled', onOrderCancelled);
+      socket.off('orderUpdated', fetchOrders);
       socket.disconnect();
-    }
+    };
   }, [isOnline, rider?.id]);
 
   useEffect(() => {
+    const checkActiveOrder = async () => {
+      try {
+        const savedOrderId = await AsyncStorage.getItem('activeOrderId');
+        if (savedOrderId) {
+          navigation.navigate('Navigation', { orderId: savedOrderId });
+        }
+      } catch (e) {
+        console.error('Auto-resume check failed:', e);
+      }
+    };
+    
     fetchRiderInfo();
     fetchMartLocations();
     loadSelectedMart();
+    checkActiveOrder();
+    syncRiderStatus(isOnline);
+  }, []);
+
+  const syncRiderStatus = async (online: boolean, coords?: any) => {
+    try {
+      const data: any = { isOnline: online };
+      if (coords) {
+        data.currentLat = coords.latitude.toString();
+        data.currentLng = coords.longitude.toString();
+      }
+      await ridersApi.updateProfile(data);
+    } catch (e) {
+      console.error('Failed to sync rider status:', e);
+    }
+  };
+
+  // ── Data fetchers ────────────────────────────────────────────────────
+  const fetchRiderInfo = async () => {
+    try {
+      const [profileRes, statsRes] = await Promise.all([ridersApi.getMe(), ridersApi.getStats()]);
+      setRider(profileRes.data);
+      setStats(statsRes.data);
+    } catch (e) { console.error('fetchRiderInfo error', e); }
+  };
+
+  const fetchOrders = useCallback(async () => {
+    try {
+      const [pendingRes, activeRes, statsRes] = await Promise.all([
+        ordersApi.getPending(),
+        ordersApi.getActive(),
+        ridersApi.getStats(),
+      ]);
+      setPendingOrders(pendingRes.data || []);
+      setActiveOrders(activeRes.data || []);
+      setStats(statsRes.data);
+    } catch (e) { console.error('fetchOrders error', e); }
   }, []);
 
   const fetchMartLocations = async () => {
@@ -86,20 +193,16 @@ export default function DashboardScreen({ navigation }: any) {
       if (res.data.mart_locations) {
         setMartLocations([
           { id: 'all', name: 'All Orders', address: 'Show orders from everywhere' },
-          ...res.data.mart_locations
+          ...res.data.mart_locations,
         ]);
       }
-    } catch (e) {
-      console.error('Fetch mart locations error:', e);
-    }
+    } catch (e) {}
   };
 
   const loadSelectedMart = async () => {
     try {
       const saved = await AsyncStorage.getItem('selectedMart');
-      if (saved) {
-        setSelectedMart(JSON.parse(saved));
-      }
+      if (saved) setSelectedMart(JSON.parse(saved));
     } catch (e) {}
   };
 
@@ -109,298 +212,365 @@ export default function DashboardScreen({ navigation }: any) {
     setShowMartModal(false);
   };
 
-  const fetchRiderInfo = async () => {
-    try {
-      const [profileRes, statsRes] = await Promise.all([
-        ridersApi.getMe(),
-        ridersApi.getStats()
-      ]);
-      setRider(profileRes.data);
-      setStats(statsRes.data);
-    } catch (e) {
-      console.error('Fetch rider info error:', e);
-    }
+  const onRefresh = async () => { setRefreshing(true); await fetchOrders(); setRefreshing(false); };
+
+  // ── Incoming Order Sheet ────────────────────────────────────────────
+  const showIncoming = (order: any) => {
+    setIncomingOrder(order);
+    setSheetVisible(true);
+    Animated.spring(sheetY, { toValue: 0, useNativeDriver: true, friction: 7 }).start();
   };
 
-  const fetchOrders = async () => {
-    setLoading(true);
-    try {
-      const [pendingRes, activeRes, statsRes] = await Promise.all([
-        ordersApi.getPending(),
-        ordersApi.getActive(),
-        ridersApi.getStats()
-      ]);
-      setPendingOrders(pendingRes.data);
-      setActiveOrders(activeRes.data);
-      setStats(statsRes.data);
-    } catch (e) {
-      console.error('Fetch orders error:', e);
-    } finally {
-      setLoading(false);
-    }
+  const dismissIncoming = () => {
+    Animated.timing(sheetY, { toValue: 350, duration: 250, useNativeDriver: true }).start(() => {
+      setSheetVisible(false);
+      setIncomingOrder(null);
+    });
   };
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await fetchOrders();
-    setRefreshing(false);
+  const handleAcceptIncoming = () => {
+    if (!incomingOrder) return;
+    navigation.navigate('OrderDetails', { orderId: incomingOrder.id });
+    dismissIncoming();
   };
 
-  const handleViewOrder = (orderId: string) => {
-    navigation.navigate('OrderDetails', { orderId });
-  };
+  // ── Filtered visible orders ─────────────────────────────────────────
+  const visiblePending = pendingOrders
+    .filter(p => !activeOrders.find(a => a?.id === p?.id))
+    .filter(p => !selectedMart || selectedMart.id === 'all' || !p.martId || p.martId === selectedMart.id);
 
+  const mapRegion = riderLoc
+    ? { latitude: riderLoc.latitude, longitude: riderLoc.longitude, latitudeDelta: 0.04, longitudeDelta: 0.04 }
+    : DEFAULT_REGION;
+
+  // ─── Render ────────────────────────────────────────────────────────────────
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.name}>Welcome, {rider?.name || 'Rider'}</Text>
-          <TouchableOpacity onPress={() => setShowMartModal(true)} style={styles.martSelector}>
-            <Text style={styles.martText}>📍 {selectedMart?.name || 'Select Nearby Mart'}</Text>
-            <Text style={styles.chevron}>▼</Text>
-          </TouchableOpacity>
+    <View style={styles.root}>
+      {/* ── Full-screen Map ── */}
+      <MapView style={styles.map} region={mapRegion} showsUserLocation showsMyLocationButton={false}>
+        {/* Rider marker */}
+        {riderLoc && (
+          <Marker coordinate={{ latitude: riderLoc.latitude, longitude: riderLoc.longitude }} anchor={{ x: 0.5, y: 0.5 }}>
+            <View style={styles.riderPin}><Text style={{ fontSize: 20 }}>🏍️</Text></View>
+          </Marker>
+        )}
+        {/* Active order customer pins */}
+        {activeOrders.map(order => order.address?.latitude ? (
+          <Marker
+            key={order?.id || Math.random().toString()}
+            coordinate={{ latitude: Number(order?.address?.latitude || 0), longitude: Number(order?.address?.longitude || 0) }}
+            title={`#ORD-${(order?.id || '').slice(0, 6).toUpperCase()}`}
+            pinColor="#2ecc71"
+          />
+        ) : null)}
+      </MapView>
+
+      {/* ── Top HUD ─────────────── */}
+      <SafeAreaView style={styles.topHud} edges={['top']}>
+        <View style={styles.topRow}>
+          {/* Rider greeting */}
+          <View style={{ flex: 1 }}>
+            <Text style={styles.greeting}>
+              {isOnline ? '🟢 Online' : '⚫ Offline'}
+            </Text>
+            <Text style={styles.name}>{rider?.name || 'Rider'}</Text>
+          </View>
+
+          {/* Online Switch */}
+          <Switch
+            value={isOnline}
+            onValueChange={(val) => {
+              setIsOnline(val);
+              syncRiderStatus(val, riderLoc);
+            }}
+            trackColor={{ false: '#444', true: '#FF4500' }}
+            thumbColor={isOnline ? '#fff' : '#888'}
+            disabled={!rider?.isActive}
+          />
         </View>
-        <Switch
-          value={isOnline}
-          onValueChange={setIsOnline}
-          trackColor={{ false: "#444", true: "#FF4500" }}
-          thumbColor={isOnline ? "#fff" : "#888"}
-          disabled={!rider?.isActive}
-        />
+
+        {/* Approval banner */}
+        {rider && !rider.isActive && rider.isProfileComplete && (
+          <View style={styles.approvalBar}>
+            <Text style={styles.approvalBarTxt}>⏳ Awaiting admin approval — you'll be notified once approved.</Text>
+          </View>
+        )}
+      </SafeAreaView>
+
+      {/* ── Stats Pill ─────────────── */}
+      <View style={styles.statsPill}>
+        <View style={styles.statItem}>
+          <Text style={styles.statVal}>Rs {Number(stats?.todayEarnings || 0).toFixed(0)}</Text>
+          <Text style={styles.statLabel}>Today</Text>
+        </View>
+        <View style={styles.statDivider} />
+        <View style={styles.statItem}>
+          <Text style={styles.statVal}>{stats?.todayDeliveries || 0}</Text>
+          <Text style={styles.statLabel}>Deliveries</Text>
+        </View>
+        <View style={styles.statDivider} />
+        <TouchableOpacity style={styles.statItem} onPress={() => setShowMartModal(true)}>
+          <Text style={styles.statVal} numberOfLines={1}>📍 {selectedMart?.name || 'Select Zone'}</Text>
+          <Text style={styles.statLabel}>Tap to change</Text>
+        </TouchableOpacity>
       </View>
 
-      {rider && !rider.isActive && rider.isProfileComplete && (
-        <View style={styles.approvalNotice}>
-          <Text style={styles.approvalIcon}>⏳</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.approvalTitle}>Awaiting Admin Approval</Text>
-            <Text style={styles.approvalText}>Our team is reviewing your documents. You'll be able to go online once approved.</Text>
+      {/* ── Active & Pending Orders Bottom Panel ─────────────── */}
+      <View style={styles.panel}>
+        <View style={styles.panelHandle} />
+
+        {!isOnline ? (
+          <View style={styles.offlineWrap}>
+            <Text style={styles.offlineIcon}>🔌</Text>
+            <Text style={styles.offlineTxt}>Go online to receive delivery requests.</Text>
           </View>
+        ) : (
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 20 }}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FF4500" />}
+          >
+
+            {/* Active Tasks */}
+            {activeOrders.length > 0 && (
+              <View>
+                <Text style={styles.sectionHdr}>Active Deliveries</Text>
+                {activeOrders.map(order => (
+                  <TouchableOpacity
+                    key={order?.id || Math.random().toString()}
+                    style={styles.activeCard}
+                    onPress={() => navigation.navigate('Navigation', { orderId: order?.id })}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <View style={styles.rowGap}>
+                        <Text style={styles.orderId}>#{(order?.id || '').slice(0, 8).toUpperCase()}</Text>
+                        <View style={[styles.badge, { backgroundColor: '#FF4500' }]}>
+                          <Text style={styles.badgeTxt}>{order.status.replace('_', ' ').toUpperCase()}</Text>
+                        </View>
+                        {order.orderType === 'food' && <View style={[styles.badge, { backgroundColor: '#FFF5E0' }]}><Text style={[styles.badgeTxt, { color: '#FF8C00' }]}>🍽️ FOOD</Text></View>}
+                        {order.orderType === 'mart' && <View style={[styles.badge, { backgroundColor: '#E8F5E9' }]}><Text style={[styles.badgeTxt, { color: '#2E7D32' }]}>🛒 MART</Text></View>}
+                      </View>
+                      <Text style={styles.cardAddr} numberOfLines={1}>📍 {order.address?.streetAddress || 'Local Area'}</Text>
+                      {order.orderType === 'food' && order.subOrders?.length > 1 && (
+                        <Text style={styles.batchBadge}>🛣️ Batched: {order.subOrders.length} stops</Text>
+                      )}
+                    </View>
+                    <Text style={{ fontSize: 22, color: '#FF4500' }}>›</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            {/* Pending Orders */}
+            <Text style={styles.sectionHdr}>Available Orders ({visiblePending.length})</Text>
+            {visiblePending.length === 0 ? (
+              <View style={styles.emptyWrap}>
+                <Text style={styles.emptyIcon}>🕐</Text>
+                <Text style={styles.emptyTxt}>Waiting for new delivery requests...</Text>
+              </View>
+            ) : (
+              visiblePending.map(order => (
+                <TouchableOpacity
+                  key={order?.id || Math.random().toString()}
+                  style={styles.pendingCard}
+                  onPress={() => navigation.navigate('OrderDetails', { orderId: order?.id })}
+                >
+                  <View style={styles.rowGap}>
+                    <Text style={styles.orderId}>#{(order?.id || '').slice(0, 8).toUpperCase()}</Text>
+                    {order.orderType === 'food' && <View style={[styles.badge, { backgroundColor: '#FFF5E0' }]}><Text style={[styles.badgeTxt, { color: '#FF8C00' }]}>🍽️</Text></View>}
+                    {order.orderType === 'mart' && <View style={[styles.badge, { backgroundColor: '#E8F5E9' }]}><Text style={[styles.badgeTxt, { color: '#2E7D32' }]}>🛒</Text></View>}
+                    <Text style={styles.earnings}>Rs {order.total}</Text>
+                  </View>
+                  <Text style={styles.cardAddr} numberOfLines={1}>📍 {order.address?.streetAddress || 'Local Area'}</Text>
+                  <Text style={styles.distanceTxt}>🚚 {order.deliveryDistanceKm || '?'} km · {order.items?.length || 0} items</Text>
+                  {order.orderType === 'food' && order.subOrders?.length > 1 && (
+                    <Text style={styles.batchBadge}>👨‍🍳 Batched ({order.subOrders.length} restaurants)</Text>
+                  )}
+                  <View style={styles.cardCTA}>
+                    <Text style={styles.cardCTATxt}>View Details →</Text>
+                  </View>
+                </TouchableOpacity>
+              ))
+            )}
+          </ScrollView>
+        )}
+      </View>
+
+      {/* ── New Order Incoming Modal ─────────────── */}
+      {sheetVisible && incomingOrder && (
+        <View style={styles.sheetOverlay}>
+          <TouchableOpacity style={{ flex: 1 }} onPress={dismissIncoming} />
+          <Animated.View style={[styles.newOrderSheet, { transform: [{ translateY: sheetY }] }]}>
+            <View style={styles.sheetPulse}>
+              <Text style={styles.sheetPulseTxt}>🔔 NEW ORDER!</Text>
+            </View>
+            <Text style={styles.sheetOrderId}>#{(incomingOrder?.id || '').slice(0, 8).toUpperCase()}</Text>
+            <View style={styles.sheetRow}>
+              <View style={styles.sheetStat}>
+                <Text style={styles.sheetStatVal}>Rs {incomingOrder.total}</Text>
+                <Text style={styles.sheetStatLabel}>Earnings</Text>
+              </View>
+              <View style={styles.sheetStat}>
+                <Text style={styles.sheetStatVal}>{incomingOrder.deliveryDistanceKm || '?'} km</Text>
+                <Text style={styles.sheetStatLabel}>Distance</Text>
+              </View>
+              <View style={styles.sheetStat}>
+                <Text style={styles.sheetStatVal}>{incomingOrder.items?.length || 0}</Text>
+                <Text style={styles.sheetStatLabel}>Items</Text>
+              </View>
+            </View>
+            <Text style={styles.sheetAddr} numberOfLines={2}>
+              📍 {incomingOrder.address?.streetAddress || 'Local Area'}
+            </Text>
+
+            <SwipeToAccept onAccept={handleAcceptIncoming} label="Swipe to Accept Order" />
+
+            <TouchableOpacity style={styles.declineBtn} onPress={dismissIncoming}>
+              <Text style={styles.declineTxt}>Skip this order</Text>
+            </TouchableOpacity>
+          </Animated.View>
         </View>
       )}
 
-      {/* Mart Selection Modal */}
-      <Modal visible={showMartModal} animationType="slide" transparent={true}>
+      {/* ── Mart Zone Modal ─────────────── */}
+      <Modal visible={showMartModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.martModal}>
-            <Text style={styles.modalTitle}>Select Nearby Mart</Text>
-            <Text style={styles.modalSub}>Select your base mart to see relevant orders</Text>
+          <View style={styles.zoneModal}>
+            <Text style={styles.modalTitle}>Select Delivery Zone</Text>
             <FlatList
               data={martLocations}
-              keyExtractor={(item) => item.id}
+              keyExtractor={item => item.id}
               renderItem={({ item }) => (
-                <TouchableOpacity 
-                  style={[styles.martItem, selectedMart?.id === item.id && styles.martItemSelected]} 
+                <TouchableOpacity
+                  style={[styles.zoneItem, selectedMart?.id === item.id && styles.zoneItemActive]}
                   onPress={() => handleSelectMart(item)}
                 >
-                  <Text style={[styles.martItemName, selectedMart?.id === item.id && { color: '#FF4500' }]}>{item.name}</Text>
-                  <Text style={styles.martItemAddr}>{item.address}</Text>
+                  <Text style={[styles.zoneItemName, selectedMart?.id === item.id && { color: '#FF4500' }]}>{item.name}</Text>
+                  <Text style={styles.zoneItemAddr}>{item.address}</Text>
                 </TouchableOpacity>
               )}
-              ListEmptyComponent={<Text style={{ textAlign: 'center', color: '#888', marginTop: 20 }}>No marts available</Text>}
+              ListEmptyComponent={<Text style={{ textAlign: 'center', color: '#888', marginTop: 20 }}>No zones available</Text>}
             />
-            <TouchableOpacity onPress={() => setShowMartModal(false)} style={styles.closeBtn}>
-              <Text style={styles.closeBtnText}>Close</Text>
+            <TouchableOpacity onPress={() => setShowMartModal(false)} style={styles.closeZoneBtn}>
+              <Text style={styles.closeZoneTxt}>Close</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
-
-      <View style={styles.statsRow}>
-        <View style={styles.statBox}>
-          <Text style={styles.statLabel}>Today's Earnings</Text>
-          <Text style={styles.statVal}>Rs. {stats?.todayEarnings?.toFixed(0) || '0'}</Text>
-        </View>
-        <View style={styles.statBox}>
-          <Text style={styles.statLabel}>Deliveries</Text>
-          <Text style={styles.statVal}>{stats?.todayDeliveries || 0}</Text>
-        </View>
-      </View>
-
-      <View style={styles.content}>
-
-        {isOnline ? (
-          <ScrollView
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-            }
-          >
-            {activeOrders.length > 0 && (
-              <View style={styles.activeSection}>
-                <Text style={styles.sectionTitle}>Your Current Tasks</Text>
-                {activeOrders.map(order => (
-                  <View key={order.id} style={[styles.orderCard, styles.activeCard]}>
-                    <View style={styles.orderHeader}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Text style={styles.orderId}>#ORD-{order.id.slice(0, 8).toUpperCase()}</Text>
-                        {order.orderType === 'food' && (
-                          <View style={[styles.typeBadge, { backgroundColor: '#FFF5E0' }]}>
-                            <Text style={[styles.typeBadgeText, { color: '#FF8C00' }]}>🍽️ Food</Text>
-                          </View>
-                        )}
-                        {order.orderType === 'mart' && (
-                          <View style={[styles.typeBadge, { backgroundColor: '#E8F5E9' }]}>
-                            <Text style={[styles.typeBadgeText, { color: '#2E7D32' }]}>🛒 Mart</Text>
-                          </View>
-                        )}
-                      </View>
-                      <Text style={styles.activeBadge}>{order.status === 'confirmed' ? 'Assigned' : order.status.replace('_', ' ')}</Text>
-                    </View>
-                    <View style={styles.orderDetails}>
-                      {order.orderType === 'food' ? (
-                          order.subOrders?.length > 1 ? (
-                              <Text style={[styles.detailText, { fontWeight: 'bold', color: '#FF4500' }]}>
-                                  👨‍🍳 Batched: {order.subOrders.length} Restaurant Stops
-                              </Text>
-                          ) : order.restaurant ? (
-                              <Text style={[styles.detailText, { fontWeight: 'bold', color: '#FF4500' }]}>
-                                  👨‍🍳 {order.restaurant.name}
-                              </Text>
-                          ) : null
-                      ) : null}
-                      <Text style={styles.detailText}>📍 {order.address?.streetAddress || 'Local Area'}</Text>
-                      <Text style={styles.detailText}>📦 {order.items?.length || 0} Items to deliver</Text>
-                    </View>
-                    <TouchableOpacity
-                      style={styles.continueBtn}
-                      onPress={() => navigation.navigate('Navigation', { orderId: order.id })}
-                    >
-                      <Text style={styles.continueBtnText}>Continue Delivery</Text>
-                    </TouchableOpacity>
-                  </View>
-                ))}
-                <View style={[styles.divider, { marginVertical: 15 }]} />
-              </View>
-            )}
-
-            <Text style={styles.sectionTitle}>Available Orders</Text>
-
-            {loading && pendingOrders.length === 0 && activeOrders.length === 0 ? (
-              <ActivityIndicator size="large" color="#FF4500" style={{ marginTop: 50 }} />
-            ) : pendingOrders.length > 0 ? (
-              pendingOrders
-                .filter(p => !activeOrders.find(a => a.id === p.id))
-                .filter(p => !selectedMart || selectedMart.id === 'all' || !p.martId || p.martId === selectedMart.id)
-                .map(order => (
-                <View key={order.id} style={styles.orderCard}>
-                  <View style={styles.orderHeader}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={styles.orderId}>#ORD-{order.id.slice(0, 8).toUpperCase()}</Text>
-                      {order.orderType === 'food' && (
-                        <View style={[styles.typeBadge, { backgroundColor: '#FFF5E0' }]}>
-                          <Text style={[styles.typeBadgeText, { color: '#FF8C00' }]}>🍽️ Food</Text>
-                        </View>
-                      )}
-                      {order.orderType === 'mart' && (
-                        <View style={[styles.typeBadge, { backgroundColor: '#E8F5E9' }]}>
-                          <Text style={[styles.typeBadgeText, { color: '#2E7D32' }]}>🛒 Mart</Text>
-                        </View>
-                      )}
-                    </View>
-                    <Text style={styles.earnings}>Rs. {order.total}</Text>
-                  </View>
-                  <View style={styles.orderDetails}>
-                    {order.orderType === 'food' ? (
-                        order.subOrders?.length > 1 ? (
-                            <Text style={[styles.detailText, { fontWeight: 'bold', color: '#FF4500' }]}>
-                                👨‍🍳 Batched: {order.subOrders.length} Restaurant Stops
-                            </Text>
-                        ) : order.restaurant ? (
-                            <Text style={[styles.detailText, { fontWeight: 'bold', color: '#FF4500' }]}>
-                                👨‍🍳 {order.restaurant.name}
-                            </Text>
-                        ) : null
-                    ) : null}
-                    <Text style={styles.detailText}>🚚 {order.deliveryDistanceKm} km away • {order.items?.length || 0} Items</Text>
-                    <Text style={styles.addressText} numberOfLines={1}>📍 {order.address?.streetAddress || 'Local Area'}</Text>
-                  </View>
-                  <View style={styles.actions}>
-                    <TouchableOpacity
-                      style={styles.acceptBtn}
-                      onPress={() => handleViewOrder(order.id)}
-                    >
-                      <Text style={styles.acceptText}>View Details</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ))
-            ) : (
-              <View style={styles.emptyBox}>
-                <Text style={styles.emptyText}>No other pending orders right now.</Text>
-              </View>
-            )}
-          </ScrollView>
-        ) : (
-          <View style={styles.offlineBox}>
-            <Text style={styles.offlineText}>Go online to start receiving delivery requests within the Baldia Town radius.</Text>
-          </View>
-        )}
-      </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f5' },
-  header: { padding: 20, backgroundColor: '#1E1E1E', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  name: { fontSize: 20, fontWeight: 'bold', color: '#fff' },
-  backBtn: { fontSize: 24, fontWeight: 'bold', color: '#333' },
-  martSelector: { flexDirection: 'row', alignItems: 'center', marginTop: 4, backgroundColor: '#2A2A2A', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, alignSelf: 'flex-start' },
-  martText: { color: '#FF4500', fontSize: 12, fontWeight: '700' },
-  chevron: { color: '#666', fontSize: 10, marginLeft: 5 },
-  statusText: { color: '#aaa', marginTop: 5 },
-  statsRow: { flexDirection: 'row', padding: 15, backgroundColor: '#1E1E1E' },
-  statBox: { flex: 1, backgroundColor: '#2A2A2A', padding: 15, borderRadius: 12, marginHorizontal: 5 },
-  statLabel: { color: '#aaa', fontSize: 12, marginBottom: 5 },
-  statVal: { color: '#fff', fontSize: 22, fontWeight: 'bold' },
-  content: { flex: 1, padding: 15 },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 15, color: '#333' },
-  orderCard: { backgroundColor: '#fff', borderRadius: 15, padding: 15, marginBottom: 15, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5, elevation: 2 },
-  orderHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
-  orderId: { fontSize: 14, fontWeight: 'bold', color: '#666' },
-  earnings: { fontSize: 18, fontWeight: 'bold', color: '#2ecc71' },
-  orderDetails: { marginBottom: 15 },
-  detailText: { color: '#555', marginBottom: 5 },
-  addressText: { color: '#7f8c8d' },
-  actions: { borderTopWidth: 1, borderTopColor: '#eee', paddingTop: 15 },
-  acceptBtn: { backgroundColor: '#FF4500', padding: 15, borderRadius: 10, alignItems: 'center' },
-  acceptText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
-  offlineBox: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
-  offlineText: { textAlign: 'center', color: '#888', fontSize: 16, lineHeight: 24 },
-  emptyBox: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 50 },
-  emptyText: { textAlign: 'center', color: '#aaa', fontSize: 14 },
-  activeSection: { marginBottom: 10 },
-  activeCard: { borderColor: '#FF450033', borderWidth: 1, backgroundColor: '#FFF5F0' },
-  activeBadge: { backgroundColor: '#FF4500', color: '#fff', fontSize: 11, fontWeight: 'bold', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, textTransform: 'uppercase' },
-  typeBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 },
-  typeBadgeText: { fontSize: 10, fontWeight: '800' },
-  continueBtn: { height: 45, backgroundColor: '#1A1A1A', borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginTop: 5 },
-  continueBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
-  divider: { height: 1, backgroundColor: '#eee' },
-  // Approval Notice
-  approvalNotice: {
-    backgroundColor: '#FFF5E0',
-    margin: 15,
-    borderRadius: 12,
-    padding: 15,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#FF8C0033',
-    gap: 12,
+const sw = StyleSheet.create({
+  track: {
+    height: 60, backgroundColor: '#FF4500', borderRadius: 30, marginVertical: 15,
+    paddingHorizontal: 4, justifyContent: 'center', position: 'relative',
   },
-  approvalIcon: { fontSize: 24 },
-  approvalTitle: { fontSize: 14, fontWeight: 'bold', color: '#B45309', marginBottom: 2 },
-  approvalText: { fontSize: 12, color: '#92400E', lineHeight: 18 },
-  // Modal styles
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'flex-end' },
-  martModal: { backgroundColor: '#fff', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, minHeight: '50%' },
-  modalTitle: { fontSize: 22, fontWeight: '900', color: '#1A1A1A' },
-  modalSub: { fontSize: 14, color: '#888', marginBottom: 20 },
-  martItem: { padding: 20, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
-  martItemSelected: { backgroundColor: '#FFF5F0', borderRadius: 15 },
-  martItemName: { fontSize: 16, fontWeight: '700', color: '#333' },
-  martItemAddr: { fontSize: 13, color: '#888', marginTop: 4 },
-  closeBtn: { marginTop: 20, backgroundColor: '#F0F0F0', padding: 15, borderRadius: 15, alignItems: 'center' },
-  closeBtnText: { fontWeight: 'bold', color: '#666' }
+  labelWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8 },
+  label: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  arrow: { color: 'rgba(255,255,255,0.6)', fontSize: 16, letterSpacing: 4 },
+  thumb: {
+    width: 52, height: 52, borderRadius: 26, backgroundColor: '#fff',
+    justifyContent: 'center', alignItems: 'center', elevation: 5,
+    shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 4,
+  },
+  thumbIcon: { fontSize: 24 },
+});
+
+const styles = StyleSheet.create({
+  root: { flex: 1 },
+  map: { ...StyleSheet.absoluteFillObject },
+
+  // Top HUD overlay
+  topHud: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 },
+  topRow: {
+    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12,
+    backgroundColor: 'rgba(20,20,20,0.88)',
+  },
+  greeting: { fontSize: 11, color: '#aaa', fontWeight: '600' },
+  name: { fontSize: 18, fontWeight: 'bold', color: '#fff', marginTop: 1 },
+  approvalBar: { backgroundColor: '#B45309', paddingHorizontal: 20, paddingVertical: 8 },
+  approvalBarTxt: { color: '#fff', fontSize: 12, fontWeight: '600' },
+
+  // Stats pill
+  statsPill: {
+    position: 'absolute', left: 16, right: 16, top: 110, zIndex: 10,
+    backgroundColor: 'rgba(255,255,255,0.97)', borderRadius: 18, flexDirection: 'row',
+    padding: 12, elevation: 8, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 12,
+  },
+  statItem: { flex: 1, alignItems: 'center' },
+  statVal: { fontSize: 14, fontWeight: '800', color: '#1A1A1A', textAlign: 'center' },
+  statLabel: { fontSize: 10, color: '#888', marginTop: 2 },
+  statDivider: { width: 1, backgroundColor: '#eee', marginHorizontal: 5 },
+
+  // Bottom panel
+  panel: {
+    position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 10,
+    backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    maxHeight: SCREEN_H * 0.48, minHeight: 180,
+    paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8,
+    elevation: 20, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 20,
+  },
+  panelHandle: { width: 40, height: 4, backgroundColor: '#ddd', borderRadius: 2, alignSelf: 'center', marginBottom: 12 },
+
+  offlineWrap: { alignItems: 'center', paddingVertical: 30 },
+  offlineIcon: { fontSize: 40, marginBottom: 12 },
+  offlineTxt: { color: '#888', fontSize: 15, textAlign: 'center' },
+
+  sectionHdr: { fontSize: 14, fontWeight: '800', color: '#333', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
+
+  activeCard: {
+    backgroundColor: '#FFF5F0', borderRadius: 14, padding: 16, marginBottom: 12,
+    borderLeftWidth: 4, borderLeftColor: '#FF4500', flexDirection: 'row', alignItems: 'center',
+  },
+
+  pendingCard: {
+    backgroundColor: '#fff', borderRadius: 14, padding: 16, marginBottom: 12,
+    borderWidth: 1, borderColor: '#EBEBEB', elevation: 2, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6,
+  },
+
+  rowGap: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 6 },
+  orderId: { fontSize: 13, fontWeight: 'bold', color: '#555' },
+  earnings: { fontSize: 16, fontWeight: '800', color: '#27ae60', marginLeft: 'auto' },
+  badge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 },
+  badgeTxt: { fontSize: 9, fontWeight: '900', color: '#fff' },
+  cardAddr: { fontSize: 13, color: '#666', marginBottom: 4 },
+  distanceTxt: { fontSize: 12, color: '#FF4500', fontWeight: '700', marginBottom: 4 },
+  batchBadge: { fontSize: 11, color: '#FF8C00', fontWeight: 'bold', marginTop: 2 },
+  cardCTA: { marginTop: 8, alignSelf: 'flex-end', backgroundColor: '#FF4500', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20 },
+  cardCTATxt: { color: '#fff', fontSize: 12, fontWeight: '700' },
+
+  emptyWrap: { alignItems: 'center', paddingVertical: 20 },
+  emptyIcon: { fontSize: 32, marginBottom: 8 },
+  emptyTxt: { color: '#aaa', fontSize: 13, textAlign: 'center' },
+  riderPin: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#FF4500', justifyContent: 'center', alignItems: 'center', elevation: 5 },
+
+  // Incoming order bottom sheet
+  sheetOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 100 },
+  newOrderSheet: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    backgroundColor: '#1A1A1A', borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    padding: 24, paddingBottom: 40,
+  },
+  sheetPulse: { backgroundColor: '#FF4500', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 6, alignSelf: 'center', marginBottom: 12 },
+  sheetPulseTxt: { color: '#fff', fontSize: 14, fontWeight: '900', letterSpacing: 1 },
+  sheetOrderId: { color: '#fff', fontSize: 22, fontWeight: '900', textAlign: 'center', marginBottom: 16 },
+  sheetRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 16 },
+  sheetStat: { alignItems: 'center' },
+  sheetStatVal: { color: '#fff', fontSize: 20, fontWeight: '800' },
+  sheetStatLabel: { color: '#888', fontSize: 11, marginTop: 2 },
+  sheetAddr: { color: '#ccc', fontSize: 14, textAlign: 'center', marginBottom: 8 },
+  declineBtn: { alignSelf: 'center', marginTop: 6 },
+  declineTxt: { color: '#666', fontSize: 13 },
+
+  // Mart modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
+  zoneModal: { backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, minHeight: '50%' },
+  modalTitle: { fontSize: 20, fontWeight: '900', color: '#1A1A1A', marginBottom: 16 },
+  zoneItem: { padding: 18, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
+  zoneItemActive: { backgroundColor: '#FFF5F0', borderRadius: 14 },
+  zoneItemName: { fontSize: 15, fontWeight: '700', color: '#333' },
+  zoneItemAddr: { fontSize: 12, color: '#888', marginTop: 3 },
+  closeZoneBtn: { marginTop: 16, backgroundColor: '#F0F0F0', padding: 14, borderRadius: 14, alignItems: 'center' },
+  closeZoneTxt: { fontWeight: 'bold', color: '#666' },
 });

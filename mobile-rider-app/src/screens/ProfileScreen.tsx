@@ -1,15 +1,19 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ActivityIndicator, Alert, ScrollView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import {
+  View, Text, StyleSheet, TouchableOpacity, SafeAreaView,
+  ActivityIndicator, Alert, ScrollView, Image,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { ridersApi } from '../api/api';
 import { useAuth } from '../context/AuthContext';
 
 export default function ProfileScreen({ navigation }: any) {
   const { logout } = useAuth();
-  const [rider, setRider] = React.useState<any>(null);
-  const [stats, setStats] = React.useState<any>(null);
-  const [loading, setLoading] = React.useState(true);
+  const [rider, setRider] = useState<any>(null);
+  const [stats, setStats] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
-  React.useEffect(() => {
+  useEffect(() => {
     fetchProfile();
   }, []);
 
@@ -29,141 +33,167 @@ export default function ProfileScreen({ navigation }: any) {
   };
 
   const handleLogout = () => {
-    Alert.alert('Log Out', 'Are you sure you want to log out?', [
+    Alert.alert('Log Out', 'Are you sure you want to log out of your session?', [
       { text: 'Cancel', style: 'cancel' },
-      { 
-        text: 'Log Out', 
-        style: 'destructive', 
-        onPress: () => logout()
-      }
+      { text: 'Log Out', style: 'destructive', onPress: () => logout() }
     ]);
   };
 
-  const showEarnings = async () => {
-    try {
-      const res = await ridersApi.getEarnings();
-      const earningsData: any[] = res.data;
-      
-      let msg = `Your total lifetime earnings: Rs. ${rider?.totalEarnings || 0}\n\n`;
-      if (earningsData && earningsData.length > 0) {
-        msg += 'Monthly Breakdown:\n';
-        earningsData.forEach(e => {
-          msg += `• ${e.month}: Rs. ${e.earnings} (${e.deliveries} orders)\n`;
-        });
-      } else {
-        msg += 'No monthly data available yet.';
-      }
+  if (loading) return (
+    <View style={styles.centered}><ActivityIndicator size="large" color="#FF4500" /></View>
+  );
 
-      Alert.alert('Earnings History', msg, [{ text: 'Dismiss' }]);
-    } catch (e: any) {
-      Alert.alert('Error', 'Failed to load earnings history');
-    }
-  };
+  const isVerified = rider?.isActive && rider?.isProfileComplete;
 
-  const showVehicle = () => {
-    Alert.alert(
-      'Vehicle Registration',
-      `Vehicle Type: ${rider?.vehicleType || 'N/A'}\nVehicle Number: ${rider?.vehicleNumber || 'N/A'}\n\nStatus: Verified and Active`,
-      [{ text: 'OK' }]
-    );
-  };
-
-  const showHelp = () => {
-    Alert.alert(
-      'Help & Support',
-      'Need assistance? Contact our support team:\n\n📞 0315-0258004\n📧 support@baldiamart.pk\n\nWe are available 24/7!',
-      [{ text: 'Got it' }]
-    );
-  };
-
-  const goToHistory = () => {
-    navigation.navigate('OrderHistory');
-  };
-
-  if (loading) {
-    return (
-      <View style={styles.loading}>
-        <ActivityIndicator size="large" color="#FF4500" />
-      </View>
-    );
-  }
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Rider Profile</Text>
-      </View>
-
-      <View style={styles.content}>
-        <View style={styles.profileBox}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{rider?.name?.[0] || 'R'}</Text>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {/* --- Header Section --- */}
+        <View style={styles.hero}>
+          <View style={styles.avatarContainer}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarTxt}>{rider?.name?.[0]?.toUpperCase() || 'R'}</Text>
+            </View>
+            {isVerified && (
+              <View style={styles.verifiedBadge}>
+                <Ionicons name="checkmark-circle" size={20} color="#fff" />
+              </View>
+            )}
           </View>
-          <View>
-            <Text style={styles.name}>{rider?.name || 'Rider'}</Text>
-            <Text style={styles.phone}>{rider?.vehicleType || 'Vehicle'} • {rider?.vehicleNumber || 'N/A'}</Text>
+          <Text style={styles.userName}>{rider?.name || 'Rider'}</Text>
+          <Text style={styles.userPhone}>{rider?.phoneNumber}</Text>
+          <View style={styles.statusChip}>
+            <View style={[styles.statusDot, { backgroundColor: isVerified ? '#27ae60' : '#e67e22' }]} />
+            <Text style={styles.statusTxt}>{isVerified ? 'Verified Account' : 'Pending Verification'}</Text>
           </View>
         </View>
 
-        <View style={styles.statsContainer}>
-          <View style={styles.statBox}>
-            <Text style={styles.statVal}>{stats?.rating || '4.9'}/5</Text>
-            <Text style={styles.statLabel}>Rating</Text>
+        {/* --- Stats Grid --- */}
+        <View style={styles.statsGrid}>
+          <View style={styles.statItem}>
+            <Text style={styles.statVal}>{stats?.rating?.toFixed(1) || '5.0'}</Text>
+            <Text style={styles.statLabel}>⭐ Rating</Text>
           </View>
-          <View style={styles.statBox}>
-            <Text style={styles.statVal}>{stats?.totalDeliveries || 0}</Text>
-            <Text style={styles.statLabel}>Deliveries</Text>
-          </View>
-          <View style={styles.statBox}>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
             <Text style={styles.statVal}>{stats?.completionRate || 100}%</Text>
-            <Text style={styles.statLabel}>Completion</Text>
+            <Text style={styles.statLabel}>🎯 Success</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statVal}>{stats?.totalDeliveries || 0}</Text>
+            <Text style={styles.statLabel}>📦 Trips</Text>
           </View>
         </View>
 
-        <View style={styles.menuList}>
-          <TouchableOpacity style={styles.menuItem} onPress={showEarnings}>
-            <Text style={styles.menuText}>Earnings History</Text>
-            <Text style={styles.arrow}>→</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.menuItem} onPress={showVehicle}>
-            <Text style={styles.menuText}>Vehicle Registration</Text>
-            <Text style={styles.arrow}>→</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.menuItem} onPress={showHelp}>
-            <Text style={styles.menuText}>Help & Support</Text>
-            <Text style={styles.arrow}>→</Text>
-          </TouchableOpacity>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Vehicle Information</Text>
+          <View style={styles.infoCard}>
+            <View style={styles.infoRow}>
+              <Ionicons name="bicycle-outline" size={20} color="#666" />
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={styles.infoLabel}>Vehicle Type</Text>
+                <Text style={styles.infoVal}>{rider?.vehicleType || 'Motorcycle'}</Text>
+              </View>
+            </View>
+            <View style={styles.infoRow}>
+              <Ionicons name="card-outline" size={20} color="#666" />
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={styles.infoLabel}>Plate Number</Text>
+                <Text style={styles.infoVal}>{rider?.vehicleNumber || 'KDL-1234'}</Text>
+              </View>
+            </View>
+          </View>
         </View>
 
-        <TouchableOpacity 
-          style={styles.logoutBtn}
-          onPress={handleLogout}
-        >
-          <Text style={styles.logoutText}>Log Out</Text>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Document Status</Text>
+          <View style={styles.infoCard}>
+            <View style={styles.docRow}>
+              <Text style={styles.docLabel}>CNIC Verification</Text>
+              <Text style={[styles.docStatus, { color: isVerified ? '#27ae60' : '#e67e22' }]}>
+                {isVerified ? 'APPROVED' : 'PENDING'}
+              </Text>
+            </View>
+            <View style={styles.docRow}>
+              <Text style={styles.docLabel}>Driving License</Text>
+              <Text style={[styles.docStatus, { color: isVerified ? '#27ae60' : '#e67e22' }]}>
+                {isVerified ? 'APPROVED' : 'PENDING'}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Account Settings</Text>
+          <View style={styles.menuBox}>
+            <TouchableOpacity style={styles.menuBtn} onPress={() => navigation.navigate('OrderHistory')}>
+              <Ionicons name="time-outline" size={22} color="#1E1E1E" />
+              <Text style={styles.menuTxt}>Delivery History</Text>
+              <Ionicons name="chevron-forward" size={18} color="#CCC" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.menuBtn} onPress={() => navigation.navigate('Wallet')}>
+              <Ionicons name="wallet-outline" size={22} color="#1E1E1E" />
+              <Text style={styles.menuTxt}>Earnings & Wallet</Text>
+              <Ionicons name="chevron-forward" size={18} color="#CCC" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.menuBtn} onPress={() => Alert.alert('Support', 'Call us at 0315-0258004')}>
+              <Ionicons name="help-circle-outline" size={22} color="#1E1E1E" />
+              <Text style={styles.menuTxt}>Help & Support</Text>
+              <Ionicons name="chevron-forward" size={18} color="#CCC" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+          <Ionicons name="log-out-outline" size={22} color="#ff4d4d" />
+          <Text style={styles.logoutTxt}>Sign Out</Text>
         </TouchableOpacity>
-      </View>
+
+        <Text style={styles.versionTxt}>Baldia Mart Rider App v2.4.0</Text>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f9f9f9' },
-  header: { padding: 20, backgroundColor: '#1E1E1E' },
-  title: { fontSize: 20, fontWeight: 'bold', color: '#fff' },
-  content: { flex: 1, padding: 20 },
-  profileBox: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, backgroundColor: '#fff', padding: 20, borderRadius: 15 },
-  avatar: { width: 60, height: 60, borderRadius: 30, backgroundColor: '#FF450015', marginRight: 15, justifyContent: 'center', alignItems: 'center' },
-  avatarText: { color: '#FF4500', fontWeight: 'bold', fontSize: 24 },
-  name: { fontSize: 18, fontWeight: 'bold', marginBottom: 5 },
-  phone: { color: '#666' },
-  loading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  statsContainer: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 30 },
-  statBox: { flex: 1, backgroundColor: '#fff', padding: 15, borderRadius: 12, alignItems: 'center', marginHorizontal: 5 },
-  statVal: { fontSize: 18, fontStyle: 'italic', fontWeight: 'bold', color: '#1E1E1E', marginBottom: 4 },
-  statLabel: { fontSize: 12, color: '#888' },
-  menuList: { backgroundColor: '#fff', borderRadius: 15, overflow: 'hidden', marginBottom: 30 },
-  menuItem: { flexDirection: 'row', justifyContent: 'space-between', padding: 18, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
-  menuText: { fontSize: 16, color: '#333' },
-  arrow: { color: '#ccc', fontSize: 18 },
-  logoutBtn: { backgroundColor: '#fff', padding: 18, borderRadius: 15, alignItems: 'center', borderWidth: 1, borderColor: '#ff3b30' },
-  logoutText: { color: '#ff3b30', fontSize: 16, fontWeight: 'bold' }
+  container: { flex: 1, backgroundColor: '#F8F9FA' },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  
+  hero: { alignItems: 'center', paddingVertical: 40, backgroundColor: '#fff', borderBottomLeftRadius: 32, borderBottomRightRadius: 32, elevation: 2 },
+  avatarContainer: { position: 'relative', marginBottom: 16 },
+  avatar: { width: 90, height: 90, borderRadius: 45, backgroundColor: '#FF450015', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FF450010' },
+  avatarTxt: { fontSize: 36, fontWeight: '900', color: '#FF4500' },
+  verifiedBadge: { position: 'absolute', bottom: 0, right: 0, width: 28, height: 28, borderRadius: 14, backgroundColor: '#27ae60', borderWidth: 3, borderColor: '#fff', justifyContent: 'center', alignItems: 'center' },
+  userName: { fontSize: 24, fontWeight: '800', color: '#1A1A1A' },
+  userPhone: { fontSize: 14, color: '#666', marginTop: 4 },
+  statusChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0F0F0', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, marginTop: 12 },
+  statusDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8 },
+  statusTxt: { fontSize: 12, fontWeight: '700', color: '#555' },
+
+  statsGrid: { flexDirection: 'row', backgroundColor: '#fff', marginHorizontal: 20, marginTop: -25, borderRadius: 20, padding: 20, elevation: 4, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10 },
+  statItem: { flex: 1, alignItems: 'center' },
+  statVal: { fontSize: 18, fontWeight: '900', color: '#1A1A1A' },
+  statLabel: { fontSize: 11, color: '#888', marginTop: 4, fontWeight: '600' },
+  statDivider: { width: 1, height: 30, backgroundColor: '#EEE' },
+
+  section: { marginTop: 24, paddingHorizontal: 20 },
+  sectionTitle: { fontSize: 15, fontWeight: '800', color: '#1A1A1A', marginBottom: 12, marginLeft: 4 },
+  infoCard: { backgroundColor: '#fff', borderRadius: 20, padding: 20, elevation: 2 },
+  infoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+  infoLabel: { fontSize: 11, color: '#999', fontWeight: '600' },
+  infoVal: { fontSize: 15, fontWeight: '700', color: '#333', marginTop: 2 },
+  
+  docRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  docLabel: { fontSize: 14, color: '#555', fontWeight: '600' },
+  docStatus: { fontSize: 11, fontWeight: '900' },
+
+  menuBox: { backgroundColor: '#fff', borderRadius: 20, overflow: 'hidden', elevation: 2 },
+  menuBtn: { flexDirection: 'row', alignItems: 'center', padding: 18, borderBottomWidth: 1, borderBottomColor: '#F5F5F5' },
+  menuTxt: { flex: 1, marginLeft: 14, fontSize: 15, fontWeight: '600', color: '#1A1A1A' },
+
+  logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginHorizontal: 20, marginTop: 32, padding: 18, borderRadius: 20, backgroundColor: '#FFF0F0', borderWidth: 1, borderColor: '#FFDADA' },
+  logoutTxt: { marginLeft: 8, fontSize: 16, fontWeight: '700', color: '#ff4d4d' },
+
+  versionTxt: { textAlign: 'center', color: '#CCC', fontSize: 12, marginVertical: 32, fontWeight: '600' },
 });

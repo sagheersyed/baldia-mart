@@ -8,8 +8,11 @@ export class BannersController {
 
   // Public - any user/app can fetch active banners
   @Get()
-  findAll(@Query('section') section?: string) {
-    return this.bannersService.findAll(section);
+  findAll(
+    @Query('section') section?: string,
+    @Query('zoneId') zoneId?: string,
+  ) {
+    return this.bannersService.findAll(section, zoneId);
   }
 
   @Get(':id')

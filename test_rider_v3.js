@@ -1,11 +1,11 @@
 const http = require('http');
 // Use the phone number from the previous successful registration
-const phone = '+923114106131'; 
+const phone = '+923114106131';
 
 const data = JSON.stringify({ phoneNumber: phone, role: 'rider' });
 
 const options = {
-  hostname: '192.168.100.142',
+  hostname: 'https://c2e9-175-107-236-228.ngrok-free.app',
   port: 3000,
   path: '/api/v1/auth/check-status',
   method: 'POST',
@@ -22,10 +22,10 @@ const req = http.request(options, (res) => {
     console.log('STATUS:', res.statusCode);
     console.log('RESPONSE:', body);
     try {
-        const json = JSON.parse(body);
-        console.log('EXISTS:', json.exists);
-        console.log('HAS_MPIN:', json.hasMpin);
-    } catch (e) {}
+      const json = JSON.parse(body);
+      console.log('EXISTS:', json.exists);
+      console.log('HAS_MPIN:', json.hasMpin);
+    } catch (e) { }
   });
 });
 

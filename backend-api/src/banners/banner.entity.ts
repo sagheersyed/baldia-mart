@@ -41,6 +41,9 @@ export class Banner {
   @Column({ default: 0 })
   sortOrder: number;
 
+  @Column({ nullable: true })
+  zoneId: string;
+
   @CreateDateColumn()
   createdAt: Date;
 

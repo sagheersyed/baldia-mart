@@ -4,13 +4,27 @@ import {
   ScrollView, ActivityIndicator, RefreshControl, Dimensions, FlatList
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { categoriesApi, addressesApi, bannersApi, restaurantsApi, normalizeUrl } from '../api/api';
+import { categoriesApi, addressesApi, bannersApi, restaurantsApi, settingsApi, deliveryZonesApi, normalizeUrl } from '../api/api';
 import { useFocusEffect } from '@react-navigation/native';
 import io from 'socket.io-client';
 import BannerCarousel from '../components/BannerCarousel';
 import { useCart } from '../context/CartContext';
+import { formatRatingCount, getDistanceKm } from '../utils/helpers';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Helper: check if a restaurant is currently open
+const isRestaurantOpen = (openingTime?: string, closingTime?: string): boolean => {
+  if (!openingTime || !closingTime) return true;
+  const now = new Date();
+  const nowMins = now.getHours() * 60 + now.getMinutes();
+  const [oh, om] = openingTime.split(':').map(Number);
+  const [ch, cm] = closingTime.split(':').map(Number);
+  const openMins = oh * 60 + om;
+  const closeMins = ch * 60 + cm;
+  if (closeMins > openMins) return nowMins >= openMins && nowMins < closeMins;
+  return nowMins >= openMins || nowMins < closeMins; // overnight
+};
 
 // ─── Restaurant Card ─────────────────────────────────────────
 const MenuItemCard = memo(({ prod, cartQty, onAdd }: any) => (
@@ -39,8 +53,9 @@ const MenuItemCard = memo(({ prod, cartQty, onAdd }: any) => (
 const RestaurantCard = memo(({ resto, onPress }: any) => {
   const logoUri = normalizeUrl(resto.logoUrl);
   const coverFallback = 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=400&q=80';
+  const open = isRestaurantOpen(resto.openingTime, resto.closingTime);
   return (
-    <TouchableOpacity style={styles.restoCard} onPress={onPress} activeOpacity={0.88}>
+    <TouchableOpacity style={[styles.restoCard, !open && styles.restoCardClosed]} onPress={onPress} activeOpacity={0.88}>
       {/* Cover Image / Placeholder */}
       <View style={styles.restoCover}>
         <Image
@@ -48,18 +63,23 @@ const RestaurantCard = memo(({ resto, onPress }: any) => {
           style={StyleSheet.absoluteFill}
           resizeMode="cover"
         />
-        <View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.3)' }} />
+        <View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: open ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.55)' }} />
         {resto.cuisineType && (
           <View style={styles.restoTag}><Text style={styles.restoTagTxt}>{resto.cuisineType}</Text></View>
+        )}
+        {!open && (
+          <View style={styles.closedPill}>
+            <Text style={styles.closedPillTxt}>Currently Closed</Text>
+          </View>
         )}
       </View>
       <View style={styles.restoInfo}>
         <View style={styles.restoTopRow}>
-          <Text style={styles.restoName} numberOfLines={1}>{resto.name}</Text>
+          <Text style={[styles.restoName, !open && { color: '#999' }]} numberOfLines={1}>{resto.name}</Text>
           {resto.rating > 0 && (
             <View style={styles.ratingBadge}>
               <Text style={styles.ratingStar}>⭐</Text>
-              <Text style={styles.ratingValue}>{Number(resto.rating).toFixed(1)}</Text>
+              <Text style={styles.ratingValue}>{Number(resto.rating).toFixed(1)}{formatRatingCount(resto.ratingCount)}</Text>
             </View>
           )}
         </View>
@@ -116,6 +136,8 @@ export default function FoodScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeCuisine, setActiveCuisine] = useState('all');
+  const [address, setAddress] = useState<any>(null);
+  const [activeZones, setActiveZones] = useState<any[]>([]);
 
   // Set food mode whenever this screen is focused
   useFocusEffect(useCallback(() => {
@@ -126,19 +148,40 @@ export default function FoodScreen({ navigation }: any) {
   const loadData = async () => {
     try {
       console.log('FoodScreen: Fetching data...');
-      const [restRes, bannerRes] = await Promise.all([
+      const [restRes, addrRes, zonesRes] = await Promise.all([
         restaurantsApi.getAll().catch(err => {
           console.error('Restaurants API Error:', err);
           return { data: [] };
         }),
-        bannersApi.getBySection('food').catch(err => {
-          console.error('Food Banners API Error:', err);
-          return { data: [] };
-        }),
+        addressesApi.getAll().catch(err => ({ data: [] })),
+        deliveryZonesApi.getActive().catch(err => ({ data: [] })),
       ]);
-      console.log(`FoodScreen: Loaded ${restRes.data?.length || 0} restaurants and ${bannerRes.data?.length || 0} banners`);
-      setRestaurants(restRes.data || []);
+
+      const addrs = addrRes.data || [];
+      const currentAddr = addrs.find((a: any) => a.isDefault) || addrs[0] || null;
+      const zones = zonesRes.data || [];
+
+      let zoneId: string | undefined;
+      if (currentAddr?.latitude && currentAddr?.longitude) {
+        const matchingZone = zones.find((z: any) =>
+          getDistanceKm(
+            Number(currentAddr.latitude), Number(currentAddr.longitude),
+            Number(z.centerLat), Number(z.centerLng)
+          ) <= Number(z.radiusKm)
+        );
+        zoneId = matchingZone?.id;
+      }
+
+      const bannerRes = await bannersApi.getBySection('food', zoneId).catch(err => {
+        console.error('Food Banners API Error:', err);
+        return { data: [] };
+      });
+
+      const allRestos = (restRes.data || []).filter((r: any) => r.isActive !== false);
+      setRestaurants(allRestos);
       setBanners(bannerRes.data || []);
+      setAddress(currentAddr);
+      setActiveZones(zones);
     } catch (e) {
       console.error('Failed to load food data:', e);
     } finally {
@@ -148,7 +191,7 @@ export default function FoodScreen({ navigation }: any) {
   };
 
   useFocusEffect(useCallback(() => {
-    const socket = io('http://192.168.100.142:3000', {
+    const socket = io('https://c2e9-175-107-236-228.ngrok-free.app', {
       transports: ['websocket'],
       forceNew: true
     });
@@ -169,11 +212,42 @@ export default function FoodScreen({ navigation }: any) {
   }, []));
 
   const onRefresh = useCallback(() => { setRefreshing(true); loadData(); }, []);
-  // Filtering logic
-  const filteredRestaurants = restaurants.filter((r: any) => {
-    if (activeCuisine === 'all') return true;
-    return r.cuisineType?.toLowerCase().includes(activeCuisine.toLowerCase());
-  });
+
+  // Sort: open restaurants by rating (desc), then closed by rating (desc)
+  const sortedFilteredRestaurants = [...restaurants]
+    .filter((r: any) => {
+      if (activeCuisine !== 'all' && !r.cuisineType?.toLowerCase().includes(activeCuisine.toLowerCase())) {
+        return false;
+      }
+
+      // Zone filter
+      if (activeZones.length > 0 && address?.latitude && address?.longitude) {
+        // Find which zones the user is currently inside
+        const userZones = activeZones.filter(z =>
+          getDistanceKm(Number(address.latitude), Number(address.longitude), Number(z.centerLat), Number(z.centerLng)) <= Number(z.radiusKm)
+        );
+
+        // If user is not in ANY zone, they can't see the restaurant
+        if (userZones.length === 0) return false;
+
+        // If restaurant has no coords, maybe we assume it's hidden or show it? We will hide it if it lacks coords
+        if (!r.latitude || !r.longitude) return false;
+
+        // Restaurant must be in AT LEAST ONE of the zones the user is in
+        const isRestoInUserZone = userZones.some(z =>
+          getDistanceKm(Number(r.latitude), Number(r.longitude), Number(z.centerLat), Number(z.centerLng)) <= Number(z.radiusKm)
+        );
+
+        if (!isRestoInUserZone) return false;
+      }
+      return true;
+    })
+    .sort((a: any, b: any) => {
+      const aOpen = isRestaurantOpen(a.openingTime, a.closingTime);
+      const bOpen = isRestaurantOpen(b.openingTime, b.closingTime);
+      if (aOpen !== bOpen) return aOpen ? -1 : 1;
+      return Number(b.rating || 0) - Number(a.rating || 0);
+    });
 
   const cartCount = getCartCount('food');
 
@@ -224,9 +298,9 @@ export default function FoodScreen({ navigation }: any) {
           onPress={(b: any) => {
             if (b.linkType === 'restaurant' && b.linkId) {
               const resto = restaurants.find((r: any) => r.id === b.linkId);
-              navigation.navigate('RestaurantDetail', { 
+              navigation.navigate('RestaurantDetail', {
                 restaurantId: b.linkId,
-                restaurantData: resto 
+                restaurantData: resto
               });
             } else if (b.linkType === 'product' && b.linkId) {
               // Food mode product usually belongs to a restaurant, 
@@ -258,19 +332,21 @@ export default function FoodScreen({ navigation }: any) {
         {/* Restaurants */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Nearby Restaurants</Text>
-          <Text style={styles.restoCount}>{filteredRestaurants.length} available</Text>
+          <Text style={styles.restoCount}>{sortedFilteredRestaurants.length} available</Text>
         </View>
 
-        {filteredRestaurants.length === 0 ? (
+        {sortedFilteredRestaurants.length === 0 ? (
           <View style={styles.emptyMenu}>
             <Text style={styles.emptyMenuTxt}>
               {restaurants.length === 0
                 ? "No restaurants added yet.\nCheck back soon!"
-                : "No restaurants found for this category."}
+                : activeCuisine !== 'all'
+                  ? "No restaurants found for this category."
+                  : `Your address is outside of active delivery zones for nearby restaurants.\nPlease select a different address.`}
             </Text>
           </View>
         ) : (
-          filteredRestaurants.map((resto: any) => (
+          sortedFilteredRestaurants.map((resto: any) => (
             <RestaurantCard
               key={resto.id}
               resto={resto}
@@ -390,6 +466,8 @@ const styles = StyleSheet.create({
   restoCoverEmoji: { fontSize: 50 },
   restoTag: { position: 'absolute', top: 10, left: 12, backgroundColor: '#FF4500', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
   restoTagTxt: { color: '#fff', fontSize: 11, fontWeight: '800' },
+  closedPill: { position: 'absolute', backgroundColor: 'rgba(255,255,255,0.95)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, elevation: 4 },
+  closedPillTxt: { color: '#FF4500', fontSize: 13, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.5 },
   restoInfo: { padding: 14 },
   restoTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   restoName: { fontSize: 16, fontWeight: '800', color: '#1A1A1A', flex: 1 },
@@ -447,4 +525,5 @@ const styles = StyleSheet.create({
 
   emptyMenu: { padding: 40, alignItems: 'center' },
   emptyMenuTxt: { color: '#999', fontSize: 14 },
+  restoCardClosed: { opacity: 0.65 },
 });

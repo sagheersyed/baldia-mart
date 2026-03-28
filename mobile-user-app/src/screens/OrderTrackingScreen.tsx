@@ -6,15 +6,15 @@ import { ordersApi, productsApi, menuItemsApi } from '../api/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Shared machine IP logic (ideally would be in a config file)
-const BASE_IP = '192.168.100.142';
-const SOCKET_URL = `http://${BASE_IP}:3000`;
+const BASE_IP = 'https://c2e9-175-107-236-228.ngrok-free.app';
+const SOCKET_URL = `http://${BASE_IP}`;
 
 const GET_STATUS_STEPS = (orderType: string = 'mart') => [
-  { key: 'pending',           label: 'Order Placed',    icon: '📝', description: orderType === 'food' ? 'Restaurant has received your order' : 'We have received your order' },
-  { key: 'confirmed',         label: 'Confirmed',       icon: '✅', description: orderType === 'food' ? 'Restaurant has confirmed your order' : 'The store has confirmed your order' },
-  { key: 'preparing',         label: 'Preparing',       icon: orderType === 'food' ? '👨‍🍳' : '📦', description: orderType === 'food' ? 'Your food is being prepared' : 'Your items are being packed' },
-  { key: 'out_for_delivery',  label: 'Out for Delivery',icon: '🚴', description: 'Our rider is on the way' },
-  { key: 'delivered',         label: 'Delivered',       icon: '🎁', description: orderType === 'food' ? 'Enjoy your meal!' : 'Your package has been delivered' },
+  { key: 'pending', label: 'Order Placed', icon: '📝', description: orderType === 'food' ? 'Restaurant has received your order' : 'We have received your order' },
+  { key: 'confirmed', label: 'Confirmed', icon: '✅', description: orderType === 'food' ? 'Restaurant has confirmed your order' : 'The store has confirmed your order' },
+  { key: 'preparing', label: 'Preparing', icon: orderType === 'food' ? '👨‍🍳' : '📦', description: orderType === 'food' ? 'Your food is being prepared' : 'Your items are being packed' },
+  { key: 'out_for_delivery', label: 'Out for Delivery', icon: '🚴', description: 'Our rider is on the way' },
+  { key: 'delivered', label: 'Delivered', icon: '🎁', description: orderType === 'food' ? 'Enjoy your meal!' : 'Your package has been delivered' },
 ];
 
 export default function OrderTrackingScreen({ route, navigation }: any) {
@@ -71,20 +71,20 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
               });
             });
           } else if (orderRes.data.restaurantId) {
-            toRate.push({ 
-              id: orderRes.data.restaurantId, 
+            toRate.push({
+              id: orderRes.data.restaurantId,
               name: orderRes.data.restaurant?.name || 'Restaurant',
-              type: 'restaurant' 
+              type: 'restaurant'
             });
           } else if (orderRes.data.brandId) {
-            toRate.push({ 
-              id: orderRes.data.brandId, 
+            toRate.push({
+              id: orderRes.data.brandId,
               name: orderRes.data.brand?.name || 'Brand',
-              type: 'brand' 
+              type: 'brand'
             });
           }
           setBusinessesToRate(toRate);
-          
+
           // Only show if not fully rated
           if (!orderRes.data.isRated || !orderRes.data.isBusinessRated) {
             setShowRating(true);
@@ -208,15 +208,15 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
 
   const handleUpdateQuantityLocal = (itemId: string, newQuantity: number) => {
     if (newQuantity < 0) return;
-    setLocalItems(prev => prev.map(item => 
+    setLocalItems(prev => prev.map(item =>
       item.id === itemId ? { ...item, quantity: newQuantity } : item
     ));
   };
 
   const hasChanges = () => {
     if (!order || !order.items) return false;
-    return JSON.stringify(localItems.map(i => ({ id: i.id, q: i.quantity }))) !== 
-           JSON.stringify(order.items.map(i => ({ id: i.id, q: i.quantity })));
+    return JSON.stringify(localItems.map(i => ({ id: i.id, q: i.quantity }))) !==
+      JSON.stringify(order.items.map(i => ({ id: i.id, q: i.quantity })));
   };
 
   const handleConfirmBatchUpdates = async () => {
@@ -227,7 +227,7 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
         quantity: item.quantity
       }));
       const res = await ordersApi.updateOrderItems(orderId, updates);
-      
+
       if (res.data?.deleted) {
         Alert.alert('Order Cancelled', 'All items were removed, so the order has been cancelled.', [
           { text: 'OK', onPress: () => navigation.navigate('MyOrders') }
@@ -262,7 +262,7 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
 
   const filteredProducts = useMemo(() => {
     if (!searchQuery) return allProducts;
-    return allProducts.filter(p => 
+    return allProducts.filter(p =>
       p.name.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [searchQuery, allProducts]);
@@ -280,7 +280,7 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
     setSubmittingReview(true);
     try {
       const { ridersApi, businessReviewsApi } = require('../api/api');
-      
+
       if (ratingStep === 1) {
         // Submit Rider Review
         if (rider) {
@@ -290,7 +290,7 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
             orderId
           });
         }
-        
+
         if (businessesToRate.length > 0) {
           setRatingStep(2);
           setCurrentBusinessIndex(0);
@@ -302,7 +302,7 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
       } else {
         // Submit Business Review (Restaurant or Brand)
         const currentBiz = businessesToRate[currentBusinessIndex];
-        
+
         if (currentBiz) {
           await businessReviewsApi.create({
             orderId,
@@ -313,7 +313,7 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
             comment: businessComment
           });
         }
-        
+
         if (currentBusinessIndex < businessesToRate.length - 1) {
           // Move to next business
           setCurrentBusinessIndex(prev => prev + 1);
@@ -373,50 +373,79 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
             </TouchableOpacity>
           </View>
         ) : (
-          <View style={styles.statusCard}>
-            <Text style={styles.orderIdLabel}>Order ID</Text>
-            <Text style={styles.orderIdValue}>#{orderId.slice(-8).toUpperCase()}</Text>
-            <View style={styles.mainStatusContainer}>
-              <Text style={styles.mainStatusText}>
+          <View style={styles.premiumStatusCard}>
+            <View style={styles.topRow}>
+              <View style={styles.idBadge}>
+                <Text style={styles.idBadgeLabel}>ORDER ID</Text>
+                <Text style={styles.idBadgeValue}>#{orderId.slice(0, 8).toUpperCase()}</Text>
+              </View>
+              <View style={styles.typeTag}>
+                <Text style={styles.typeTagText}>{order?.orderType === 'food' ? '🍽️ FOOD' : '🛒 MART'}</Text>
+              </View>
+            </View>
+
+            <View style={styles.mainStatusContent}>
+              <Text style={styles.statusHighlight}>
                 {steps[currentStepIndex]?.label || 'Processing...'}
               </Text>
-              <Text style={styles.mainStatusDesc}>
+              <Text style={styles.statusSubtext}>
                 {steps[currentStepIndex]?.description}
               </Text>
             </View>
+
+            <View style={styles.progressBarBg}>
+              <View style={[styles.progressBarFill, { width: `${((currentStepIndex + 1) / steps.length) * 100}%` }]} />
+            </View>
           </View>
         )}
-        
+
         {order?.subOrders && order.subOrders.length > 1 && (
-          <View style={[styles.statusCard, { marginTop: 15, paddingVertical: 15 }]}>
-            <Text style={[styles.orderIdLabel, { color: '#FF4500', marginBottom: 5 }]}>
-              Batch Order ({order.subOrders.length} Restaurant Stops)
-            </Text>
-            {order.subOrders.map((sub: any, idx: number) => (
-              <View key={sub.id || idx} style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
-                <Text style={{ fontSize: 22, marginRight: 12 }}>{sub.status === 'delivered' ? '🎁' : sub.status === 'picked_up' ? '🚴' : '👨‍🍳'}</Text>
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Text style={{ fontWeight: 'bold', color: '#1a1a1a', fontSize: 14 }}>
-                      [Stop {idx+1}] {sub.restaurant?.name || 'Restaurant'}
-                    </Text>
-                    <View style={{ backgroundColor: sub.status === 'picked_up' ? '#2ecc7120' : sub.status === 'ready' ? '#3498db20' : '#f1f2f6', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                       <Text style={{ fontSize: 9, fontWeight: 'bold', color: sub.status === 'picked_up' ? '#27ae60' : sub.status === 'ready' ? '#2980b9' : '#7f8c8d' }}>
-                         {sub.status.toUpperCase()}
-                       </Text>
+          <View style={[styles.subOrderCard]}>
+            <View style={styles.subOrderHeader}>
+              <Text style={styles.subOrderTitle}>
+                {order.orderType === 'food' ? 'Batch Order' : 'Multi-Vendor Route'}
+              </Text>
+              <Text style={styles.subOrderCount}>
+                {order.subOrders.length} {order.orderType === 'food' ? 'Restaurants' : 'Shops'}
+              </Text>
+            </View>
+            <View style={styles.subOrderList}>
+              {order.subOrders.map((sub: any, idx: number) => {
+                const isMart = order.orderType === 'mart';
+                const statusColors: any = {
+                  pending: { bg: '#F7FAFC', text: '#718096' },
+                  confirmed: { bg: '#EBF8FF', text: '#3182CE' },
+                  preparing: { bg: '#FFF5F5', text: '#E53E3E' },
+                  ready: { bg: '#F0FFF4', text: '#38A169' },
+                  picked_up: { bg: '#FAF5FF', text: '#805AD5' },
+                  delivered: { bg: '#C6F6D5', text: '#22543D' },
+                };
+                const colors = statusColors[sub.status] || statusColors.pending;
+
+                return (
+                  <View key={sub.id || idx} style={styles.subOrderItem}>
+                    <View style={[styles.subOrderBadge, { backgroundColor: isMart ? '#FF450015' : '#3182CE15' }]}>
+                      <Text style={{ fontSize: 16 }}>{isMart ? '🛍️' : '👨‍🍳'}</Text>
+                    </View>
+                    <View style={styles.subOrderInfo}>
+                      <View style={styles.subOrderNameRow}>
+                        <Text style={styles.subOrderName} numberOfLines={1}>
+                          {sub.restaurant?.name || sub.vendor?.name || (isMart ? 'Shop' : 'Restaurant')}
+                        </Text>
+                        <View style={[styles.statusTag, { backgroundColor: colors.bg }]}>
+                          <Text style={[styles.statusTagText, { color: colors.text }]}>
+                            {sub.status.toUpperCase()}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={styles.subOrderLoc} numberOfLines={1}>
+                        {sub.restaurant?.location || sub.vendor?.location || sub.vendor?.address || 'Baldia Town Center'}
+                      </Text>
                     </View>
                   </View>
-                  <Text style={{ fontSize: 12, color: '#666', marginTop: 2 }} numberOfLines={1}>
-                    {sub.restaurant?.location}
-                  </Text>
-                  {sub.status === 'preparing' && sub.estimatedPrepTimeMinutes > 0 && (
-                    <Text style={{ fontSize: 11, color: '#FF4500', fontWeight: 'bold', marginTop: 4 }}>
-                      ⏳ Estimated Prep: {sub.estimatedPrepTimeMinutes} mins
-                    </Text>
-                  )}
-                </View>
-              </View>
-            ))}
+                );
+              })}
+            </View>
           </View>
         )}
 
@@ -430,8 +459,8 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
                 <Text style={styles.riderName}>{rider.name || 'Your Rider'}</Text>
                 <Text style={styles.riderStatus}>Assign to your delivery</Text>
               </View>
-              <TouchableOpacity 
-                style={styles.callBtn} 
+              <TouchableOpacity
+                style={styles.callBtn}
                 onPress={() => {
                   const { Linking } = require('react-native');
                   Linking.openURL(`tel:${rider.phoneNumber}`);
@@ -450,22 +479,22 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
               <View key={item.id} style={styles.itemRow}>
                 <View style={styles.itemInfo}>
                   <Text style={styles.itemName}>
-                    {order?.orderType === 'food' 
-                      ? (item.menuItem?.name || 'Dish') 
+                    {order?.orderType === 'food'
+                      ? (item.menuItem?.name || 'Dish')
                       : (item.product?.name || 'Item')}
                   </Text>
                   <Text style={styles.itemPrice}>Rs. {item.priceAtTime} x {item.quantity}</Text>
                 </View>
                 {(status === 'pending' || status === 'confirmed') && order?.orderType !== 'food' ? (
                   <View style={styles.quantityControls}>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       style={styles.qtyBtn}
                       onPress={() => handleUpdateQuantityLocal(item.id, item.quantity - 1)}
                     >
                       <Text style={styles.qtyBtnText}>-</Text>
                     </TouchableOpacity>
                     <Text style={styles.qtyText}>{item.quantity}</Text>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       style={styles.qtyBtn}
                       onPress={() => handleUpdateQuantityLocal(item.id, item.quantity + 1)}
                     >
@@ -477,19 +506,19 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
                 )}
               </View>
             ))}
-            
+
             {(status === 'pending' || status === 'confirmed') && order?.orderType !== 'food' && (
               <View style={styles.summaryActionsRow}>
                 {hasChanges() && (
-                  <TouchableOpacity 
-                    style={[styles.actionBtn, styles.confirmBtn]} 
+                  <TouchableOpacity
+                    style={[styles.actionBtn, styles.confirmBtn]}
                     onPress={handleConfirmBatchUpdates}
                   >
                     <Text style={styles.confirmBtnText}>Confirm Changes</Text>
                   </TouchableOpacity>
                 )}
-                <TouchableOpacity 
-                  style={[styles.actionBtn, styles.addBtn, !hasChanges() && { flex: 1 }]} 
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.addBtn, !hasChanges() && { flex: 1 }]}
                   onPress={() => setShowAddProduct(true)}
                 >
                   <Text style={styles.addBtnText}>
@@ -519,7 +548,7 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
               <View key={step.key} style={styles.timelineItem}>
                 <View style={styles.leftColumn}>
                   <View style={[
-                    styles.indicator, 
+                    styles.indicator,
                     isPassed && styles.passedIndicator,
                     isCurrent && styles.currentIndicator
                   ]}>
@@ -530,7 +559,7 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
                 <View style={styles.rightColumn}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Text style={[
-                      styles.stepLabel, 
+                      styles.stepLabel,
                       isPassed && styles.passedStepLabel,
                       isCurrent && styles.currentStepLabel
                     ]}>
@@ -556,7 +585,7 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
                 <>
                   <Text style={styles.ratingTitle}>Rate your Rider</Text>
                   <Text style={styles.ratingSubtitle}>How was your delivery experience with {rider?.name || 'your rider'}?</Text>
-                  
+
                   <View style={styles.starsRow}>
                     {[1, 2, 3, 4, 5].map(s => (
                       <TouchableOpacity key={s} onPress={() => setRating(s)}>
@@ -565,7 +594,7 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
                     ))}
                   </View>
 
-                  <TextInput 
+                  <TextInput
                     style={styles.commentInput}
                     placeholder="Share your delivery experience..."
                     placeholderTextColor="#999"
@@ -583,7 +612,7 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
                   <Text style={styles.ratingSubtitle}>
                     Step {currentBusinessIndex + 1} of {businessesToRate.length}: How was the quality of your {order?.orderType === 'food' ? 'meal' : 'items'}?
                   </Text>
-                  
+
                   <View style={styles.starsRow}>
                     {[1, 2, 3, 4, 5].map(s => (
                       <TouchableOpacity key={s} onPress={() => setBusinessRating(s)}>
@@ -592,7 +621,7 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
                     ))}
                   </View>
 
-                  <TextInput 
+                  <TextInput
                     style={styles.commentInput}
                     placeholder={`Tell us about the ${order?.orderType === 'food' ? 'food' : 'products'}...`}
                     placeholderTextColor="#999"
@@ -604,22 +633,22 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
                 </>
               )}
 
-              <TouchableOpacity 
-                style={[styles.submitRatingBtn, submittingReview && { opacity: 0.7 }]} 
+              <TouchableOpacity
+                style={[styles.submitRatingBtn, submittingReview && { opacity: 0.7 }]}
                 onPress={handleSubmitReview}
                 disabled={submittingReview}
               >
                 {submittingReview ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                   <Text style={styles.submitRatingText}>
-                    {ratingStep === 1 
-                      ? (businessesToRate.length > 0 ? 'Next: Rate Business' : 'Finish') 
+                  <Text style={styles.submitRatingText}>
+                    {ratingStep === 1
+                      ? (businessesToRate.length > 0 ? 'Next: Rate Business' : 'Finish')
                       : (currentBusinessIndex < businessesToRate.length - 1 ? 'Next Business' : 'Submit Feedback')}
                   </Text>
                 )}
               </TouchableOpacity>
-              
+
               <TouchableOpacity style={styles.closeRatingBtn} onPress={handleDismissRating}>
                 <Text style={styles.closeRatingText}>Maybe later</Text>
               </TouchableOpacity>
@@ -638,7 +667,7 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
                     <Text style={styles.addProductCloseText}>✕</Text>
                   </TouchableOpacity>
                 </View>
-                
+
                 <View style={styles.searchBox}>
                   <Text style={styles.searchIcon}>🔍</Text>
                   <TextInput
@@ -694,8 +723,8 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
         </Modal>
       </ScrollView>
 
-      <TouchableOpacity 
-        style={styles.homeBtn} 
+      <TouchableOpacity
+        style={styles.homeBtn}
         onPress={() => navigation.navigate('Main')}
       >
         <Text style={styles.homeBtnText}>Back to Home</Text>
@@ -714,7 +743,7 @@ const styles = StyleSheet.create({
   backIcon: { fontSize: 20, color: '#333' },
   headerTitle: { fontSize: 18, fontWeight: '700', color: '#1A1A1A', marginLeft: 15 },
   scrollContent: { padding: 20 },
-  
+
   cancelledBanner: {
     backgroundColor: '#FFF5F5', borderRadius: 20, padding: 30,
     alignItems: 'center', borderWidth: 1, borderColor: '#FED7D7', marginBottom: 20,
@@ -731,9 +760,26 @@ const styles = StyleSheet.create({
 
   statusCard: {
     backgroundColor: '#FF4500', borderRadius: 24, padding: 25,
-    marginBottom: 30, elevation: 8, shadowColor: '#FF4500',
+    marginBottom: 20, elevation: 8, shadowColor: '#FF4500',
     shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12,
   },
+  premiumStatusCard: {
+    backgroundColor: '#fff', borderRadius: 28, padding: 25,
+    marginBottom: 25, shadowColor: '#000', shadowOpacity: 0.08,
+    shadowRadius: 15, elevation: 3, borderWidth: 1, borderColor: '#F0F0F0',
+  },
+  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
+  idBadge: { backgroundColor: '#F7FAFC', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: '#EDF2F7' },
+  idBadgeLabel: { fontSize: 10, fontWeight: '800', color: '#718096', letterSpacing: 1 },
+  idBadgeValue: { fontSize: 14, fontWeight: '800', color: '#1A202C', marginTop: 2 },
+  typeTag: { backgroundColor: '#FF450015', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  typeTagText: { fontSize: 10, fontWeight: '800', color: '#FF4500' },
+  mainStatusContent: { marginBottom: 20 },
+  statusHighlight: { fontSize: 28, fontWeight: '900', color: '#1A202C', letterSpacing: -0.5 },
+  statusSubtext: { fontSize: 14, color: '#718096', marginTop: 6, lineHeight: 20 },
+  progressBarBg: { height: 6, backgroundColor: '#EDF2F7', borderRadius: 3, overflow: 'hidden' },
+  progressBarFill: { height: '100%', backgroundColor: '#FF4500', borderRadius: 3 },
+
   orderIdLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: '600', textTransform: 'uppercase' },
   orderIdValue: { color: '#fff', fontSize: 18, fontWeight: '800', marginTop: 4 },
   mainStatusContainer: { marginTop: 25 },
@@ -753,7 +799,7 @@ const styles = StyleSheet.create({
   stepIcon: { fontSize: 20 },
   connector: { width: 2, flex: 1, backgroundColor: '#E2E8F0', marginVertical: -10, zIndex: 1 },
   passedConnector: { backgroundColor: '#FF4500' },
-  
+
   rightColumn: { flex: 1, paddingLeft: 15, paddingBottom: 35, paddingTop: 6 },
   stepLabel: { fontSize: 16, fontWeight: '600', color: '#A0AEC0' },
   passedStepLabel: { color: '#2D3748' },
@@ -765,7 +811,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
   },
   homeBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  
+
   riderCard: {
     backgroundColor: '#fff', borderRadius: 20, padding: 20,
     marginBottom: 25, shadowColor: '#000', shadowOpacity: 0.05,
@@ -797,7 +843,33 @@ const styles = StyleSheet.create({
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   totalLabel: { fontSize: 14, fontWeight: '600', color: '#718096' },
   totalText: { fontSize: 18, fontWeight: '800', color: '#1A1A1A' },
-  
+
+  subOrderCard: {
+    backgroundColor: '#fff', borderRadius: 24, padding: 20,
+    marginBottom: 25, shadowColor: '#000', shadowOpacity: 0.04,
+    shadowRadius: 12, elevation: 2,
+    borderWidth: 1, borderColor: '#F0F0F0',
+  },
+  subOrderHeader: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline',
+    marginBottom: 15, borderBottomWidth: 1, borderBottomColor: '#F7FAFC',
+    paddingBottom: 10,
+  },
+  subOrderTitle: { fontSize: 15, fontWeight: '800', color: '#2D3748' },
+  subOrderCount: { fontSize: 12, fontWeight: '700', color: '#A0AEC0' },
+  subOrderList: { gap: 12 },
+  subOrderItem: { flexDirection: 'row', alignItems: 'center', gap: 15 },
+  subOrderBadge: {
+    width: 44, height: 44, borderRadius: 14,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  subOrderInfo: { flex: 1 },
+  subOrderNameRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  subOrderName: { fontSize: 14, fontWeight: '700', color: '#1A202C', maxWidth: '65%' },
+  subOrderLoc: { fontSize: 12, color: '#718096', marginTop: 2 },
+  statusTag: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  statusTagText: { fontSize: 10, fontWeight: '800' },
+
   quantityControls: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F7FAFC', borderRadius: 10, padding: 4 },
   qtyBtn: { width: 32, height: 32, backgroundColor: '#fff', borderRadius: 8, justifyContent: 'center', alignItems: 'center', elevation: 1, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2 },
   qtyBtnText: { fontSize: 18, fontWeight: 'bold', color: '#FF4500' },
@@ -826,7 +898,7 @@ const styles = StyleSheet.create({
     borderColor: '#FF450030',
   },
   confirmUpdatesBtnText: { color: '#FF4500', fontWeight: '700', fontSize: 14 },
-  
+
   summaryActionsRow: { flexDirection: 'row', gap: 10, marginTop: 15 },
   actionBtn: { flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   confirmBtn: { backgroundColor: '#FF450015', borderWidth: 1, borderColor: '#FF450030' },
@@ -841,11 +913,11 @@ const styles = StyleSheet.create({
   addProductTitle: { fontSize: 20, fontWeight: '800', color: '#1A1A1A' },
   addProductCloseBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F5F5F5', justifyContent: 'center', alignItems: 'center' },
   addProductCloseText: { fontSize: 16, color: '#666', fontWeight: 'bold' },
-  
+
   searchBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5F6FA', borderRadius: 16, paddingHorizontal: 15, marginBottom: 20 },
   searchIcon: { fontSize: 18, marginRight: 10 },
   searchInput: { flex: 1, height: 50, fontSize: 16, color: '#1A1A1A', fontWeight: '500' },
-  
+
   addProductRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
   addProdPic: { width: 50, height: 50, borderRadius: 12, backgroundColor: '#F5F5F5', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
   addProdImg: { width: '100%', height: '100%' },

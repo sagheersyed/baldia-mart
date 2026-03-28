@@ -15,7 +15,7 @@ interface User {
   createdAt: string;
 }
 
-const API_URL = 'http://192.168.100.142:3000/api/v1/users/all';
+const API_URL = 'https://c2e9-175-107-236-228.ngrok-free.app/api/v1/users/all';
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -44,7 +44,7 @@ export default function UsersPage() {
   const handleToggleActive = async (user: User) => {
     setUpdating(user.id);
     try {
-      const res = await fetchWithAuth(`http://192.168.100.142:3000/api/v1/users/${user.id}/status`, {
+      const res = await fetchWithAuth(`https://c2e9-175-107-236-228.ngrok-free.app/api/v1/users/${user.id}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isActive: !user.isActive }),
@@ -169,8 +169,8 @@ export default function UsersPage() {
                         disabled={updating === user.id}
                         onClick={() => handleToggleActive(user)}
                         className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${user.isActive
-                            ? 'bg-red-50 border-red-100 text-red-600 hover:bg-red-500 hover:text-white'
-                            : 'bg-green-50 border-green-100 text-green-600 hover:bg-green-500 hover:text-white'
+                          ? 'bg-red-50 border-red-100 text-red-600 hover:bg-red-500 hover:text-white'
+                          : 'bg-green-50 border-green-100 text-green-600 hover:bg-green-500 hover:text-white'
                           } ${updating === user.id ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
                         {updating === user.id ? (

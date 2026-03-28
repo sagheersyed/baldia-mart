@@ -84,8 +84,8 @@ export default function BrandsScreen({ navigation }: any) {
         brandsApi.getAll('mart'),
         productsApi.getAll(),
       ]);
-      const allBrands = brandsRes.data || [];
-      const allProds = prodRes.data || [];
+      const allBrands = (brandsRes.data || []).filter((b: any) => b.isActive !== false);
+      const allProds = (prodRes.data || []).filter((p: any) => p.isActive !== false);
 
       // Attach product count to each brand
       const brandsWithCount = allBrands.map((b: any) => ({

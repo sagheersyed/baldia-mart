@@ -16,11 +16,15 @@ export class SettingsService implements OnModuleInit {
     await this.seedDefault('delivery_base_fee', '80'); // Rs. 150 base
     await this.seedDefault('delivery_threshold_km', '3'); // Free up to 3km in base
     await this.seedDefault('delivery_per_km_fee', '5'); // Rs. 20 per extra km
+    await this.seedDefault('delivery_max_radius_km', '10'); // Max delivery zone
     await this.seedDefault('tax_rate_percentage', '1.00');
+    await this.seedDefault('multi_restaurant_max_distance_km', '0.4');
 
     // New Global Configuration
     await this.seedDefault('contact_phone', '+92 300 1234567');
     await this.seedDefault('contact_email', 'support@baldiamart.com');
+    await this.seedDefault('social_facebook', 'https://facebook.com/baldiamart');
+    await this.seedDefault('social_instagram', 'https://instagram.com/baldiamart');
     await this.seedDefault('mart_location', 'Baldia Town, Karachi');
     await this.seedDefault('mart_locations_list', JSON.stringify([
       { id: '1', name: 'Baldia Town Main', address: 'Plot 12, Sector 5, Baldia Town', lat: 24.9123, lng: 66.9876 },
@@ -48,9 +52,12 @@ export class SettingsService implements OnModuleInit {
       delivery_base_fee: await this.getNumber('delivery_base_fee', 150),
       delivery_threshold_km: await this.getNumber('delivery_threshold_km', 3),
       delivery_per_km_fee: await this.getNumber('delivery_per_km_fee', 20),
+      delivery_max_radius_km: await this.getNumber('delivery_max_radius_km', 10),
       store_status: await this.getByKey('store_status', 'open'),
       contact_phone: await this.getByKey('contact_phone', '+92 341 2248616'),
       contact_email: await this.getByKey('contact_email', 'support@baldiamart.com'),
+      social_facebook: await this.getByKey('social_facebook', 'https://facebook.com/baldiamart'),
+      social_instagram: await this.getByKey('social_instagram', 'https://instagram.com/baldiamart'),
       mart_locations: JSON.parse(await this.getByKey('mart_locations_list', '[]') as string),
       auth_customer_mpin_enabled: (await this.getByKey('auth_customer_mpin_enabled', 'true')) === 'true',
       auth_customer_otp_enabled: (await this.getByKey('auth_customer_otp_enabled', 'true')) === 'true',

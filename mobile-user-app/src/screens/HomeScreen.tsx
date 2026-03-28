@@ -6,14 +6,19 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import io from 'socket.io-client';
-import { categoriesApi, productsApi, addressesApi, brandsApi, bannersApi, normalizeUrl } from '../api/api';
+import {
+  categoriesApi, productsApi, addressesApi, brandsApi, bannersApi,
+  deliveryZonesApi, normalizeUrl
+} from '../api/api';
+import { getDistanceKm } from '../utils/helpers';
 import BannerCarousel from '../components/BannerCarousel';
 import { useCart } from '../context/CartContext';
+import { useFavourites } from '../hooks/useFavourites';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // ─────────────── Product Card ───────────────
-const ProductCard = memo(({ prod, cartQty, onAdd }: any) => {
+const ProductCard = memo(({ prod, cartQty, onAdd, isFav, onToggleFav }: any) => {
   const stock = prod.stock ?? prod.stockQuantity ?? 1;
   const isOOS = stock <= 0;
   const finalPrice = (Number(prod.price) - Number(prod.discount || 0)).toFixed(0);
@@ -30,6 +35,9 @@ const ProductCard = memo(({ prod, cartQty, onAdd }: any) => {
         {isOOS && (
           <View style={styles.oosOverlay}><Text style={styles.oosText}>Out of Stock</Text></View>
         )}
+        <TouchableOpacity style={styles.prodHeart} onPress={onToggleFav}>
+          <Text style={styles.prodHeartIcon}>{isFav ? '❤️' : '🤍'}</Text>
+        </TouchableOpacity>
       </View>
       <Text style={styles.prodName} numberOfLines={2}>{prod.name}</Text>
       {prod.category?.name && <Text style={styles.prodCatLabel}>{prod.category.name}</Text>}
@@ -81,7 +89,7 @@ const BrandChip = memo(({ brand, onPress }: any) => {
       </View>
       <Text style={styles.brandChipName} numberOfLines={1}>{brand.name}</Text>
     </TouchableOpacity>
-  ); r
+  );
 });
 
 // ════════════════ MAIN SCREEN ════════════════
@@ -89,6 +97,7 @@ export default function HomeScreen({ navigation }: any) {
   const { martCart, foodCart, addToCart, getCartCount, activeMode, setActiveMode } = useCart();
   const [serviceMode, setServiceMode] = useState<'mart' | 'food'>(activeMode);
   const cart = serviceMode === 'mart' ? martCart : foodCart;
+  const { isFavourite, toggleFavourite, reload: reloadFavs } = useFavourites();
 
   const [categories, setCategories] = useState<any[]>([]);
   const [brands, setBrands] = useState<any[]>([]);
@@ -102,19 +111,36 @@ export default function HomeScreen({ navigation }: any) {
   // ── Load Data ──
   const loadData = useCallback(async () => {
     try {
-      const [catRes, prodRes, addrRes, brandRes, bannerRes] = await Promise.all([
+      const [catRes, prodRes, addrRes, brandRes, zonesRes] = await Promise.all([
         categoriesApi.getAll('mart'),
         productsApi.getAll(),
         addressesApi.getAll().catch(() => ({ data: [] })),
         brandsApi.getAll('mart').catch(() => ({ data: [] })),
-        bannersApi.getBySection('mart').catch(() => ({ data: [] })),
+        deliveryZonesApi.getActive().catch(() => ({ data: [] })),
       ]);
-      setCategories(catRes.data || []);
-      setProducts(prodRes.data || []);
-      setBrands(brandRes.data || []);
-      setBanners(bannerRes.data || []);
+
       const addrs = addrRes.data || [];
-      setAddress(addrs.find((a: any) => a.isDefault) || addrs[0] || null);
+      const currentAddr = addrs.find((a: any) => a.isDefault) || addrs[0] || null;
+      const zones = zonesRes.data || [];
+
+      let zoneId: string | undefined;
+      if (currentAddr?.latitude && currentAddr?.longitude) {
+        const matchingZone = zones.find((z: any) =>
+          getDistanceKm(
+            Number(currentAddr.latitude), Number(currentAddr.longitude),
+            Number(z.centerLat), Number(z.centerLng)
+          ) <= Number(z.radiusKm)
+        );
+        zoneId = matchingZone?.id;
+      }
+
+      const bannerRes = await bannersApi.getBySection('mart', zoneId).catch(() => ({ data: [] }));
+
+      setCategories(catRes.data || []);
+      setProducts((prodRes.data || []).filter((p: any) => p.isActive !== false));
+      setBrands((brandRes.data || []).filter((b: any) => b.isActive !== false));
+      setBanners(bannerRes.data || []);
+      setAddress(currentAddr);
     } catch (e) {
       console.error('Failed to load home data:', e);
     } finally {
@@ -126,11 +152,12 @@ export default function HomeScreen({ navigation }: any) {
   useFocusEffect(useCallback(() => {
     setActiveMode('mart');
     loadData();
-  }, [loadData]));
+    reloadFavs();
+  }, [loadData, reloadFavs]));
 
   // Real-time Banners Update
   useEffect(() => {
-    const socket = io('http://192.168.100.142:3000', {
+    const socket = io('https://c2e9-175-107-236-228.ngrok-free.app', {
       transports: ['websocket'],
       forceNew: true
     });
@@ -268,7 +295,6 @@ export default function HomeScreen({ navigation }: any) {
               if (brand) navigation.navigate('BrandDetail', { brandId: brand.id });
             } else if (b.linkType === 'category' && b.linkId) {
               setSelectedCatId(b.linkId);
-              loadData(b.linkId);
             } else if (b.linkType === 'restaurant' && b.linkId) {
               navigation.navigate('RestaurantDetail', { restaurantId: b.linkId });
             }
@@ -332,6 +358,11 @@ export default function HomeScreen({ navigation }: any) {
                   prod={prod}
                   cartQty={martCart.find((c: any) => c.id === prod.id)?.quantity || 0}
                   onAdd={handleAddToCart}
+                  isFav={isFavourite(prod.id, 'products')}
+                  onToggleFav={() => toggleFavourite(
+                    { id: prod.id, name: prod.name, imageUrl: prod.imageUrl, price: prod.price },
+                    'products'
+                  )}
                 />
               ))}
             </View>
@@ -503,6 +534,12 @@ const styles = StyleSheet.create({
   qtyBadgeText: { color: '#fff', fontSize: 10, fontWeight: '900' },
   oosOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end', alignItems: 'center', paddingBottom: 6 },
   oosText: { color: '#fff', fontSize: 10, fontWeight: '700' },
+  prodHeart: {
+    position: 'absolute', top: 6, left: 6,
+    width: 26, height: 26, borderRadius: 13, backgroundColor: 'rgba(255,255,255,0.85)',
+    justifyContent: 'center', alignItems: 'center', elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 3
+  },
+  prodHeartIcon: { fontSize: 14 },
   prodName: { fontSize: 13, fontWeight: '700', color: '#1A1A1A', marginBottom: 2, lineHeight: 18 },
   prodCatLabel: { fontSize: 10, color: '#ABABAB', fontWeight: '600', marginBottom: 8 },
   prodBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },

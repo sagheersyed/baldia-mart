@@ -19,6 +19,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
   // Modals state
   const [showAddressListModal, setShowAddressListModal] = useState(false);
   const [showAddressPickerModal, setShowAddressPickerModal] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [editingAddressData, setEditingAddressData] = useState<any>(null);
 
   const [deliveryFee, setDeliveryFee] = useState(0);
@@ -111,7 +112,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
   
   const total = subtotal + deliveryFee + multiStopSurcharge;
 
-  const handlePlaceOrder = async () => {
+  const handlePlaceOrder = () => {
     if (cart.length === 0) {
       Alert.alert('Error', 'Your cart is empty');
       return;
@@ -127,6 +128,11 @@ export default function CheckoutScreen({ navigation, route }: any) {
       return;
     }
 
+    setShowConfirmModal(true);
+  };
+
+  const proceedToCheckout = async () => {
+    setShowConfirmModal(false);
     setIsPlacingOrder(true);
     try {
       const restaurantId = mode === 'food' ? cart[0]?.restaurantId : undefined;
@@ -307,6 +313,39 @@ export default function CheckoutScreen({ navigation, route }: any) {
         </View>
       )}
 
+      {/* Location Confirmation Modal */}
+      {showConfirmModal && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.confirmationContainer}>
+            <View style={styles.confirmIconBox}>
+              <Text style={{ fontSize: 32 }}>📍</Text>
+            </View>
+            <Text style={styles.confirmTitle}>Confirm Your Location</Text>
+            <Text style={styles.confirmSubtitle}>Please ensure your delivery address is correct to avoid delivery delays.</Text>
+            
+            <View style={styles.confirmAddressPreview}>
+              <Text style={styles.confirmAddressLabel}>{selectedAddress?.label || 'Delivery Address'}</Text>
+              <Text style={styles.confirmAddressText}>{selectedAddress?.streetAddress}</Text>
+            </View>
+
+            <View style={styles.confirmActions}>
+              <TouchableOpacity 
+                style={styles.cancelActionBtn} 
+                onPress={() => setShowConfirmModal(false)}
+              >
+                <Text style={styles.cancelActionText}>Change Address</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.proceedActionBtn} 
+                onPress={proceedToCheckout}
+              >
+                <Text style={styles.proceedActionText}>Confirm & Place Order</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
+
       {/* Actual Address Map/Form Modal */}
       <AddressPickerModal
         visible={showAddressPickerModal}
@@ -368,6 +407,20 @@ const styles = StyleSheet.create({
   editAddressBtn: { paddingVertical: 15, paddingLeft: 10, justifyContent: 'center', alignItems: 'center', borderLeftWidth: 1, borderLeftColor: '#f0f0f0' },
   editAddressBtnText: { color: '#FF4500', fontWeight: 'bold', fontSize: 13 },
   addNewAddressBtn: { marginTop: 10, backgroundColor: '#fff', borderWidth: 2, borderStyle: 'dashed', borderColor: '#ccc', borderRadius: 20, padding: 18, alignItems: 'center' },
-  addNewAddressText: { color: '#666', fontWeight: 'bold', fontSize: 15 }
+  addNewAddressText: { color: '#666', fontWeight: 'bold', fontSize: 15 },
+
+  // Confirmation Modal Styles
+  confirmationContainer: { backgroundColor: '#fff', borderTopLeftRadius: 35, borderTopRightRadius: 35, padding: 30, alignItems: 'center', width: '100%' },
+  confirmIconBox: { width: 80, height: 80, backgroundColor: '#FFF5F0', borderRadius: 40, justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
+  confirmTitle: { fontSize: 22, fontWeight: '900', color: '#1a1a1a', marginBottom: 10 },
+  confirmSubtitle: { fontSize: 14, color: '#666', textAlign: 'center', marginBottom: 25, lineHeight: 20 },
+  confirmAddressPreview: { width: '100%', backgroundColor: '#f9f9f9', padding: 20, borderRadius: 20, marginBottom: 30, borderWidth: 1, borderColor: '#f0f0f0' },
+  confirmAddressLabel: { fontWeight: 'bold', fontSize: 16, color: '#1a1a1a', marginBottom: 5 },
+  confirmAddressText: { color: '#555', fontSize: 14, lineHeight: 20 },
+  confirmActions: { width: '100%', gap: 12 },
+  proceedActionBtn: { backgroundColor: '#FF4500', height: 60, borderRadius: 20, justifyContent: 'center', alignItems: 'center', width: '100%' },
+  proceedActionText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  cancelActionBtn: { height: 60, borderRadius: 20, justifyContent: 'center', alignItems: 'center', width: '100%', borderWidth: 1, borderColor: '#eee' },
+  cancelActionText: { color: '#666', fontSize: 16, fontWeight: '700' }
 });
 

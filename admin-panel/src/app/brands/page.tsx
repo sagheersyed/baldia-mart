@@ -25,7 +25,8 @@ export default function BrandsPage() {
   const [showModal, setShowModal] = useState(false);
   const [formData, setFormData] = useState({ 
     name: '', description: '', logoUrl: '', section: 'mart', 
-    location: '', latitude: '', longitude: '', category: '' 
+    location: '', latitude: '', longitude: '', category: '',
+    isActive: true 
   });
   const [editingBrand, setEditingBrand] = useState<Brand | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -69,7 +70,7 @@ export default function BrandsPage() {
       if (res.ok) {
         setShowModal(false);
         setEditingBrand(null);
-        setFormData({ name: '', description: '', logoUrl: '', section: 'mart', location: '', latitude: '', longitude: '', category: '' });
+        setFormData({ name: '', description: '', logoUrl: '', section: 'mart', location: '', latitude: '', longitude: '', category: '', isActive: true });
         fetchBrands();
       }
     } catch (error) {
@@ -89,7 +90,8 @@ export default function BrandsPage() {
       location: brand.location || '',
       latitude: brand.latitude ? brand.latitude.toString() : '',
       longitude: brand.longitude ? brand.longitude.toString() : '',
-      category: brand.category || ''
+      category: brand.category || '',
+      isActive: brand.isActive
     });
     setShowModal(true);
   };
@@ -121,7 +123,7 @@ export default function BrandsPage() {
           <button 
             onClick={() => {
               setEditingBrand(null);
-              setFormData({ name: '', description: '', logoUrl: '', section: 'mart', location: '', latitude: '', longitude: '', category: '' });
+              setFormData({ name: '', description: '', logoUrl: '', section: 'mart', location: '', latitude: '', longitude: '', category: '', isActive: true });
               setShowModal(true);
             }}
             className="flex items-center space-x-2 bg-gradient-to-br from-blue-600 to-indigo-600 text-white px-6 py-3 rounded-2xl font-bold hover:shadow-lg hover:shadow-blue-500/30 transition-all active:scale-95 shadow-md shadow-blue-500/10"
@@ -290,6 +292,17 @@ export default function BrandsPage() {
                       onChange={(e) => setFormData({ ...formData, longitude: e.target.value })}
                     />
                   </div>
+                </div>
+
+                <div className="flex items-center gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                  <input 
+                    type="checkbox" 
+                    id="isActive"
+                    className="w-5 h-5 rounded-lg border-gray-300 text-blue-500 focus:ring-blue-500" 
+                    checked={formData.isActive} 
+                    onChange={e => setFormData({ ...formData, isActive: e.target.checked })} 
+                  />
+                  <label htmlFor="isActive" className="text-sm font-bold text-gray-700 cursor-pointer">Brand is Active (Visible to Customers)</label>
                 </div>
 
                 <div className="pt-2">

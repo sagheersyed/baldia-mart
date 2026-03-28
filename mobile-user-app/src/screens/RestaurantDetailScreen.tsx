@@ -8,6 +8,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { restaurantsApi, menuItemsApi, normalizeUrl } from '../api/api';
 import { useCart } from '../context/CartContext';
 import { useFavourites } from '../hooks/useFavourites';
+import { formatRatingCount } from '../utils/helpers';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_W = (SCREEN_WIDTH - 44) / 2;
@@ -188,7 +189,7 @@ export default function RestaurantDetailScreen({ route, navigation }: any) {
             )}
             {restaurant?.rating > 0 && (
               <View style={[styles.infoPill, { backgroundColor: '#FFF5E0' }]}>
-                <Text style={[styles.infoPillTxt, { color: '#FF8C00' }]}>⭐ {Number(restaurant.rating).toFixed(1)}</Text>
+                <Text style={[styles.infoPillTxt, { color: '#FF8C00' }]}>⭐ {Number(restaurant.rating).toFixed(1)}{formatRatingCount(restaurant.ratingCount)}</Text>
               </View>
             )}
           </View>

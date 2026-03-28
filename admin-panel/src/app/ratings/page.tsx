@@ -14,7 +14,7 @@ interface Review {
   order: { id: string; total: number };
 }
 
-const API_URL = 'http://192.168.100.142:3000/api/v1/riders/reviews/all';
+const API_URL = 'https://c2e9-175-107-236-228.ngrok-free.app/api/v1/riders/reviews/all';
 
 export default function RatingsPage() {
   const [reviews, setReviews] = useState<Review[]>([]);

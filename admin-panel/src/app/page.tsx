@@ -15,13 +15,15 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { 
-  BarChart, 
+  ComposedChart,
+  Area, 
   Bar, 
   XAxis, 
   YAxis, 
   CartesianGrid, 
   Tooltip, 
-  ResponsiveContainer 
+  ResponsiveContainer,
+  Line
 } from 'recharts';
 import { fetchWithAuth, BASE_URL } from '@/lib/api';
 
@@ -190,34 +192,79 @@ export default function Dashboard() {
               <TrendingUp size={24} />
             </div>
           </div>
-          <div className="h-[300px] w-full">
+          <div className="h-[350px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+              <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#F97316" stopOpacity={0.1}/>
+                    <stop offset="95%" stopColor="#F97316" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
                 <XAxis 
                   dataKey="date" 
                   axisLine={false} 
                   tickLine={false} 
-                  tick={{ fill: '#9CA3AF', fontWeight: 600, fontSize: 12 }} 
+                  tick={{ fill: '#9CA3AF', fontWeight: 700, fontSize: 12 }} 
                   dy={10}
                 />
                 <YAxis 
+                  yAxisId="left"
                   axisLine={false} 
                   tickLine={false} 
-                  tick={{ fill: '#9CA3AF', fontWeight: 600, fontSize: 12 }}
-                  tickFormatter={(value) => `Rs.${value}`}
+                  tick={{ fill: '#9CA3AF', fontWeight: 700, fontSize: 12 }}
+                  tickFormatter={(value) => `Rs.${value >= 1000 ? (value/1000).toFixed(1) + 'k' : value}`}
+                />
+                <YAxis 
+                  yAxisId="right"
+                  orientation="right"
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: '#6366F1', fontWeight: 700, fontSize: 12 }}
                 />
                 <Tooltip 
-                  cursor={{ fill: '#F3F4F6' }}
-                  contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)', fontWeight: 'bold' }}
+                  cursor={{ stroke: '#F3F4F6', strokeWidth: 2 }}
+                  content={({ active, payload, label }) => {
+                    if (active && payload && payload.length) {
+                      return (
+                        <div className="bg-white p-4 rounded-2xl shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-200">
+                          <p className="text-gray-900 font-black mb-2">{label}</p>
+                          <div className="space-y-1">
+                            <div className="flex justify-between items-center gap-4">
+                              <span className="text-gray-500 font-bold text-xs uppercase tracking-wider">Revenue</span>
+                              <span className="text-orange-600 font-black">Rs. {payload[0].value?.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between items-center gap-4">
+                              <span className="text-gray-500 font-bold text-xs uppercase tracking-wider">Orders</span>
+                              <span className="text-indigo-600 font-black">{payload[1].value} orders</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                />
+                <Area 
+                  yAxisId="left"
+                  type="monotone" 
+                  dataKey="revenue" 
+                  stroke="#F97316" 
+                  strokeWidth={4}
+                  fillOpacity={1} 
+                  fill="url(#colorRevenue)" 
+                  animationDuration={1500}
                 />
                 <Bar 
-                  dataKey="revenue" 
-                  fill="#F97316" 
-                  radius={[6, 6, 0, 0]} 
-                  barSize={40}
+                  yAxisId="right"
+                  dataKey="orders" 
+                  fill="#6366F1" 
+                  radius={[4, 4, 0, 0]} 
+                  barSize={20}
+                  animationDuration={1500}
                 />
-              </BarChart>
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
         </div>

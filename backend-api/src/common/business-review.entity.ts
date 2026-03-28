@@ -5,7 +5,8 @@ import { Restaurant } from '../restaurants/restaurant.entity';
 import { Brand } from '../brands/brand.entity';
 
 @Entity('business_reviews')
-@Index(['orderId'], { unique: true })
+@Index(['orderId', 'restaurantId'], { unique: true, where: '"restaurant_id" IS NOT NULL' })
+@Index(['orderId', 'brandId'], { unique: true, where: '"brand_id" IS NOT NULL' })
 export class BusinessReview {
   @PrimaryGeneratedColumn('uuid')
   id: string;

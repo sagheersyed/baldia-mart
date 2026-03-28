@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Save, RefreshCw, Truck, ArrowRight, Ruler, Phone, Mail, MapPin, Building2, Shield, ToggleLeft, ToggleRight } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api';
 
-const SETTINGS_API_URL = 'http://192.168.100.142:3000/api/v1/settings';
+const SETTINGS_API_URL = 'https://c2e9-175-107-236-228.ngrok-free.app/api/v1/settings';
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<any>({});
@@ -170,6 +170,32 @@ export default function SettingsPage() {
                   </button>
                 </div>
                 <p className="text-xs text-gray-400 italic">Added for every kilometer beyond the threshold distance.</p>
+              </div>
+
+              {/* Multi-Restaurant Distance Limit */}
+              <div className="space-y-3">
+                <label className="text-sm font-medium text-gray-700">Multi-Restaurant Max Distance (KM)</label>
+                <div className="flex space-x-2">
+                  <div className="relative flex-1">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><Ruler size={16} /></span>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={settings.multi_restaurant_max_distance_km || ''}
+                      onChange={(e) => handleSettingChange('multi_restaurant_max_distance_km', e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition"
+                      placeholder="0.4"
+                    />
+                  </div>
+                  <button
+                    onClick={() => handleUpdate('multi_restaurant_max_distance_km', settings.multi_restaurant_max_distance_km)}
+                    disabled={saving}
+                    className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition disabled:opacity-50"
+                  >
+                    <Save size={20} />
+                  </button>
+                </div>
+                <p className="text-xs text-gray-400 italic">Max distance allowed between pickup points for batch/multi-stop orders.</p>
               </div>
             </div>
           </div>

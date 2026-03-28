@@ -32,7 +32,12 @@ export class AnalyticsService {
         recentOrders,
       ] = await Promise.all([
         this.userRepository.count(),
-        this.riderRepository.count({ where: { isOnline: true } }),
+        this.riderRepository.createQueryBuilder('rider')
+          .where('rider.isOnline = :isOnline', { isOnline: true })
+          .andWhere('rider.updatedAt >= :lastHour', { 
+            lastHour: new Date(Date.now() - 60 * 60 * 1000) 
+          })
+          .getCount(),
         this.orderRepository.count(),
         this.orderRepository.find({
           order: { createdAt: 'DESC' },
@@ -48,7 +53,7 @@ export class AnalyticsService {
       const totalRevenue = deliveredOrders.reduce((sum, order) => sum + Number(order.total), 0);
 
       // Generate Sales Chart Data for the last 7 days
-      const salesChartData: { date: string; revenue: number }[] = [];
+      const salesChartData: { date: string; revenue: number; orders: number }[] = [];
       for (let i = 6; i >= 0; i--) {
         const targetDate = new Date();
         targetDate.setDate(today.getDate() - i);
@@ -65,10 +70,12 @@ export class AnalyticsService {
           .getMany();
 
         const dailyRevenue = dayOrders.reduce((sum, order) => sum + Number(order.total), 0);
+        const dailyOrderCount = dayOrders.length;
         
         salesChartData.push({
           date: targetDate.toLocaleDateString('en-US', { weekday: 'short' }),
           revenue: dailyRevenue,
+          orders: dailyOrderCount,
         });
       }
 

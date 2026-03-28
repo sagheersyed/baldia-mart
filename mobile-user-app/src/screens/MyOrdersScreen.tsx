@@ -9,8 +9,8 @@ import { useCart } from '../context/CartContext';
 import { ordersApi, authApi } from '../api/api';
 import io from 'socket.io-client';
 
-const BASE_IP = '192.168.100.142';
-const SOCKET_URL = `http://${BASE_IP}:3000`;
+const BASE_IP = 'https://c2e9-175-107-236-228.ngrok-free.app';
+const SOCKET_URL = `http://${BASE_IP}`;
 
 const STATUS_CONFIG: Record<string, { color: string; bg: string; label: string; icon: string }> = {
   pending: { color: '#F59E0B', bg: '#FFFBEB', label: 'Pending', icon: '⏳' },
@@ -71,8 +71,8 @@ function OrderCard({ order, onTrack, onCancel }: any) {
           onPress={() => onTrack(order.id)}
         >
           <Text style={styles.trackBtnText}>
-            {order.status === 'delivered' 
-              ? ((order.isRated && order.isBusinessRated) ? 'Order Details' : 'Rate Order') 
+            {order.status === 'delivered'
+              ? ((order.isRated && order.isBusinessRated) ? 'Order Details' : 'Rate Order')
               : 'Track Order'}
           </Text>
         </TouchableOpacity>
@@ -103,9 +103,9 @@ export default function MyOrdersScreen({ navigation }: any) {
       const res = await ordersApi.getHistory();
       const orderList = res.data || [];
       setOrders(orderList);
-      
+
       // Update active orders count for badge
-      const activeCount = orderList.filter((o: any) => 
+      const activeCount = orderList.filter((o: any) =>
         ['pending', 'confirmed', 'preparing', 'out_for_delivery'].includes(o.status)
       ).length;
       setActiveOrdersCount(activeCount);

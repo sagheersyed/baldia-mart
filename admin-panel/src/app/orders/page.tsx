@@ -52,6 +52,8 @@ interface Order {
     city: string;
   };
   items: OrderItem[];
+  orderType: string;
+  martId?: string;
   subOrders?: {
     id: string;
     status: string;
@@ -59,31 +61,69 @@ interface Order {
     restaurant?: {
       name: string;
       location: string;
+      zoneId?: string;
     };
   }[];
 }
 
-const API_URL = 'http://192.168.100.142:3000/api/v1/orders/all';
-const STATUS_UPDATE_URL = (id: string) => `http://192.168.100.142:3000/api/v1/orders/${id}/status`;
+const API_URL = 'https://c2e9-175-107-236-228.ngrok-free.app/api/v1/orders/all';
+const ZONES_URL = 'https://c2e9-175-107-236-228.ngrok-free.app/api/v1/delivery-zones/all';
+const SETTINGS_URL = 'https://c2e9-175-107-236-228.ngrok-free.app/api/v1/settings/public';
+const STATUS_UPDATE_URL = (id: string) => `https://c2e9-175-107-236-228.ngrok-free.app/api/v1/orders/${id}/status`;
+
+const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [riders, setRiders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('ALL');
+  const [selectedZone, setSelectedZone] = useState('all');
+  const [zones, setZones] = useState<any[]>([]);
+  const [martLocations, setMartLocations] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
   useEffect(() => {
     fetchOrders();
     fetchRiders();
+    fetchZones();
+    fetchSettings();
     const interval = setInterval(fetchOrders, 30000); // Poll every 30s
     return () => clearInterval(interval);
   }, []);
 
+  const fetchZones = async () => {
+    try {
+      const res = await fetchWithAuth(ZONES_URL);
+      if (res.ok) setZones(await res.json());
+    } catch (e) { console.error('Failed to fetch zones', e); }
+  };
+
+  const fetchSettings = async () => {
+    try {
+      const res = await fetchWithAuth(SETTINGS_URL);
+      if (res.ok) {
+        const data = await res.json();
+        const marts = JSON.parse(data.find((s: any) => s.key === 'mart_locations_list')?.value || '[]');
+        setMartLocations(marts);
+      }
+    } catch (e) { console.error('Failed to fetch settings', e); }
+  };
+
   const fetchRiders = async () => {
     try {
-      const res = await fetchWithAuth('http://192.168.100.142:3000/api/v1/riders/all');
+      const res = await fetchWithAuth('https://c2e9-175-107-236-228.ngrok-free.app/api/v1/riders/all');
       if (res.ok) {
         const body = await res.json();
         // Only get active riders with complete profiles
@@ -133,7 +173,7 @@ export default function OrdersPage() {
   const handleAssignRider = async (orderId: string, riderId: string) => {
     if (!riderId) return;
     try {
-      const res = await fetchWithAuth(`http://192.168.100.142:3000/api/v1/orders/${orderId}/assign`, {
+      const res = await fetchWithAuth(`https://c2e9-175-107-236-228.ngrok-free.app/api/v1/orders/${orderId}/assign`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ riderId }),
@@ -155,12 +195,43 @@ export default function OrdersPage() {
     }
   };
 
+  const getOrderZoneId = (order: Order): string | null => {
+    // 1. If Food Order with a Restaurant
+    if (order.subOrders && order.subOrders.length > 0) {
+      const restaurantZone = (order.subOrders[0] as any).restaurant?.zoneId;
+      if (restaurantZone) return restaurantZone;
+    }
+
+    // 2. If Mart Order, check mart location against zones
+    if (order.orderType === 'mart' && (order as any).martId) {
+      const mart = martLocations.find(m => m.id === (order as any).martId);
+      if (mart && mart.lat && mart.lng) {
+        const matchingZone = zones.find(z =>
+          calculateDistance(Number(mart.lat), Number(mart.lng), Number(z.centerLat), Number(z.centerLng)) <= Number(z.radiusKm)
+        );
+        if (matchingZone) return matchingZone.id;
+      }
+    }
+
+    // 3. Fallback: check destination address (customer)
+    if ((order as any).address?.latitude && (order as any).address?.longitude) {
+      const matchingZone = zones.find(z =>
+        calculateDistance(Number((order as any).address.latitude), Number((order as any).address.longitude), Number(z.centerLat), Number(z.centerLng)) <= Number(z.radiusKm)
+      );
+      if (matchingZone) return matchingZone.id;
+    }
+
+    return null;
+  };
+
   const filteredOrders = orders.filter(order => {
     const matchesFilter = filter === 'ALL' || order.status.toUpperCase() === filter;
+    const orderZoneId = getOrderZoneId(order);
+    const matchesZone = selectedZone === 'all' || orderZoneId === selectedZone;
     const matchesSearch =
       order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (order.user?.name || '').toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesFilter && matchesSearch;
+    return matchesFilter && matchesZone && matchesSearch;
   });
 
   const getStatusBadge = (status: string) => {
@@ -199,11 +270,21 @@ export default function OrdersPage() {
             <input
               type="text"
               placeholder="Search by ID or Customer..."
-              className="pl-12 pr-4 py-3 bg-white border border-gray-100 rounded-2xl w-72 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-medium"
+              className="pl-12 pr-4 py-3 bg-white border border-gray-100 rounded-2xl w-64 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-medium"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
+          <select
+            className="bg-white border border-gray-100 rounded-2xl px-4 py-3 font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-sm"
+            value={selectedZone}
+            onChange={(e) => setSelectedZone(e.target.value)}
+          >
+            <option value="all">All Zones</option>
+            {zones.map(z => (
+              <option key={z.id} value={z.id}>{z.name}</option>
+            ))}
+          </select>
           <div className="flex bg-white rounded-2xl border border-gray-100 p-1">
             {['ALL', 'PENDING', 'CONFIRMED', 'DELIVERING', 'DELIVERED', 'CANCELLED'].map(f => (
               <button

@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Put, Param, Body, ParseUUIDPipe } from '@nestjs/common';
 import { DeliveryZonesService } from './delivery-zones.service';
 
-@Controller('zones')
+@Controller(['delivery-zones', 'zones'])
 export class DeliveryZonesController {
   constructor(private readonly zonesService: DeliveryZonesService) {}
 
@@ -9,6 +9,11 @@ export class DeliveryZonesController {
   // TODO: Add AdminRoleGuard
   async getAllZones() {
     return this.zonesService.findAll();
+  }
+
+  @Get('active')
+  async getActiveZones() {
+    return this.zonesService.findAllActive();
   }
 
   @Post()

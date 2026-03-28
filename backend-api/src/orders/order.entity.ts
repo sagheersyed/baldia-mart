@@ -1,4 +1,4 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, OneToMany, Index } from 'typeorm';
 import { User } from '../users/user.entity';
 import { Address } from '../addresses/address.entity';
 import { Rider } from '../riders/rider.entity';
@@ -12,6 +12,7 @@ export class Order {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Index()
   @Column({ name: 'user_id' })
   userId: string;
 
@@ -19,6 +20,7 @@ export class Order {
   @JoinColumn({ name: 'user_id' })
   user: User;
 
+  @Index()
   @Column({ name: 'rider_id', nullable: true })
   riderId: string;
 
@@ -50,6 +52,7 @@ export class Order {
   @JoinColumn({ name: 'brand_id' })
   brand: Brand;
 
+  @Index()
   @Column({ default: 'pending' })
   status: string; // pending, confirmed, out_for_delivery, delivered, cancelled
 
@@ -70,6 +73,9 @@ export class Order {
 
   @Column({ name: 'payment_status', default: 'pending' })
   paymentStatus: string; // pending, paid, failed
+
+  @Column('decimal', { name: 'rider_commission', precision: 10, scale: 2, default: 0 })
+  riderCommission: number;
 
   @Column('decimal', { name: 'delivery_distance_km', precision: 5, scale: 2, nullable: true })
   deliveryDistanceKm: number;

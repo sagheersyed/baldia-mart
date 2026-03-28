@@ -17,7 +17,7 @@ export default function LoginPage() {
     setError('');
 
     try {
-      const res = await fetch('http://192.168.100.142:3000/api/v1/auth/admin/login', {
+      const res = await fetch('https://c2e9-175-107-236-228.ngrok-free.app/api/v1/auth/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),

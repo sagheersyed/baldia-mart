@@ -43,10 +43,10 @@ export default function BannersPage() {
   const fetchLinkEntities = async (type: string) => {
     try {
       let endpoint = '';
-      if (type === 'product') endpoint = 'http://192.168.100.142:3000/api/v1/products';
-      else if (type === 'restaurant') endpoint = 'http://192.168.100.142:3000/api/v1/restaurants';
-      else if (type === 'brand') endpoint = 'http://192.168.100.142:3000/api/v1/brands';
-      else if (type === 'category') endpoint = 'http://192.168.100.142:3000/api/v1/categories';
+      if (type === 'product') endpoint = 'https://c2e9-175-107-236-228.ngrok-free.app/api/v1/products';
+      else if (type === 'restaurant') endpoint = 'https://c2e9-175-107-236-228.ngrok-free.app/api/v1/restaurants';
+      else if (type === 'brand') endpoint = 'https://c2e9-175-107-236-228.ngrok-free.app/api/v1/brands';
+      else if (type === 'category') endpoint = 'https://c2e9-175-107-236-228.ngrok-free.app/api/v1/categories';
 
       if (!endpoint) return;
       const res = await fetchWithAuth(endpoint);
@@ -60,7 +60,7 @@ export default function BannersPage() {
   const fetchBanners = async () => {
     try {
       setLoading(true);
-      const res = await fetch('http://192.168.100.142:3000/api/v1/banners');
+      const res = await fetch('https://c2e9-175-107-236-228.ngrok-free.app/api/v1/banners');
       const data = await res.json();
       setBanners(data);
     } catch (error) {
@@ -77,8 +77,8 @@ export default function BannersPage() {
     try {
       setSaving(true);
       const url = editingBanner.id
-        ? `http://192.168.100.142:3000/api/v1/banners/${editingBanner.id}`
-        : 'http://192.168.100.142:3000/api/v1/banners';
+        ? `https://c2e9-175-107-236-228.ngrok-free.app/api/v1/banners/${editingBanner.id}`
+        : 'https://c2e9-175-107-236-228.ngrok-free.app/api/v1/banners';
       const method = editingBanner.id ? 'PATCH' : 'POST';
 
       const res = await fetchWithAuth(url, {
@@ -103,7 +103,7 @@ export default function BannersPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this banner?')) return;
     try {
-      const res = await fetchWithAuth(`http://192.168.100.142:3000/api/v1/banners/${id}`, {
+      const res = await fetchWithAuth(`https://c2e9-175-107-236-228.ngrok-free.app/api/v1/banners/${id}`, {
         method: 'DELETE',
       });
       if (!res.ok) throw new Error('Delete failed');

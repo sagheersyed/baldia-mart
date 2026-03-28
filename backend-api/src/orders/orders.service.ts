@@ -12,6 +12,8 @@ import { SettingsService } from '../settings/settings.service';
 import { OrdersGateway } from './orders.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
 import { Rider } from '../riders/rider.entity';
+import { RidersService } from '../riders/riders.service';
+import { VendorsService } from '../vendors/vendors.service';
 
 @Injectable()
 export class OrdersService {
@@ -27,7 +29,9 @@ export class OrdersService {
     private settingsService: SettingsService,
     private ordersGateway: OrdersGateway,
     private notificationsService: NotificationsService,
-  ) {}
+    private ridersService: RidersService,
+    private vendorsService: VendorsService,
+  ) { }
 
   async placeOrder(userId: string, addressId: string, paymentMethod: string, notes?: string, items?: any[], orderType: string = 'mart', restaurantId?: string): Promise<Order> {
     console.log('--- PlaceOrder Debug ---');
@@ -46,7 +50,7 @@ export class OrdersService {
             cartItems.push({
               menuItemId: item.menuItemId,
               quantity: item.quantity,
-              product: menuItem, 
+              product: menuItem,
               restaurantId: menuItem.restaurantId,
               restaurant: menuItem.restaurant
             });
@@ -65,16 +69,16 @@ export class OrdersService {
     } else {
       cartItems = await this.cartService.getCartByUserId(userId);
       if (orderType === 'food') {
-         for (const item of cartItems) {
-            if (item.menuItemId) {
-               const menuItem = await this.orderItemsRepository.manager.getRepository('MenuItem').findOne({ where: { id: item.menuItemId }, relations: ['restaurant'] }) as any;
-               if (menuItem) {
-                  item.product = menuItem;
-                  item.restaurantId = menuItem.restaurantId;
-                  item.restaurant = menuItem.restaurant;
-               }
+        for (const item of cartItems) {
+          if (item.menuItemId) {
+            const menuItem = await this.orderItemsRepository.manager.getRepository('MenuItem').findOne({ where: { id: item.menuItemId }, relations: ['restaurant'] }) as any;
+            if (menuItem) {
+              item.product = menuItem;
+              item.restaurantId = menuItem.restaurantId;
+              item.restaurant = menuItem.restaurant;
             }
-         }
+          }
+        }
       }
     }
 
@@ -104,73 +108,75 @@ export class OrdersService {
     if (orderType === 'food') {
       const restoMap = new Map();
       for (const item of cartItems) {
-         if (item.restaurantId && item.restaurant && !restoMap.has(item.restaurantId)) {
-            restoMap.set(item.restaurantId, item.restaurant);
-         }
+        if (item.restaurantId && item.restaurant && !restoMap.has(item.restaurantId)) {
+          restoMap.set(item.restaurantId, item.restaurant);
+        }
       }
       distinctRestaurants = Array.from(restoMap.values());
 
       if (distinctRestaurants.length > 0) {
         // Validate operating hours for ALL involved restaurants
         for (const restaurant of distinctRestaurants) {
-           if (restaurant.openingHours) {
-              try {
-                const [openStr, closeStr] = restaurant.openingHours.split('-').map((s: string) => s.trim());
-                const parseTime = (timeStr: string) => {
-                  const match = timeStr.match(/(\d+):(\d+)(?:\s*(AM|PM))?/i);
-                  if (!match) return null;
-                  let hours = parseInt(match[1], 10);
-                  const minutes = parseInt(match[2], 10);
-                  const period = match[3]?.toUpperCase();
-                  if (period === 'PM' && hours !== 12) hours += 12;
-                  if (period === 'AM' && hours === 12) hours = 0;
-                  const d = new Date();
-                  d.setHours(hours, minutes, 0, 0);
-                  return d;
-                };
-                const openTime = parseTime(openStr);
-                const closeTime = parseTime(closeStr);
-                const now = new Date();
+          if (restaurant.openingHours) {
+            try {
+              const [openStr, closeStr] = restaurant.openingHours.split('-').map((s: string) => s.trim());
+              const parseTime = (timeStr: string) => {
+                const match = timeStr.match(/(\d+):(\d+)(?:\s*(AM|PM))?/i);
+                if (!match) return null;
+                let hours = parseInt(match[1], 10);
+                const minutes = parseInt(match[2], 10);
+                const period = match[3]?.toUpperCase();
+                if (period === 'PM' && hours !== 12) hours += 12;
+                if (period === 'AM' && hours === 12) hours = 0;
+                const d = new Date();
+                d.setHours(hours, minutes, 0, 0);
+                return d;
+              };
+              const openTime = parseTime(openStr);
+              const closeTime = parseTime(closeStr);
+              const now = new Date();
 
-                if (openTime && closeTime) {
-                  if (closeTime < openTime) {
-                    if (now < openTime && now > closeTime) {
-                      throw new BadRequestException(`Restaurant ${restaurant.name} is currently closed.`);
-                    }
-                  } else if (now < openTime || now > closeTime) {
+              if (openTime && closeTime) {
+                if (closeTime < openTime) {
+                  if (now < openTime && now > closeTime) {
                     throw new BadRequestException(`Restaurant ${restaurant.name} is currently closed.`);
                   }
+                } else if (now < openTime || now > closeTime) {
+                  throw new BadRequestException(`Restaurant ${restaurant.name} is currently closed.`);
                 }
-              } catch (e) {
-                if (e instanceof BadRequestException) throw e;
               }
-           }
+            } catch (e) {
+              if (e instanceof BadRequestException) throw e;
+            }
+          }
         }
 
         // Validate Multi-Restaurant Logic (Distance & Prep Time)
         if (distinctRestaurants.length > 1) {
-            for (let i = 0; i < distinctRestaurants.length; i++) {
-                for (let j = i + 1; j < distinctRestaurants.length; j++) {
-                    const r1 = distinctRestaurants[i];
-                    const r2 = distinctRestaurants[j];
-                    const dist = this.deliveryZonesService.calculateDistance(Number(r1.latitude), Number(r1.longitude), Number(r2.latitude), Number(r2.longitude));
-                    if (dist > 0.2) {
-                        throw new BadRequestException('Multi-restaurant orders are only allowed for restaurants within 200 meters of each other.');
-                    }
-                    const prep1 = r1.prepTimeMinutes || 20;
-                    const prep2 = r2.prepTimeMinutes || 20;
-                    if (Math.abs(prep1 - prep2) > 10) {
-                        throw new BadRequestException('Preparation time difference between selected restaurants is too high.');
-                    }
-                }
+          for (let i = 0; i < distinctRestaurants.length; i++) {
+            for (let j = i + 1; j < distinctRestaurants.length; j++) {
+              const r1 = distinctRestaurants[i];
+              const r2 = distinctRestaurants[j];
+              const dist = this.deliveryZonesService.calculateDistance(Number(r1.latitude), Number(r1.longitude), Number(r2.latitude), Number(r2.longitude));
+              
+              const maxDist = await this.settingsService.getNumber('multi_restaurant_max_distance_km', 0.4);
+              if (dist > maxDist) {
+                throw new BadRequestException(`Multi-restaurant orders are only allowed for restaurants within ${(maxDist * 1000).toFixed(0)} meters of each other.`);
+              }
+              const prep1 = r1.prepTimeMinutes || 20;
+              const prep2 = r2.prepTimeMinutes || 20;
+              if (Math.abs(prep1 - prep2) > 10) {
+                throw new BadRequestException('Preparation time difference between selected restaurants is too high.');
+              }
             }
-            multiStopSurcharge = (distinctRestaurants.length - 1) * 50; 
+          }
+          multiStopSurcharge = (distinctRestaurants.length - 1) * 50;
         }
 
         const primaryResto = distinctRestaurants[0];
         if (primaryResto.latitude && primaryResto.longitude) {
-            pickupLat = Number(primaryResto.latitude);
-            pickupLng = Number(primaryResto.longitude);
+          pickupLat = Number(primaryResto.latitude);
+          pickupLng = Number(primaryResto.longitude);
         }
       }
     } else {
@@ -210,7 +216,7 @@ export class OrdersService {
       const itemPrice = Number(item.product.price) - Number(item.product.discount || 0);
       subtotal += itemPrice * item.quantity;
     }
-    
+
     // 5. Create Parent Order
     let orderBrandId = undefined;
     if (orderType === 'mart') {
@@ -236,40 +242,120 @@ export class OrdersService {
 
     // 6. Create SubOrders and OrderItems
     if (orderType === 'food' && distinctRestaurants.length > 0) {
-       for (const resto of distinctRestaurants) {
-           const restoItems = cartItems.filter(i => i.restaurantId === resto.id);
-           const restoSubtotal = restoItems.reduce((acc, item) => {
-               const price = Number(item.product.price) - Number(item.product.discount || 0);
-               return acc + (price * item.quantity);
-           }, 0);
-           
-           const subOrder = this.subOrdersRepository.create({
-               orderId: savedOrder.id,
-               restaurantId: resto.id,
-               status: 'pending',
-               subtotal: restoSubtotal,
-                estimatedPrepTimeMinutes: Math.max(...restoItems.map(i => (i.product as any)?.prepTimeMinutes || 0), resto.prepTimeMinutes || 20)
-           });
-           const savedSubOrder = await this.subOrdersRepository.save(subOrder);
-           
-           const orderItemsToSave = restoItems.map(item => this.orderItemsRepository.create({
-               orderId: savedOrder.id,
-               subOrderId: savedSubOrder.id,
-               menuItemId: item.menuItemId,
-               quantity: item.quantity,
-               priceAtTime: Number(item.product.price) - Number(item.product.discount || 0)
-           }));
-           await this.orderItemsRepository.save(orderItemsToSave);
-       }
+      for (const resto of distinctRestaurants) {
+        const restoItems = cartItems.filter(i => i.restaurantId === resto.id);
+        const restoSubtotal = restoItems.reduce((acc, item) => {
+          const price = Number(item.product.price) - Number(item.product.discount || 0);
+          return acc + (price * item.quantity);
+        }, 0);
+
+        const subOrder = this.subOrdersRepository.create({
+          orderId: savedOrder.id,
+          restaurantId: resto.id,
+          status: 'pending',
+          subtotal: restoSubtotal,
+          estimatedPrepTimeMinutes: Math.max(...restoItems.map(i => (i.product as any)?.prepTimeMinutes || 0), resto.prepTimeMinutes || 20)
+        });
+        const savedSubOrder = await this.subOrdersRepository.save(subOrder);
+
+        const orderItemsToSave = restoItems.map(item => this.orderItemsRepository.create({
+          orderId: savedOrder.id,
+          subOrderId: savedSubOrder.id,
+          menuItemId: item.menuItemId,
+          quantity: item.quantity,
+          priceAtTime: Number(item.product.price) - Number(item.product.discount || 0)
+        }));
+        await this.orderItemsRepository.save(orderItemsToSave);
+      }
     } else {
-       // Mart Orders
-       const orderItemsToSave = cartItems.map(item => this.orderItemsRepository.create({
-         orderId: savedOrder.id,
-         productId: item.productId || undefined,
-         quantity: item.quantity,
-         priceAtTime: Number(item.product.price) - Number(item.product.discount || 0),
-       }));
-       await this.orderItemsRepository.save(orderItemsToSave);
+      // ── MART ORDER SPLITTING ENGINE ──────────────────────────────────────
+      // Match each product to its best vendor, then group into sub-orders
+      const userLat = Number(address.latitude);
+      const userLng = Number(address.longitude);
+
+      // Map: vendorId -> { vendorProduct, items[] }
+      const vendorMap = new Map<string, { lat: number; lng: number; items: any[] }>();
+      const unmappedItems: any[] = [];
+
+      for (const item of cartItems) {
+        if (!item.productId) { unmappedItems.push(item); continue; }
+
+        const vendorProduct = await this.vendorsService.findBestVendorForProduct(
+          item.productId, userLat, userLng,
+        );
+
+        if (!vendorProduct) {
+          // No vendor registered → treat as unmapped (flat order item)
+          unmappedItems.push(item);
+        } else {
+          const key = vendorProduct.vendorId;
+          if (!vendorMap.has(key)) {
+            vendorMap.set(key, {
+              lat: Number(vendorProduct.vendor.lat),
+              lng: Number(vendorProduct.vendor.lng),
+              items: [],
+            });
+          }
+          vendorMap.get(key)!.items.push({
+            ...item,
+            vendorProductId: vendorProduct.id,
+            priceAtTime: Number(vendorProduct.price), // Use vendor-specific price
+          });
+        }
+      }
+
+      if (vendorMap.size > 0) {
+        // Optimize pickup sequence using nearest-first algorithm
+        const coords = Array.from(vendorMap.entries()).map(([vendorId, v]) => ({
+          vendorId, lat: v.lat, lng: v.lng,
+        }));
+
+        const sequence = this.vendorsService.optimizePickupSequence(coords, userLat, userLng);
+        const sequenceMap = new Map(sequence.map(s => [s.vendorId, s.sequence]));
+
+        // Create one sub-order per vendor
+        for (const [vendorId, vendorData] of vendorMap) {
+          const vendorSubtotal = vendorData.items.reduce((acc, item) => {
+            return acc + (item.priceAtTime * item.quantity);
+          }, 0);
+
+          const subOrder = this.subOrdersRepository.create({
+            orderId: savedOrder.id,
+            vendorId,
+            status: 'pending',
+            subtotal: vendorSubtotal,
+            pickupSequence: sequenceMap.get(vendorId) ?? 1,
+          });
+          const savedSubOrder = await this.subOrdersRepository.save(subOrder);
+
+          // Decrement vendor stock for each item
+          for (const item of vendorData.items) {
+            await this.vendorsService.decrementStock(item.vendorProductId, item.quantity);
+          }
+
+          const subOrderItems = vendorData.items.map(item =>
+            this.orderItemsRepository.create({
+              orderId: savedOrder.id,
+              subOrderId: savedSubOrder.id,
+              productId: item.productId,
+              quantity: item.quantity,
+              priceAtTime: item.priceAtTime,
+            })
+          );
+          await this.orderItemsRepository.save(subOrderItems);
+        }
+      }
+
+      // Handle unmapped items (no vendor registered → save as flat order items)
+      if (unmappedItems.length > 0) {
+        const flatItems = unmappedItems.map(item => this.orderItemsRepository.create({
+          orderId: savedOrder.id,
+          productId: item.productId || undefined,
+          quantity: item.quantity,
+          priceAtTime: Number(item.product.price) - Number(item.product.discount || 0),
+        }));
+        await this.orderItemsRepository.save(flatItems);
+      }
     }
 
     // 7. Clear Cart if it was stored in DB
@@ -285,11 +371,11 @@ export class OrdersService {
     // 9. Broadcast
     const orderWithDetails = await this.ordersRepository.findOne({
       where: { id: savedOrder.id },
-      relations: ['items', 'items.product', 'items.menuItem', 'address', 'user', 'subOrders']
+      relations: ['items', 'items.product', 'items.menuItem', 'address', 'user', 'subOrders', 'subOrders.restaurant', 'subOrders.vendor']
     });
 
     if (orderWithDetails && orderWithDetails.restaurantId) {
-       (orderWithDetails as any).restaurant = await this.orderItemsRepository.manager.getRepository('Restaurant').findOne({ where: { id: orderWithDetails.restaurantId } });
+      (orderWithDetails as any).restaurant = await this.orderItemsRepository.manager.getRepository('Restaurant').findOne({ where: { id: orderWithDetails.restaurantId } });
     }
 
     if (orderWithDetails) {
@@ -297,33 +383,33 @@ export class OrdersService {
       this.ordersGateway.emitNewOrderToAdmin(orderWithDetails);
 
       if (orderType === 'food' && distinctRestaurants.length > 0) {
-          // Delayed Dispatch Logic
-          let maxPrepTime = 0;
-          for (const r of distinctRestaurants) {
-             const pt = r.prepTimeMinutes || 20;
-             if (pt > maxPrepTime) maxPrepTime = pt;
-          }
-          
-          const estimatedRiderTravelTime = 10; // Generic 10 mins ETA for a rider to arrive at the restaurant
-          const safetyBuffer = 2; // ping 2 mins earlier than strictly needed
-          
-          const delayMinutes = maxPrepTime - estimatedRiderTravelTime - safetyBuffer;
-          
-          if (delayMinutes > 0) {
-             console.log(`[Smart Logistics] Delaying rider dispatch for ${delayMinutes} minutes to ensure food is fresh for Order ${savedOrder.id}.`);
-             setTimeout(async () => {
-                 this.ordersGateway.emitNewOrderToRiders(orderWithDetails);
-                 this.notifyOnlineRiders(orderWithDetails);
-             }, delayMinutes * 60 * 1000);
-          } else {
-             // Dispatch immediately
-             this.ordersGateway.emitNewOrderToRiders(orderWithDetails);
-             this.notifyOnlineRiders(orderWithDetails);
-          }
-      } else {
-          // Mart Orders dispatch immediately
+        // Delayed Dispatch Logic
+        let maxPrepTime = 0;
+        for (const r of distinctRestaurants) {
+          const pt = r.prepTimeMinutes || 20;
+          if (pt > maxPrepTime) maxPrepTime = pt;
+        }
+
+        const estimatedRiderTravelTime = 10; // Generic 10 mins ETA for a rider to arrive at the restaurant
+        const safetyBuffer = 2; // ping 2 mins earlier than strictly needed
+
+        const delayMinutes = maxPrepTime - estimatedRiderTravelTime - safetyBuffer;
+
+        if (delayMinutes > 0) {
+          console.log(`[Smart Logistics] Delaying rider dispatch for ${delayMinutes} minutes to ensure food is fresh for Order ${savedOrder.id}.`);
+          setTimeout(async () => {
+            this.ordersGateway.emitNewOrderToRiders(orderWithDetails);
+            this.notifyOnlineRiders(orderWithDetails);
+          }, delayMinutes * 60 * 1000);
+        } else {
+          // Dispatch immediately
           this.ordersGateway.emitNewOrderToRiders(orderWithDetails);
           this.notifyOnlineRiders(orderWithDetails);
+        }
+      } else {
+        // Mart Orders dispatch immediately
+        this.ordersGateway.emitNewOrderToRiders(orderWithDetails);
+        this.notifyOnlineRiders(orderWithDetails);
       }
     }
 
@@ -369,7 +455,7 @@ export class OrdersService {
 
   async getAllOrdersForAdmin(): Promise<Order[]> {
     return this.ordersRepository.find({
-      relations: ['items', 'items.product', 'address', 'user', 'rider', 'subOrders', 'subOrders.restaurant'],
+      relations: ['items', 'items.product', 'address', 'user', 'rider', 'subOrders', 'subOrders.restaurant', 'subOrders.vendor'],
       order: { createdAt: 'DESC' }
     });
   }
@@ -382,6 +468,7 @@ export class OrdersService {
       .leftJoinAndSelect('order.user', 'user')
       .leftJoinAndSelect('order.subOrders', 'subOrders')
       .leftJoinAndSelect('subOrders.restaurant', 'subOrderRestaurant')
+      .leftJoinAndSelect('subOrders.vendor', 'subOrderVendor')
       .where('order.riderId = :riderId', { riderId })
       .andWhere('order.status IN (:...statuses)', { statuses: ['delivered', 'cancelled'] })
       .orderBy('order.updatedAt', 'DESC')
@@ -390,29 +477,43 @@ export class OrdersService {
   }
 
   async acceptOrder(orderId: string, riderId: string): Promise<Order> {
-    const order = await this.ordersRepository.findOne({ 
+    const order = await this.ordersRepository.findOne({
       where: { id: orderId },
       relations: ['rider']
     });
-    
+
     if (!order) throw new NotFoundException('Order not found');
 
-    // Check if rider is blocked
+    // Check if rider is blocked or out of zone
     const riderRepo = this.ordersRepository.manager.getRepository('Rider');
     const rider = await riderRepo.findOne({ where: { id: riderId } }) as any;
     if (!rider || rider.isActive === false) {
       throw new ForbiddenException('Your account has been blocked. Please contact support.');
     }
-    
+
+    // Zone Enforcement
+    if (!rider.currentLat || !rider.currentLng) {
+      throw new BadRequestException('Please enable location services and stay online to accept orders.');
+    }
+
+    const zoneCheck = await this.deliveryZonesService.validateAddressInZone(
+      Number(rider.currentLat), 
+      Number(rider.currentLng)
+    );
+
+    if (!zoneCheck.isValid) {
+      throw new BadRequestException('You are outside the active delivery zone. Please move closer to a service area to accept orders.');
+    }
+
     // allow same rider to "re-accept" (idempotency)
     if (order.riderId && order.riderId !== riderId) {
       throw new BadRequestException('Order already accepted by another rider');
     }
-    
+
     if (order.status === 'cancelled') {
       throw new BadRequestException('Order was cancelled by the customer');
     }
-    
+
     if (order.status !== 'pending' && order.riderId !== riderId) {
       throw new BadRequestException('Only pending orders can be accepted');
     }
@@ -436,10 +537,10 @@ export class OrdersService {
   }
 
   async assignRider(orderId: string, riderId: string): Promise<Order> {
-    const order = await this.ordersRepository.findOne({ 
+    const order = await this.ordersRepository.findOne({
       where: { id: orderId }
     });
-    
+
     if (!order) throw new NotFoundException('Order not found');
 
     const riderRepo = this.ordersRepository.manager.getRepository('Rider');
@@ -450,17 +551,17 @@ export class OrdersService {
     if (order.status === 'pending') {
       order.status = 'confirmed';
     }
-    
+
     const updatedOrder = await this.ordersRepository.save(order);
 
     // Record History
     await this.orderHistoryRepository.save(
-      this.orderHistoryRepository.create({ orderId, status: order.status, notes: `Admin manually assigned rider #${riderId.slice(0,8)}` })
+      this.orderHistoryRepository.create({ orderId, status: order.status, notes: `Admin manually assigned rider #${riderId.slice(0, 8)}` })
     );
 
     // Notify User
     this.ordersGateway.emitOrderStatusUpdate(orderId, order.status, order.userId);
-    
+
     // Notify previous and new riders (by broadcasting to order room/all)
     this.ordersGateway.emitOrderAccepted(orderId);
 
@@ -477,6 +578,7 @@ export class OrdersService {
       .leftJoinAndSelect('order.restaurant', 'restaurant')
       .leftJoinAndSelect('order.subOrders', 'subOrders')
       .leftJoinAndSelect('subOrders.restaurant', 'subOrderRestaurant')
+      .leftJoinAndSelect('subOrders.vendor', 'subOrderVendor')
       .where('order.riderId = :riderId', { riderId })
       .andWhere('order.status IN (:...statuses)', { statuses: ['confirmed', 'preparing', 'out_for_delivery'] })
       .orderBy('order.updatedAt', 'DESC')
@@ -509,6 +611,7 @@ export class OrdersService {
       .leftJoinAndSelect('order.restaurant', 'restaurant')
       .leftJoinAndSelect('order.subOrders', 'subOrders')
       .leftJoinAndSelect('subOrders.restaurant', 'subOrderRestaurant')
+      .leftJoinAndSelect('subOrders.vendor', 'subOrderVendor')
       .where('order.id = :id', { id })
       .withDeleted()
       .getOne();
@@ -518,12 +621,14 @@ export class OrdersService {
     // Access Control:
     // 1. Owner of the order can see it.
     // 2. Assigned rider can see it.
-    // 3. Any rider can see it if it's still 'pending'.
+    // 3. Any rider can see it if it's 'pending' or 'confirmed' AND not yet assigned to another rider.
     const isOwner = order.userId === requesterId;
     const isAssignedRider = order.riderId === requesterId;
-    const isRiderViewingPending = requesterRole === 'rider' && order.status === 'pending';
+    const isRiderInAcceptanceFlow = requesterRole === 'rider' && 
+      (order.status === 'pending' || order.status === 'confirmed') && 
+      (!order.riderId || order.riderId === requesterId);
 
-    if (!isOwner && !isAssignedRider && !isRiderViewingPending) {
+    if (!isOwner && !isAssignedRider && !isRiderInAcceptanceFlow) {
       throw new UnauthorizedException('Access denied to this order');
     }
 
@@ -536,11 +641,11 @@ export class OrdersService {
 
     const oldStatus = order.status;
     if (oldStatus === 'cancelled') {
-        throw new BadRequestException('Cannot update status of a cancelled order');
+      throw new BadRequestException('Cannot update status of a cancelled order');
     }
     order.status = status;
     const updatedOrder = await this.ordersRepository.save(order);
-    
+
     // Record History
     await this.orderHistoryRepository.save(
       this.orderHistoryRepository.create({ orderId: id, status: status })
@@ -559,7 +664,7 @@ export class OrdersService {
 
     // Emit real-time update
     this.ordersGateway.emitOrderStatusUpdate(id, status, order.userId);
-    
+
     return updatedOrder;
   }
 
@@ -659,7 +764,7 @@ export class OrdersService {
     }
 
     const updatedOrder = await this.ordersRepository.save(order);
-    
+
     if (remainingItems.length === 0) {
       await this.ordersRepository.delete(orderId);
       return { ...updatedOrder, deleted: true } as any;
@@ -767,7 +872,7 @@ export class OrdersService {
 
     order.subtotal = subtotal;
     order.total = Number(subtotal) + Number(order.deliveryFee) - Number(order.discountAmount);
-    
+
     const updatedOrder = await this.ordersRepository.save(order);
 
     // Notify tracking screen and rider
@@ -828,7 +933,7 @@ export class OrdersService {
       // Recalculate totals from all items in this order
       const allItems = await manager.find(OrderItem, { where: { orderId } });
       const subtotal = allItems.reduce((sum, i) => sum + Number(i.priceAtTime) * i.quantity, 0);
-      
+
       const subtotalVal = Number(subtotal);
       const deliveryFee = Number(order.deliveryFee);
       const discountAmount = Number(order.discountAmount || 0);
@@ -865,15 +970,15 @@ export class OrdersService {
     }
 
     // Default to mart pickup for preview
-    let pickupLat = 24.91522600; 
+    let pickupLat = 24.91522600;
     let pickupLng = 66.96431980;
 
     if (restaurantId) {
-       const restaurant = await this.orderItemsRepository.manager.getRepository('Restaurant').findOne({ where: { id: restaurantId } }) as any;
-       if (restaurant && restaurant.latitude && restaurant.longitude) {
-         pickupLat = Number(restaurant.latitude);
-         pickupLng = Number(restaurant.longitude);
-       }
+      const restaurant = await this.orderItemsRepository.manager.getRepository('Restaurant').findOne({ where: { id: restaurantId } }) as any;
+      if (restaurant && restaurant.latitude && restaurant.longitude) {
+        pickupLat = Number(restaurant.latitude);
+        pickupLng = Number(restaurant.longitude);
+      }
     } else {
       try {
         const martsStr = await this.settingsService.getByKey('mart_locations_list', '[]');
@@ -891,7 +996,7 @@ export class OrdersService {
             }
           }
         }
-      } catch (err) {}
+      } catch (err) { }
     }
 
     return this.calculateDeliveryFeeFromCoords(Number(address.latitude), Number(address.longitude), pickupLat, pickupLng);
@@ -901,7 +1006,7 @@ export class OrdersService {
     console.log(`Calculating fee: Customer (${custLat}, ${custLng}) to Pickup (${pickupLat}, ${pickupLng})`);
 
     const validation = await this.deliveryZonesService.validateAddressInZone(custLat, custLng);
-    
+
     if (!validation.isValid) {
       const maxRad = (validation as any).maxRadius || 50;
       return {
@@ -920,7 +1025,7 @@ export class OrdersService {
     const perKmFee = await this.settingsService.getNumber('delivery_per_km_fee', 20);
 
     let deliveryFee = baseFee;
-    
+
     if (realDistance > threshold) {
       const extraKm = realDistance - threshold;
       deliveryFee += extraKm * perKmFee;
@@ -937,7 +1042,7 @@ export class OrdersService {
   }
 
   async updateSubOrderStatus(subOrderId: string, status: string): Promise<SubOrder> {
-    const subOrder = await this.subOrdersRepository.findOne({ 
+    const subOrder = await this.subOrdersRepository.findOne({
       where: { id: subOrderId },
       relations: ['order']
     });
@@ -961,21 +1066,21 @@ export class OrdersService {
 
     // Notify users
     this.ordersGateway.emitOrderStatusUpdate(subOrder.orderId, `sub_${status}`, subOrder.order.userId);
-    
+
     return updatedSubOrder;
   }
 
   private async emitUpdateNotifications(orderId: string, status: string, userId: string, riderId?: string) {
     // Notify through gateway for tracking screens
     this.ordersGateway.emitOrderStatusUpdate(orderId, status, userId, riderId);
-    
+
     // Emit 'orderUpdated' for specific order room (User/Rider details refresh)
     this.ordersGateway.server.to(`order_${orderId}`).emit('orderUpdated', { orderId });
 
     if (riderId) {
       // Emit 'orderUpdated' specifically to the rider (Dashboard refresh)
       this.ordersGateway.server.to(`rider_${riderId}`).emit('orderUpdated', { orderId });
-      
+
       try {
         const rider = await this.ridersRepository.findOne({ where: { id: riderId } });
         if (rider && rider.fcmToken) {

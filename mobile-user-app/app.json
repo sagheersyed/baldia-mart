@@ -24,13 +24,29 @@
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundColor": "#FF4500"
       },
-      "package": "com.baldia.mart"
+      "package": "com.baldia.mart",
+      "googleServicesFile": "./google-services.json",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "FOREGROUND_SERVICE"
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyBMoO6fS8CX5Dpz3JJHUSo60iG1oByNKO0"
+        }
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "expo-web-browser"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "02594da6-bfc4-418e-8aab-0462bd7f03b0"
+      }
+    }
   }
 }

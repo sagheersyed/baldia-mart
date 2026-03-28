@@ -97,8 +97,8 @@ export default function OrderDetailsScreen({ route, navigation }: any) {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Customer & Delivery</Text>
           <Text style={styles.customerName}>👤 {order.user?.name || 'Customer'}</Text>
-          <Text style={styles.address}>📍 {order.address?.streetAddress || 'Local Area'}</Text>
-          <Text style={styles.distance}>🚚 {order.deliveryDistanceKm} km distance</Text>
+          <Text style={styles.address}>📍 {order?.address?.streetAddress || 'Local Area'}</Text>
+          <Text style={styles.distance}>🚚 {order?.deliveryDistanceKm || '?'} km distance</Text>
         </View>
 
         <View style={styles.section}>
@@ -126,7 +126,7 @@ export default function OrderDetailsScreen({ route, navigation }: any) {
                           <Text style={{ fontSize: 11, color: '#FF8C00', marginTop: 2 }}>⏳ {item.menuItem.prepTimeMinutes} mins prep</Text>
                         )}
                       </View>
-                      <Text style={styles.itemPrice}>Rs. {item.priceAtTime * item.quantity}</Text>
+                      <Text style={styles.itemPrice}>Rs. {Number(item.priceAtTime || 0) * item.quantity}</Text>
                     </View>
                   );
                 })}
@@ -136,7 +136,7 @@ export default function OrderDetailsScreen({ route, navigation }: any) {
           <View style={styles.divider} />
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>Total Bill (COD)</Text>
-            <Text style={styles.totalVal}>Rs. {order.total}</Text>
+            <Text style={styles.totalVal}>Rs. {order?.total || 0}</Text>
           </View>
         </View>
 

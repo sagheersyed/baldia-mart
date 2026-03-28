@@ -23,7 +23,7 @@ interface Rider {
   createdAt: string;
 }
 
-const API_URL = 'http://192.168.100.142:3000/api/v1/riders';
+const API_URL = 'https://c2e9-175-107-236-228.ngrok-free.app/api/v1/riders';
 
 export default function RidersPage() {
   const [riders, setRiders] = useState<Rider[]>([]);
@@ -263,8 +263,8 @@ export default function RidersPage() {
                   disabled={updating === rider.id}
                   onClick={() => handleToggleActive(rider)}
                   className={`flex-1 py-2.5 font-bold rounded-xl flex items-center justify-center transition text-sm border ${rider.isActive
-                      ? 'bg-red-50 border-red-100 text-red-600 hover:bg-red-500 hover:text-white'
-                      : 'bg-green-50 border-green-100 text-green-600 hover:bg-green-500 hover:text-white'
+                    ? 'bg-red-50 border-red-100 text-red-600 hover:bg-red-500 hover:text-white'
+                    : 'bg-green-50 border-green-100 text-green-600 hover:bg-green-500 hover:text-white'
                     } ${updating === rider.id ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   {updating === rider.id ? (
@@ -336,8 +336,8 @@ export default function RidersPage() {
                   setViewingDocs(null);
                 }}
                 className={`w-full py-4 font-black rounded-2xl flex items-center justify-center text-lg transition ${viewingDocs.isActive
-                    ? 'bg-red-500 hover:bg-red-600 text-white'
-                    : 'bg-green-500 hover:bg-green-600 text-white'
+                  ? 'bg-red-500 hover:bg-red-600 text-white'
+                  : 'bg-green-500 hover:bg-green-600 text-white'
                   }`}
               >
                 {viewingDocs.isActive ? <><ShieldX size={20} className="mr-2" /> Block This Rider</> : <><ShieldCheck size={20} className="mr-2" /> Approve & Unblock Rider</>}

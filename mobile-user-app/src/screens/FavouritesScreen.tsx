@@ -5,16 +5,42 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useFavourites } from '../hooks/useFavourites';
-import { normalizeUrl } from '../api/api';
+import { normalizeUrl, restaurantsApi, productsApi } from '../api/api';
+import { useCart } from '../context/CartContext';
+import { formatRatingCount } from '../utils/helpers';
 
 const TABS = ['Restaurants', 'Products'] as const;
 
 export default function FavouritesScreen({ navigation }: any) {
   const [activeTab, setActiveTab] = useState<'Restaurants' | 'Products'>('Restaurants');
-  const { restaurants, products, toggleFavourite, reload } = useFavourites();
+  const [syncing, setSyncing] = useState(false);
+  const { restaurants, products, toggleFavourite, reload, syncFromApi } = useFavourites();
+  const { foodCart, martCart, addToCart } = useCart();
 
   // Reload when screen comes into focus
-  useFocusEffect(useCallback(() => { reload(); }, [reload]));
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    const sync = async () => {
+      setSyncing(true);
+      await reload(); // Initial local load
+      try {
+        const [rRes, pRes] = await Promise.allSettled([
+          restaurantsApi.getAll(),
+          productsApi.getAll(),
+        ]);
+        if (!active) return;
+        const liveR = rRes.status === 'fulfilled' ? rRes.value.data : [];
+        const liveP = pRes.status === 'fulfilled' ? pRes.value.data : [];
+        await syncFromApi(liveR, liveP);
+      } catch (e) {
+        console.error('Failed to sync favourites with API', e);
+      } finally {
+        if (active) setSyncing(false);
+      }
+    };
+    sync();
+    return () => { active = false; };
+  }, [reload, syncFromApi]));
 
   const isEmpty = activeTab === 'Restaurants' ? restaurants.length === 0 : products.length === 0;
 
@@ -61,6 +87,9 @@ export default function FavouritesScreen({ navigation }: any) {
           contentContainerStyle={styles.list}
           renderItem={({ item }) => {
             const imgUri = normalizeUrl(item.logoUrl || item.imageUrl);
+            const cartItem = activeTab === 'Products' ? (martCart.find((c: any) => c.id === item.id) || foodCart.find((c: any) => c.id === item.id)) : null;
+            const cartQty = cartItem?.quantity || 0;
+
             return (
               <TouchableOpacity
                 style={styles.card}
@@ -68,6 +97,8 @@ export default function FavouritesScreen({ navigation }: any) {
                 onPress={() => {
                   if (activeTab === 'Restaurants') {
                     navigation.navigate('RestaurantDetail', { restaurantId: item.id });
+                  } else {
+                    // Navigate to product detail or search if needed
                   }
                 }}
               >
@@ -81,23 +112,36 @@ export default function FavouritesScreen({ navigation }: any) {
                   )}
                 </View>
                 <View style={styles.cardInfo}>
-                  <Text style={styles.cardName} numberOfLines={1}>{item.name}</Text>
+                  <View style={styles.cardHeaderRow}>
+                    <Text style={styles.cardName} numberOfLines={1}>{item.name}</Text>
+                    <TouchableOpacity
+                      onPress={(e) => { e.stopPropagation(); toggleFavourite(item, activeTab === 'Restaurants' ? 'restaurants' : 'products'); }}
+                      style={styles.heartBtnSm}
+                    >
+                      <Text style={styles.heartIconSm}>❤️</Text>
+                    </TouchableOpacity>
+                  </View>
                   {item.cuisineType && (
                     <Text style={styles.cardSub} numberOfLines={1}>{item.cuisineType}</Text>
                   )}
-                  {item.price != null && (
-                    <Text style={styles.cardPrice}>Rs {Number(item.price).toFixed(0)}</Text>
-                  )}
                   {item.rating != null && item.rating > 0 && (
-                    <Text style={styles.cardRating}>⭐ {Number(item.rating).toFixed(1)}</Text>
+                    <Text style={styles.cardRating}>⭐ {Number(item.rating).toFixed(1)}{formatRatingCount(item.ratingCount)}</Text>
                   )}
+                  
+                  <View style={styles.cardActionRow}>
+                    {item.price != null && (
+                      <Text style={styles.cardPrice}>Rs {Number(item.price).toFixed(0)}</Text>
+                    )}
+                    {activeTab === 'Products' && (
+                      <TouchableOpacity
+                        style={styles.addBtn}
+                        onPress={(e) => { e.stopPropagation(); addToCart(item, 'mart'); }}
+                      >
+                        <Text style={styles.addBtnTxt}>{cartQty > 0 ? `${cartQty} ✓` : '+ Add'}</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
-                <TouchableOpacity
-                  onPress={() => toggleFavourite(item, activeTab === 'Restaurants' ? 'restaurants' : 'products')}
-                  style={styles.heartBtn}
-                >
-                  <Text style={styles.heartIcon}>❤️</Text>
-                </TouchableOpacity>
               </TouchableOpacity>
             );
           }}
@@ -138,13 +182,17 @@ const styles = StyleSheet.create({
   cardImgWrap: { width: 70, height: 70, borderRadius: 16, overflow: 'hidden', backgroundColor: '#F5F5F5', marginRight: 14 },
   cardImg: { width: '100%', height: '100%' },
   cardImgPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  cardInfo: { flex: 1 },
-  cardName: { fontSize: 16, fontWeight: '800', color: '#1A1A1A', marginBottom: 3 },
+  cardInfo: { flex: 1, justifyContent: 'center' },
+  cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  cardName: { fontSize: 16, fontWeight: '800', color: '#1A1A1A', marginBottom: 3, flex: 1 },
+  heartBtnSm: { padding: 4, marginLeft: 6 },
+  heartIconSm: { fontSize: 16 },
   cardSub: { fontSize: 13, color: '#888', marginBottom: 3 },
-  cardPrice: { fontSize: 14, fontWeight: '700', color: '#FF4500' },
-  cardRating: { fontSize: 12, color: '#888', marginTop: 2 },
-  heartBtn: { padding: 8 },
-  heartIcon: { fontSize: 22 },
+  cardRating: { fontSize: 12, color: '#888', marginTop: 2, marginBottom: 4 },
+  cardActionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 },
+  cardPrice: { fontSize: 15, fontWeight: '800', color: '#FF4500' },
+  addBtn: { backgroundColor: '#FF4500', paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20 },
+  addBtnTxt: { color: '#fff', fontSize: 12, fontWeight: '800' },
 
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
   emptyIcon: { fontSize: 64, marginBottom: 16, opacity: 0.4 },

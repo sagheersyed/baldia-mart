@@ -18,6 +18,7 @@ import MpinSetupScreen from './src/screens/MpinSetupScreen';
 import MpinSetupDirectScreen from './src/screens/MpinSetupDirectScreen';
 import OrderDetailsScreen from './src/screens/OrderDetailsScreen';
 import OrderHistoryScreen from './src/screens/OrderHistoryScreen';
+import WalletScreen from './src/screens/WalletScreen';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { setAuthToken, authApi } from './src/api/api';
@@ -39,12 +40,14 @@ function RiderTabs() {
         tabBarIcon: ({ color, size }) => {
           let iconName: any;
           if (route.name === 'Dashboard') iconName = 'speedometer-outline';
+          else if (route.name === 'Wallet') iconName = 'wallet-outline';
           else if (route.name === 'Profile') iconName = 'person-outline';
           return <Ionicons name={iconName} size={size} color={color} />;
         },
       })}
     >
       <Tab.Screen name="Dashboard" component={DashboardScreen} />
+      <Tab.Screen name="Wallet" component={WalletScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );
@@ -79,6 +82,7 @@ function AppInner() {
             <Stack.Screen name="OrderDetails" component={OrderDetailsScreen} />
             <Stack.Screen name="Navigation" component={NavigationScreen} />
             <Stack.Screen name="OrderHistory" component={OrderHistoryScreen} />
+            <Stack.Screen name="WalletDetail" component={WalletScreen} />
           </>
         )}
       </Stack.Navigator>

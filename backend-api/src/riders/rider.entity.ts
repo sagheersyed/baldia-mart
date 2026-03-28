@@ -1,4 +1,4 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 
 @Entity('riders')
 export class Rider {
@@ -44,6 +44,7 @@ export class Rider {
   @Column({ name: 'is_profile_complete', default: false })
   isProfileComplete: boolean;
 
+  @Index()
   @Column({ name: 'is_online', default: false })
   isOnline: boolean;
 
@@ -56,12 +57,19 @@ export class Rider {
   @Column('decimal', { name: 'total_earnings', precision: 10, scale: 2, default: 0 })
   totalEarnings: number;
 
+  @Column('decimal', { name: 'lifetime_commission', precision: 10, scale: 2, default: 0 })
+  lifetimeCommission: number;
+
+  @Column('decimal', { name: 'performance_bonus', precision: 10, scale: 2, default: 0 })
+  performanceBonus: number;
+
   @Column('decimal', { name: 'average_rating', precision: 3, scale: 2, default: 5.0 })
   averageRating: number;
 
   @Column({ name: 'total_reviews', default: 0 })
   totalReviews: number;
 
+  @Index()
   @Column({ name: 'is_active', default: false })
   isActive: boolean;
 

@@ -1,10 +1,18 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, OneToMany, ManyToOne, JoinColumn } from 'typeorm';
 import { MenuItem } from '../menu-items/menu-item.entity';
+import { DeliveryZone } from '../delivery-zones/delivery-zone.entity';
 
 @Entity('restaurants')
 export class Restaurant {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @Column({ name: 'zone_id', nullable: true })
+  zoneId: string;
+
+  @ManyToOne(() => DeliveryZone)
+  @JoinColumn({ name: 'zone_id' })
+  zone: DeliveryZone;
 
   @Column({ unique: true })
   name: string;

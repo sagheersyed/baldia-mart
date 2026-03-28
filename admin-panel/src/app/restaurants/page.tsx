@@ -18,7 +18,15 @@ interface Restaurant {
   longitude?: number;
   isActive: boolean;
   rating?: number;
+  zoneId?: string;
+  zone?: DeliveryZone;
   menuItems?: MenuItem[];
+}
+
+interface DeliveryZone {
+  id: string;
+  name: string;
+  isActive: boolean;
 }
 
 interface MenuItem {
@@ -37,10 +45,26 @@ interface MenuItem {
 const API_URL = `${BASE_URL}/restaurants`;
 const MENU_API_URL = `${BASE_URL}/menu-items`;
 
-const emptyRestaurantForm = {
+interface RestaurantForm {
+  name: string;
+  description: string;
+  logoUrl: string;
+  cuisineType: string;
+  openingHours: string;
+  openingTime: string;
+  closingTime: string;
+  location: string;
+  latitude: string;
+  longitude: string;
+  zoneId: string;
+  isActive: boolean;
+}
+
+const emptyRestaurantForm: RestaurantForm = {
   name: '', description: '', logoUrl: '', cuisineType: '',
   openingHours: '', openingTime: '', closingTime: '',
-  location: '', latitude: '', longitude: ''
+  location: '', latitude: '', longitude: '', zoneId: '',
+  isActive: true
 };
 
 const emptyMenuItemForm = {
@@ -51,7 +75,9 @@ const emptyMenuItemForm = {
 
 export default function RestaurantsPage() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
+  const [zones, setZones] = useState<DeliveryZone[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedZoneFilter, setSelectedZoneFilter] = useState('all');
   const [showRestaurantModal, setShowRestaurantModal] = useState(false);
   const [showMenuModal, setShowMenuModal] = useState(false);
   const [restaurantForm, setRestaurantForm] = useState(emptyRestaurantForm);
@@ -61,7 +87,20 @@ export default function RestaurantsPage() {
   const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => { fetchRestaurants(); }, []);
+  useEffect(() => { 
+    fetchRestaurants();
+    fetchZones();
+  }, []);
+
+  const fetchZones = async () => {
+    try {
+      const res = await fetchWithAuth(`${BASE_URL}/delivery-zones/all`);
+      const data = await res.json();
+      setZones(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Failed to fetch zones:', err);
+    }
+  };
 
   const fetchRestaurants = async () => {
     setLoading(true);
@@ -86,6 +125,7 @@ export default function RestaurantsPage() {
         ...restaurantForm,
         latitude: restaurantForm.latitude ? parseFloat(restaurantForm.latitude) : null,
         longitude: restaurantForm.longitude ? parseFloat(restaurantForm.longitude) : null,
+        zoneId: restaurantForm.zoneId || null
       };
       const res = await fetchWithAuth(url, {
         method,
@@ -159,9 +199,15 @@ export default function RestaurantsPage() {
       location: r.location || '',
       latitude: r.latitude ? r.latitude.toString() : '',
       longitude: r.longitude ? r.longitude.toString() : '',
+      zoneId: r.zoneId || '',
+      isActive: r.isActive
     });
     setShowRestaurantModal(true);
   };
+
+  const filteredRestaurants = selectedZoneFilter === 'all' 
+    ? restaurants 
+    : restaurants.filter(r => r.zoneId === selectedZoneFilter);
 
   const openEditMenuItem = (item: MenuItem, restaurant: Restaurant) => {
     setSelectedRestaurant(restaurant);
@@ -185,13 +231,25 @@ export default function RestaurantsPage() {
             <h1 className="text-4xl font-black text-gray-900">🍽️ Restaurants</h1>
             <p className="text-gray-400 font-medium mt-1">Manage food restaurants and their menus</p>
           </div>
-          <button
-            onClick={() => { setEditingRestaurant(null); setRestaurantForm(emptyRestaurantForm); setShowRestaurantModal(true); }}
-            className="flex items-center space-x-2 bg-gradient-to-br from-orange-500 to-red-500 text-white px-6 py-3 rounded-2xl font-bold hover:shadow-lg transition-all"
-          >
-            <Plus size={18} />
-            <span>Add Restaurant</span>
-          </button>
+          <div className="flex items-center gap-4">
+            <select 
+              className="bg-white border border-gray-100 rounded-2xl px-4 py-3 font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500/20 shadow-sm"
+              value={selectedZoneFilter}
+              onChange={(e) => setSelectedZoneFilter(e.target.value)}
+            >
+              <option value="all">All Delivery Zones</option>
+              {zones.map(zone => (
+                <option key={zone.id} value={zone.id}>{zone.name}</option>
+              ))}
+            </select>
+            <button
+              onClick={() => { setEditingRestaurant(null); setRestaurantForm(emptyRestaurantForm); setShowRestaurantModal(true); }}
+              className="flex items-center space-x-2 bg-gradient-to-br from-orange-500 to-red-500 text-white px-6 py-3 rounded-2xl font-bold hover:shadow-lg transition-all"
+            >
+              <Plus size={18} />
+              <span>Add Restaurant</span>
+            </button>
+          </div>
         </div>
 
         {loading ? (
@@ -200,7 +258,7 @@ export default function RestaurantsPage() {
           </div>
         ) : (
           <div className="space-y-6">
-            {restaurants.map(restaurant => (
+            {filteredRestaurants.map(restaurant => (
               <div key={restaurant.id} className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
                 {/* Restaurant Header */}
                 <div className="flex items-center justify-between p-6 border-b border-gray-50">
@@ -321,6 +379,16 @@ export default function RestaurantsPage() {
                   <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Cuisine Type</label>
                   <input placeholder="e.g., Pakistani, BBQ" className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 font-bold" value={restaurantForm.cuisineType} onChange={e => setRestaurantForm({ ...restaurantForm, cuisineType: e.target.value })} />
                 </div>
+                <div>
+                  <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Delivery Zone</label>
+                  <select required className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none font-bold" value={restaurantForm.zoneId} onChange={e => setRestaurantForm({ ...restaurantForm, zoneId: e.target.value })}>
+                    <option value="">Select a zone...</option>
+                    {zones.map(zone => (
+                      <option key={zone.id} value={zone.id}>{zone.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Display Hours</label>
@@ -335,7 +403,6 @@ export default function RestaurantsPage() {
                   <input type="time" className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 font-bold" value={restaurantForm.closingTime} onChange={e => setRestaurantForm({ ...restaurantForm, closingTime: e.target.value })} />
                 </div>
               </div>
-              </div>
               <div>
                 <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Location Address</label>
                 <input placeholder="e.g., Shop 5, Baldia Town, Karachi" className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 font-bold" value={restaurantForm.location} onChange={e => setRestaurantForm({ ...restaurantForm, location: e.target.value })} />
@@ -349,6 +416,16 @@ export default function RestaurantsPage() {
                   <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Longitude</label>
                   <input type="number" step="any" placeholder="66.9643" className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 font-bold" value={restaurantForm.longitude} onChange={e => setRestaurantForm({ ...restaurantForm, longitude: e.target.value })} />
                 </div>
+              </div>
+              <div className="flex items-center gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                <input 
+                  type="checkbox" 
+                  id="isActive"
+                  className="w-5 h-5 rounded-lg border-gray-300 text-orange-500 focus:ring-orange-500" 
+                  checked={restaurantForm.isActive} 
+                  onChange={e => setRestaurantForm({ ...restaurantForm, isActive: e.target.checked })} 
+                />
+                <label htmlFor="isActive" className="text-sm font-bold text-gray-700 cursor-pointer">Restaurant is Active (Visible to Customers)</label>
               </div>
               <div className="pt-2">
                 <button type="submit" disabled={isSubmitting} className="w-full h-14 bg-gradient-to-br from-orange-500 to-red-500 text-white rounded-2xl font-black text-lg hover:shadow-lg transition-all disabled:opacity-60">

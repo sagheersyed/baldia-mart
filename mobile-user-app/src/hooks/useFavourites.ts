@@ -14,6 +14,7 @@ export type FavItem = {
   // Extra info for display
   cuisineType?: string;
   rating?: number;
+  ratingCount?: number;
   price?: number;
   brandId?: string;
 };
@@ -70,5 +71,35 @@ export function useFavourites() {
     [restaurants, products],
   );
 
-  return { restaurants, products, isFavourite, toggleFavourite, reload: load };
+  // Sync saved favourites with live API data (refreshes name, image, rating)
+  const syncFromApi = useCallback(
+    async (allRestaurants: FavItem[], allProducts: FavItem[]) => {
+      try {
+        const [rRaw, pRaw] = await Promise.all([
+          AsyncStorage.getItem(KEYS.restaurants),
+          AsyncStorage.getItem(KEYS.products),
+        ]);
+        const savedR: FavItem[] = rRaw ? JSON.parse(rRaw) : [];
+        const savedP: FavItem[] = pRaw ? JSON.parse(pRaw) : [];
+
+        const updatedR = savedR
+          .map((fav) => allRestaurants.find((r) => r.id === fav.id) ?? fav)
+          .filter(Boolean) as FavItem[];
+
+        const updatedP = savedP
+          .map((fav) => allProducts.find((p) => p.id === fav.id) ?? fav)
+          .filter(Boolean) as FavItem[];
+
+        setRestaurants(updatedR);
+        setProducts(updatedP);
+        await AsyncStorage.setItem(KEYS.restaurants, JSON.stringify(updatedR));
+        await AsyncStorage.setItem(KEYS.products, JSON.stringify(updatedP));
+      } catch (e) {
+        console.error('[useFavourites] syncFromApi error', e);
+      }
+    },
+    [],
+  );
+
+  return { restaurants, products, isFavourite, toggleFavourite, reload: load, syncFromApi };
 }

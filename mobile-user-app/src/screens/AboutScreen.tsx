@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, Linking, Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
+import { settingsApi } from '../api/api';
 
 const APP_VERSION = '1.0.0';
 
@@ -16,12 +18,12 @@ const FEATURES = [
   '🔔 Order status notifications',
 ];
 
-const CONTACT = [
+const DEFAULT_CONTACT = [
   { icon: '📧', label: 'Email', value: 'support@baldiamart.pk', action: () => Linking.openURL('mailto:support@baldiamart.pk') },
   { icon: '📞', label: 'Phone', value: '+92 300 0000000', action: () => Linking.openURL('tel:+923000000000') },
 ];
 
-const SOCIAL = [
+const DEFAULT_SOCIAL = [
   { icon: '📘', label: 'Facebook', url: 'https://facebook.com/baldiamart' },
   { icon: '📸', label: 'Instagram', url: 'https://instagram.com/baldiamart' },
 ];
@@ -32,6 +34,32 @@ const LEGAL = [
 ];
 
 export default function AboutScreen({ navigation }: any) {
+  const [contactLinks, setContactLinks] = useState(DEFAULT_CONTACT);
+  const [socialLinks, setSocialLinks] = useState(DEFAULT_SOCIAL);
+
+  useFocusEffect(
+    useCallback(() => {
+      settingsApi.getPublicSettings().then(res => {
+        const data = res.data;
+        if (data) {
+          const email = data.contact_email || 'support@baldiamart.pk';
+          const phone = data.contact_phone || '+92 300 0000000';
+          const fb = data.social_facebook || 'https://facebook.com/baldiamart';
+          const insta = data.social_instagram || 'https://instagram.com/baldiamart';
+
+          setContactLinks([
+            { icon: '📧', label: 'Email', value: email, action: () => Linking.openURL(`mailto:${email}`) },
+            { icon: '📞', label: 'Phone', value: phone, action: () => Linking.openURL(`tel:${phone}`) },
+          ]);
+          setSocialLinks([
+            { icon: '📘', label: 'Facebook', url: fb },
+            { icon: '📸', label: 'Instagram', url: insta },
+          ]);
+        }
+      }).catch(err => console.error('Failed to load settings', err));
+    }, [])
+  );
+
   const openLink = (url: string) => {
     Linking.openURL(url).catch(() =>
       Alert.alert('Error', 'Could not open link. Please try again.')
@@ -86,7 +114,7 @@ export default function AboutScreen({ navigation }: any) {
         {/* Contact */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Contact Us</Text>
-          {CONTACT.map((item, i) => (
+          {contactLinks.map((item, i) => (
             <TouchableOpacity key={i} style={styles.row} onPress={item.action} activeOpacity={0.7}>
               <Text style={styles.rowIcon}>{item.icon}</Text>
               <View style={styles.rowBody}>
@@ -101,7 +129,7 @@ export default function AboutScreen({ navigation }: any) {
         {/* Social */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Follow Us</Text>
-          {SOCIAL.map((item, i) => (
+          {socialLinks.map((item, i) => (
             <TouchableOpacity key={i} style={styles.row} onPress={() => openLink(item.url)} activeOpacity={0.7}>
               <Text style={styles.rowIcon}>{item.icon}</Text>
               <View style={styles.rowBody}>

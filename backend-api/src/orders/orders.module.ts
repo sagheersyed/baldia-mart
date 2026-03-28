@@ -14,6 +14,7 @@ import { SettingsModule } from '../settings/settings.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { Rider } from '../riders/rider.entity';
 import { RidersModule } from '../riders/riders.module';
+import { VendorsModule } from '../vendors/vendors.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { RidersModule } from '../riders/riders.module';
     SettingsModule,
     NotificationsModule,
     forwardRef(() => RidersModule),
+    VendorsModule,
   ],
   providers: [OrdersService, OrdersGateway],
   controllers: [OrdersController],
