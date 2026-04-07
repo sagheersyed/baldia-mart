@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, RefreshControl
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ordersApi } from '../api/api';
@@ -68,7 +69,11 @@ export default function NotificationsScreen({ navigation }: any) {
     }
   }, []);
 
-  useEffect(() => { fetchNotifications(); }, [fetchNotifications]);
+  useFocusEffect(
+    useCallback(() => {
+      fetchNotifications();
+    }, [fetchNotifications])
+  );
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);

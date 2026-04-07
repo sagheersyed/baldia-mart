@@ -52,6 +52,12 @@ export class Vendor {
   @Column({ name: 'opening_hours', nullable: true })
   openingHours: string; // e.g. "09:00 AM - 11:00 PM"
 
+  @Column({ name: 'opening_time', nullable: true })
+  openingTime: string; // e.g. "09:00"
+
+  @Column({ name: 'closing_time', nullable: true })
+  closingTime: string; // e.g. "23:00"
+
   @OneToMany(() => VendorProduct, vp => vp.vendor)
   vendorProducts: VendorProduct[];
 

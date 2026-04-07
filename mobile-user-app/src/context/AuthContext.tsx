@@ -85,6 +85,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUserData(null);
       await AsyncStorage.removeItem('userToken');
       await AsyncStorage.removeItem('userData');
+      // Clear persistent favorites
+      await Promise.all([
+        AsyncStorage.removeItem('@fav_restaurants'),
+        AsyncStorage.removeItem('@fav_products'),
+      ]);
     } catch (e) {
       console.error('SignOut error', e);
     }

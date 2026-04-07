@@ -27,6 +27,7 @@ import { RestaurantsModule } from './restaurants/restaurants.module';
 import { MenuItemsModule } from './menu-items/menu-items.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { VendorsModule } from './vendors/vendors.module';
+import { FavoritesModule } from './favorites/favorites.module';
 
 // Entities
 import { User } from './users/user.entity';
@@ -52,6 +53,7 @@ import { MenuItem } from './menu-items/menu-item.entity';
 import { BusinessReview } from './common/business-review.entity';
 import { Vendor } from './vendors/vendor.entity';
 import { VendorProduct } from './vendors/vendor-product.entity';
+import { Favorite } from './favorites/favorite.entity';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 
@@ -79,7 +81,7 @@ import { APP_GUARD } from '@nestjs/core';
         User, Address, DeliveryZone, Category, Product, 
         CartItem, Order, OrderItem, Payment, Notification, Rider, Otp,
         OrderHistory, RiderReview, Setting, Brand, Banner, Restaurant, MenuItem, SubOrder, BusinessReview,
-        Vendor, VendorProduct,
+        Vendor, VendorProduct, Favorite,
       ],
 
       synchronize: process.env.NODE_ENV !== 'production',
@@ -107,6 +109,7 @@ import { APP_GUARD } from '@nestjs/core';
     MenuItemsModule,
     ReviewsModule,
     VendorsModule,
+    FavoritesModule,
   ],
   controllers: [AppController, HealthController],
   providers: [

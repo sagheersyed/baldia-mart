@@ -20,6 +20,12 @@ export class Category {
   @Column({ name: 'is_active', default: true })
   isActive: boolean;
 
+  @Column({ name: 'opening_time', nullable: true })
+  openingTime: string; // e.g., '09:00'
+
+  @Column({ name: 'closing_time', nullable: true })
+  closingTime: string; // e.g., '23:00'
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

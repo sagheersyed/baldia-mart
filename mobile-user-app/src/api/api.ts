@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // For Android Emulator, use 10.0.2.2. For iOS/Local, use localhost.
 // Replace with your local machine's IP (e.g., 192.168.1.10) for physical devices.
-const BASE_URL = 'https://c2e9-175-107-236-228.ngrok-free.app/api/v1';
+const BASE_URL = 'https://00ad-175-107-236-228.ngrok-free.app/api/v1';
 
 /**
  * Normalizes image and file URLs.
@@ -12,10 +12,10 @@ const BASE_URL = 'https://c2e9-175-107-236-228.ngrok-free.app/api/v1';
 export const normalizeUrl = (url: string | null | undefined): string | null => {
   if (!url) return null;
   if (url.startsWith('http')) {
-    return url.replace('localhost', 'https://c2e9-175-107-236-228.ngrok-free.app');
+    return url.replace('localhost', 'https://00ad-175-107-236-228.ngrok-free.app');
   }
   if (url.startsWith('/')) {
-    return `https://c2e9-175-107-236-228.ngrok-free.app${url}`;
+    return `https://00ad-175-107-236-228.ngrok-free.app${url}`;
   }
   return url;
 };
@@ -91,7 +91,7 @@ export const productsApi = {
 
 export const ordersApi = {
   checkout: (data: any) => api.post('/orders/checkout', data),
-  getHistory: () => api.get('/orders/history'),
+  getHistory: () => api.get(`/orders/history?_t=${Date.now()}`),
   getById: (orderId: string) => api.get(`/orders/${orderId}`),
   updateStatus: (orderId: string, status: string) =>
     api.put(`/orders/${orderId}/status`, { status }),
@@ -148,4 +148,10 @@ export const businessReviewsApi = {
 
 export const deliveryZonesApi = {
   getActive: () => api.get('/delivery-zones/active'),
+};
+
+export const favoritesApi = {
+  getAll: () => api.get('/favorites'),
+  toggle: (type: 'product' | 'restaurant', targetId: string) => api.post('/favorites/toggle', { type, targetId }),
+  sync: (items: { type: 'product' | 'restaurant', targetId: string }[]) => api.post('/favorites/sync', { items }),
 };

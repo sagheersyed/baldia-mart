@@ -17,10 +17,10 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
   const R = 6371; // km
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-            Math.sin(dLon/2) * Math.sin(dLon/2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 };
 
@@ -87,10 +87,10 @@ function StopPin({ number, emoji }: { number: number; emoji: string }) {
 const getStatusLabel = (status: string, isFood: boolean, paymentMethod: string) => {
   const isCOD = paymentMethod === 'cod';
   const labels: Record<string, string> = {
-    confirmed:         isFood ? 'Swipe — Arrived at Restaurant' : 'Swipe — Arrived at Mart',
-    preparing:         isFood ? 'Swipe — Food Ready, Pick Up' : 'Swipe — Order Packed, Pick Up',
-    out_for_delivery:  isCOD ? 'Swipe — Collect Cash & Deliver' : 'Swipe — Mark as Delivered',
-    delivered:         '✅  Order Delivered',
+    confirmed: isFood ? 'Swipe — Arrived at Restaurant' : 'Swipe — Arrived at Mart',
+    preparing: isFood ? 'Swipe — Food Ready, Pick Up' : 'Swipe — Order Packed, Pick Up',
+    out_for_delivery: isCOD ? 'Swipe — Collect Cash & Deliver' : 'Swipe — Mark as Delivered',
+    delivered: '✅  Order Delivered',
   };
   return labels[status] || 'Swipe to Update';
 };
@@ -117,16 +117,16 @@ export default function NavigationScreen({ navigation, route }: any) {
         const entity = sub.restaurant || sub.vendor;
         if (entity?.latitude || entity?.lat) {
           pickupStops.push({
-            id: sub.id, 
-            stopNum: i + 1, 
+            id: sub.id,
+            stopNum: i + 1,
             name: entity.name,
             description: entity.location || entity.address || (isFood ? 'Restaurant' : 'Shop'),
-            coords: { 
-              latitude: Number(entity.latitude || entity.lat || 0), 
-              longitude: Number(entity.longitude || entity.lng || 0) 
+            coords: {
+              latitude: Number(entity.latitude || entity.lat || 0),
+              longitude: Number(entity.longitude || entity.lng || 0)
             },
-            subOrderId: sub.id, 
-            subStatus: sub.status, 
+            subOrderId: sub.id,
+            subStatus: sub.status,
             emoji: isFood ? '🍽️' : '🏪',
           });
         }
@@ -210,7 +210,7 @@ export default function NavigationScreen({ navigation, route }: any) {
       try {
         if (!data) return;
         const targetId = data.orderId || (typeof data === 'string' ? data : null);
-        
+
         // CRITICAL FIX: Only trigger alert IF the status provided is actually 'cancelled'
         if ((targetId === orderId && data.status === 'cancelled') || (typeof data === 'string' && data === 'cancelled')) {
           Vibration.vibrate([100, 500]);
@@ -259,7 +259,7 @@ export default function NavigationScreen({ navigation, route }: any) {
         });
       }, 500);
     }
-  }, [loading, riderLoc]);
+  }, [loading, riderLoc, order]);
 
   // ── Status progression ──────────────────────────────────────────────
   const handleSwipeConfirm = async () => {
@@ -268,7 +268,7 @@ export default function NavigationScreen({ navigation, route }: any) {
     // --- GEO-FENCING CHECKS ---
     if (riderLoc) {
       const { latitude: rLat, longitude: rLng } = riderLoc;
-      
+
       if (status === 'confirmed') {
         // Must be near Mart/Restaurant (500m)
         const pickup = pickupStops[0]?.coords || DEFAULT_MART;
@@ -302,14 +302,14 @@ export default function NavigationScreen({ navigation, route }: any) {
         `Please collect Rs. ${order.total} from the customer before completing the delivery.`,
         [
           { text: 'Cancel', style: 'cancel' },
-          { 
-            text: 'I have Collected Cash', 
+          {
+            text: 'I have Collected Cash',
             onPress: () => completeDelivery(nextStatus),
             style: 'default'
           }
         ]
       );
-      return; 
+      return;
     }
 
     // Process immediately if not COD or not final delivery stage
@@ -344,13 +344,25 @@ export default function NavigationScreen({ navigation, route }: any) {
   // ── External maps ───────────────────────────────────────────────────
   const openExternalMaps = () => {
     const origin = riderLoc ? `${riderLoc.latitude},${riderLoc.longitude}` : '';
+    const customerLabel = encodeURIComponent(order?.address?.label || 'Customer');
     const dest = `${customerCoords.latitude},${customerCoords.longitude}`;
     const waypts = pickupStops.map(s => `${s.coords.latitude},${s.coords.longitude}`).join('|');
+    
     if (Platform.OS === 'android') {
-      Linking.openURL(`https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${dest}&waypoints=${waypts}&travelmode=two_wheeler`);
+      if (pickupStops.length === 1) {
+        // Single stop: origin -> stop -> customer with destination label
+        Linking.openURL(
+          `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${dest}&destination_place_id=${customerLabel}&waypoints=${pickupStops[0].coords.latitude},${pickupStops[0].coords.longitude}&travelmode=two_wheeler`
+        );
+      } else {
+        Linking.openURL(
+          `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${dest}&waypoints=${waypts}&travelmode=two_wheeler`
+        );
+      }
     } else {
       const first = pickupStops[0]?.coords || DEFAULT_MART;
-      Linking.openURL(`maps:0,0?q=Stop@${first.latitude},${first.longitude}`);
+      const firstName = pickupStops[0]?.name || 'Stop';
+      Linking.openURL(`maps:0,0?q=${encodeURIComponent(firstName)}@${first.latitude},${first.longitude}`);
     }
   };
 
@@ -385,8 +397,8 @@ export default function NavigationScreen({ navigation, route }: any) {
 
         {/* Pickup stops — numbered */}
         {pickupStops.map((stop) => (
-          <Marker 
-            key={stop.id} 
+          <Marker
+            key={stop.id}
             coordinate={stop.coords}
             tracksViewChanges={false}
           >
@@ -395,7 +407,7 @@ export default function NavigationScreen({ navigation, route }: any) {
         ))}
 
         {/* Customer dropoff — numbered last */}
-        <Marker 
+        <Marker
           coordinate={customerCoords}
           tracksViewChanges={false}
         >

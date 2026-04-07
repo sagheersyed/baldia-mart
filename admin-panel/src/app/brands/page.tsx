@@ -14,6 +14,8 @@ interface Brand {
   location?: string;
   latitude?: number;
   longitude?: number;
+  openingTime?: string;
+  closingTime?: string;
   category?: string;
 }
 
@@ -25,7 +27,7 @@ export default function BrandsPage() {
   const [showModal, setShowModal] = useState(false);
   const [formData, setFormData] = useState({ 
     name: '', description: '', logoUrl: '', section: 'mart', 
-    location: '', latitude: '', longitude: '', category: '',
+    location: '', latitude: '', longitude: '', openingTime: '09:00', closingTime: '23:00', category: '',
     isActive: true 
   });
   const [editingBrand, setEditingBrand] = useState<Brand | null>(null);
@@ -70,7 +72,7 @@ export default function BrandsPage() {
       if (res.ok) {
         setShowModal(false);
         setEditingBrand(null);
-        setFormData({ name: '', description: '', logoUrl: '', section: 'mart', location: '', latitude: '', longitude: '', category: '', isActive: true });
+        setFormData({ name: '', description: '', logoUrl: '', section: 'mart', location: '', latitude: '', longitude: '', openingTime: '09:00', closingTime: '23:00', category: '', isActive: true });
         fetchBrands();
       }
     } catch (error) {
@@ -90,6 +92,8 @@ export default function BrandsPage() {
       location: brand.location || '',
       latitude: brand.latitude ? brand.latitude.toString() : '',
       longitude: brand.longitude ? brand.longitude.toString() : '',
+      openingTime: brand.openingTime || '09:00',
+      closingTime: brand.closingTime || '23:00',
       category: brand.category || '',
       isActive: brand.isActive
     });
@@ -123,7 +127,7 @@ export default function BrandsPage() {
           <button 
             onClick={() => {
               setEditingBrand(null);
-              setFormData({ name: '', description: '', logoUrl: '', section: 'mart', location: '', latitude: '', longitude: '', category: '', isActive: true });
+              setFormData({ name: '', description: '', logoUrl: '', section: 'mart', location: '', latitude: '', longitude: '', openingTime: '09:00', closingTime: '23:00', category: '', isActive: true });
               setShowModal(true);
             }}
             className="flex items-center space-x-2 bg-gradient-to-br from-blue-600 to-indigo-600 text-white px-6 py-3 rounded-2xl font-bold hover:shadow-lg hover:shadow-blue-500/30 transition-all active:scale-95 shadow-md shadow-blue-500/10"
@@ -267,6 +271,27 @@ export default function BrandsPage() {
                       className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white focus:border-blue-500 transition-all font-bold"
                       value={formData.location}
                       onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Opening Time</label>
+                    <input
+                      type="time"
+                      className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white focus:border-blue-500 transition-all font-bold"
+                      value={formData.openingTime}
+                      onChange={(e) => setFormData({ ...formData, openingTime: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Closing Time</label>
+                    <input
+                      type="time"
+                      className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white focus:border-blue-500 transition-all font-bold"
+                      value={formData.closingTime}
+                      onChange={(e) => setFormData({ ...formData, closingTime: e.target.value })}
                     />
                   </div>
                 </div>

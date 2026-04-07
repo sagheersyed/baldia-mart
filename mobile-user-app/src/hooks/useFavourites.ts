@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { favoritesApi } from '../api/api';
+import { useAuth } from '../context/AuthContext';
 
 const KEYS = {
   restaurants: '@fav_restaurants',
@@ -16,7 +18,14 @@ export type FavItem = {
   rating?: number;
   ratingCount?: number;
   price?: number;
+  discount?: number;
+  category?: any;
+  brand?: any;
   brandId?: string;
+  openingTime?: string | null;
+  closingTime?: string | null;
+  maxQuantityPerOrder?: number;
+  stockQuantity?: number;
 };
 
 export type FavType = 'restaurants' | 'products';
@@ -24,19 +33,54 @@ export type FavType = 'restaurants' | 'products';
 export function useFavourites() {
   const [restaurants, setRestaurants] = useState<FavItem[]>([]);
   const [products, setProducts] = useState<FavItem[]>([]);
+  const { userToken } = useAuth();
 
   const load = useCallback(async () => {
     try {
+      // 1. Load from local cache first for instant UI
       const [rRaw, pRaw] = await Promise.all([
         AsyncStorage.getItem(KEYS.restaurants),
         AsyncStorage.getItem(KEYS.products),
       ]);
-      setRestaurants(rRaw ? JSON.parse(rRaw) : []);
-      setProducts(pRaw ? JSON.parse(pRaw) : []);
+      const localR = rRaw ? JSON.parse(rRaw) : [];
+      const localP = pRaw ? JSON.parse(pRaw) : [];
+      setRestaurants(localR);
+      setProducts(localP);
+
+      // 2. If logged in, sync with DB
+      if (userToken) {
+        const res = await favoritesApi.getAll();
+        if (res.data) {
+          const dbItems = res.data;
+          const dbR = dbItems.filter((i: any) => i.type === 'restaurant');
+          const dbP = dbItems.filter((i: any) => i.type === 'product');
+
+          // Deduplicate
+          const uniqueR = Array.from(new Map(dbR.map((r: any) => [r.id, r])).values()) as FavItem[];
+          const uniqueP = Array.from(new Map(dbP.map((p: any) => [p.id, p])).values()) as FavItem[];
+
+          // If local has more, sync local to DB
+          if ((localR.length > 0 || localP.length > 0) && dbItems.length === 0) {
+            const syncItems = [
+                ...localR.map((r: any) => ({ type: 'restaurant', targetId: r.id })),
+                ...localP.map((p: any) => ({ type: 'product', targetId: p.id })),
+            ];
+            await favoritesApi.sync(syncItems);
+          } else {
+            // Update local state and cache from DB
+            setRestaurants(uniqueR);
+            setProducts(uniqueP);
+            await Promise.all([
+              AsyncStorage.setItem(KEYS.restaurants, JSON.stringify(uniqueR)),
+              AsyncStorage.setItem(KEYS.products, JSON.stringify(uniqueP)),
+            ]);
+          }
+        }
+      }
     } catch (e) {
       console.error('[useFavourites] load error', e);
     }
-  }, []);
+  }, [userToken]);
 
   useEffect(() => {
     load();
@@ -64,11 +108,15 @@ export function useFavourites() {
 
       try {
         await AsyncStorage.setItem(key, JSON.stringify(next));
+        if (userToken) {
+           // Call API to toggle in DB
+           await favoritesApi.toggle(type === 'restaurants' ? 'restaurant' : 'product', item.id);
+        }
       } catch (e) {
-        console.error('[useFavourites] save error', e);
+        console.error('[useFavourites] save/toggle error', e);
       }
     },
-    [restaurants, products],
+    [restaurants, products, userToken],
   );
 
   // Sync saved favourites with live API data (refreshes name, image, rating)
@@ -87,7 +135,23 @@ export function useFavourites() {
           .filter(Boolean) as FavItem[];
 
         const updatedP = savedP
-          .map((fav) => allProducts.find((p) => p.id === fav.id) ?? fav)
+          .map((fav) => {
+            const live = allProducts.find((p) => p.id === fav.id);
+            if (!live) return fav;
+            return {
+              ...fav,
+              name: live.name,
+              imageUrl: live.imageUrl,
+              price: live.price,
+              discount: live.discount,
+              category: live.category,
+              brand: live.brand,
+              openingTime: live.openingTime,
+              closingTime: live.closingTime,
+              maxQuantityPerOrder: live.maxQuantityPerOrder,
+              stockQuantity: live.stockQuantity,
+            };
+          })
           .filter(Boolean) as FavItem[];
 
         setRestaurants(updatedR);
@@ -101,5 +165,18 @@ export function useFavourites() {
     [],
   );
 
-  return { restaurants, products, isFavourite, toggleFavourite, reload: load, syncFromApi };
+  const clearFavourites = useCallback(async () => {
+    setRestaurants([]);
+    setProducts([]);
+    try {
+      await Promise.all([
+        AsyncStorage.removeItem(KEYS.restaurants),
+        AsyncStorage.removeItem(KEYS.products),
+      ]);
+    } catch (e) {
+      console.error('[useFavourites] clear error', e);
+    }
+  }, []);
+
+  return { restaurants, products, isFavourite, toggleFavourite, reload: load, syncFromApi, clearFavourites };
 }

@@ -17,3 +17,24 @@ export const getDistanceKm = (lat1: number, lon1: number, lat2: number, lon2: nu
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 };
+
+export const isBusinessOpen = (openingTime: string | null | undefined, closingTime: string | null | undefined): boolean => {
+  if (!openingTime || !closingTime) return true;
+  try {
+    const now = new Date();
+    const [openH, openM] = openingTime.split(':').map(Number);
+    const [closeH, closeM] = closingTime.split(':').map(Number);
+    
+    const openDate = new Date(now); openDate.setHours(openH, openM, 0, 0);
+    const closeDate = new Date(now); closeDate.setHours(closeH, closeM, 0, 0);
+
+    if (closeDate < openDate) {
+      // Overnight (e.g. 09:00 - 02:00)
+      return now >= openDate || now <= closeDate;
+    }
+    return now >= openDate && now <= closeDate;
+  } catch (e) {
+    return true;
+  }
+};
+

@@ -1,4 +1,5 @@
-import React, { createContext, useState, useContext, ReactNode } from 'react';
+import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
+import { useAuth } from './AuthContext';
 import { Alert } from 'react-native';
 
 interface CartItem {
@@ -38,6 +39,13 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   const [foodCart, setFoodCart] = useState<CartItem[]>([]);
   const [activeMode, setActiveMode] = useState<'mart' | 'food'>('mart');
   const [activeOrdersCount, setActiveOrdersCount] = useState(0);
+  const { userToken } = useAuth();
+
+  useEffect(() => {
+    if (!userToken) {
+      clearCart();
+    }
+  }, [userToken]);
 
   const currentCart = activeMode === 'mart' ? martCart : foodCart;
 
@@ -97,9 +105,15 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     });
   };
 
-  const clearCart = (mode: 'mart' | 'food' = activeMode) => {
-    const setter = mode === 'mart' ? setMartCart : setFoodCart;
-    setter([]);
+  const clearCart = (mode?: 'mart' | 'food') => {
+    if (mode) {
+      const setter = mode === 'mart' ? setMartCart : setFoodCart;
+      setter([]);
+    } else {
+      setMartCart([]);
+      setFoodCart([]);
+      setActiveOrdersCount(0);
+    }
   };
 
   const getCartTotal = (mode: 'mart' | 'food' = activeMode) => {

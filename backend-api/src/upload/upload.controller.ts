@@ -17,7 +17,7 @@ export class UploadController {
   )
   async uploadFile(@UploadedFile() file: any) {
     // If using multer-s3, file.location is the URL. Otherwise we use local host.
-    const host = process.env.BACKEND_URL || 'https://c2e9-175-107-236-228.ngrok-free.app';
+    const host = process.env.BACKEND_URL || 'https://00ad-175-107-236-228.ngrok-free.app';
     const url = file.location || `${host}/uploads/${file.filename}`;
 
     return {

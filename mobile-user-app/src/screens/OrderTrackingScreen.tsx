@@ -1,13 +1,15 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator, Modal, TextInput, FlatList, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import io from 'socket.io-client';
+import MapView, { Marker, Polyline } from 'react-native-maps';
 import { ordersApi, productsApi, menuItemsApi } from '../api/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { isBusinessOpen } from '../utils/helpers';
 
 // Shared machine IP logic (ideally would be in a config file)
-const BASE_IP = 'https://c2e9-175-107-236-228.ngrok-free.app';
-const SOCKET_URL = `http://${BASE_IP}`;
+const BASE_IP = 'https://00ad-175-107-236-228.ngrok-free.app';
+const SOCKET_URL = BASE_IP;
 
 const GET_STATUS_STEPS = (orderType: string = 'mart') => [
   { key: 'pending', label: 'Order Placed', icon: '📝', description: orderType === 'food' ? 'Restaurant has received your order' : 'We have received your order' },
@@ -22,6 +24,7 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
   const [status, setStatus] = useState('pending');
   const [loading, setLoading] = useState(true);
   const [rider, setRider] = useState<any>(null);
+  const [riderLocation, setRiderLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [order, setOrder] = useState<any>(null);
   const [localItems, setLocalItems] = useState<any[]>([]);
   const [timeline, setTimeline] = useState<any[]>([]);
@@ -137,6 +140,22 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
       }
     });
 
+    socket.on('orderUpdated', async (data: any) => {
+      console.log('User App: Received item/order update:', data);
+      if (data.orderId === orderId) {
+        await fetchOrderDetails();
+      }
+    });
+
+    socket.on('riderLocationUpdate', (data: any) => {
+      if (data.orderId === orderId && data.latitude && data.longitude) {
+        setRiderLocation({
+          latitude: Number(data.latitude),
+          longitude: Number(data.longitude),
+        });
+      }
+    });
+
     return () => {
       console.log('User App: Disconnecting socket');
       socket.disconnect();
@@ -208,6 +227,23 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
 
   const handleUpdateQuantityLocal = (itemId: string, newQuantity: number) => {
     if (newQuantity < 0) return;
+
+    // Check if incrementing and if limits exist
+    const item = localItems.find(i => i.id === itemId);
+    if (item && newQuantity > item.quantity) {
+      const product = item.product;
+      if (product) {
+        if (product.maxQuantityPerOrder > 0 && newQuantity > product.maxQuantityPerOrder) {
+          Alert.alert('Limit Reached', `Maximum allowed for ${product.name} is ${product.maxQuantityPerOrder}.`);
+          return;
+        }
+        if (newQuantity > product.stockQuantity) {
+          Alert.alert('Out of Stock', `Only ${product.stockQuantity} units available.`);
+          return;
+        }
+      }
+    }
+
     setLocalItems(prev => prev.map(item =>
       item.id === itemId ? { ...item, quantity: newQuantity } : item
     ));
@@ -472,6 +508,45 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
           </View>
         )}
 
+        {/* ── Live Tracking Map (Hiding per request) ──────────────────────
+        {(status === 'confirmed' || status === 'preparing' || status === 'out_for_delivery') && (
+          <View style={styles.mapContainer}>
+            <Text style={styles.mapTitle}>📍 Live Tracking</Text>
+            <MapView
+              style={styles.map}
+              initialRegion={{
+                latitude: Number(order?.address?.latitude || 24.9144),
+                longitude: Number(order?.address?.longitude || 66.9748),
+                latitudeDelta: 0.05,
+                longitudeDelta: 0.05,
+              }}
+            >
+              {riderLocation && (
+                <Marker coordinate={riderLocation} title={rider?.name || 'Rider'} description="Your rider's current location" pinColor="#FF4500" />
+              )}
+              <Marker
+                coordinate={{ latitude: Number(order?.address?.latitude || 24.9144), longitude: Number(order?.address?.longitude || 66.9748) }}
+                title={order?.address?.label || 'Delivery Address'} description="Your delivery location" pinColor="#22C55E"
+              />
+              {order?.subOrders?.map((sub: any, idx: number) => {
+                const entity = sub.restaurant || sub.vendor;
+                if (!entity) return null;
+                const lat = Number(entity.latitude || entity.lat || 0);
+                const lng = Number(entity.longitude || entity.lng || 0);
+                if (!lat || !lng) return null;
+                return <Marker key={sub.id || idx} coordinate={{ latitude: lat, longitude: lng }} title={entity.name || 'Pickup'} description={entity.location || entity.address || 'Pickup Point'} pinColor="#3B82F6" />;
+              })}
+              {riderLocation && (
+                <Polyline
+                  coordinates={[riderLocation, { latitude: Number(order?.address?.latitude || 24.9144), longitude: Number(order?.address?.longitude || 66.9748) }]}
+                  strokeColor="#FF4500" strokeWidth={3} lineDashPattern={[10, 5]}
+                />
+              )}
+            </MapView>
+          </View>
+        )}
+        ───────────────────────────────────────────────────────────── */}
+
         {order && order.items && order.items.length > 0 && (
           <View style={styles.summaryCard}>
             <Text style={styles.summaryTitle}>Order Summary</Text>
@@ -703,14 +778,19 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
                           <Text style={styles.addProdPrice}>Rs. {price.toFixed(0)}</Text>
                         </View>
                         <TouchableOpacity
-                          style={[styles.addBtnSmall, item.stockQuantity < 1 && { opacity: 0.5 }]}
-                          disabled={item.stockQuantity < 1 || addingProductId === item.id}
+                          style={[
+                            styles.addBtnSmall,
+                            (item.stockQuantity < 1 || !isBusinessOpen(item.openingTime, item.closingTime)) && { opacity: 0.5, backgroundColor: '#999' }
+                          ]}
+                          disabled={item.stockQuantity < 1 || addingProductId === item.id || !isBusinessOpen(item.openingTime, item.closingTime)}
                           onPress={() => handleAddNewProductToOrder(item.id)}
                         >
                           {addingProductId === item.id ? (
                             <ActivityIndicator size="small" color="#fff" />
                           ) : (
-                            <Text style={styles.addBtnSmallText}>{item.stockQuantity > 0 ? '+ Add' : 'Out'}</Text>
+                            <Text style={styles.addBtnSmallText}>
+                              {item.stockQuantity < 1 ? 'Out' : (!isBusinessOpen(item.openingTime, item.closingTime) ? 'Closed' : '+ Add')}
+                            </Text>
                           )}
                         </TouchableOpacity>
                       </View>
@@ -926,5 +1006,17 @@ const styles = StyleSheet.create({
   addProdPrice: { fontSize: 14, fontWeight: '800', color: '#FF4500' },
   addBtnSmall: { backgroundColor: '#FF4500', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, minWidth: 70, alignItems: 'center' },
   addBtnSmallText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+
+  // Map Styles
+  mapContainer: {
+    backgroundColor: '#fff', borderRadius: 20, marginBottom: 20,
+    overflow: 'hidden', borderWidth: 1, borderColor: '#F0F0F0',
+    shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 10, elevation: 3,
+  },
+  mapTitle: {
+    fontSize: 16, fontWeight: '800', color: '#1A202C',
+    paddingHorizontal: 20, paddingTop: 16, paddingBottom: 10,
+  },
+  map: { width: '100%', height: 220 },
 
 });

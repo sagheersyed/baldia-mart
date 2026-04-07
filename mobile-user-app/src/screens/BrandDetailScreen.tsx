@@ -4,17 +4,27 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { brandsApi, productsApi, categoriesApi } from '../api/api';
 import { useCart } from '../context/CartContext';
+import { isBusinessOpen } from '../utils/helpers';
 
-const ProductCard = memo(({ prod, cartQty, onAdd }: { prod: any; cartQty: number; onAdd: (p: any) => void }) => {
+const ProductCard = memo(({ prod, cartQty, onAdd, brandClosed }: { prod: any; cartQty: number; onAdd: (p: any) => void; brandClosed: boolean }) => {
+  const productClosed = !isBusinessOpen(prod.openingTime, prod.closingTime);
+  const categoryClosed = prod.category && !isBusinessOpen(prod.category.openingTime, prod.category.closingTime);
+  const isClosed = brandClosed || productClosed || categoryClosed;
+
   return (
-    <View style={styles.prodCard}>
+    <View style={[styles.prodCard, isClosed && { opacity: 0.7 }]}>
       <View style={styles.imageContainer}>
         {prod.imageUrl ? (
           <Image source={{ uri: prod.imageUrl }} style={styles.image} />
         ) : (
           <View style={styles.placeholder} />
         )}
-        {cartQty > 0 && (
+        {isClosed && (
+          <View style={styles.closedOverlay}>
+            <Text style={styles.closedText}>CLOSED</Text>
+          </View>
+        )}
+        {cartQty > 0 && !isClosed && (
           <View style={styles.badge}>
             <Text style={styles.badgeText}>{cartQty}</Text>
           </View>
@@ -22,8 +32,12 @@ const ProductCard = memo(({ prod, cartQty, onAdd }: { prod: any; cartQty: number
       </View>
       <Text style={styles.prodName} numberOfLines={1}>{prod.name}</Text>
       <Text style={styles.prodPrice}>Rs. {Number(prod.price).toFixed(0)}</Text>
-      <TouchableOpacity style={styles.addBtn} onPress={() => onAdd(prod)}>
-        <Text style={styles.addBtnText}>+ Add</Text>
+      <TouchableOpacity 
+        style={[styles.addBtn, isClosed && styles.addBtnDisabled]} 
+        onPress={() => onAdd(prod)}
+        disabled={isClosed}
+      >
+        <Text style={styles.addBtnText}>{isClosed ? 'Unavailable' : '+ Add'}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -114,6 +128,11 @@ export default function BrandDetailScreen({ navigation, route }: any) {
         {brand?.imageUrl && (
           <View style={styles.brandBannerContainer}>
             <Image source={{ uri: brand.imageUrl }} style={styles.brandBanner} resizeMode="contain" />
+            {brand && !isBusinessOpen(brand.openingHours || brand.openingTime, brand.closingTime) && (
+               <View style={styles.brandClosedBanner}>
+                  <Text style={styles.brandClosedText}>Temporarily Closed</Text>
+               </View>
+            )}
           </View>
         )}
 
@@ -144,6 +163,7 @@ export default function BrandDetailScreen({ navigation, route }: any) {
               prod={prod} 
               cartQty={martCart.find((c: any) => c.id === prod.id)?.quantity || 0}
               onAdd={(p) => addToCart(p, 'mart')}
+              brandClosed={brand && !isBusinessOpen(brand.openingTime, brand.closingTime)}
             />
           ))}
         </View>
@@ -186,5 +206,10 @@ const styles = StyleSheet.create({
   badge: { position: 'absolute', top: 5, right: 5, backgroundColor: '#FF4500', borderRadius: 10, minWidth: 20, height: 20, justifyContent: 'center', alignItems: 'center' },
   badgeText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
   empty: { padding: 50, alignItems: 'center' },
-  emptyText: { color: '#999', fontSize: 16 }
+  emptyText: { color: '#999', fontSize: 16 },
+  closedOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
+  closedText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
+  addBtnDisabled: { backgroundColor: '#ccc' },
+  brandClosedBanner: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(255,69,0,0.9)', paddingVertical: 5, alignItems: 'center' },
+  brandClosedText: { color: '#fff', fontSize: 12, fontWeight: 'bold', textTransform: 'uppercase' }
 });

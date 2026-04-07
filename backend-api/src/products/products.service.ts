@@ -11,11 +11,11 @@ export class ProductsService {
   ) {}
 
   async findAllActive(): Promise<Product[]> {
-    return this.productRepository.find({ where: { isActive: true }, relations: ['category'] });
+    return this.productRepository.find({ where: { isActive: true }, relations: ['category', 'brand'] });
   }
 
   async findByCategory(categoryId: string): Promise<Product[]> {
-    return this.productRepository.find({ where: { categoryId, isActive: true } });
+    return this.productRepository.find({ where: { categoryId, isActive: true }, relations: ['category', 'brand'] });
   }
 
   async findByBrand(brandId: string): Promise<Product[]> {

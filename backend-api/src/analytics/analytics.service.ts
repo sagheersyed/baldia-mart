@@ -14,7 +14,7 @@ export class AnalyticsService {
     private userRepository: Repository<User>,
     @InjectRepository(Rider)
     private riderRepository: Repository<Rider>,
-  ) {}
+  ) { }
 
   async getDashboardMetrics() {
     const today = new Date();
@@ -34,8 +34,8 @@ export class AnalyticsService {
         this.userRepository.count(),
         this.riderRepository.createQueryBuilder('rider')
           .where('rider.isOnline = :isOnline', { isOnline: true })
-          .andWhere('rider.updatedAt >= :lastHour', { 
-            lastHour: new Date(Date.now() - 60 * 60 * 1000) 
+          .andWhere('rider.updatedAt >= :lastHour', {
+            lastHour: new Date(Date.now() - 60 * 60 * 1000)
           })
           .getCount(),
         this.orderRepository.count(),
@@ -46,36 +46,39 @@ export class AnalyticsService {
         }),
       ]);
 
-      // Calculate total revenue from delivered orders
-      const deliveredOrders = await this.orderRepository.find({
-        where: { status: 'delivered' },
-      });
-      const totalRevenue = deliveredOrders.reduce((sum, order) => sum + Number(order.total), 0);
+      // Calculate total revenue from delivered orders directly in DB
+      const revenueData = await this.orderRepository
+        .createQueryBuilder('order')
+        .select('SUM(CAST(order.total AS NUMERIC))', 'total')
+        .where('order.status = :status', { status: 'delivered' })
+        .getRawOne();
+      const totalRevenue = Number(revenueData?.total) || 0;
 
-      // Generate Sales Chart Data for the last 7 days
+      // Generate Sales Chart Data for the last 7 days using GROUP BY
+      const chartStats = await this.orderRepository
+        .createQueryBuilder('order')
+        .select("TO_CHAR(order.createdAt, 'Mon DD')", 'date')
+        .addSelect('SUM(CAST(order.total AS NUMERIC))', 'revenue')
+        .addSelect('COUNT(order.id)', 'orders')
+        .where('order.status = :status', { status: 'delivered' })
+        .andWhere('order.createdAt >= :startDate', { startDate: sevenDaysAgo })
+        .groupBy("TO_CHAR(order.createdAt, 'YYYY-MM-DD'), TO_CHAR(order.createdAt, 'Mon DD')")
+        .orderBy("TO_CHAR(order.createdAt, 'YYYY-MM-DD')", 'ASC')
+        .getRawMany();
+
       const salesChartData: { date: string; revenue: number; orders: number }[] = [];
       for (let i = 6; i >= 0; i--) {
-        const targetDate = new Date();
-        targetDate.setDate(today.getDate() - i);
-        targetDate.setHours(0, 0, 0, 0);
-
-        const nextDay = new Date(targetDate);
-        nextDay.setDate(targetDate.getDate() + 1);
-
-        const dayOrders = await this.orderRepository
-          .createQueryBuilder('order')
-          .where('order.status = :status', { status: 'delivered' })
-          .andWhere('order.createdAt >= :startDate', { startDate: targetDate })
-          .andWhere('order.createdAt < :endDate', { endDate: nextDay })
-          .getMany();
-
-        const dailyRevenue = dayOrders.reduce((sum, order) => sum + Number(order.total), 0);
-        const dailyOrderCount = dayOrders.length;
+        const d = new Date();
+        d.setDate(today.getDate() - i);
+        d.setHours(0, 0, 0, 0);
         
+        const formattedLabel = d.toLocaleDateString('en-US', { month: 'short' }) + ' ' + d.getDate().toString().padStart(2, '0');
+        const existing = chartStats.find(s => s.date === formattedLabel);
+
         salesChartData.push({
-          date: targetDate.toLocaleDateString('en-US', { weekday: 'short' }),
-          revenue: dailyRevenue,
-          orders: dailyOrderCount,
+          date: d.toLocaleDateString('en-US', { weekday: 'short' }),
+          revenue: Number(existing?.revenue) || 0,
+          orders: Number(existing?.orders) || 0,
         });
       }
 
@@ -88,11 +91,11 @@ export class AnalyticsService {
         },
         salesChartData,
         recentOrders: recentOrders.map(order => ({
-            id: order.id,
-            customerName: order.user?.name || 'Unknown',
-            totalAmount: order.total,
-            status: order.status,
-            createdAt: order.createdAt
+          id: order.id,
+          customerName: order.user?.name || 'Unknown',
+          totalAmount: order.total,
+          status: order.status,
+          createdAt: order.createdAt
         })),
       };
     } catch (error) {

@@ -39,6 +39,12 @@ export class Brand {
   @Column({ name: 'rating_count', default: 0 })
   ratingCount: number;
 
+  @Column({ name: 'opening_time', nullable: true })
+  openingTime: string; // e.g., '09:00'
+
+  @Column({ name: 'closing_time', nullable: true })
+  closingTime: string; // e.g., '23:00'
+
   @OneToMany(() => Product, product => product.brand)
   products: Product[];
 

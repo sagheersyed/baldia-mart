@@ -31,22 +31,23 @@ export class VendorsService {
   ): Promise<VendorProduct | null> {
     const candidates = await this.vendorProductsRepository.find({
       where: { productId, isAvailable: true },
-      relations: ['vendor'],
+      relations: ['vendor', 'product', 'product.brand', 'product.category'],
     });
 
     // Filter to open + active vendors with stock
     const available = candidates.filter(vp => {
-      const vendor = vp.vendor;
-      if (!vendor.isOpen || !vendor.isActive || vp.stockQty <= 0) return false;
+      const v = vp.vendor;
+      const p = vp.product;
+      const b = p?.brand;
+      const c = p?.category;
+
+      if (!v.isOpen || !v.isActive || vp.stockQty <= 0) return false;
       
-      // Check opening hours if set
-      if (vendor.openingHours) {
-        try {
-          if (!this.isVendorOpenNow(vendor.openingHours)) return false;
-        } catch (e) {
-          console.warn(`Failed to parse opening hours for vendor ${vendor.id}`, e);
-        }
-      }
+      // Strict Hierarchical Business Hour Check (Vendor -> Category -> Brand -> Product)
+      if (!this.isBusinessOpen(v.openingTime, v.closingTime)) return false;
+      if (c && !this.isBusinessOpen(c.openingTime, c.closingTime)) return false;
+      if (b && !this.isBusinessOpen(b.openingTime, b.closingTime)) return false;
+      if (p && !this.isBusinessOpen(p.openingTime, p.closingTime)) return false;
       
       return true;
     });
@@ -61,6 +62,23 @@ export class VendorsService {
     });
 
     return available[0];
+  }
+
+  private isBusinessOpen(openingTime: string | null, closingTime: string | null): boolean {
+    if (!openingTime || !closingTime) return true;
+    try {
+      const now = new Date();
+      const [openH, openM] = openingTime.split(':').map(Number);
+      const [closeH, closeM] = closingTime.split(':').map(Number);
+      const openTime = new Date(now); openTime.setHours(openH, openM, 0, 0);
+      const closeTime = new Date(now); closeTime.setHours(closeH, closeM, 0, 0);
+      if (closeTime < openTime) {
+        return now >= openTime || now <= closeTime;
+      }
+      return now >= openTime && now <= closeTime;
+    } catch (e) {
+      return true;
+    }
   }
 
   // ── Optimize Pickup Sequence (Nearest-First Greedy) ────────────────────────
@@ -180,40 +198,5 @@ export class VendorsService {
     if (vp && vp.stockQty <= 0) {
       await this.vendorProductsRepository.update(vendorProductId, { isAvailable: false, stockQty: 0 });
     }
-  }
-
-  /**
-   * Helper to check if a vendor is open based on its opening_hours string
-   * Format: "09:00 AM - 11:00 PM"
-   */
-  private isVendorOpenNow(openingHours: string): boolean {
-    const [openStr, closeStr] = openingHours.split('-').map(s => s.trim());
-    
-    const parseTime = (timeStr: string) => {
-      const match = timeStr.match(/(\d+):(\d+)(?:\s*(AM|PM))?/i);
-      if (!match) return null;
-      let hours = parseInt(match[1], 10);
-      const minutes = parseInt(match[2], 10);
-      const period = match[3]?.toUpperCase();
-      if (period === 'PM' && hours !== 12) hours += 12;
-      if (period === 'AM' && hours === 12) hours = 0;
-      const d = new Date();
-      d.setHours(hours, minutes, 0, 0);
-      return d;
-    };
-
-    const openTime = parseTime(openStr);
-    const closeTime = parseTime(closeStr);
-    const now = new Date();
-
-    if (openTime && closeTime) {
-      if (closeTime < openTime) {
-        // Handle overnight shifts (e.g. 10:00 PM - 04:00 AM)
-        return (now >= openTime || now <= closeTime);
-      } else {
-        return (now >= openTime && now <= closeTime);
-      }
-    }
-    return true; // Default to open if parsing fails
   }
 }

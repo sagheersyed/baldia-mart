@@ -40,6 +40,8 @@ interface MenuItem {
   isAvailable: boolean;
   prepTimeMinutes?: number;
   maxQuantityPerOrder?: number;
+  openingTime?: string;
+  closingTime?: string;
 }
 
 const API_URL = `${BASE_URL}/restaurants`;
@@ -70,7 +72,7 @@ const emptyRestaurantForm: RestaurantForm = {
 const emptyMenuItemForm = {
   name: '', description: '', price: '', discount: '0',
   imageUrl: '', category: '', prepTimeMinutes: '',
-  maxQuantityPerOrder: ''
+  maxQuantityPerOrder: '', openingTime: '', closingTime: ''
 };
 
 export default function RestaurantsPage() {
@@ -218,6 +220,8 @@ export default function RestaurantsPage() {
       imageUrl: item.imageUrl || '', category: item.category || '',
       prepTimeMinutes: item.prepTimeMinutes?.toString() || '',
       maxQuantityPerOrder: item.maxQuantityPerOrder?.toString() || '',
+      openingTime: item.openingTime || '',
+      closingTime: item.closingTime || '',
     });
     setShowMenuModal(true);
   };
@@ -479,6 +483,16 @@ export default function RestaurantsPage() {
                 <div>
                   <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Limit (0=No)</label>
                   <input type="number" className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none font-bold" value={menuItemForm.maxQuantityPerOrder} onChange={e => setMenuItemForm({ ...menuItemForm, maxQuantityPerOrder: e.target.value })} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Item Opening Time</label>
+                  <input type="time" className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none font-bold" value={menuItemForm.openingTime} onChange={e => setMenuItemForm({ ...menuItemForm, openingTime: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Item Closing Time</label>
+                  <input type="time" className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none font-bold" value={menuItemForm.closingTime} onChange={e => setMenuItemForm({ ...menuItemForm, closingTime: e.target.value })} />
                 </div>
               </div>
               <div>

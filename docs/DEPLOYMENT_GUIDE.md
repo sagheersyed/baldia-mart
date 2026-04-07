@@ -13,13 +13,13 @@ From the project root folder, navigate to docker directory and start the stack:
 
 ```bash
 cd docker
-docker-compose up -d
+docker-compose up -d 
 ```
 
 This will run:
 - **PostgreSQL Database** on `localhost:5432` (auto-seeded with `schema.sql`)
 - **Redis Cache** on `localhost:6379`
-- **NestJS Backend** on `https://c2e9-175-107-236-228.ngrok-free.app:3000`
+- **NestJS Backend** on `https://00ad-175-107-236-228.ngrok-free.app:3000`
 - **Next.js Admin Dashboard** on `localhost:3001`
 
 ## 2. Running the Mobile Applications

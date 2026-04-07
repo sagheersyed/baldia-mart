@@ -1,13 +1,13 @@
 import React, { useCallback, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Image, FlatList, SafeAreaView
+  Image, FlatList, SafeAreaView, Alert
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useFavourites } from '../hooks/useFavourites';
 import { normalizeUrl, restaurantsApi, productsApi } from '../api/api';
 import { useCart } from '../context/CartContext';
-import { formatRatingCount } from '../utils/helpers';
+import { formatRatingCount, isBusinessOpen } from '../utils/helpers';
 
 const TABS = ['Restaurants', 'Products'] as const;
 
@@ -90,60 +90,95 @@ export default function FavouritesScreen({ navigation }: any) {
             const cartItem = activeTab === 'Products' ? (martCart.find((c: any) => c.id === item.id) || foodCart.find((c: any) => c.id === item.id)) : null;
             const cartQty = cartItem?.quantity || 0;
 
-            return (
-              <TouchableOpacity
-                style={styles.card}
-                activeOpacity={0.85}
-                onPress={() => {
-                  if (activeTab === 'Restaurants') {
-                    navigation.navigate('RestaurantDetail', { restaurantId: item.id });
-                  } else {
-                    // Navigate to product detail or search if needed
-                  }
-                }}
-              >
-                <View style={styles.cardImgWrap}>
-                  {imgUri ? (
-                    <Image source={{ uri: imgUri }} style={styles.cardImg} resizeMode="cover" />
-                  ) : (
-                    <View style={styles.cardImgPlaceholder}>
-                      <Text style={{ fontSize: 28 }}>{activeTab === 'Restaurants' ? '🍽️' : '📦'}</Text>
-                    </View>
-                  )}
-                </View>
-                <View style={styles.cardInfo}>
-                  <View style={styles.cardHeaderRow}>
-                    <Text style={styles.cardName} numberOfLines={1}>{item.name}</Text>
+                  const isProductOpen = isBusinessOpen(item.openingTime, item.closingTime);
+                  const isBrandOpen = item.brand ? isBusinessOpen(item.brand.openingTime, item.brand.closingTime) : true;
+                  const isCatOpen = item.category ? isBusinessOpen(item.category.openingTime, item.category.closingTime) : true;
+                  const isEffectiveOpen = isProductOpen && isBrandOpen && isCatOpen;
+
+                  const finalPrice = Number(item.price || 0) - Number(item.discount || 0);
+
+                  return (
                     <TouchableOpacity
-                      onPress={(e) => { e.stopPropagation(); toggleFavourite(item, activeTab === 'Restaurants' ? 'restaurants' : 'products'); }}
-                      style={styles.heartBtnSm}
+                      style={styles.card}
+                      activeOpacity={0.85}
+                      onPress={() => {
+                        if (activeTab === 'Restaurants') {
+                          navigation.navigate('RestaurantDetail', { restaurantId: item.id });
+                        } else {
+                          // Navigate to product detail or search if needed
+                        }
+                      }}
                     >
-                      <Text style={styles.heartIconSm}>❤️</Text>
+                      <View style={styles.cardImgWrap}>
+                        {imgUri ? (
+                          <Image source={{ uri: imgUri }} style={styles.cardImg} resizeMode="cover" />
+                        ) : (
+                          <View style={styles.cardImgPlaceholder}>
+                            <Text style={{ fontSize: 28 }}>{activeTab === 'Restaurants' ? '🍽️' : '📦'}</Text>
+                          </View>
+                        )}
+                        {activeTab === 'Products' && !isEffectiveOpen && (
+                          <View style={styles.oosOverlay}>
+                            <Text style={styles.oosText}>Closed</Text>
+                          </View>
+                        )}
+                      </View>
+                      <View style={styles.cardInfo}>
+                        <View style={styles.cardHeaderRow}>
+                          <Text style={styles.cardName} numberOfLines={1}>{item.name}</Text>
+                          <TouchableOpacity
+                            onPress={(e) => { e.stopPropagation(); toggleFavourite(item, activeTab === 'Restaurants' ? 'restaurants' : 'products'); }}
+                            style={styles.heartBtnSm}
+                          >
+                            <Text style={styles.heartIconSm}>❤️</Text>
+                          </TouchableOpacity>
+                        </View>
+                        {item.category && (
+                          <Text style={styles.cardSub} numberOfLines={1}>{item.category.name}</Text>
+                        )}
+                        {item.rating != null && item.rating > 0 && (
+                          <Text style={styles.cardRating}>⭐ {Number(item.rating).toFixed(1)}{formatRatingCount(item.ratingCount)}</Text>
+                        )}
+                        
+                        <View style={styles.cardActionRow}>
+                          {item.price != null && (
+                            <View>
+                              <Text style={styles.cardPrice}>Rs {finalPrice.toFixed(0)}</Text>
+                              {Number(item.discount) > 0 && (
+                                <Text style={styles.cardOldPrice}>Rs {Number(item.price).toFixed(0)}</Text>
+                              )}
+                            </View>
+                          )}
+                          {activeTab === 'Products' && (
+                            <TouchableOpacity
+                              style={[
+                                styles.addBtn, 
+                                (cartQty > 0 || !isEffectiveOpen) && { opacity: 0.7 },
+                                !isEffectiveOpen && { backgroundColor: '#999' }
+                              ]}
+                              onPress={(e) => { 
+                                if (!isEffectiveOpen) return;
+                                e.stopPropagation();
+                                
+                                // Check Limit
+                                if (item.maxQuantityPerOrder > 0 && cartQty >= item.maxQuantityPerOrder) {
+                                  Alert.alert('Limit Reached ✋', `Maximum allowed per order is ${item.maxQuantityPerOrder} units for ${item.name}.`);
+                                  return;
+                                }
+                                
+                                addToCart(item, 'mart'); 
+                              }}
+                              disabled={!isEffectiveOpen}
+                            >
+                              <Text style={styles.addBtnTxt}>
+                                {!isEffectiveOpen ? 'Closed' : (cartQty > 0 ? `${cartQty} ✓` : '+ Add')}
+                              </Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      </View>
                     </TouchableOpacity>
-                  </View>
-                  {item.cuisineType && (
-                    <Text style={styles.cardSub} numberOfLines={1}>{item.cuisineType}</Text>
-                  )}
-                  {item.rating != null && item.rating > 0 && (
-                    <Text style={styles.cardRating}>⭐ {Number(item.rating).toFixed(1)}{formatRatingCount(item.ratingCount)}</Text>
-                  )}
-                  
-                  <View style={styles.cardActionRow}>
-                    {item.price != null && (
-                      <Text style={styles.cardPrice}>Rs {Number(item.price).toFixed(0)}</Text>
-                    )}
-                    {activeTab === 'Products' && (
-                      <TouchableOpacity
-                        style={styles.addBtn}
-                        onPress={(e) => { e.stopPropagation(); addToCart(item, 'mart'); }}
-                      >
-                        <Text style={styles.addBtnTxt}>{cartQty > 0 ? `${cartQty} ✓` : '+ Add'}</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                </View>
-              </TouchableOpacity>
-            );
+                  );
           }}
         />
       )}
@@ -191,6 +226,9 @@ const styles = StyleSheet.create({
   cardRating: { fontSize: 12, color: '#888', marginTop: 2, marginBottom: 4 },
   cardActionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 },
   cardPrice: { fontSize: 15, fontWeight: '800', color: '#FF4500' },
+  cardOldPrice: { fontSize: 11, color: '#CCC', textDecorationLine: 'line-through', marginTop: 1 },
+  oosOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' },
+  oosText: { color: '#fff', fontSize: 10, fontWeight: '900', textTransform: 'uppercase' },
   addBtn: { backgroundColor: '#FF4500', paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20 },
   addBtnTxt: { color: '#fff', fontSize: 12, fontWeight: '800' },
 

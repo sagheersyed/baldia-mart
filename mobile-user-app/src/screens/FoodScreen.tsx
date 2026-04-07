@@ -9,51 +9,50 @@ import { useFocusEffect } from '@react-navigation/native';
 import io from 'socket.io-client';
 import BannerCarousel from '../components/BannerCarousel';
 import { useCart } from '../context/CartContext';
-import { formatRatingCount, getDistanceKm } from '../utils/helpers';
+import { formatRatingCount, getDistanceKm, isBusinessOpen } from '../utils/helpers';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// Helper: check if a restaurant is currently open
-const isRestaurantOpen = (openingTime?: string, closingTime?: string): boolean => {
-  if (!openingTime || !closingTime) return true;
-  const now = new Date();
-  const nowMins = now.getHours() * 60 + now.getMinutes();
-  const [oh, om] = openingTime.split(':').map(Number);
-  const [ch, cm] = closingTime.split(':').map(Number);
-  const openMins = oh * 60 + om;
-  const closeMins = ch * 60 + cm;
-  if (closeMins > openMins) return nowMins >= openMins && nowMins < closeMins;
-  return nowMins >= openMins || nowMins < closeMins; // overnight
-};
+// Standardized Business Hours Logic moved to helpers.ts
 
 // ─── Restaurant Card ─────────────────────────────────────────
-const MenuItemCard = memo(({ prod, cartQty, onAdd }: any) => (
-  <View style={styles.menuCard}>
-    <View style={styles.menuImgWrap}>
-      {prod.imageUrl
-        ? <Image source={{ uri: normalizeUrl(prod.imageUrl) }} style={styles.fillImg} resizeMode="cover" />
-        : <Image
-          source={{ uri: 'https://cdn-icons-png.flaticon.com/512/3081/3081840.png' }}
-          style={{ width: 40, height: 40, opacity: 0.4 }}
-        />}
-    </View>
-    <View style={styles.menuInfo}>
-      <Text style={styles.menuName} numberOfLines={1}>{prod.name}</Text>
-      {prod.description && <Text style={styles.menuDesc} numberOfLines={1}>{prod.description}</Text>}
-      <View style={styles.menuBottom}>
-        <Text style={styles.menuPrice}>Rs {Number(prod.price).toFixed(0)}</Text>
-        <TouchableOpacity style={styles.menuAddBtn} onPress={() => onAdd(prod)}>
-          <Text style={styles.menuAddTxt}>{cartQty > 0 ? `${cartQty} ✓` : '+ Add'}</Text>
-        </TouchableOpacity>
+const MenuItemCard = memo(({ prod, cartQty, onAdd }: any) => {
+  const isClosed = !isBusinessOpen(prod.openingTime, prod.closingTime);
+  return (
+    <View style={styles.menuCard}>
+      <View style={styles.menuImgWrap}>
+        {prod.imageUrl
+          ? <Image source={{ uri: normalizeUrl(prod.imageUrl) }} style={styles.fillImg} resizeMode="cover" />
+          : <Image
+            source={{ uri: 'https://cdn-icons-png.flaticon.com/512/3081/3081840.png' }}
+            style={{ width: 40, height: 40, opacity: 0.4 }}
+          />}
+        {isClosed && (
+          <View style={styles.oosOverlay}><Text style={styles.oosText}>Closed</Text></View>
+        )}
+      </View>
+      <View style={styles.menuInfo}>
+        <Text style={styles.menuName} numberOfLines={1}>{prod.name}</Text>
+        {prod.description && <Text style={styles.menuDesc} numberOfLines={1}>{prod.description}</Text>}
+        <View style={styles.menuBottom}>
+          <Text style={styles.menuPrice}>Rs {Number(prod.price).toFixed(0)}</Text>
+          <TouchableOpacity
+            style={[styles.menuAddBtn, isClosed && styles.menuAddBtnDisabled]}
+            onPress={() => onAdd(prod)}
+            disabled={isClosed}
+          >
+            <Text style={styles.menuAddTxt}>{cartQty > 0 ? `${cartQty} ✓` : '+ Add'}</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
-  </View>
-));
+  );
+});
 
 const RestaurantCard = memo(({ resto, onPress }: any) => {
   const logoUri = normalizeUrl(resto.logoUrl);
   const coverFallback = 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=400&q=80';
-  const open = isRestaurantOpen(resto.openingTime, resto.closingTime);
+  const open = isBusinessOpen(resto.openingTime, resto.closingTime);
   return (
     <TouchableOpacity style={[styles.restoCard, !open && styles.restoCardClosed]} onPress={onPress} activeOpacity={0.88}>
       {/* Cover Image / Placeholder */}
@@ -191,7 +190,7 @@ export default function FoodScreen({ navigation }: any) {
   };
 
   useFocusEffect(useCallback(() => {
-    const socket = io('https://c2e9-175-107-236-228.ngrok-free.app', {
+    const socket = io('https://00ad-175-107-236-228.ngrok-free.app', {
       transports: ['websocket'],
       forceNew: true
     });
@@ -243,8 +242,8 @@ export default function FoodScreen({ navigation }: any) {
       return true;
     })
     .sort((a: any, b: any) => {
-      const aOpen = isRestaurantOpen(a.openingTime, a.closingTime);
-      const bOpen = isRestaurantOpen(b.openingTime, b.closingTime);
+      const aOpen = isBusinessOpen(a.openingTime, a.closingTime);
+      const bOpen = isBusinessOpen(b.openingTime, b.closingTime);
       if (aOpen !== bOpen) return aOpen ? -1 : 1;
       return Number(b.rating || 0) - Number(a.rating || 0);
     });
@@ -521,7 +520,11 @@ const styles = StyleSheet.create({
   menuBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   menuPrice: { fontSize: 15, fontWeight: '900', color: '#FF4500' },
   menuAddBtn: { backgroundColor: '#FF4500', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20 },
+  menuAddBtnDisabled: { backgroundColor: '#CCC' },
   menuAddTxt: { color: '#fff', fontSize: 12, fontWeight: '700' },
+
+  oosOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end', alignItems: 'center', paddingBottom: 6 },
+  oosText: { color: '#fff', fontSize: 10, fontWeight: '700' },
 
   emptyMenu: { padding: 40, alignItems: 'center' },
   emptyMenuTxt: { color: '#999', fontSize: 14 },

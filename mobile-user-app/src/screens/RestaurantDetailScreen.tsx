@@ -8,22 +8,28 @@ import { useFocusEffect } from '@react-navigation/native';
 import { restaurantsApi, menuItemsApi, normalizeUrl } from '../api/api';
 import { useCart } from '../context/CartContext';
 import { useFavourites } from '../hooks/useFavourites';
-import { formatRatingCount } from '../utils/helpers';
+import { formatRatingCount, isBusinessOpen } from '../utils/helpers';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_W = (SCREEN_WIDTH - 44) / 2;
 
 // ─── Menu Item Card ───
-const MenuItemCard = memo(({ item, cartQty, onAdd }: any) => {
+const MenuItemCard = memo(({ item, cartQty, onAdd, restaurantClosed }: any) => {
   const finalPrice = (Number(item.price) - Number(item.discount || 0)).toFixed(0);
   const imgUri = normalizeUrl(item.imageUrl);
+  const itemClosed = !isBusinessOpen(item.openingTime, item.closingTime);
+  const isClosed = restaurantClosed || itemClosed;
+
   return (
-    <View style={styles.menuCard}>
+    <View style={[styles.menuCard, isClosed && { opacity: 0.7 }]}>
       <View style={styles.menuImgWrap}>
         {imgUri
           ? <Image source={{ uri: imgUri }} style={styles.fillImg} resizeMode="cover" />
           : <View style={styles.menuImgPlaceholder}><Text style={{ fontSize: 32 }}>🍽️</Text></View>}
-        {cartQty > 0 && (
+        {isClosed && (
+          <View style={styles.oosOverlay}><Text style={styles.oosText}>CLOSED</Text></View>
+        )}
+        {cartQty > 0 && !isClosed && (
           <View style={styles.qtyBadge}><Text style={styles.qtyBadgeTxt}>{cartQty}</Text></View>
         )}
       </View>
@@ -38,11 +44,11 @@ const MenuItemCard = memo(({ item, cartQty, onAdd }: any) => {
           {item.discount > 0 && <Text style={styles.itemOldPrice}>Rs {Number(item.price).toFixed(0)}</Text>}
         </View>
         <TouchableOpacity 
-          style={[styles.addCircle, item.disabled && styles.addCircleDisabled]} 
+          style={[styles.addCircle, isClosed && styles.addCircleDisabled]} 
           onPress={() => onAdd(item)}
-          disabled={item.disabled}
+          disabled={isClosed}
         >
-          <Text style={styles.addCircleText}>{item.disabled ? '×' : '+'}</Text>
+          <Text style={styles.addCircleText}>{isClosed ? '×' : '+'}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -67,29 +73,7 @@ export default function RestaurantDetailScreen({ route, navigation }: any) {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
-  const isRestaurantOpen = (openTime?: string, closeTime?: string) => {
-    if (!openTime || !closeTime) return true; // Default to open if not set
-    
-    // Parse times (HH:mm)
-    const now = new Date();
-    const [nowH, nowM] = [now.getHours(), now.getMinutes()];
-    const nowMinutes = nowH * 60 + nowM;
-    
-    const [openH, openM] = openTime.split(':').map(Number);
-    const [closeH, closeM] = closeTime.split(':').map(Number);
-    const openMinutes = openH * 60 + openM;
-    const closeMinutes = closeH * 60 + closeM;
-    
-    if (closeMinutes > openMinutes) {
-      // Normal day hours (e.g., 09:00 to 22:00)
-      return nowMinutes >= openMinutes && nowMinutes < closeMinutes;
-    } else {
-      // Overnight hours (e.g., 20:00 to 04:00)
-      return nowMinutes >= openMinutes || nowMinutes < closeMinutes;
-    }
-  };
-
-  const isOpen = isRestaurantOpen(restaurant?.openingTime, restaurant?.closingTime);
+  const isOpen = isBusinessOpen(restaurant?.openingTime, restaurant?.closingTime);
 
   const loadData = useCallback(async () => {
     try {
@@ -253,8 +237,8 @@ export default function RestaurantDetailScreen({ route, navigation }: any) {
                 key={item.id}
                 item={item}
                 cartQty={foodCart.find((c: any) => c.id === item.id)?.quantity || 0}
-                onAdd={isOpen ? handleAddToCart : () => {}}
-                disabled={!isOpen}
+                onAdd={handleAddToCart}
+                restaurantClosed={!isOpen}
               />
             ))}
           </View>
@@ -320,6 +304,9 @@ const styles = StyleSheet.create({
 
   emptyState: { paddingVertical: 60, alignItems: 'center' },
   emptyTxt: { fontSize: 16, color: '#999', fontWeight: '600' },
+
+  oosOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' },
+  oosText: { color: '#fff', fontSize: 10, fontWeight: '700' },
 
   closedBanner: {
     backgroundColor: '#FFF1F1',

@@ -33,6 +33,24 @@ export class OrdersService {
     private vendorsService: VendorsService,
   ) { }
 
+  private isBusinessOpen(openingTime: string | null, closingTime: string | null): boolean {
+    if (!openingTime || !closingTime) return true;
+    try {
+      const now = new Date();
+      const [openH, openM] = openingTime.split(':').map(Number);
+      const [closeH, closeM] = closingTime.split(':').map(Number);
+      const openTime = new Date(now); openTime.setHours(openH, openM, 0, 0);
+      const closeTime = new Date(now); closeTime.setHours(closeH, closeM, 0, 0);
+      if (closeTime < openTime) {
+        return now >= openTime || now <= closeTime;
+      }
+      return now >= openTime && now <= closeTime;
+    } catch (e) {
+      console.warn('Error parsing business hours', e);
+      return true;
+    }
+  }
+
   async placeOrder(userId: string, addressId: string, paymentMethod: string, notes?: string, items?: any[], orderType: string = 'mart', restaurantId?: string): Promise<Order> {
     console.log('--- PlaceOrder Debug ---');
     console.log('UserId:', userId);
@@ -56,7 +74,10 @@ export class OrdersService {
             });
           }
         } else if (item.productId) {
-          const product = await this.orderItemsRepository.manager.getRepository('Product').findOne({ where: { id: item.productId } }) as any;
+          const product = await this.orderItemsRepository.manager.getRepository('Product').findOne({ 
+            where: { id: item.productId },
+            relations: ['brand', 'category']
+          }) as any;
           if (product) {
             cartItems.push({
               productId: item.productId,
@@ -79,18 +100,48 @@ export class OrdersService {
             }
           }
         }
+      } else {
+        for (const item of cartItems) {
+          if (item.productId) {
+            const product = await this.orderItemsRepository.manager.getRepository('Product').findOne({ 
+              where: { id: item.productId },
+              relations: ['brand', 'category']
+            }) as any;
+            if (product) item.product = product;
+          }
+        }
       }
     }
 
     if (cartItems.length === 0) throw new BadRequestException('Cart is empty');
 
-    // 1.5 Validate Max Quantity Per Order
+    // 1.5 Validate Max Quantity & Business Hours (Hierarchical)
     for (const item of cartItems) {
-      const entity = item.product; // This holds both Product or MenuItem depending on orderType
+      const entity = item.product; 
+      
+      // A. Max Quantity Check
       if (entity && entity.maxQuantityPerOrder > 0 && item.quantity > entity.maxQuantityPerOrder) {
         throw new BadRequestException(
           `Quantity limit exceeded for ${entity.name}. Maximum allowed per order is ${entity.maxQuantityPerOrder}.`
         );
+      }
+
+      // B. Business Hours Check (Hierarchy: Product > Brand > Category)
+      // Note: Vendor (Mart/Restaurant) check happens after martId/dist check
+      if (orderType === 'mart') {
+        const product = entity;
+        const brand = product.brand;
+        const category = product.category;
+
+        if (category && !this.isBusinessOpen(category.openingTime, category.closingTime)) {
+          throw new BadRequestException(`Category '${category.name}' is currently closed.`);
+        }
+        if (brand && !this.isBusinessOpen(brand.openingTime, brand.closingTime)) {
+          throw new BadRequestException(`Brand '${brand.name}' is currently closed.`);
+        }
+        if (!this.isBusinessOpen(product.openingTime, product.closingTime)) {
+          throw new BadRequestException(`Product '${product.name}' is currently unavailable.`);
+        }
       }
     }
 
@@ -158,7 +209,7 @@ export class OrdersService {
               const r1 = distinctRestaurants[i];
               const r2 = distinctRestaurants[j];
               const dist = this.deliveryZonesService.calculateDistance(Number(r1.latitude), Number(r1.longitude), Number(r2.latitude), Number(r2.longitude));
-              
+
               const maxDist = await this.settingsService.getNumber('multi_restaurant_max_distance_km', 0.4);
               if (dist > maxDist) {
                 throw new BadRequestException(`Multi-restaurant orders are only allowed for restaurants within ${(maxDist * 1000).toFixed(0)} meters of each other.`);
@@ -210,6 +261,21 @@ export class OrdersService {
     }
     const finalDeliveryFee = pricing.deliveryFee + multiStopSurcharge;
 
+    // 3.5 Validate Vendor Hours (Fulfillment Center)
+    const isUuid = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+    
+    if (orderType === 'mart' && martId && isUuid(martId)) {
+      try {
+        const vendor = await this.orderItemsRepository.manager.getRepository('Vendor').findOne({ where: { id: martId } }) as any;
+        if (vendor && !this.isBusinessOpen(vendor.openingTime, vendor.closingTime)) {
+          throw new BadRequestException(`Fulfillment center '${vendor.name}' is currently closed.`);
+        }
+      } catch (err) {
+        if (err instanceof BadRequestException) throw err;
+        console.warn('Failed to check fulfillment center vendor status', err);
+      }
+    }
+
     // 4. Calculate Subtotal
     let subtotal = 0;
     for (const item of cartItems) {
@@ -227,7 +293,7 @@ export class OrdersService {
     const order = this.ordersRepository.create({
       userId,
       addressId,
-      martId: martId || undefined,
+      martId: (martId && isUuid(martId)) ? martId : undefined,
       restaurantId: orderType === 'food' && distinctRestaurants.length === 1 ? distinctRestaurants[0].id : undefined,
       brandId: orderBrandId,
       subtotal,
@@ -262,101 +328,26 @@ export class OrdersService {
           orderId: savedOrder.id,
           subOrderId: savedSubOrder.id,
           menuItemId: item.menuItemId,
+          // productId should remain undefined for food orders because item.product is aliased to menuItem
+          productId: undefined,
           quantity: item.quantity,
           priceAtTime: Number(item.product.price) - Number(item.product.discount || 0)
         }));
         await this.orderItemsRepository.save(orderItemsToSave);
       }
     } else {
-      // ── MART ORDER SPLITTING ENGINE ──────────────────────────────────────
-      // Match each product to its best vendor, then group into sub-orders
-      const userLat = Number(address.latitude);
-      const userLng = Number(address.longitude);
-
-      // Map: vendorId -> { vendorProduct, items[] }
-      const vendorMap = new Map<string, { lat: number; lng: number; items: any[] }>();
-      const unmappedItems: any[] = [];
-
-      for (const item of cartItems) {
-        if (!item.productId) { unmappedItems.push(item); continue; }
-
-        const vendorProduct = await this.vendorsService.findBestVendorForProduct(
-          item.productId, userLat, userLng,
-        );
-
-        if (!vendorProduct) {
-          // No vendor registered → treat as unmapped (flat order item)
-          unmappedItems.push(item);
-        } else {
-          const key = vendorProduct.vendorId;
-          if (!vendorMap.has(key)) {
-            vendorMap.set(key, {
-              lat: Number(vendorProduct.vendor.lat),
-              lng: Number(vendorProduct.vendor.lng),
-              items: [],
-            });
-          }
-          vendorMap.get(key)!.items.push({
-            ...item,
-            vendorProductId: vendorProduct.id,
-            priceAtTime: Number(vendorProduct.price), // Use vendor-specific price
-          });
-        }
-      }
-
-      if (vendorMap.size > 0) {
-        // Optimize pickup sequence using nearest-first algorithm
-        const coords = Array.from(vendorMap.entries()).map(([vendorId, v]) => ({
-          vendorId, lat: v.lat, lng: v.lng,
-        }));
-
-        const sequence = this.vendorsService.optimizePickupSequence(coords, userLat, userLng);
-        const sequenceMap = new Map(sequence.map(s => [s.vendorId, s.sequence]));
-
-        // Create one sub-order per vendor
-        for (const [vendorId, vendorData] of vendorMap) {
-          const vendorSubtotal = vendorData.items.reduce((acc, item) => {
-            return acc + (item.priceAtTime * item.quantity);
-          }, 0);
-
-          const subOrder = this.subOrdersRepository.create({
-            orderId: savedOrder.id,
-            vendorId,
-            status: 'pending',
-            subtotal: vendorSubtotal,
-            pickupSequence: sequenceMap.get(vendorId) ?? 1,
-          });
-          const savedSubOrder = await this.subOrdersRepository.save(subOrder);
-
-          // Decrement vendor stock for each item
-          for (const item of vendorData.items) {
-            await this.vendorsService.decrementStock(item.vendorProductId, item.quantity);
-          }
-
-          const subOrderItems = vendorData.items.map(item =>
-            this.orderItemsRepository.create({
-              orderId: savedOrder.id,
-              subOrderId: savedSubOrder.id,
-              productId: item.productId,
-              quantity: item.quantity,
-              priceAtTime: item.priceAtTime,
-            })
-          );
-          await this.orderItemsRepository.save(subOrderItems);
-        }
-      }
-
-      // Handle unmapped items (no vendor registered → save as flat order items)
-      if (unmappedItems.length > 0) {
-        const flatItems = unmappedItems.map(item => this.orderItemsRepository.create({
-          orderId: savedOrder.id,
-          productId: item.productId || undefined,
-          quantity: item.quantity,
-          priceAtTime: Number(item.product.price) - Number(item.product.discount || 0),
-        }));
-        await this.orderItemsRepository.save(flatItems);
-      }
+      // For Mart orders, just save the items; syncSubOrdersInternal will group them into SubOrders
+      const orderItemsToSave = cartItems.map(item => this.orderItemsRepository.create({
+        orderId: savedOrder.id,
+        productId: item.productId || (item.product?.id),
+        quantity: item.quantity,
+        priceAtTime: Number(item.product.price) - Number(item.product.discount || 0)
+      }));
+      await this.orderItemsRepository.save(orderItemsToSave);
     }
+
+    // 6. Split into Sub-Orders (Refactored to private method for re-use)
+    await this.syncSubOrdersInternal(this.ordersRepository.manager, savedOrder.id);
 
     // 7. Clear Cart if it was stored in DB
     if (!items) {
@@ -497,7 +488,7 @@ export class OrdersService {
     }
 
     const zoneCheck = await this.deliveryZonesService.validateAddressInZone(
-      Number(rider.currentLat), 
+      Number(rider.currentLat),
       Number(rider.currentLng)
     );
 
@@ -596,6 +587,7 @@ export class OrdersService {
       .where('order.userId = :userId', { userId })
       .orderBy('order.createdAt', 'DESC')
       .withDeleted()
+      .take(50)
       .getMany();
   }
 
@@ -624,8 +616,8 @@ export class OrdersService {
     // 3. Any rider can see it if it's 'pending' or 'confirmed' AND not yet assigned to another rider.
     const isOwner = order.userId === requesterId;
     const isAssignedRider = order.riderId === requesterId;
-    const isRiderInAcceptanceFlow = requesterRole === 'rider' && 
-      (order.status === 'pending' || order.status === 'confirmed') && 
+    const isRiderInAcceptanceFlow = requesterRole === 'rider' &&
+      (order.status === 'pending' || order.status === 'confirmed') &&
       (!order.riderId || order.riderId === requesterId);
 
     if (!isOwner && !isAssignedRider && !isRiderInAcceptanceFlow) {
@@ -813,6 +805,10 @@ export class OrdersService {
 
     order.subtotal = subtotal;
     order.total = Number(subtotal) + Number(order.deliveryFee) - Number(order.discountAmount);
+
+    // Sync sub-orders for routing
+    await this.syncSubOrdersInternal(this.ordersRepository.manager, orderId);
+
     const updatedOrder = await this.ordersRepository.save(order);
 
     // Notify tracking screen and rider
@@ -824,7 +820,7 @@ export class OrdersService {
   async batchUpdateItems(orderId: string, items: { itemId: string; quantity: number }[]): Promise<any> {
     const order = await this.ordersRepository.findOne({
       where: { id: orderId },
-      relations: ['items'],
+      relations: ['items', 'items.product'],
     });
 
     if (!order) throw new NotFoundException('Order not found');
@@ -842,6 +838,21 @@ export class OrdersService {
       if (update.quantity <= 0) {
         itemIdsToRemove.push(update.itemId);
       } else {
+        const product = existingItem.product;
+        if (!product) continue;
+
+        if (product.maxQuantityPerOrder > 0 && update.quantity > product.maxQuantityPerOrder) {
+          throw new BadRequestException(
+            `Quantity limit exceeded for ${product.name}. Maximum allowed per order is ${product.maxQuantityPerOrder}.`
+          );
+        }
+
+        if (product.stockQuantity < update.quantity) {
+          throw new BadRequestException(
+            `Not enough stock for ${product.name}. Only ${product.stockQuantity} units available.`
+          );
+        }
+
         existingItem.quantity = update.quantity;
         itemsToUpdate.push(existingItem);
       }
@@ -873,6 +884,9 @@ export class OrdersService {
     order.subtotal = subtotal;
     order.total = Number(subtotal) + Number(order.deliveryFee) - Number(order.discountAmount);
 
+    // Sync sub-orders for routing
+    await this.syncSubOrdersInternal(this.ordersRepository.manager, orderId);
+
     const updatedOrder = await this.ordersRepository.save(order);
 
     // Notify tracking screen and rider
@@ -902,9 +916,38 @@ export class OrdersService {
         throw new BadRequestException('Items can only be added while the order is pending or confirmed.');
       }
 
-      // Fetch product to get current price and check stock
-      const product = await manager.getRepository('Product').findOne({ where: { id: productId } }) as any;
+      // Fetch product to get current price and check stock & business hours
+      const product = await manager.getRepository('Product').findOne({ 
+        where: { id: productId },
+        relations: ['brand', 'category']
+      }) as any;
       if (!product) throw new NotFoundException('Product not found');
+
+      // Hierarchical Business Hour Check
+      const brand = product.brand;
+      const category = product.category;
+
+      if (category && !this.isBusinessOpen(category.openingTime, category.closingTime)) {
+        throw new BadRequestException(`Category '${category.name}' is currently closed.`);
+      }
+      if (brand && !this.isBusinessOpen(brand.openingTime, brand.closingTime)) {
+        throw new BadRequestException(`Brand '${brand.name}' is currently closed.`);
+      }
+      if (!this.isBusinessOpen(product.openingTime, product.closingTime)) {
+        throw new BadRequestException(`Product '${product.name}' is currently unavailable.`);
+      }
+
+      // Quantity Limit Check
+      const existingItem = order.items.find(i => i.productId === productId);
+      const currentQty = existingItem ? existingItem.quantity : 0;
+      const totalNewQty = currentQty + quantity;
+
+      if (product.maxQuantityPerOrder > 0 && totalNewQty > product.maxQuantityPerOrder) {
+        throw new BadRequestException(
+          `Quantity limit exceeded for ${product.name}. Maximum allowed per order is ${product.maxQuantityPerOrder}.`
+        );
+      }
+
       if (product.stockQuantity < quantity) {
         throw new BadRequestException(`Only ${product.stockQuantity} units available in stock.`);
       }
@@ -944,6 +987,9 @@ export class OrdersService {
         subtotal: subtotalVal,
         total: total,
       });
+
+      // Sync sub-orders for routing
+      await this.syncSubOrdersInternal(manager, orderId);
 
       // Notify through gateway and push notifications
       await this.emitUpdateNotifications(orderId, order.status, userId, order.riderId ?? undefined);
@@ -1039,6 +1085,113 @@ export class OrdersService {
       distance: realDistance,
       message: 'Service is available.',
     };
+  }
+
+  private async syncSubOrdersInternal(manager: any, orderId: string) {
+    const order = await manager.findOne(Order, {
+      where: { id: orderId },
+      relations: ['items', 'items.product', 'items.menuItem', 'address'],
+    });
+    if (!order) return;
+
+    // Get existing sub-orders to sync instead of blind delete
+    const existingSubOrders = await manager.find(SubOrder, { where: { orderId } });
+    const existingMap = new Map();
+    existingSubOrders.forEach(s => {
+      const key = order.orderType === 'food' ? s.restaurantId : s.vendorId;
+      existingMap.set(key, s);
+    });
+
+    const activeKeys = new Set();
+    const subOrderDataMap = new Map();
+
+    if (order.orderType === 'food') {
+      for (const item of order.items) {
+        let restaurantId = null;
+        if (item.menuItem && item.menuItem.restaurantId) {
+          restaurantId = item.menuItem.restaurantId;
+        } else if (item.menuItemId) {
+          const mItem = await manager.getRepository('MenuItem').findOne({ where: { id: item.menuItemId } });
+          if (mItem) restaurantId = mItem.restaurantId;
+        }
+        
+        if (restaurantId) {
+          activeKeys.add(restaurantId);
+          if (!subOrderDataMap.has(restaurantId)) {
+            subOrderDataMap.set(restaurantId, { items: [], id: restaurantId });
+          }
+          subOrderDataMap.get(restaurantId).items.push(item);
+        }
+      }
+    } else {
+      for (const item of order.items) {
+        const vendorProduct = await this.vendorsService.findBestVendorForProduct(
+          item.productId, 
+          Number(order.address.latitude), 
+          Number(order.address.longitude)
+        );
+        if (vendorProduct) {
+          activeKeys.add(vendorProduct.vendorId);
+          if (!subOrderDataMap.has(vendorProduct.vendorId)) {
+            subOrderDataMap.set(vendorProduct.vendorId, { 
+              items: [], 
+              id: vendorProduct.vendorId,
+              lat: Number(vendorProduct.vendor.lat),
+              lng: Number(vendorProduct.vendor.lng) 
+            });
+          }
+          subOrderDataMap.get(vendorProduct.vendorId).items.push({ ...item, vendorProductId: vendorProduct.id });
+        }
+      }
+    }
+
+    // Optimize sequences for Mart orders
+    let sequenceMap = new Map();
+    if (order.orderType !== 'food' && subOrderDataMap.size > 0) {
+      const coords = Array.from(subOrderDataMap.values()).map(v => ({
+        vendorId: v.id, lat: v.lat, lng: v.lng,
+      }));
+      const sequence = this.vendorsService.optimizePickupSequence(coords, Number(order.address.latitude), Number(order.address.longitude));
+      sequenceMap = new Map(sequence.map(s => [s.vendorId, s.sequence]));
+    }
+
+    // 1. Delete sub-orders that are no longer needed
+    for (const sub of existingSubOrders) {
+      const key = order.orderType === 'food' ? sub.restaurantId : sub.vendorId;
+      if (!activeKeys.has(key)) {
+        await manager.delete(SubOrder, sub.id);
+      }
+    }
+
+    // 2. Create or Update sub-orders
+    for (const [key, data] of subOrderDataMap) {
+      const subtotal = data.items.reduce((acc, i) => acc + (Number(i.priceAtTime) * i.quantity), 0);
+      let subOrder = existingMap.get(key);
+      
+      if (subOrder) {
+        // Update existing
+        await manager.update(SubOrder, subOrder.id, {
+          subtotal,
+          pickupSequence: order.orderType === 'food' ? 1 : (sequenceMap.get(key) ?? 1),
+        });
+      } else {
+        // Create new
+        subOrder = manager.create(SubOrder, {
+          orderId,
+          restaurantId: order.orderType === 'food' ? key : undefined,
+          vendorId: order.orderType !== 'food' ? key : undefined,
+          status: 'pending',
+          subtotal,
+          pickupSequence: order.orderType === 'food' ? 1 : (sequenceMap.get(key) ?? 1),
+        });
+        subOrder = await manager.save(SubOrder, subOrder);
+      }
+
+      // Update item relationships
+      for (const item of data.items) {
+        await manager.update(OrderItem, item.id, { subOrderId: subOrder.id });
+      }
+    }
   }
 
   async updateSubOrderStatus(subOrderId: string, status: string): Promise<SubOrder> {

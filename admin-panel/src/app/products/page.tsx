@@ -29,6 +29,8 @@ interface Product {
   };
   isActive: boolean;
   maxQuantityPerOrder: number;
+  openingTime?: string;
+  closingTime?: string;
 }
 
 interface Brand {
@@ -36,8 +38,8 @@ interface Brand {
   name: string;
 }
 
-const API_URL = 'https://c2e9-175-107-236-228.ngrok-free.app/api/v1/products';
-const CAT_URL = 'https://c2e9-175-107-236-228.ngrok-free.app/api/v1/categories';
+const API_URL = 'https://00ad-175-107-236-228.ngrok-free.app/api/v1/products';
+const CAT_URL = 'https://00ad-175-107-236-228.ngrok-free.app/api/v1/categories';
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -57,7 +59,9 @@ export default function ProductsPage() {
     categoryId: '',
     brandId: '',
     imageUrl: '',
-    maxQuantityPerOrder: 0
+    maxQuantityPerOrder: 0,
+    openingTime: '',
+    closingTime: ''
   });
 
   useEffect(() => {
@@ -70,7 +74,7 @@ export default function ProductsPage() {
       const [prodRes, catRes, brandRes] = await Promise.all([
         fetchWithAuth(API_URL),
         fetchWithAuth(CAT_URL),
-        fetchWithAuth('https://c2e9-175-107-236-228.ngrok-free.app/api/v1/brands')
+        fetchWithAuth('https://00ad-175-107-236-228.ngrok-free.app/api/v1/brands')
       ]);
       const [prodData, catData, brandData] = await Promise.all([
         prodRes.json(),
@@ -109,7 +113,7 @@ export default function ProductsPage() {
       if (res.ok) {
         setShowModal(false);
         setEditingProduct(null);
-        setFormData({ name: '', description: '', price: 0, discount: 0, stockQuantity: 0, categoryId: '', brandId: '', imageUrl: '', maxQuantityPerOrder: 0 });
+        setFormData({ name: '', description: '', price: 0, discount: 0, stockQuantity: 0, categoryId: '', brandId: '', imageUrl: '', maxQuantityPerOrder: 0, openingTime: '', closingTime: '' });
         fetchData();
       }
     } catch (error) {
@@ -130,7 +134,9 @@ export default function ProductsPage() {
       categoryId: product.categoryId,
       brandId: product.brandId || '',
       imageUrl: product.imageUrl || '',
-      maxQuantityPerOrder: product.maxQuantityPerOrder || 0
+      maxQuantityPerOrder: product.maxQuantityPerOrder || 0,
+      openingTime: product.openingTime || '',
+      closingTime: product.closingTime || ''
     });
     setShowModal(true);
   };
@@ -162,7 +168,7 @@ export default function ProductsPage() {
           <button
             onClick={() => {
               setEditingProduct(null);
-              setFormData({ name: '', description: '', price: 0, discount: 0, stockQuantity: 0, categoryId: '', brandId: '', imageUrl: '', maxQuantityPerOrder: 0 });
+              setFormData({ name: '', description: '', price: 0, discount: 0, stockQuantity: 0, categoryId: '', brandId: '', imageUrl: '', maxQuantityPerOrder: 0, openingTime: '', closingTime: '' });
               setShowModal(true);
             }}
             className="flex items-center space-x-2 bg-gradient-to-br from-primary to-orange-600 text-white px-6 py-3 rounded-2xl font-bold hover:shadow-lg hover:shadow-orange-500/30 transition-all active:scale-95 shadow-md shadow-orange-500/10"
@@ -410,6 +416,31 @@ export default function ProductsPage() {
                     <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">
                       {formData.stockQuantity > 0 ? 'In Stock' : 'Out of Stock'}
                     </span>
+                  </div>
+
+                  <div className="col-span-2 border-t border-gray-100 pt-6 grid grid-cols-2 gap-5">
+                    <div className="col-span-2">
+                      <h3 className="text-[10px] font-black text-primary uppercase tracking-widest px-1">Specific Sales Hours (Overrides All)</h3>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 px-1">Opening Time</label>
+                      <input
+                        type="time"
+                        className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-bold text-sm"
+                        value={formData.openingTime}
+                        onChange={(e) => setFormData({ ...formData, openingTime: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 px-1">Closing Time</label>
+                      <input
+                        type="time"
+                        className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-bold text-sm"
+                        value={formData.closingTime}
+                        onChange={(e) => setFormData({ ...formData, closingTime: e.target.value })}
+                      />
+                    </div>
+                    <p className="col-span-2 text-[10px] text-gray-400 px-1 italic">Set specific hours for this product if it differs from the brand/category. Leave empty to use hierarchy.</p>
                   </div>
 
                   <div className="col-span-2">

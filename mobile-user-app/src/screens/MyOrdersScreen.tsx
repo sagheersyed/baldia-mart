@@ -9,8 +9,8 @@ import { useCart } from '../context/CartContext';
 import { ordersApi, authApi } from '../api/api';
 import io from 'socket.io-client';
 
-const BASE_IP = 'https://c2e9-175-107-236-228.ngrok-free.app';
-const SOCKET_URL = `http://${BASE_IP}`;
+const BASE_IP = 'https://00ad-175-107-236-228.ngrok-free.app';
+const SOCKET_URL = BASE_IP;
 
 const STATUS_CONFIG: Record<string, { color: string; bg: string; label: string; icon: string }> = {
   pending: { color: '#F59E0B', bg: '#FFFBEB', label: 'Pending', icon: '⏳' },
@@ -124,8 +124,6 @@ export default function MyOrdersScreen({ navigation }: any) {
   );
 
   useEffect(() => {
-    fetchOrders();
-
     let socket: any;
 
     const setupSocket = async () => {

@@ -7,27 +7,42 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { brandsApi, productsApi, normalizeUrl } from '../api/api';
 import { useCart } from '../context/CartContext';
+import { isBusinessOpen } from '../utils/helpers';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_W = (SCREEN_WIDTH - 48) / 2;
 
 // ─── Product Card ───────────────────────────────────────────
-const ProductCard = memo(({ item, cartQty, onAdd }: any) => {
+const ProductCard = memo(({ item, cartQty, onAdd, brandClosed }: any) => {
   const finalPrice = (Number(item.price) - Number(item.discount || 0)).toFixed(0);
+  const productClosed = !isBusinessOpen(item.openingTime, item.closingTime);
+  const categoryClosed = item.category && !isBusinessOpen(item.category.openingTime, item.category.closingTime);
+  const isClosed = brandClosed || productClosed || categoryClosed;
+
   return (
-    <View style={styles.prodCard}>
+    <View style={[styles.prodCard, isClosed && { opacity: 0.7 }]}>
       <View style={styles.prodImgWrap}>
         {item.imageUrl
           ? <Image source={{ uri: item.imageUrl }} style={styles.fillImg} resizeMode="cover" />
           : <View style={styles.prodPlaceholder} />}
-        {cartQty > 0 && (
+
+        {isClosed && (
+          <View style={styles.oosOverlay}>
+            <Text style={styles.oosText}>CLOSED</Text>
+          </View>
+        )}
+        {cartQty > 0 && !isClosed && (
           <View style={styles.qtyBadge}><Text style={styles.qtyBadgeTxt}>{cartQty}</Text></View>
         )}
       </View>
       <Text style={styles.prodName} numberOfLines={2}>{item.name}</Text>
       <View style={styles.prodBottom}>
         <Text style={styles.prodPrice}>Rs {finalPrice}</Text>
-        <TouchableOpacity style={styles.addCircle} onPress={() => onAdd(item)}>
+        <TouchableOpacity
+          style={[styles.addCircle, isClosed && styles.addCircleDisabled]}
+          onPress={() => onAdd(item)}
+          disabled={isClosed}
+        >
           <Text style={styles.addCircleTxt}>+</Text>
         </TouchableOpacity>
       </View>
@@ -40,6 +55,7 @@ const GRID_CARD_W = (SCREEN_WIDTH - 48) / 2;
 
 const BrandGridCard = memo(({ brand, onPress }: any) => {
   const imageUri = normalizeUrl(brand.logoUrl || brand.imageUrl);
+  const isOpen = isBusinessOpen(brand.openingTime, brand.closingTime);
   return (
     <TouchableOpacity style={[styles.brandGridCard, { width: GRID_CARD_W }]} onPress={onPress} activeOpacity={0.85}>
       <View style={styles.brandGridImgWrap}>
@@ -50,11 +66,16 @@ const BrandGridCard = memo(({ brand, onPress }: any) => {
             <Text style={{ fontSize: 32 }}>🏬</Text>
           </View>
         )}
+        {!isOpen && (
+          <View style={styles.oosOverlay}>
+            <Text style={styles.oosText}>CLOSED</Text>
+          </View>
+        )}
       </View>
       <Text style={styles.brandGridName} numberOfLines={1}>{brand.name}</Text>
       <Text style={styles.brandGridCount}>{brand.productCount ?? 0} products</Text>
-      <View style={styles.brandGridShopBtn}>
-        <Text style={styles.brandGridShopTxt}>Shop Now →</Text>
+      <View style={[styles.brandGridShopBtn, !isOpen && { opacity: 0.6 }]}>
+        <Text style={styles.brandGridShopTxt}>{isOpen ? 'Shop Now →' : 'Closed'}</Text>
       </View>
     </TouchableOpacity>
   );
@@ -168,6 +189,7 @@ export default function BrandsScreen({ navigation }: any) {
                 item={item}
                 cartQty={martCart.find((c: any) => c.productId === item.id || c.id === item.id)?.quantity || 0}
                 onAdd={(p: any) => addToCart(p, 'mart')}
+                brandClosed={!isBusinessOpen(selectedBrand.openingTime, selectedBrand.closingTime)}
               />
             )}
           />
@@ -265,7 +287,7 @@ const styles = StyleSheet.create({
     elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 6,
   },
   backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F5F5F5', justifyContent: 'center', alignItems: 'center' },
-  backArrow: { fontSize: 22, color: '#333' },
+  backArrow: { fontSize: 22, color: '#333', justifyContent: 'center', alignItems: 'center', textAlign: 'center', display: 'flex', marginTop: -8, fontWeight: 'bold' },
   headerCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
   headerBrandImg: { width: 28, height: 28, borderRadius: 6, marginRight: 8 },
   headerTitle: { fontSize: 18, fontWeight: '800', color: '#1A1A1A' },
@@ -341,7 +363,11 @@ const styles = StyleSheet.create({
   prodBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   prodPrice: { fontSize: 15, fontWeight: '900', color: '#FF4500' },
   addCircle: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#FF4500', justifyContent: 'center', alignItems: 'center', elevation: 3, shadowColor: '#FF4500', shadowOpacity: 0.4, shadowRadius: 6 },
+  addCircleDisabled: { backgroundColor: '#ccc' },
   addCircleTxt: { color: '#fff', fontSize: 22, fontWeight: '700', lineHeight: 26 },
+
+  oosOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' },
+  oosText: { color: '#fff', fontSize: 10, fontWeight: '700' },
 
   // Empty
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },

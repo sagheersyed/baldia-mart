@@ -14,6 +14,8 @@ interface Vendor {
   isActive: boolean;
   isOpen: boolean;
   openingHours?: string;
+  openingTime?: string;
+  closingTime?: string;
   location?: string;
   zoneId?: string;
   zone?: DeliveryZone;
@@ -45,7 +47,8 @@ const API_URL = `${BASE_URL}/vendors`;
 const PRODUCTS_API = `${BASE_URL}/products`;
 
 const emptyVendorForm = {
-  name: '', type: 'grocery', address: '', location: '', lat: '', lng: '', isOpen: true, isActive: true, openingHours: '09:00 AM - 11:00 PM', zoneId: ''
+  name: '', type: 'grocery', address: '', location: '', lat: '', lng: '', isOpen: true, isActive: true, 
+  openingHours: '09:00 AM - 11:00 PM', openingTime: '09:00', closingTime: '23:00', zoneId: ''
 };
 
 const emptyVendorProductForm = {
@@ -185,6 +188,8 @@ export default function VendorsPage() {
       lat: v.lat ? v.lat.toString() : '', lng: v.lng ? v.lng.toString() : '',
       isOpen: v.isOpen, isActive: v.isActive,
       openingHours: v.openingHours || '09:00 AM - 11:00 PM',
+      openingTime: v.openingTime || '09:00',
+      closingTime: v.closingTime || '23:00',
       zoneId: v.zoneId || ''
     });
     setShowVendorModal(true);
@@ -360,9 +365,21 @@ export default function VendorsPage() {
                 <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Full Street Address</label>
                 <input className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-teal-500/20 font-bold" value={vendorForm.address} onChange={e => setVendorForm({ ...vendorForm, address: e.target.value })} placeholder="Street 5, Block B, House 12..." />
               </div>
-              <div>
-                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Opening Hours (Example: 09:00 AM - 11:00 PM)</label>
-                <input className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-teal-500/20 font-bold" value={vendorForm.openingHours} onChange={e => setVendorForm({ ...vendorForm, openingHours: e.target.value })} />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Display Hours (e.g. 9AM-11PM)</label>
+                  <input className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-teal-500/20 font-bold" value={vendorForm.openingHours} onChange={e => setVendorForm({ ...vendorForm, openingHours: e.target.value })} />
+                </div>
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Open</label>
+                    <input type="time" className="w-full px-3 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none font-bold" value={vendorForm.openingTime} onChange={e => setVendorForm({ ...vendorForm, openingTime: e.target.value })} />
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Close</label>
+                    <input type="time" className="w-full px-3 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none font-bold" value={vendorForm.closingTime} onChange={e => setVendorForm({ ...vendorForm, closingTime: e.target.value })} />
+                  </div>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>

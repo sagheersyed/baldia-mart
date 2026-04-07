@@ -10,7 +10,7 @@ import {
   categoriesApi, productsApi, addressesApi, brandsApi, bannersApi,
   deliveryZonesApi, normalizeUrl
 } from '../api/api';
-import { getDistanceKm } from '../utils/helpers';
+import { getDistanceKm, isBusinessOpen } from '../utils/helpers';
 import BannerCarousel from '../components/BannerCarousel';
 import { useCart } from '../context/CartContext';
 import { useFavourites } from '../hooks/useFavourites';
@@ -32,9 +32,30 @@ const ProductCard = memo(({ prod, cartQty, onAdd, isFav, onToggleFav }: any) => 
         {cartQty > 0 && (
           <View style={styles.qtyBadge}><Text style={styles.qtyBadgeText}>{cartQty}</Text></View>
         )}
-        {isOOS && (
-          <View style={styles.oosOverlay}><Text style={styles.oosText}>Out of Stock</Text></View>
-        )}
+
+        {/* Hierarchical Business Hours Check */}
+        {(() => {
+          const productWait = !isBusinessOpen(prod.openingTime, prod.closingTime);
+          const brandWait = prod.brand && !isBusinessOpen(prod.brand.openingTime, prod.brand.closingTime);
+          const catWait = prod.category && !isBusinessOpen(prod.category.openingTime, prod.category.closingTime);
+
+          if (productWait || brandWait || catWait) {
+            return (
+              <View style={styles.oosOverlay}>
+                <Text style={styles.oosText}>Currently Closed</Text>
+              </View>
+            );
+          }
+          if (isOOS) {
+            return (
+              <View style={styles.oosOverlay}>
+                <Text style={styles.oosText}>Out of Stock</Text>
+              </View>
+            );
+          }
+          return null;
+        })()}
+
         <TouchableOpacity style={styles.prodHeart} onPress={onToggleFav}>
           <Text style={styles.prodHeartIcon}>{isFav ? '❤️' : '🤍'}</Text>
         </TouchableOpacity>
@@ -49,9 +70,9 @@ const ProductCard = memo(({ prod, cartQty, onAdd, isFav, onToggleFav }: any) => 
           )}
         </View>
         <TouchableOpacity
-          style={[styles.addCircle, isOOS && styles.addCircleDisabled]}
+          style={[styles.addCircle, (isOOS || !isBusinessOpen(prod.openingTime, prod.closingTime) || (prod.brand && !isBusinessOpen(prod.brand.openingTime, prod.brand.closingTime)) || (prod.category && !isBusinessOpen(prod.category.openingTime, prod.category.closingTime))) && styles.addCircleDisabled]}
           onPress={() => onAdd(prod)}
-          disabled={isOOS}
+          disabled={isOOS || !isBusinessOpen(prod.openingTime, prod.closingTime) || (prod.brand && !isBusinessOpen(prod.brand.openingTime, prod.brand.closingTime)) || (prod.category && !isBusinessOpen(prod.category.openingTime, prod.category.closingTime))}
         >
           <Text style={styles.addCircleText}>+</Text>
         </TouchableOpacity>
@@ -80,12 +101,18 @@ const CatPill = memo(({ cat, isSelected, onPress }: any) => (
 // ─────────────── Brand Chip ───────────────
 const BrandChip = memo(({ brand, onPress }: any) => {
   const imgUri = normalizeUrl(brand.logoUrl || brand.imageUrl);
+  const isOpen = isBusinessOpen(brand.openingTime, brand.closingTime);
   return (
     <TouchableOpacity style={styles.brandChip} onPress={onPress} activeOpacity={0.85}>
       <View style={styles.brandChipImg}>
         {imgUri
           ? <Image source={{ uri: imgUri }} style={styles.fillImg} />
           : <Text style={{ fontSize: 28 }}>🏬</Text>}
+        {!isOpen && (
+          <View style={[styles.oosOverlay, { borderRadius: 16 }]}>
+            <Text style={[styles.oosText, { fontSize: 8 }]}>CLOSED</Text>
+          </View>
+        )}
       </View>
       <Text style={styles.brandChipName} numberOfLines={1}>{brand.name}</Text>
     </TouchableOpacity>
@@ -157,7 +184,7 @@ export default function HomeScreen({ navigation }: any) {
 
   // Real-time Banners Update
   useEffect(() => {
-    const socket = io('https://c2e9-175-107-236-228.ngrok-free.app', {
+    const socket = io('https://00ad-175-107-236-228.ngrok-free.app', {
       transports: ['websocket'],
       forceNew: true
     });
@@ -360,7 +387,17 @@ export default function HomeScreen({ navigation }: any) {
                   onAdd={handleAddToCart}
                   isFav={isFavourite(prod.id, 'products')}
                   onToggleFav={() => toggleFavourite(
-                    { id: prod.id, name: prod.name, imageUrl: prod.imageUrl, price: prod.price },
+                    {
+                      id: prod.id,
+                      name: prod.name,
+                      imageUrl: prod.imageUrl,
+                      price: prod.price,
+                      discount: prod.discount,
+                      category: prod.category,
+                      brand: prod.brand,
+                      openingTime: prod.openingTime,
+                      closingTime: prod.closingTime
+                    },
                     'products'
                   )}
                 />

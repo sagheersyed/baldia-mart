@@ -14,7 +14,7 @@ export default function MarketingPage() {
     if (!title || !message) return;
     try {
       setSaving(true);
-      const res = await fetchWithAuth('https://c2e9-175-107-236-228.ngrok-free.app/api/v1/notifications/broadcast', {
+      const res = await fetchWithAuth('https://00ad-175-107-236-228.ngrok-free.app/api/v1/notifications/broadcast', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title, message }),

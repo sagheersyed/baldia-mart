@@ -11,6 +11,8 @@ interface Category {
   imageUrl: string;
   isActive: boolean;
   section: string;
+  openingTime?: string;
+  closingTime?: string;
 }
 
 const API_URL = `${BASE_URL}/categories`;
@@ -19,7 +21,7 @@ export default function CategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [formData, setFormData] = useState({ name: '', description: '', imageUrl: '', section: 'mart' });
+  const [formData, setFormData] = useState({ name: '', description: '', imageUrl: '', section: 'mart', openingTime: '', closingTime: '' });
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -56,7 +58,7 @@ export default function CategoriesPage() {
       if (res.ok) {
         setShowModal(false);
         setEditingCategory(null);
-        setFormData({ name: '', description: '', imageUrl: '', section: 'mart' });
+        setFormData({ name: '', description: '', imageUrl: '', section: 'mart', openingTime: '', closingTime: '' });
         fetchCategories();
       }
     } catch (error) {
@@ -72,7 +74,9 @@ export default function CategoriesPage() {
       name: category.name,
       description: category.description || '',
       imageUrl: category.imageUrl || '',
-      section: category.section || 'mart'
+      section: category.section || 'mart',
+      openingTime: category.openingTime || '',
+      closingTime: category.closingTime || ''
     });
     setShowModal(true);
   };
@@ -104,7 +108,7 @@ export default function CategoriesPage() {
           <button 
             onClick={() => {
               setEditingCategory(null);
-              setFormData({ name: '', description: '', imageUrl: '', section: 'mart' });
+              setFormData({ name: '', description: '', imageUrl: '', section: 'mart', openingTime: '', closingTime: '' });
               setShowModal(true);
             }}
             className="flex items-center space-x-2 bg-gradient-to-br from-primary to-orange-600 text-white px-6 py-3 rounded-2xl font-bold hover:shadow-lg hover:shadow-orange-500/30 transition-all active:scale-95 shadow-md shadow-orange-500/10"
@@ -242,6 +246,28 @@ export default function CategoriesPage() {
                     <option value="restaurant">🍕 Restaurant (Food)</option>
                   </select>
                   <p className="text-[10px] text-gray-400 mt-2 px-1">Determines where this category appears in the User app.</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 border-t border-gray-100 pt-6">
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2 px-1 text-orange-600">Opening Time (Optional)</label>
+                    <input
+                      type="time"
+                      className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-medium"
+                      value={formData.openingTime}
+                      onChange={(e) => setFormData({ ...formData, openingTime: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2 px-1 text-orange-600">Closing Time (Optional)</label>
+                    <input
+                      type="time"
+                      className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-medium"
+                      value={formData.closingTime}
+                      onChange={(e) => setFormData({ ...formData, closingTime: e.target.value })}
+                    />
+                  </div>
+                  <p className="col-span-2 text-[10px] text-gray-400 px-1 italic">Leave empty to use parent brand/vendor hours. These override brand hours but are overridden by product hours.</p>
                 </div>
 
                 <div className="pt-2">

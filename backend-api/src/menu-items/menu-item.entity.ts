@@ -40,6 +40,12 @@ export class MenuItem {
   @Column({ name: 'max_quantity_per_order', default: 0 })
   maxQuantityPerOrder: number;
 
+  @Column({ name: 'opening_time', nullable: true })
+  openingTime: string; // e.g., '09:00'
+
+  @Column({ name: 'closing_time', nullable: true })
+  closingTime: string; // e.g., '23:00'
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
