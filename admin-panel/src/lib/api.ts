@@ -1,4 +1,4 @@
-export const BASE_URL = 'https://00ad-175-107-236-228.ngrok-free.app/api/v1';
+export const BASE_URL = 'http://localhost:3000/api/v1';
 
 export const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
   let token = null;

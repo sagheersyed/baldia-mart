@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Save, RefreshCw, Truck, ArrowRight, Ruler, Phone, Mail, MapPin, Building2, Shield, ToggleLeft, ToggleRight } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api';
 
-const SETTINGS_API_URL = 'https://00ad-175-107-236-228.ngrok-free.app/api/v1/settings';
+const SETTINGS_API_URL = 'http://localhost:3000/api/v1/settings';
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<any>({});

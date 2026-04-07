@@ -1,175 +1,26 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator, Modal, TextInput, FlatList, Image } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator, Modal, TextInput, FlatList } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import io from 'socket.io-client';
 import MapView, { Marker, Polyline } from 'react-native-maps';
-import { ordersApi, productsApi, menuItemsApi } from '../api/api';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { isBusinessOpen } from '../utils/helpers';
-
-// Shared machine IP logic (ideally would be in a config file)
-const BASE_IP = 'https://00ad-175-107-236-228.ngrok-free.app';
-const SOCKET_URL = BASE_IP;
-
-const GET_STATUS_STEPS = (orderType: string = 'mart') => [
-  { key: 'pending', label: 'Order Placed', icon: '📝', description: orderType === 'food' ? 'Restaurant has received your order' : 'We have received your order' },
-  { key: 'confirmed', label: 'Confirmed', icon: '✅', description: orderType === 'food' ? 'Restaurant has confirmed your order' : 'The store has confirmed your order' },
-  { key: 'preparing', label: 'Preparing', icon: orderType === 'food' ? '👨‍🍳' : '📦', description: orderType === 'food' ? 'Your food is being prepared' : 'Your items are being packed' },
-  { key: 'out_for_delivery', label: 'Out for Delivery', icon: '🚴', description: 'Our rider is on the way' },
-  { key: 'delivered', label: 'Delivered', icon: '🎁', description: orderType === 'food' ? 'Enjoy your meal!' : 'Your package has been delivered' },
-];
+import { useOrderTracking } from '../hooks/useOrderTracking';
 
 export default function OrderTrackingScreen({ route, navigation }: any) {
   const { orderId } = route.params;
-  const [status, setStatus] = useState('pending');
-  const [loading, setLoading] = useState(true);
-  const [rider, setRider] = useState<any>(null);
-  const [riderLocation, setRiderLocation] = useState<{ latitude: number; longitude: number } | null>(null);
-  const [order, setOrder] = useState<any>(null);
-  const [localItems, setLocalItems] = useState<any[]>([]);
-  const [timeline, setTimeline] = useState<any[]>([]);
-  const [showRating, setShowRating] = useState(false);
-  const [ratingStep, setRatingStep] = useState(1); // 1: Rider, 2+: Business Reviews
-  const [businessesToRate, setBusinessesToRate] = useState<any[]>([]);
-  const [currentBusinessIndex, setCurrentBusinessIndex] = useState(0);
-  const [rating, setRating] = useState(5);
-  const [comment, setComment] = useState('');
-  const [businessRating, setBusinessRating] = useState(5);
-  const [businessComment, setBusinessComment] = useState('');
-  const [submittingReview, setSubmittingReview] = useState(false);
 
-  // Add Products Feature state
-  const [showAddProduct, setShowAddProduct] = useState(false);
-  const [allProducts, setAllProducts] = useState<any[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [addingProductId, setAddingProductId] = useState<string | null>(null);
-
-  const fetchOrderDetails = async () => {
-    try {
-      const [orderRes, timelineRes] = await Promise.all([
-        ordersApi.getById(orderId),
-        ordersApi.getTimeline(orderId)
-      ]);
-      setOrder(orderRes.data);
-      setLocalItems(orderRes.data.items || []);
-      setTimeline(timelineRes.data);
-      setStatus(orderRes.data.status || 'pending');
-      if (orderRes.data.rider) {
-        setRider(orderRes.data.rider);
-      }
-
-      await fetchProductsList(orderRes.data);
-
-      if (orderRes.data.status === 'delivered') {
-        const dismissed = await AsyncStorage.getItem(`ratingDismissed_${orderId}`);
-        if (!dismissed) {
-          const toRate: any[] = [];
-          if (orderRes.data.orderType === 'food' && orderRes.data.subOrders?.length > 0) {
-            orderRes.data.subOrders.forEach((so: any) => {
-              toRate.push({
-                id: so.restaurantId,
-                name: so.restaurant?.name || 'Restaurant',
-                type: 'restaurant',
-                subOrderId: so.id
-              });
-            });
-          } else if (orderRes.data.restaurantId) {
-            toRate.push({
-              id: orderRes.data.restaurantId,
-              name: orderRes.data.restaurant?.name || 'Restaurant',
-              type: 'restaurant'
-            });
-          } else if (orderRes.data.brandId) {
-            toRate.push({
-              id: orderRes.data.brandId,
-              name: orderRes.data.brand?.name || 'Brand',
-              type: 'brand'
-            });
-          }
-          setBusinessesToRate(toRate);
-
-          // Only show if not fully rated
-          if (!orderRes.data.isRated || !orderRes.data.isBusinessRated) {
-            setShowRating(true);
-          }
-        }
-      }
-    } catch (e) {
-      console.error('Failed to fetch order details:', e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchProductsList = async (currentOrder: any) => {
-    try {
-      if (currentOrder?.orderType === 'food' && currentOrder?.restaurantId) {
-        const res = await menuItemsApi.getByRestaurant(currentOrder.restaurantId);
-        setAllProducts(res.data);
-      } else {
-        const res = await productsApi.getAll();
-        setAllProducts(res.data);
-      }
-    } catch (e) {
-      console.error('Failed to fetch products/dishes for adding:', e);
-    }
-  };
-
-  useEffect(() => {
-    fetchOrderDetails();
-
-    const socket = io(SOCKET_URL, {
-      transports: ['websocket'],
-      forceNew: true
-    });
-
-    socket.on('connect', () => {
-      console.log('User App: Connected to socket');
-      socket.emit('joinOrder', orderId);
-    });
-
-    socket.on('connect_error', (err) => {
-      console.error('User App: Socket connection error:', err);
-    });
-
-    socket.on('orderStatusUpdated', async (data) => {
-      console.log('User App: Received status update:', data);
-      if (data.orderId === orderId) {
-        setStatus(data.status);
-        await fetchOrderDetails();
-      }
-    });
-
-    socket.on('orderUpdated', async (data: any) => {
-      console.log('User App: Received item/order update:', data);
-      if (data.orderId === orderId) {
-        await fetchOrderDetails();
-      }
-    });
-
-    socket.on('riderLocationUpdate', (data: any) => {
-      if (data.orderId === orderId && data.latitude && data.longitude) {
-        setRiderLocation({
-          latitude: Number(data.latitude),
-          longitude: Number(data.longitude),
-        });
-      }
-    });
-
-    return () => {
-      console.log('User App: Disconnecting socket');
-      socket.disconnect();
-    };
-  }, [orderId]);
-
-  const steps = useMemo(() => GET_STATUS_STEPS(order?.orderType), [order?.orderType]);
-
-  const getCurrentStepIndex = () => {
-    if (status === 'cancelled') return -1;
-    return steps.findIndex(step => step.key === status);
-  };
-
-  const currentStepIndex = getCurrentStepIndex();
+  const {
+    order, status, loading, rider, riderLocation, localItems, timeline,
+    showRating, ratingStep, businessesToRate, currentBusinessIndex,
+    rating, setRating, comment, setComment,
+    businessRating, setBusinessRating, businessComment, setBusinessComment,
+    submittingReview,
+    showAddProduct, setShowAddProduct, filteredProducts, searchQuery, setSearchQuery, addingProductId,
+    steps, currentStepIndex,
+    fetchOrderDetails, hasChanges,
+    handleReorder: _handleReorder, handleUpdateQuantityLocal, handleConfirmBatchUpdates, handleRemoveItem,
+    handleAddNewProductToOrder, handleDismissRating, handleSubmitReview,
+  } = useOrderTracking(orderId, navigation);
 
   const handleReorder = () => {
     Alert.alert(
@@ -177,198 +28,31 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
       'Would you like to place the same order again?',
       [
         { text: 'No', style: 'cancel' },
-        {
-          text: 'Yes, Reorder',
-          onPress: async () => {
-            try {
-              await ordersApi.reorderOrder(orderId);
-              Alert.alert('Success! 🎉', 'Your order has been placed again as pending.', [
-                { text: 'OK', onPress: () => navigation.navigate('MyOrders') }
-              ]);
-            } catch (error: any) {
-              const msg = error.response?.data?.message || 'Failed to reorder. Please try again.';
-              Alert.alert('Error', msg);
-            }
-          }
-        }
+        { text: 'Yes, Reorder', onPress: _handleReorder },
       ]
     );
   };
 
-  const handleRemoveItem = (itemId: string, itemName: string) => {
+  const handleRemoveItemWithConfirm = (itemId: string, itemName: string) => {
     Alert.alert(
       'Remove Item',
       `Are you sure you want to remove ${itemName} from your order?`,
       [
         { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const res = await ordersApi.removeItem(orderId, itemId);
-              if (res.data?.deleted) {
-                Alert.alert('Order Cancelled', 'All items were removed, so the order has been cancelled.', [
-                  { text: 'OK', onPress: () => navigation.navigate('MyOrders') }
-                ]);
-              } else {
-                fetchOrderDetails();
-              }
-            } catch (err: any) {
-              // Only alert if we didn't just delete the order (which might cause a background 404 in fetch)
-              const msg = err.response?.data?.message || 'Failed to remove item.';
-              Alert.alert('Error', msg);
-            }
-          }
-        }
+        { text: 'Remove', style: 'destructive', onPress: () => handleRemoveItem(itemId) },
       ]
     );
   };
 
-  const handleUpdateQuantityLocal = (itemId: string, newQuantity: number) => {
-    if (newQuantity < 0) return;
-
-    // Check if incrementing and if limits exist
-    const item = localItems.find(i => i.id === itemId);
-    if (item && newQuantity > item.quantity) {
-      const product = item.product;
-      if (product) {
-        if (product.maxQuantityPerOrder > 0 && newQuantity > product.maxQuantityPerOrder) {
-          Alert.alert('Limit Reached', `Maximum allowed for ${product.name} is ${product.maxQuantityPerOrder}.`);
-          return;
-        }
-        if (newQuantity > product.stockQuantity) {
-          Alert.alert('Out of Stock', `Only ${product.stockQuantity} units available.`);
-          return;
-        }
-      }
-    }
-
-    setLocalItems(prev => prev.map(item =>
-      item.id === itemId ? { ...item, quantity: newQuantity } : item
-    ));
-  };
-
-  const hasChanges = () => {
-    if (!order || !order.items) return false;
-    return JSON.stringify(localItems.map(i => ({ id: i.id, q: i.quantity }))) !==
-      JSON.stringify(order.items.map(i => ({ id: i.id, q: i.quantity })));
-  };
-
-  const handleConfirmBatchUpdates = async () => {
+  const handleConfirmUpdatesWithAlert = async () => {
     try {
-      setLoading(true);
-      const updates = localItems.map(item => ({
-        itemId: item.id,
-        quantity: item.quantity
-      }));
-      const res = await ordersApi.updateOrderItems(orderId, updates);
-
-      if (res.data?.deleted) {
-        Alert.alert('Order Cancelled', 'All items were removed, so the order has been cancelled.', [
-          { text: 'OK', onPress: () => navigation.navigate('MyOrders') }
-        ]);
-      } else {
-        setOrder(res.data);
-        setLocalItems(res.data.items || []);
-        Alert.alert('Success', 'Order updated successfully!');
-      }
+      await handleConfirmBatchUpdates();
+      Alert.alert('Success', 'Order updated successfully!');
     } catch (err: any) {
-      const msg = err.response?.data?.message || 'Failed to update order. Please try again.';
-      Alert.alert('Error', msg);
-    } finally {
-      setLoading(false);
+      Alert.alert('Error', err.response?.data?.message || 'Failed to update order.');
     }
   };
 
-  const handleAddNewProductToOrder = async (productId: string) => {
-    try {
-      setAddingProductId(productId);
-      await ordersApi.addItem(orderId, productId, 1);
-      Alert.alert('Success', 'Product added to your order!');
-      await fetchOrderDetails();
-      setShowAddProduct(false); // OPTIONAL: keep open if they want to add multiple? Closing for now.
-    } catch (err: any) {
-      const msg = err.response?.data?.message || 'Failed to add product.';
-      Alert.alert('Error', msg);
-    } finally {
-      setAddingProductId(null);
-    }
-  };
-
-  const filteredProducts = useMemo(() => {
-    if (!searchQuery) return allProducts;
-    return allProducts.filter(p =>
-      p.name.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [searchQuery, allProducts]);
-
-  const handleDismissRating = async () => {
-    try {
-      await AsyncStorage.setItem(`ratingDismissed_${orderId}`, 'true');
-      setShowRating(false);
-    } catch (e) {
-      console.error('Failed to dismiss rating:', e);
-    }
-  };
-
-  const handleSubmitReview = async () => {
-    setSubmittingReview(true);
-    try {
-      const { ridersApi, businessReviewsApi } = require('../api/api');
-
-      if (ratingStep === 1) {
-        // Submit Rider Review
-        if (rider) {
-          await ridersApi.postReview(rider.id, {
-            rating,
-            comment,
-            orderId
-          });
-        }
-
-        if (businessesToRate.length > 0) {
-          setRatingStep(2);
-          setCurrentBusinessIndex(0);
-        } else {
-          await AsyncStorage.setItem(`ratingDismissed_${orderId}`, 'true');
-          setShowRating(false);
-          Alert.alert('Thank You!', 'Your feedback helps us improve our service.');
-        }
-      } else {
-        // Submit Business Review (Restaurant or Brand)
-        const currentBiz = businessesToRate[currentBusinessIndex];
-
-        if (currentBiz) {
-          await businessReviewsApi.create({
-            orderId,
-            subOrderId: currentBiz.subOrderId,
-            businessId: currentBiz.id,
-            businessType: currentBiz.type,
-            rating: businessRating,
-            comment: businessComment
-          });
-        }
-
-        if (currentBusinessIndex < businessesToRate.length - 1) {
-          // Move to next business
-          setCurrentBusinessIndex(prev => prev + 1);
-          setBusinessRating(5);
-          setBusinessComment('');
-        } else {
-          // Finished all ratings
-          await AsyncStorage.setItem(`ratingDismissed_${orderId}`, 'true');
-          setShowRating(false);
-          Alert.alert('Thank You!', 'Your feedback helps us improve our service.');
-        }
-      }
-    } catch (e: any) {
-      const msg = e.response?.data?.message || 'Failed to submit review.';
-      Alert.alert('Error', msg);
-    } finally {
-      setSubmittingReview(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -550,35 +234,48 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
         {order && order.items && order.items.length > 0 && (
           <View style={styles.summaryCard}>
             <Text style={styles.summaryTitle}>Order Summary</Text>
-            {localItems.map((item: any) => (
-              <View key={item.id} style={styles.itemRow}>
-                <View style={styles.itemInfo}>
-                  <Text style={styles.itemName}>
-                    {order?.orderType === 'food'
-                      ? (item.menuItem?.name || 'Dish')
-                      : (item.product?.name || 'Item')}
-                  </Text>
-                  <Text style={styles.itemPrice}>Rs. {item.priceAtTime} x {item.quantity}</Text>
-                </View>
-                {(status === 'pending' || status === 'confirmed') && order?.orderType !== 'food' ? (
-                  <View style={styles.quantityControls}>
-                    <TouchableOpacity
-                      style={styles.qtyBtn}
-                      onPress={() => handleUpdateQuantityLocal(item.id, item.quantity - 1)}
-                    >
-                      <Text style={styles.qtyBtnText}>-</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.qtyText}>{item.quantity}</Text>
-                    <TouchableOpacity
-                      style={styles.qtyBtn}
-                      onPress={() => handleUpdateQuantityLocal(item.id, item.quantity + 1)}
-                    >
-                      <Text style={styles.qtyBtnText}>+</Text>
-                    </TouchableOpacity>
+            {Object.entries(
+              localItems.reduce((acc: any, item: any) => {
+                const sub = order.subOrders?.find((s: any) => s.id === item.subOrderId);
+                const groupName = sub?.vendor?.name || sub?.restaurant?.name || item.product?.brand?.name || item.menuItem?.restaurant?.name || order.restaurant?.name || 'Baldia Mart';
+                if (!acc[groupName]) acc[groupName] = [];
+                acc[groupName].push(item);
+                return acc;
+              }, {})
+            ).map(([groupName, items]: [any, any], groupIdx) => (
+              <View key={groupIdx} style={{ marginBottom: 10 }}>
+                <Text style={styles.groupHeader}>{groupName}</Text>
+                {items.map((item: any) => (
+                  <View key={item.id} style={styles.itemRow}>
+                    <View style={styles.itemInfo}>
+                      <Text style={styles.itemName}>
+                        {order?.orderType === 'food'
+                          ? (item.menuItem?.name || 'Dish')
+                          : (item.product?.name || 'Item')}
+                      </Text>
+                      <Text style={styles.itemPrice}>Rs. {item.priceAtTime} x {item.quantity}</Text>
+                    </View>
+                    {(status === 'pending' || status === 'confirmed') && order?.orderType !== 'food' ? (
+                      <View style={styles.quantityControls}>
+                        <TouchableOpacity
+                          style={styles.qtyBtn}
+                          onPress={() => handleUpdateQuantityLocal(item.id, item.quantity - 1)}
+                        >
+                          <Text style={styles.qtyBtnText}>-</Text>
+                        </TouchableOpacity>
+                        <Text style={styles.qtyText}>{item.quantity}</Text>
+                        <TouchableOpacity
+                          style={styles.qtyBtn}
+                          onPress={() => handleUpdateQuantityLocal(item.id, item.quantity + 1)}
+                        >
+                          <Text style={styles.qtyBtnText}>+</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <Text style={styles.itemName}>{item.quantity}x</Text>
+                    )}
                   </View>
-                ) : (
-                  <Text style={styles.itemName}>{item.quantity}x</Text>
-                )}
+                ))}
               </View>
             ))}
 
@@ -913,6 +610,11 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: '#F0F0F0',
   },
   summaryTitle: { fontSize: 16, fontWeight: '700', color: '#2D3748', marginBottom: 15 },
+  groupHeader: {
+    fontSize: 14, fontWeight: 'bold', color: '#B45309',
+    backgroundColor: '#FFFBEB', padding: 8, borderRadius: 8,
+    marginBottom: 10, marginTop: 5, borderLeftWidth: 3, borderLeftColor: '#F59E0B'
+  },
   itemRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
   itemInfo: { flex: 1 },
   itemName: { fontSize: 14, color: '#2D3748', fontWeight: '500' },

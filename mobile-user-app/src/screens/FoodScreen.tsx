@@ -1,13 +1,16 @@
 import React, { useState, useEffect, useCallback, memo } from 'react';
 import {
-  View, Text, StyleSheet, Image, TouchableOpacity,
+  View, Text, StyleSheet, TouchableOpacity,
   ScrollView, ActivityIndicator, RefreshControl, Dimensions, FlatList
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { categoriesApi, addressesApi, bannersApi, restaurantsApi, settingsApi, deliveryZonesApi, normalizeUrl } from '../api/api';
+import { ENV } from '../config/env';
 import { useFocusEffect } from '@react-navigation/native';
 import io from 'socket.io-client';
 import BannerCarousel from '../components/BannerCarousel';
+import SkeletonLoader from '../components/SkeletonLoader';
 import { useCart } from '../context/CartContext';
 import { formatRatingCount, getDistanceKm, isBusinessOpen } from '../utils/helpers';
 
@@ -189,8 +192,8 @@ export default function FoodScreen({ navigation }: any) {
     }
   };
 
-  useFocusEffect(useCallback(() => {
-    const socket = io('https://00ad-175-107-236-228.ngrok-free.app', {
+  useEffect(() => {
+    const socket = io(ENV.SOCKET_URL, {
       transports: ['websocket'],
       forceNew: true
     });
@@ -208,7 +211,7 @@ export default function FoodScreen({ navigation }: any) {
     return () => {
       socket.disconnect();
     };
-  }, []));
+  }, []);
 
   const onRefresh = useCallback(() => { setRefreshing(true); loadData(); }, []);
 
@@ -252,10 +255,51 @@ export default function FoodScreen({ navigation }: any) {
 
   if (loading) {
     return (
-      <View style={styles.loader}>
-        <ActivityIndicator size="large" color="#FF4500" />
-        <Text style={styles.loaderTxt}>Finding restaurants near you...</Text>
-      </View>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <View style={styles.headerTop}>
+            <View style={styles.headerLeft}>
+               <SkeletonLoader width={140} height={24} style={{ marginBottom: 4 }} />
+               <SkeletonLoader width={180} height={14} />
+            </View>
+            <SkeletonLoader width={40} height={40} borderRadius={20} />
+          </View>
+        </View>
+
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 30 }}>
+          {/* Banner Skeleton */}
+          <View style={{ margin: 16 }}>
+             <SkeletonLoader width="100%" height={120} borderRadius={20} />
+          </View>
+
+          {/* Cuisine Skeleton */}
+          <SkeletonLoader width={100} height={20} style={{ marginHorizontal: 16, marginBottom: 12 }} />
+          <View style={{ flexDirection: 'row', paddingHorizontal: 16, marginBottom: 16 }}>
+             {[...Array(4)].map((_, i) => (
+               <SkeletonLoader key={i} width={80} height={40} borderRadius={20} style={{ marginRight: 10 }} />
+             ))}
+          </View>
+
+          {/* Restaurants Skeleton */}
+          <View style={styles.sectionHeader}>
+             <SkeletonLoader width={160} height={20} />
+          </View>
+
+          {[...Array(3)].map((_, i) => (
+             <View key={i} style={[styles.restoCard, { paddingBottom: 14 }]}>
+                <SkeletonLoader width="100%" height={100} borderRadius={0} />
+                <View style={{ padding: 14 }}>
+                   <SkeletonLoader width={150} height={20} style={{ marginBottom: 6 }} />
+                   <SkeletonLoader width={80} height={14} style={{ marginBottom: 10 }} />
+                   <View style={{ flexDirection: 'row', gap: 10 }}>
+                      <SkeletonLoader width={70} height={24} borderRadius={12} />
+                      <SkeletonLoader width={70} height={24} borderRadius={12} />
+                   </View>
+                </View>
+             </View>
+          ))}
+        </ScrollView>
+      </SafeAreaView>
     );
   }
 

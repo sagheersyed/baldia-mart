@@ -24,9 +24,6 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
   return R * c;
 };
 
-const handleSelectMart = async (mart: any) => {
-
-}
 
 
 // ─── Swipe-to-Confirm Slider ──────────────────────────────────────────────────
@@ -346,6 +343,27 @@ export default function NavigationScreen({ navigation, route }: any) {
     } catch (e) { Alert.alert('Error', 'Failed to update stop status.'); }
   };
 
+  const handleReportMissing = (itemId: string, itemName: string) => {
+    Alert.alert(
+      'Report Missing Item',
+      `Are you sure ${itemName} is missing? This will remove it from the order and adjust the COD total.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Mark Missing', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+               await ordersApi.removeItem(orderId, itemId);
+               Alert.alert('Success', 'Item removed correctly.');
+               await refreshOrder();
+            } catch (e) { Alert.alert('Error', 'Failed to report item missing'); }
+          }
+        }
+      ]
+    );
+  };
+
   // ── External maps ───────────────────────────────────────────────────
   const openExternalMaps = () => {
     const origin = riderLoc ? `${riderLoc.latitude},${riderLoc.longitude}` : '';
@@ -535,13 +553,23 @@ export default function NavigationScreen({ navigation, route }: any) {
                     <View style={styles.pickedChip}><Text style={styles.pickedChipTxt}>✅ DONE</Text></View>
                   )}
                 </View>
-                {group.items.map((item: any, idx: number) => (
-                  <View key={idx} style={styles.itemRow}>
-                    <Text style={styles.itemQty}>{item.quantity}x</Text>
-                    <Text style={styles.itemName} numberOfLines={1}>{item.product?.name || item.menuItem?.name || 'Item'}</Text>
-                    <Text style={styles.itemPrice}>Rs {Number(item.priceAtTime || 0) * item.quantity}</Text>
-                  </View>
-                ))}
+                {group.items.map((item: any, idx: number) => {
+                  const itemName = item.product?.name || item.menuItem?.name || 'Item';
+                  return (
+                    <View key={idx} style={[styles.itemRow, { justifyContent: 'space-between' }]}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                        <Text style={styles.itemQty}>{item.quantity}x</Text>
+                        <Text style={[styles.itemName, { flex: 1, marginRight: 5 }]} numberOfLines={1}>{itemName}</Text>
+                        <Text style={styles.itemPrice}>Rs {Number(item.priceAtTime || 0) * item.quantity}</Text>
+                      </View>
+                      {group.status !== 'picked_up' && group.status !== 'delivered' && (
+                        <TouchableOpacity onPress={() => handleReportMissing(item.id, itemName)} style={{ marginLeft: 10, padding: 4, backgroundColor: '#FFF5F5', borderRadius: 6 }}>
+                          <Text style={{ fontSize: 13 }}>🗑️</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  );
+                })}
               </View>
             ))}
             <View style={styles.totalRow}>

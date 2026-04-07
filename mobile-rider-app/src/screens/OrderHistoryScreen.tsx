@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, SafeAreaView } from 'react-native';
 import { ordersApi } from '../api/api';
-import { format } from 'date-fns'; // Optional, but usually better for simple dates. We'll use basic JS dates for simplicity if missing
 
 export default function OrderHistoryScreen({ navigation }: any) {
   const [orders, setOrders] = useState<any[]>([]);

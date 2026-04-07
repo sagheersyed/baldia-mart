@@ -1,9 +1,6 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-// For Android Emulator, use 10.0.2.2. For iOS/Local, use localhost.
-// Replace with your local machine's IP (e.g., 192.168.1.10) for physical devices.
-const BASE_URL = 'https://00ad-175-107-236-228.ngrok-free.app/api/v1';
+import { ENV } from '../config/env';
 
 /**
  * Normalizes image and file URLs.
@@ -11,11 +8,12 @@ const BASE_URL = 'https://00ad-175-107-236-228.ngrok-free.app/api/v1';
  */
 export const normalizeUrl = (url: string | null | undefined): string | null => {
   if (!url) return null;
+  const serverBase = ENV.SOCKET_URL;
   if (url.startsWith('http')) {
-    return url.replace('localhost', 'https://00ad-175-107-236-228.ngrok-free.app');
+    return url.replace('http://localhost', serverBase).replace('https://localhost', serverBase);
   }
   if (url.startsWith('/')) {
-    return `https://00ad-175-107-236-228.ngrok-free.app${url}`;
+    return `${serverBase}${url}`;
   }
   return url;
 };
@@ -34,9 +32,23 @@ export const normalizePhone = (phone: string): string => {
 };
 
 const api = axios.create({
-  baseURL: BASE_URL,
-  timeout: 10000,
+  baseURL: ENV.BASE_URL,
+  timeout: 15000,
 });
+
+// ── Global 401 interceptor — auto sign-out on token expiry ──
+let _signOutCallback: (() => void) | null = null;
+export const registerSignOutCallback = (cb: () => void) => { _signOutCallback = cb; };
+
+api.interceptors.response.use(
+  res => res,
+  err => {
+    if (err.response?.status === 401 && _signOutCallback) {
+      _signOutCallback();
+    }
+    return Promise.reject(err);
+  }
+);
 
 export const setAuthToken = (token: string | null) => {
   if (token) {
@@ -84,9 +96,24 @@ export const brandsApi = {
 };
 
 export const productsApi = {
-  getAll: () => api.get('/products'),
-  getByCategory: (catId: string) => api.get(`/products/category/${catId}`),
-  getByBrand: (brandId: string) => api.get(`/products/brand/${brandId}`),
+  getAll: async (page?: number, limit?: number) => {
+    const qs = page && limit ? `?page=${page}&limit=${limit}` : '';
+    const res = await api.get(`/products${qs}`);
+    if (res.data && typeof res.data === 'object' && !Array.isArray(res.data) && res.data.data) res.data = res.data.data;
+    return res;
+  },
+  getByCategory: async (catId: string, page?: number, limit?: number) => {
+    const qs = page && limit ? `?page=${page}&limit=${limit}` : '';
+    const res = await api.get(`/products/category/${catId}${qs}`);
+    if (res.data && typeof res.data === 'object' && !Array.isArray(res.data) && res.data.data) res.data = res.data.data;
+    return res;
+  },
+  getByBrand: async (brandId: string, page?: number, limit?: number) => {
+    const qs = page && limit ? `?page=${page}&limit=${limit}` : '';
+    const res = await api.get(`/products/brand/${brandId}${qs}`);
+    if (res.data && typeof res.data === 'object' && !Array.isArray(res.data) && res.data.data) res.data = res.data.data;
+    return res;
+  },
 };
 
 export const ordersApi = {

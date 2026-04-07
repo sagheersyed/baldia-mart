@@ -1,6 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { setAuthToken, authApi } from '../api/api';
+import { setAuthToken, authApi, registerSignOutCallback } from '../api/api';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 
 interface AuthContextType {
@@ -94,6 +94,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('SignOut error', e);
     }
   };
+
+  // Register signOut with Axios so 401 responses auto-sign-out globally
+  useEffect(() => {
+    registerSignOutCallback(signOut);
+  }, []);
 
   const updateUserData = (data: any) => {
     setUserData(data);

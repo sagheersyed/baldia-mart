@@ -38,8 +38,8 @@ interface Brand {
   name: string;
 }
 
-const API_URL = 'https://00ad-175-107-236-228.ngrok-free.app/api/v1/products';
-const CAT_URL = 'https://00ad-175-107-236-228.ngrok-free.app/api/v1/categories';
+const API_URL = 'http://localhost:3000/api/v1/products';
+const CAT_URL = 'http://localhost:3000/api/v1/categories';
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -74,7 +74,7 @@ export default function ProductsPage() {
       const [prodRes, catRes, brandRes] = await Promise.all([
         fetchWithAuth(API_URL),
         fetchWithAuth(CAT_URL),
-        fetchWithAuth('https://00ad-175-107-236-228.ngrok-free.app/api/v1/brands')
+        fetchWithAuth('http://localhost:3000/api/v1/brands')
       ]);
       const [prodData, catData, brandData] = await Promise.all([
         prodRes.json(),

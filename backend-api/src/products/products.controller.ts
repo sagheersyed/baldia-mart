@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/common';
 import { ProductsService } from './products.service';
 import { Product } from './product.entity';
 
@@ -7,18 +7,18 @@ export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
   @Get()
-  async getAllActive() {
-    return this.productsService.findAllActive();
+  async getAllActive(@Query('page') page?: number, @Query('limit') limit?: number) {
+    return this.productsService.findAllActive(page, limit);
   }
 
   @Get('category/:categoryId')
-  async getByCategory(@Param('categoryId') categoryId: string) {
-    return this.productsService.findByCategory(categoryId);
+  async getByCategory(@Param('categoryId') categoryId: string, @Query('page') page?: number, @Query('limit') limit?: number) {
+    return this.productsService.findByCategory(categoryId, page, limit);
   }
 
   @Get('brand/:brandId')
-  async getByBrand(@Param('brandId') brandId: string) {
-    return this.productsService.findByBrand(brandId);
+  async getByBrand(@Param('brandId') brandId: string, @Query('page') page?: number, @Query('limit') limit?: number) {
+    return this.productsService.findByBrand(brandId, page, limit);
   }
 
   @Get(':id')

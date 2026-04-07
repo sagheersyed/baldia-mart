@@ -15,7 +15,7 @@ interface User {
   createdAt: string;
 }
 
-const API_URL = 'https://00ad-175-107-236-228.ngrok-free.app/api/v1/users/all';
+const API_URL = 'http://localhost:3000/api/v1/users/all';
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -44,7 +44,7 @@ export default function UsersPage() {
   const handleToggleActive = async (user: User) => {
     setUpdating(user.id);
     try {
-      const res = await fetchWithAuth(`https://00ad-175-107-236-228.ngrok-free.app/api/v1/users/${user.id}/status`, {
+      const res = await fetchWithAuth(`http://localhost:3000/api/v1/users/${user.id}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isActive: !user.isActive }),

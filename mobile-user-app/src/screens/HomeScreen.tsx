@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, memo, useRef } from 'react';
 import {
-  View, Text, StyleSheet, Image, TouchableOpacity,
+  View, Text, StyleSheet, TouchableOpacity,
   ScrollView, ActivityIndicator, RefreshControl, FlatList, Dimensions
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import io from 'socket.io-client';
@@ -10,8 +11,10 @@ import {
   categoriesApi, productsApi, addressesApi, brandsApi, bannersApi,
   deliveryZonesApi, normalizeUrl
 } from '../api/api';
+import { ENV } from '../config/env';
 import { getDistanceKm, isBusinessOpen } from '../utils/helpers';
 import BannerCarousel from '../components/BannerCarousel';
+import SkeletonLoader from '../components/SkeletonLoader';
 import { useCart } from '../context/CartContext';
 import { useFavourites } from '../hooks/useFavourites';
 
@@ -185,7 +188,7 @@ export default function HomeScreen({ navigation }: any) {
 
   // Real-time Banners Update
   useEffect(() => {
-    const socket = io('https://00ad-175-107-236-228.ngrok-free.app', {
+    const socket = io(ENV.SOCKET_URL, {
       transports: ['websocket'],
       forceNew: true
     });
@@ -237,10 +240,62 @@ export default function HomeScreen({ navigation }: any) {
 
   if (loading) {
     return (
-      <View style={styles.loader}>
-        <ActivityIndicator size="large" color="#FF4500" />
-        <Text style={styles.loaderText}>Loading Baldia Mart...</Text>
-      </View>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        {/* Placeholder Header */}
+        <View style={styles.header}>
+          <View style={styles.headerRow}>
+            <View style={{ flex: 1 }}><SkeletonLoader width={120} height={28} borderRadius={8} /></View>
+            <View style={styles.headerIcons}>
+              <SkeletonLoader width={38} height={38} borderRadius={19} />
+              <SkeletonLoader width={38} height={38} borderRadius={19} />
+            </View>
+          </View>
+          <View style={{ marginBottom: 10 }}>
+             <SkeletonLoader width={200} height={16} />
+          </View>
+          <SkeletonLoader width="100%" height={46} borderRadius={12} style={{ marginBottom: 12 }} />
+        </View>
+
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+          {/* Banner Skeleton */}
+          <View style={{ margin: 16 }}>
+             <SkeletonLoader width="100%" height={120} borderRadius={20} />
+          </View>
+
+          {/* Categories Skeleton */}
+          <View style={styles.section}>
+            <SkeletonLoader width={140} height={20} style={{ marginHorizontal: 16, marginBottom: 12 }} />
+            <View style={styles.catsGrid}>
+              {[...Array(8)].map((_, i) => (
+                <View key={i} style={{ alignItems: 'center', marginBottom: 16, width: (SCREEN_WIDTH - 24) / 4 }}>
+                   <SkeletonLoader width={56} height={56} borderRadius={14} style={{ marginBottom: 6 }} />
+                   <SkeletonLoader width={40} height={12} />
+                </View>
+              ))}
+            </View>
+          </View>
+
+          {/* Products Skeleton */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+               <SkeletonLoader width={100} height={20} />
+            </View>
+            <View style={styles.productsGrid}>
+               {[...Array(4)].map((_, i) => (
+                 <View key={i} style={[styles.prodCard, { padding: 12 }]}>
+                    <SkeletonLoader width="100%" height={110} borderRadius={14} style={{ marginBottom: 10 }} />
+                    <SkeletonLoader width="80%" height={16} style={{ marginBottom: 4 }} />
+                    <SkeletonLoader width="50%" height={12} style={{ marginBottom: 14 }} />
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                       <SkeletonLoader width={60} height={18} />
+                       <SkeletonLoader width={32} height={32} borderRadius={16} />
+                    </View>
+                 </View>
+               ))}
+            </View>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
     );
   }
 

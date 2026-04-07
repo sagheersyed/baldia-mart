@@ -1,6 +1,12 @@
 import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import { Alert } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const CART_KEYS = {
+  mart: '@cart_mart',
+  food: '@cart_food',
+};
 
 interface CartItem {
   id: string;
@@ -39,8 +45,40 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   const [foodCart, setFoodCart] = useState<CartItem[]>([]);
   const [activeMode, setActiveMode] = useState<'mart' | 'food'>('mart');
   const [activeOrdersCount, setActiveOrdersCount] = useState(0);
+  const [hydrated, setHydrated] = useState(false);
   const { userToken } = useAuth();
 
+  // ── Rehydrate carts from AsyncStorage on mount ──────────────────────
+  useEffect(() => {
+    const rehydrate = async () => {
+      try {
+        const [martRaw, foodRaw] = await Promise.all([
+          AsyncStorage.getItem(CART_KEYS.mart),
+          AsyncStorage.getItem(CART_KEYS.food),
+        ]);
+        if (martRaw) setMartCart(JSON.parse(martRaw));
+        if (foodRaw) setFoodCart(JSON.parse(foodRaw));
+      } catch (e) {
+        console.error('[Cart] Failed to rehydrate carts:', e);
+      } finally {
+        setHydrated(true);
+      }
+    };
+    rehydrate();
+  }, []);
+
+  // ── Persist carts whenever they change (after initial hydration) ─────
+  useEffect(() => {
+    if (!hydrated) return;
+    AsyncStorage.setItem(CART_KEYS.mart, JSON.stringify(martCart)).catch(() => {});
+  }, [martCart, hydrated]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    AsyncStorage.setItem(CART_KEYS.food, JSON.stringify(foodCart)).catch(() => {});
+  }, [foodCart, hydrated]);
+
+  // ── Clear cart on logout ──────────────────────────────────────────────
   useEffect(() => {
     if (!userToken) {
       clearCart();
@@ -50,15 +88,13 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   const currentCart = activeMode === 'mart' ? martCart : foodCart;
 
   const addToCart = (product: any, mode: 'mart' | 'food' = activeMode) => {
-    console.log(`[Cart] Adding item: ${product.name} (ID: ${product.id}) | Mode: ${mode} | Limit: ${product.maxQuantityPerOrder}`);
     const effectivePrice = Number(product.price) - Number(product.discount || 0);
     const setter = mode === 'mart' ? setMartCart : setFoodCart;
     const limit = Number(product.maxQuantityPerOrder) || 0;
-    
+
     setter(prevCart => {
       const existingItem = prevCart.find(item => item.id === product.id);
       if (existingItem) {
-        console.log(`[Cart] Item exists. Current Qty: ${existingItem.quantity} | Limit: ${limit}`);
         if (limit > 0 && existingItem.quantity >= limit) {
           Alert.alert('Limit Reached ✋', `Maximum allowed per order is ${limit} units for ${product.name}.`);
           return prevCart;
@@ -67,11 +103,10 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
           item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
         );
       }
-      console.log(`[Cart] New item added to cart.`);
-      return [...prevCart, { 
-        id: product.id, 
-        name: product.name, 
-        price: effectivePrice, 
+      return [...prevCart, {
+        id: product.id,
+        name: product.name,
+        price: effectivePrice,
         imageUrl: product.imageUrl,
         quantity: 1,
         restaurantId: product.restaurantId,
@@ -109,10 +144,15 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     if (mode) {
       const setter = mode === 'mart' ? setMartCart : setFoodCart;
       setter([]);
+      AsyncStorage.removeItem(CART_KEYS[mode]).catch(() => {});
     } else {
       setMartCart([]);
       setFoodCart([]);
       setActiveOrdersCount(0);
+      Promise.all([
+        AsyncStorage.removeItem(CART_KEYS.mart),
+        AsyncStorage.removeItem(CART_KEYS.food),
+      ]).catch(() => {});
     }
   };
 
@@ -130,8 +170,8 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   const currentCount = getCartCount(activeMode);
 
   return (
-    <CartContext.Provider value={{ 
-      martCart, foodCart, currentCart, addToCart, removeFromCart, updateQuantity, clearCart, 
+    <CartContext.Provider value={{
+      martCart, foodCart, currentCart, addToCart, removeFromCart, updateQuantity, clearCart,
       getCartTotal, getCartCount, currentTotal, currentCount,
       activeMode, setActiveMode,
       activeOrdersCount, setActiveOrdersCount

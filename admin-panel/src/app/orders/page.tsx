@@ -66,10 +66,10 @@ interface Order {
   }[];
 }
 
-const API_URL = 'https://00ad-175-107-236-228.ngrok-free.app/api/v1/orders/all';
-const ZONES_URL = 'https://00ad-175-107-236-228.ngrok-free.app/api/v1/delivery-zones/all';
-const SETTINGS_URL = 'https://00ad-175-107-236-228.ngrok-free.app/api/v1/settings/public';
-const STATUS_UPDATE_URL = (id: string) => `https://00ad-175-107-236-228.ngrok-free.app/api/v1/orders/${id}/status`;
+const API_URL = 'http://localhost:3000/api/v1/orders/all';
+const ZONES_URL = 'http://localhost:3000/api/v1/delivery-zones/all';
+const SETTINGS_URL = 'http://localhost:3000/api/v1/settings/public';
+const STATUS_UPDATE_URL = (id: string) => `http://localhost:3000/api/v1/orders/${id}/status`;
 
 const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
   const R = 6371;
@@ -123,7 +123,7 @@ export default function OrdersPage() {
 
   const fetchRiders = async () => {
     try {
-      const res = await fetchWithAuth('https://00ad-175-107-236-228.ngrok-free.app/api/v1/riders/all');
+      const res = await fetchWithAuth('http://localhost:3000/api/v1/riders/all');
       if (res.ok) {
         const body = await res.json();
         // Only get active riders with complete profiles
@@ -173,7 +173,7 @@ export default function OrdersPage() {
   const handleAssignRider = async (orderId: string, riderId: string) => {
     if (!riderId) return;
     try {
-      const res = await fetchWithAuth(`https://00ad-175-107-236-228.ngrok-free.app/api/v1/orders/${orderId}/assign`, {
+      const res = await fetchWithAuth(`http://localhost:3000/api/v1/orders/${orderId}/assign`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ riderId }),

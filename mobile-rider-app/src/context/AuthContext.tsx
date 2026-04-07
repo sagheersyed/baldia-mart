@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { setAuthToken, authApi } from '../api/api';
+import { setAuthToken, authApi, registerSignOutCallback } from '../api/api';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -22,12 +22,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (token) {
           setAuthToken(token);
           setIsAuthenticated(true);
-          
+
           // Background verification
           try {
             await authApi.getMe();
           } catch (error) {
-            console.log('Token verification failed, logging out');
             await logout();
           }
         }
@@ -52,6 +51,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAuthToken(null);
     setIsAuthenticated(false);
   };
+
+  // Register logout with Axios so 401 responses auto-logout globally
+  useEffect(() => {
+    registerSignOutCallback(logout);
+  }, []);
 
   return (
     <AuthContext.Provider value={{ isAuthenticated, isLoading, loginSuccess, logout }}>

@@ -1231,6 +1231,11 @@ export class OrdersService {
     // Emit 'orderUpdated' for specific order room (User/Rider details refresh)
     this.ordersGateway.server.to(`order_${orderId}`).emit('orderUpdated', { orderId });
 
+    // Broadcast 'orderUpdated' to riders_room so unassigned riders see the changes in their dashboard pool
+    if (!riderId && (status === 'pending' || status === 'confirmed')) {
+      this.ordersGateway.server.to('riders_room').emit('orderUpdated', { orderId });
+    }
+
     if (riderId) {
       // Emit 'orderUpdated' specifically to the rider (Dashboard refresh)
       this.ordersGateway.server.to(`rider_${riderId}`).emit('orderUpdated', { orderId });

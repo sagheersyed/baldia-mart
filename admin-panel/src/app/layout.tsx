@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import './globals.css';
 import Sidebar from '@/components/Sidebar';
+import SocketListener from '@/components/SocketListener';
 import { Menu, X } from 'lucide-react';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -90,6 +91,7 @@ export default function RootLayout({
         <main className={`flex-1 overflow-y-auto ${isLoginPage ? 'flex items-center justify-center p-0' : 'pt-16 lg:pt-0'}`}>
           {children}
         </main>
+        {!isLoginPage && <SocketListener />}
       </body>
     </html>
   );

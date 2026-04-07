@@ -1,15 +1,13 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { io } from 'socket.io-client';
+import { ENV } from '../config/env';
 
-const SOCKET_URL = 'https://00ad-175-107-236-228.ngrok-free.app'; // No /api/v1 suffix
-export const socket = io(SOCKET_URL, {
+export const socket = io(ENV.SOCKET_URL, {
   autoConnect: false,
   transports: ['websocket'],
 });
 
-// Replace with your local machine's IP
-const BASE_URL = 'https://00ad-175-107-236-228.ngrok-free.app/api/v1';
 
 export const normalizePhone = (phone: string): string => {
   if (!phone) return phone;
@@ -25,9 +23,23 @@ export const normalizePhone = (phone: string): string => {
 };
 
 export const api = axios.create({
-  baseURL: BASE_URL,
-  timeout: 10000,
+  baseURL: ENV.BASE_URL,
+  timeout: 15000,
 });
+
+// ── Global 401 interceptor — auto sign-out on token expiry ──
+let _signOutCallback: (() => void) | null = null;
+export const registerSignOutCallback = (cb: () => void) => { _signOutCallback = cb; };
+
+api.interceptors.response.use(
+  res => res,
+  err => {
+    if (err.response?.status === 401 && _signOutCallback) {
+      _signOutCallback();
+    }
+    return Promise.reject(err);
+  }
+);
 
 export const setAuthToken = (token: string | null) => {
   if (token) {
@@ -61,6 +73,7 @@ export const ordersApi = {
     api.patch(`/orders/${orderId}/rider-status`, { status }),
   updateSubOrderStatus: (subOrderId: string, status: string) =>
     api.patch(`/orders/sub-orders/${subOrderId}/status`, { status }),
+  removeItem: (orderId: string, itemId: string) => api.delete(`/orders/${orderId}/items/${itemId}`),
   getHistory: () => api.get('/orders/history/rider'),
 };
 

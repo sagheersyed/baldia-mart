@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker, Circle } from 'react-native-maps';
 import * as Location from 'expo-location';
+import { useNetInfo } from '@react-native-community/netinfo';
 import { socket, ordersApi, ridersApi, settingsApi } from '../api/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -54,6 +55,9 @@ function SwipeToAccept({ onAccept, label = 'Swipe to Accept' }: { onAccept: () =
 
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 export default function DashboardScreen({ navigation }: any) {
+  const netInfo = useNetInfo();
+  const isNetworkOffline = netInfo.isConnected === false;
+  
   const [isOnline, setIsOnline] = useState(false);
   const [pendingOrders, setPendingOrders] = useState<any[]>([]);
   const [activeOrders, setActiveOrders] = useState<any[]>([]);
@@ -89,7 +93,7 @@ export default function DashboardScreen({ navigation }: any) {
 
   // ── Socket lifecycle ────────────────────────────────────────────────
   useEffect(() => {
-    if (!isOnline) { socket.disconnect(); return; }
+    if (!isOnline || isNetworkOffline) { socket.disconnect(); return; }
 
     socket.connect();
     const onConnect = () => {
@@ -131,7 +135,7 @@ export default function DashboardScreen({ navigation }: any) {
       socket.off('orderUpdated', fetchOrders);
       socket.disconnect();
     };
-  }, [isOnline, rider?.id]);
+  }, [isOnline, rider?.id, isNetworkOffline]);
 
   useEffect(() => {
     const checkActiveOrder = async () => {
@@ -246,6 +250,11 @@ export default function DashboardScreen({ navigation }: any) {
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
     <View style={styles.root}>
+      {isNetworkOffline && (
+        <View style={styles.offlineBanner}>
+          <Text style={styles.offlineText}>⚠️ No Internet Connection</Text>
+        </View>
+      )}
       {/* ── Full-screen Map ── */}
       <MapView style={styles.map} region={mapRegion} showsUserLocation showsMyLocationButton={false}>
         {/* Rider marker */}
@@ -335,11 +344,11 @@ export default function DashboardScreen({ navigation }: any) {
             {activeOrders.length > 0 && (
               <View>
                 <Text style={styles.sectionHdr}>Active Deliveries</Text>
-                {activeOrders.map(order => (
+                {activeOrders.filter(o => o?.id).map(order => (
                   <TouchableOpacity
-                    key={order?.id || Math.random().toString()}
+                    key={order.id}
                     style={styles.activeCard}
-                    onPress={() => navigation.navigate('Navigation', { orderId: order?.id })}
+                    onPress={() => navigation.navigate('Navigation', { orderId: order.id })}
                   >
                     <View style={{ flex: 1 }}>
                       <View style={styles.rowGap}>
@@ -369,11 +378,11 @@ export default function DashboardScreen({ navigation }: any) {
                 <Text style={styles.emptyTxt}>Waiting for new delivery requests...</Text>
               </View>
             ) : (
-              visiblePending.map(order => (
+              visiblePending.filter(o => o?.id).map(order => (
                 <TouchableOpacity
-                  key={order?.id || Math.random().toString()}
+                  key={order.id}
                   style={styles.pendingCard}
-                  onPress={() => navigation.navigate('OrderDetails', { orderId: order?.id })}
+                  onPress={() => navigation.navigate('OrderDetails', { orderId: order.id })}
                 >
                   <View style={styles.rowGap}>
                     <Text style={styles.orderId}>#{(order?.id || '').slice(0, 8).toUpperCase()}</Text>
@@ -573,4 +582,11 @@ const styles = StyleSheet.create({
   zoneItemAddr: { fontSize: 12, color: '#888', marginTop: 3 },
   closeZoneBtn: { marginTop: 16, backgroundColor: '#F0F0F0', padding: 14, borderRadius: 14, alignItems: 'center' },
   closeZoneTxt: { fontWeight: 'bold', color: '#666' },
+
+  offlineBanner: {
+    position: 'absolute', top: 50, left: 16, right: 16, zIndex: 999,
+    backgroundColor: '#EF4444', padding: 12, borderRadius: 12,
+    alignItems: 'center', elevation: 5, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }
+  },
+  offlineText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
 });

@@ -112,13 +112,10 @@ export default function MyOrdersScreen({ navigation }: any) {
       setHasMore(newOrders.length === 15);
 
       setOrders(prev => {
-        const updated = shouldAppend ? [...prev, ...newOrders] : newOrders;
-        // Update active orders count for badge based on recent/all fetched
-        const activeCount = updated.filter((o: any) =>
-          ['pending', 'confirmed', 'preparing', 'out_for_delivery'].includes(o.status)
-        ).length;
-        setActiveOrdersCount(activeCount);
-        return updated;
+        if (!shouldAppend) return newOrders;
+        const existingIds = new Set(prev.map((o: any) => o.id));
+        const uniqueNew = newOrders.filter((o: any) => !existingIds.has(o.id));
+        return [...prev, ...uniqueNew];
       });
     } catch (error) {
       console.error('Failed to fetch orders:', error);
@@ -127,7 +124,7 @@ export default function MyOrdersScreen({ navigation }: any) {
       setLoadingMore(false);
       setRefreshing(false);
     }
-  }, [setActiveOrdersCount, refreshing]);
+  }, [refreshing]);
 
   useFocusEffect(
     useCallback(() => {
@@ -135,6 +132,13 @@ export default function MyOrdersScreen({ navigation }: any) {
       fetchOrders(1, false);
     }, [fetchOrders])
   );
+
+  useEffect(() => {
+    const activeCount = orders.filter((o: any) =>
+      ['pending', 'confirmed', 'preparing', 'out_for_delivery'].includes(o.status)
+    ).length;
+    setActiveOrdersCount(activeCount);
+  }, [orders, setActiveOrdersCount]);
 
   useEffect(() => {
     let socket: any;

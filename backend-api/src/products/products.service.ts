@@ -10,15 +10,48 @@ export class ProductsService {
     private productRepository: Repository<Product>,
   ) {}
 
-  async findAllActive(): Promise<Product[]> {
+  async findAllActive(page?: number, limit?: number): Promise<any> {
+    if (page && limit) {
+      const take = Number(limit);
+      const skip = (Number(page) - 1) * take;
+      const [data, total] = await this.productRepository.findAndCount({
+        where: { isActive: true },
+        relations: ['category', 'brand'],
+        take,
+        skip,
+      });
+      return { data, total, page: Number(page), limit: take, totalPages: Math.ceil(total / take) };
+    }
     return this.productRepository.find({ where: { isActive: true }, relations: ['category', 'brand'] });
   }
 
-  async findByCategory(categoryId: string): Promise<Product[]> {
+  async findByCategory(categoryId: string, page?: number, limit?: number): Promise<any> {
+    if (page && limit) {
+      const take = Number(limit);
+      const skip = (Number(page) - 1) * take;
+      const [data, total] = await this.productRepository.findAndCount({
+        where: { categoryId, isActive: true },
+        relations: ['category', 'brand'],
+        take,
+        skip,
+      });
+      return { data, total, page: Number(page), limit: take, totalPages: Math.ceil(total / take) };
+    }
     return this.productRepository.find({ where: { categoryId, isActive: true }, relations: ['category', 'brand'] });
   }
 
-  async findByBrand(brandId: string): Promise<Product[]> {
+  async findByBrand(brandId: string, page?: number, limit?: number): Promise<any> {
+    if (page && limit) {
+      const take = Number(limit);
+      const skip = (Number(page) - 1) * take;
+      const [data, total] = await this.productRepository.findAndCount({
+        where: { brandId, isActive: true },
+        relations: ['category'],
+        take,
+        skip,
+      });
+      return { data, total, page: Number(page), limit: take, totalPages: Math.ceil(total / take) };
+    }
     return this.productRepository.find({ where: { brandId, isActive: true }, relations: ['category'] });
   }
 

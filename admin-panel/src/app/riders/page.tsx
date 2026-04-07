@@ -23,7 +23,7 @@ interface Rider {
   createdAt: string;
 }
 
-const API_URL = 'https://00ad-175-107-236-228.ngrok-free.app/api/v1/riders';
+const API_URL = 'http://localhost:3000/api/v1/riders';
 
 export default function RidersPage() {
   const [riders, setRiders] = useState<Rider[]>([]);
