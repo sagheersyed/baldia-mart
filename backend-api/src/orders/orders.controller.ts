@@ -34,9 +34,17 @@ export class OrdersController {
   }
 
   @Get('history')
-  async getHistory(@Req() req: Request) {
+  async getHistory(
+    @Req() req: Request,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string
+  ) {
     const user = req.user as any;
-    return this.ordersService.getOrderHistory(user.id);
+    return this.ordersService.getOrderHistory(
+      user.id,
+      page ? parseInt(page, 10) : 1,
+      limit ? parseInt(limit, 10) : 20
+    );
   }
 
   @Get('history/rider')

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Alert,
   ActivityIndicator, ScrollView, Linking, Platform, Vibration,
-  Animated, PanResponder, Dimensions,
+  Animated, PanResponder, Dimensions, FlatList
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,6 +23,11 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 };
+
+const handleSelectMart = async (mart: any) => {
+
+}
+
 
 // ─── Swipe-to-Confirm Slider ──────────────────────────────────────────────────
 function SwipeToConfirm({ onConfirm, label }: { onConfirm: () => void; label: string }) {
@@ -347,7 +352,7 @@ export default function NavigationScreen({ navigation, route }: any) {
     const customerLabel = encodeURIComponent(order?.address?.label || 'Customer');
     const dest = `${customerCoords.latitude},${customerCoords.longitude}`;
     const waypts = pickupStops.map(s => `${s.coords.latitude},${s.coords.longitude}`).join('|');
-    
+
     if (Platform.OS === 'android') {
       if (pickupStops.length === 1) {
         // Single stop: origin -> stop -> customer with destination label
@@ -443,7 +448,7 @@ export default function NavigationScreen({ navigation, route }: any) {
 
       {/* ── Route Legend strip ── */}
       <View style={styles.routeLegend}>
-        {pickupStops.map((stop, i) => (
+        {/* {pickupStops.map((stop, i) => (
           <React.Fragment key={stop.id}>
             <View style={styles.legendStep}>
               <View style={styles.legendNum}><Text style={styles.legendNumTxt}>{stop.stopNum}</Text></View>
@@ -451,7 +456,22 @@ export default function NavigationScreen({ navigation, route }: any) {
             </View>
             <Text style={styles.legendArrow}>›</Text>
           </React.Fragment>
-        ))}
+        ))} */}
+        <FlatList
+          horizontal
+          data={pickupStops}
+          keyExtractor={item => item.id}
+          renderItem={({ item }) => (
+            <React.Fragment key={item.id}>
+              <View style={styles.legendStep}>
+                <View style={styles.legendNum}><Text style={styles.legendNumTxt}>{item.stopNum}</Text></View>
+                <Text style={styles.legendTxt} numberOfLines={1}>{item.name}</Text>
+              </View>
+              <Text style={styles.legendArrow}>›</Text>
+            </React.Fragment>
+          )}
+        />
+
         <View style={styles.legendStep}>
           <View style={[styles.legendNum, { backgroundColor: '#27ae60' }]}>
             <Text style={styles.legendNumTxt}>{dropoffStopNum}</Text>
@@ -497,9 +517,7 @@ export default function NavigationScreen({ navigation, route }: any) {
             {Object.entries(
               order.items.reduce((acc: any, item: any) => {
                 const sub = order.subOrders?.find((s: any) => s.id === item.subOrderId);
-                const gName = (isFood || item.menuItem)
-                  ? (sub?.restaurant?.name || item.menuItem?.restaurant?.name || order.restaurant?.name || 'Restaurant')
-                  : 'Baldia Mart';
+                const gName = sub?.vendor?.name || sub?.restaurant?.name || item.product?.brand?.name || item.menuItem?.restaurant?.name || order.restaurant?.name || 'Baldia Mart';
                 if (!acc[gName]) acc[gName] = { items: [], subOrderId: item.subOrderId, status: sub?.status };
                 acc[gName].items.push(item);
                 return acc;

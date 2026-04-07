@@ -91,7 +91,7 @@ export const productsApi = {
 
 export const ordersApi = {
   checkout: (data: any) => api.post('/orders/checkout', data),
-  getHistory: () => api.get(`/orders/history?_t=${Date.now()}`),
+  getHistory: (page: number = 1, limit: number = 20) => api.get(`/orders/history?page=${page}&limit=${limit}&_t=${Date.now()}`),
   getById: (orderId: string) => api.get(`/orders/${orderId}`),
   updateStatus: (orderId: string, status: string) =>
     api.put(`/orders/${orderId}/status`, { status }),

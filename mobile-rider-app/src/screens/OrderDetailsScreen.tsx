@@ -70,28 +70,37 @@ export default function OrderDetailsScreen({ route, navigation }: any) {
               </View>
             )}
           </View>
-          {order.orderType === 'food' ? (
-             order.subOrders && order.subOrders.length > 0 ? (
-                 order.subOrders.map((sub: any, idx: number) => (
-                    <View key={sub.id || idx} style={{ marginBottom: order.subOrders.length > 1 ? 15 : 0 }}>
-                       <Text style={styles.customerName}>
-                          👨‍🍳 {order.subOrders.length > 1 ? `[Stop ${idx + 1}] ` : ''}{sub.restaurant?.name || 'Restaurant'}
-                       </Text>
-                       <Text style={styles.address}>📍 {sub.restaurant?.location}</Text>
-                    </View>
-                 ))
-             ) : order.restaurant ? (
+          {(() => {
+            if (order.subOrders?.length > 0) {
+              return order.subOrders.map((sub: any, idx: number) => {
+                const entity = sub.restaurant || sub.vendor;
+                if (!entity) return null;
+                return (
+                  <View key={sub.id || idx} style={{ marginBottom: order.subOrders.length > 1 ? 15 : 0 }}>
+                    <Text style={styles.customerName}>
+                      {order.orderType === 'food' ? '👨‍🍳 ' : '🏬 '}
+                      {order.subOrders.length > 1 ? `[Stop ${idx + 1}] ` : ''}{entity.name}
+                    </Text>
+                    <Text style={styles.address}>📍 {entity.location || entity.address || 'Local area'}</Text>
+                  </View>
+                );
+              });
+            }
+            if (order.restaurant) {
+               return (
                  <>
                    <Text style={styles.customerName}>👨‍🍳 {order.restaurant.name}</Text>
                    <Text style={styles.address}>📍 {order.restaurant.location}</Text>
                  </>
-             ) : null
-          ) : (
-            <>
-              <Text style={styles.customerName}>🏬 Baldia Mart</Text>
-              <Text style={styles.address}>📍 Main Colony, Baldia Town</Text>
-            </>
-          )}
+               );
+            }
+            return (
+              <>
+                <Text style={styles.customerName}>🏬 Baldia Mart</Text>
+                <Text style={styles.address}>📍 Main Colony, Baldia Town</Text>
+              </>
+            );
+          })()}
         </View>
 
         <View style={styles.section}>
@@ -106,9 +115,8 @@ export default function OrderDetailsScreen({ route, navigation }: any) {
           {order.items && (
             Object.entries(
               order.items.reduce((acc: any, item: any) => {
-                const groupName = (order.orderType === 'food' || item.menuItem) 
-                  ? (item.menuItem?.restaurant?.name || order.restaurant?.name || 'Restaurant')
-                  : 'Baldia Mart';
+                const sub = order.subOrders?.find((s: any) => s.id === item.subOrderId);
+                const groupName = sub?.vendor?.name || sub?.restaurant?.name || item.product?.brand?.name || item.menuItem?.restaurant?.name || order.restaurant?.name || 'Baldia Mart';
                 if (!acc[groupName]) acc[groupName] = [];
                 acc[groupName].push(item);
                 return acc;

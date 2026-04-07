@@ -134,6 +134,7 @@ export default function HomeScreen({ navigation }: any) {
   const [address, setAddress] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [showAllCats, setShowAllCats] = useState(false);
 
   // ── Load Data ──
   const loadData = useCallback(async () => {
@@ -351,13 +352,13 @@ export default function HomeScreen({ navigation }: any) {
             <Text style={{ marginHorizontal: 16, marginBottom: 12, fontSize: 17, fontWeight: '700', color: '#111' }}>
               Shop by Category
             </Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catsRow}>
+            <View style={styles.catsGrid}>
               <CatPill
                 cat={{ id: null, name: 'All', imageUrl: null }}
                 isSelected={!selectedCatId}
                 onPress={() => setSelectedCatId(null)}
               />
-              {displayCats.map(c => (
+              {(showAllCats ? displayCats : displayCats.slice(0, 6)).map(c => (
                 <CatPill
                   key={c.id}
                   cat={c}
@@ -365,7 +366,15 @@ export default function HomeScreen({ navigation }: any) {
                   onPress={() => setSelectedCatId(selectedCatId === c.id ? null : c.id)}
                 />
               ))}
-            </ScrollView>
+              {displayCats.length > 6 && (
+                <TouchableOpacity style={styles.catPill} onPress={() => setShowAllCats(!showAllCats)} activeOpacity={0.8}>
+                  <View style={styles.catIconBox}>
+                    <Text style={{ fontSize: 20 }}>{showAllCats ? '⬆️' : '⬇️'}</Text>
+                  </View>
+                  <Text style={styles.catPillText}>{showAllCats ? 'Less' : 'More'}</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
         )}
         {/* ─ PRODUCTS ─ */}
@@ -539,13 +548,14 @@ const styles = StyleSheet.create({
 
 
   // Categories
+  catsGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 12, justifyContent: 'flex-start', paddingTop: 4 },
   catsRow: { paddingLeft: 16, paddingRight: 8, paddingBottom: 4 },
-  catPill: { alignItems: 'center', marginRight: 14, width: 68 },
-  catIconBox: { width: 60, height: 60, borderRadius: 16, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: '#F0F0F0', overflow: 'hidden', marginBottom: 6, elevation: 2, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 3 },
+  catPill: { alignItems: 'center', marginBottom: 16, width: (SCREEN_WIDTH - 24) / 4 },
+  catIconBox: { width: 56, height: 56, borderRadius: 14, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: '#F0F0F0', overflow: 'hidden', marginBottom: 6, elevation: 2, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 3 },
   catIconBoxActive: { borderColor: '#FF4500', backgroundColor: '#FFF5F0' },
   catIcon: { width: '100%', height: '100%' },
   catEmoji: { fontSize: 26 },
-  catPillText: { fontSize: 11, fontWeight: '600', color: '#666', textAlign: 'center' },
+  catPillText: { fontSize: 11, fontWeight: '600', color: '#666', textAlign: 'center', paddingHorizontal: 2 },
   catPillTextActive: { color: '#FF4500' },
 
   // Products Grid

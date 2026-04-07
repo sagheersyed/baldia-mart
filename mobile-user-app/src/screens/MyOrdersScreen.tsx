@@ -94,32 +94,45 @@ export default function MyOrdersScreen({ navigation }: any) {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [activeFilter, setActiveFilter] = useState('All');
 
   const filters = ['All', 'Pending', 'Confirmed', 'Preparing', 'Out for Delivery', 'Delivered', 'Cancelled'];
 
-  const fetchOrders = useCallback(async () => {
+  const fetchOrders = useCallback(async (pageNum = 1, shouldAppend = false) => {
     try {
-      const res = await ordersApi.getHistory();
-      const orderList = res.data || [];
-      setOrders(orderList);
+      if (pageNum === 1 && !refreshing) setLoading(true);
+      else if (pageNum > 1) setLoadingMore(true);
 
-      // Update active orders count for badge
-      const activeCount = orderList.filter((o: any) =>
-        ['pending', 'confirmed', 'preparing', 'out_for_delivery'].includes(o.status)
-      ).length;
-      setActiveOrdersCount(activeCount);
+      const res = await ordersApi.getHistory(pageNum, 15);
+      const newOrders = res.data || [];
+      
+      setHasMore(newOrders.length === 15);
+
+      setOrders(prev => {
+        const updated = shouldAppend ? [...prev, ...newOrders] : newOrders;
+        // Update active orders count for badge based on recent/all fetched
+        const activeCount = updated.filter((o: any) =>
+          ['pending', 'confirmed', 'preparing', 'out_for_delivery'].includes(o.status)
+        ).length;
+        setActiveOrdersCount(activeCount);
+        return updated;
+      });
     } catch (error) {
       console.error('Failed to fetch orders:', error);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
       setRefreshing(false);
     }
-  }, [setActiveOrdersCount]);
+  }, [setActiveOrdersCount, refreshing]);
 
   useFocusEffect(
     useCallback(() => {
-      fetchOrders();
+      setPage(1);
+      fetchOrders(1, false);
     }, [fetchOrders])
   );
 
@@ -145,7 +158,8 @@ export default function MyOrdersScreen({ navigation }: any) {
 
         socket.on('orderStatusUpdated', (data: any) => {
           console.log('MyOrders: Received order update:', data);
-          fetchOrders();
+          setPage(1);
+          fetchOrders(1, false);
         });
       } catch (e) {
         console.error('Socket setup error:', e);
@@ -161,8 +175,17 @@ export default function MyOrdersScreen({ navigation }: any) {
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    fetchOrders();
+    setPage(1);
+    fetchOrders(1, false);
   }, [fetchOrders]);
+
+  const handleLoadMore = () => {
+    if (!loadingMore && hasMore) {
+      const nextPage = page + 1;
+      setPage(nextPage);
+      fetchOrders(nextPage, true);
+    }
+  };
 
   const handleTrack = (orderId: string) => {
     navigation.navigate('OrderTracking', { orderId });
@@ -257,6 +280,9 @@ export default function MyOrdersScreen({ navigation }: any) {
           contentContainerStyle={{ padding: 16 }}
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FF4500" />}
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={loadingMore ? <ActivityIndicator size="small" color="#FF4500" style={{ margin: 10 }} /> : null}
           renderItem={({ item }) => (
             <OrderCard
               order={item}

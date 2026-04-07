@@ -577,7 +577,7 @@ export class OrdersService {
       .getMany();
   }
 
-  async getOrderHistory(userId: string): Promise<Order[]> {
+  async getOrderHistory(userId: string, page = 1, limit = 20): Promise<Order[]> {
     return this.ordersRepository.createQueryBuilder('order')
       .leftJoinAndSelect('order.items', 'items')
       .leftJoinAndSelect('items.product', 'product')
@@ -587,7 +587,8 @@ export class OrdersService {
       .where('order.userId = :userId', { userId })
       .orderBy('order.createdAt', 'DESC')
       .withDeleted()
-      .take(50)
+      .skip((page - 1) * limit)
+      .take(limit)
       .getMany();
   }
 
