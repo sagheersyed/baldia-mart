@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import { isBusinessOpen } from '../utils/helpers';
 import { useOrderTracking } from '../hooks/useOrderTracking';
+import { generateReceiptPDF, printReceipt } from '../utils/receiptGenerator';
 
 export default function OrderTrackingScreen({ route, navigation }: any) {
   const { orderId } = route.params;
@@ -84,13 +85,15 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
         {status === 'cancelled' ? (
           <View style={styles.cancelledBanner}>
             <Text style={styles.cancelledIcon}>🛑</Text>
-            <Text style={styles.cancelledTitle}>Order Cancelled by You</Text>
+            <Text style={styles.cancelledTitle}>Order Cancelled</Text>
             <Text style={styles.cancelledSubtitle}>
-              You cancelled this order. If this was a mistake, you can reorder below.
+              {order?.notes || 'This order was cancelled. Please try reordering or contact support.'}
             </Text>
-            <TouchableOpacity style={styles.reorderBtn} onPress={handleReorder}>
-              <Text style={styles.reorderBtnText}>🔄  Reorder</Text>
-            </TouchableOpacity>
+            {!order?.notes?.includes('missing') && (
+              <TouchableOpacity style={styles.reorderBtn} onPress={handleReorder}>
+                <Text style={styles.reorderBtnText}>🔄 Reorder Now</Text>
+              </TouchableOpacity>
+            )}
           </View>
         ) : (
           <View style={styles.premiumStatusCard}>
@@ -103,7 +106,6 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
                 <Text style={styles.typeTagText}>{order?.orderType === 'food' ? '🍽️ FOOD' : '🛒 MART'}</Text>
               </View>
             </View>
-
             <View style={styles.mainStatusContent}>
               <Text style={styles.statusHighlight}>
                 {steps[currentStepIndex]?.label || 'Processing...'}
@@ -111,6 +113,22 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
               <Text style={styles.statusSubtext}>
                 {steps[currentStepIndex]?.description}
               </Text>
+              {status === 'delivered' && (
+                <View style={styles.receiptActionRow}>
+                  <TouchableOpacity 
+                    style={[styles.receiptDownloadBtn, { flex: 1, marginRight: 8, backgroundColor: '#FF450015' }]} 
+                    onPress={() => generateReceiptPDF(order)}
+                  >
+                    <Text style={[styles.receiptDownloadText, { color: '#FF4500' }]}>📤 Share</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[styles.receiptDownloadBtn, { flex: 1, backgroundColor: '#1A1A1A', borderColor: '#1A1A1A' }]} 
+                    onPress={() => printReceipt(order)}
+                  >
+                    <Text style={[styles.receiptDownloadText, { color: '#fff' }]}>🖨️ View / Print</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
 
             <View style={styles.progressBarBg}>
@@ -119,7 +137,7 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
           </View>
         )}
 
-        {order?.subOrders && order.subOrders.length > 1 && (
+        {order?.subOrders && order.subOrders.length > 1 && order.orderType === 'food' && (
           <View style={[styles.subOrderCard]}>
             <View style={styles.subOrderHeader}>
               <Text style={styles.subOrderTitle}>
@@ -212,7 +230,7 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
                 coordinate={{ latitude: Number(order?.address?.latitude || 24.9144), longitude: Number(order?.address?.longitude || 66.9748) }}
                 title={order?.address?.label || 'Delivery Address'} description="Your delivery location" pinColor="#22C55E"
               />
-              {order?.subOrders?.map((sub: any, idx: number) => {
+              {order?.orderType === 'food' && order?.subOrders?.map((sub: any, idx: number) => {
                 const entity = sub.restaurant || sub.vendor;
                 if (!entity) return null;
                 const lat = Number(entity.latitude || entity.lat || 0);
@@ -234,50 +252,55 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
         {order && order.items && order.items.length > 0 && (
           <View style={styles.summaryCard}>
             <Text style={styles.summaryTitle}>Order Summary</Text>
-            {Object.entries(
-              localItems.reduce((acc: any, item: any) => {
-                const sub = order.subOrders?.find((s: any) => s.id === item.subOrderId);
-                const groupName = sub?.vendor?.name || sub?.restaurant?.name || item.product?.brand?.name || item.menuItem?.restaurant?.name || order.restaurant?.name || 'Baldia Mart';
-                if (!acc[groupName]) acc[groupName] = [];
-                acc[groupName].push(item);
-                return acc;
-              }, {})
-            ).map(([groupName, items]: [any, any], groupIdx) => (
-              <View key={groupIdx} style={{ marginBottom: 10 }}>
-                <Text style={styles.groupHeader}>{groupName}</Text>
-                {items.map((item: any) => (
-                  <View key={item.id} style={styles.itemRow}>
+            
+            {/* Active Items Section */}
+            {localItems.filter((i: any) => i.status !== 'missing').map((itemValue: any) => (
+              <View key={itemValue.id} style={styles.itemRow}>
+                <View style={styles.itemInfo}>
+                  <Text style={styles.itemName}>
+                    {itemValue.menuItem?.name || itemValue.product?.name || 'Item'}
+                  </Text>
+                  <Text style={styles.itemPrice}>Rs. {itemValue.priceAtTime} x {itemValue.quantity}</Text>
+                </View>
+                {(status === 'pending' || status === 'confirmed') && order.orderType === 'mart' ? (
+                  <View style={styles.quantityControls}>
+                    <TouchableOpacity
+                      style={styles.qtyBtn}
+                      onPress={() => handleUpdateQuantityLocal(itemValue.id, itemValue.quantity - 1)}
+                    >
+                      <Text style={styles.qtyBtnText}>-</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.qtyText}>{itemValue.quantity}</Text>
+                    <TouchableOpacity
+                      style={styles.qtyBtn}
+                      onPress={() => handleUpdateQuantityLocal(itemValue.id, itemValue.quantity + 1)}
+                    >
+                      <Text style={styles.qtyBtnText}>+</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <Text style={styles.itemName}>{itemValue.quantity}x</Text>
+                )}
+              </View>
+            ))}
+
+            {/* Missing Items Section */}
+            {order.items.filter((i: any) => i.status === 'missing').length > 0 && (
+              <View style={{ marginTop: 20 }}>
+                <Text style={[styles.summaryTitle, { color: '#E53E3E', fontSize: 13 }]}>⚠️ Missing Items (Not Charged)</Text>
+                {order.items.filter((i: any) => i.status === 'missing').map((itemValue: any) => (
+                  <View key={itemValue.id} style={[styles.itemRow, { opacity: 0.6 }]}>
                     <View style={styles.itemInfo}>
-                      <Text style={styles.itemName}>
-                        {order?.orderType === 'food'
-                          ? (item.menuItem?.name || 'Dish')
-                          : (item.product?.name || 'Item')}
+                      <Text style={[styles.itemName, { textDecorationLine: 'line-through' }]}>
+                        {itemValue.menuItem?.name || itemValue.product?.name || 'Item'}
                       </Text>
-                      <Text style={styles.itemPrice}>Rs. {item.priceAtTime} x {item.quantity}</Text>
+                      <Text style={styles.itemPrice}>Marked as missing by rider</Text>
                     </View>
-                    {(status === 'pending' || status === 'confirmed') && order?.orderType !== 'food' ? (
-                      <View style={styles.quantityControls}>
-                        <TouchableOpacity
-                          style={styles.qtyBtn}
-                          onPress={() => handleUpdateQuantityLocal(item.id, item.quantity - 1)}
-                        >
-                          <Text style={styles.qtyBtnText}>-</Text>
-                        </TouchableOpacity>
-                        <Text style={styles.qtyText}>{item.quantity}</Text>
-                        <TouchableOpacity
-                          style={styles.qtyBtn}
-                          onPress={() => handleUpdateQuantityLocal(item.id, item.quantity + 1)}
-                        >
-                          <Text style={styles.qtyBtnText}>+</Text>
-                        </TouchableOpacity>
-                      </View>
-                    ) : (
-                      <Text style={styles.itemName}>{item.quantity}x</Text>
-                    )}
+                    <Text style={[styles.itemName, { color: '#E53E3E', fontWeight: 'bold' }]}>MISSING</Text>
                   </View>
                 ))}
               </View>
-            ))}
+            )}
 
             {(status === 'pending' || status === 'confirmed') && order?.orderType !== 'food' && (
               <View style={styles.summaryActionsRow}>
@@ -720,5 +743,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20, paddingTop: 16, paddingBottom: 10,
   },
   map: { width: '100%', height: 220 },
-
+  receiptDownloadBtn: {
+    backgroundColor: '#FF450015',
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    borderRadius: 12,
+    marginTop: 15,
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: '#FF450030',
+  },
+  receiptDownloadText: {
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  receiptActionRow: { flexDirection: 'row', marginTop: 10, width: '100%', paddingHorizontal: 0 },
 });

@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  ActivityIndicator, RefreshControl, Alert
+  ActivityIndicator, RefreshControl, Alert, ScrollView
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useCart } from '../context/CartContext';
 import { ordersApi, authApi } from '../api/api';
 import io from 'socket.io-client';
+import { generateReceiptPDF, printReceipt } from '../utils/receiptGenerator';
+import SkeletonLoader from '../components/SkeletonLoader';
 
 const BASE_IP = 'https://00ad-175-107-236-228.ngrok-free.app';
 const SOCKET_URL = BASE_IP;
@@ -43,7 +45,11 @@ function OrderCard({ order, onTrack, onCancel }: any) {
           <Text style={styles.orderDate}>{formatDate(order.createdAt)}</Text>
         </View>
         <View style={[styles.statusBadge, { backgroundColor: cfg.bg }]}>
-          <Text style={[styles.statusText, { color: cfg.color }]}>{cfg.icon} {cfg.label}</Text>
+          <Text style={[styles.statusText, { color: cfg.color }]}>
+            {order.status === 'cancelled' && order.notes?.includes('missing') 
+              ? '❌ STOCK OUT' 
+              : `${cfg.icon} ${cfg.label}`}
+          </Text>
         </View>
       </View>
       <View style={styles.orderTypeRow}>
@@ -55,9 +61,25 @@ function OrderCard({ order, onTrack, onCancel }: any) {
       </View>
       <View style={styles.orderDivider} />
       <View style={styles.orderBody}>
-        <Text style={styles.orderItems} numberOfLines={1}>
-          {firstItem}{itemCount > 1 ? ` + ${itemCount - 1} more` : ''}
-        </Text>
+        <View style={{ flex: 1 }}>
+          {order.items.filter((i: any) => i.status !== 'missing').map((item: any, idx: number) => (
+            <Text key={item.id || idx} style={styles.orderItems} numberOfLines={1}>
+              {item.quantity}x {item.product?.name || item.menuItem?.name || 'Item'}
+            </Text>
+          )).slice(0, 2)}
+          {order.items.filter((i: any) => i.status !== 'missing').length > 2 && (
+            <Text style={[styles.orderItems, { fontSize: 11, color: '#999' }]}>
+              + {order.items.filter((i: any) => i.status !== 'missing').length - 2} more items
+            </Text>
+          )}
+
+          {/* Missing Items Indicator */}
+          {order.items.some((i: any) => i.status === 'missing') && (
+            <Text style={{ fontSize: 11, color: '#E53E3E', fontWeight: 'bold', marginTop: 4 }}>
+              ⚠️ Missing items reported
+            </Text>
+          )}
+        </View>
         <Text style={styles.orderTotal}>Rs. {(Number(order.total) || 0).toFixed(0)}</Text>
       </View>
       {order.address && (
@@ -85,6 +107,22 @@ function OrderCard({ order, onTrack, onCancel }: any) {
           </TouchableOpacity>
         )}
       </View>
+      {order.status === 'delivered' && (
+        <View style={styles.cardReceiptRow}>
+          <TouchableOpacity 
+            style={[styles.receiptBtn, { flex: 1, marginRight: 8 }]} 
+            onPress={() => generateReceiptPDF(order)}
+          >
+            <Text style={styles.receiptBtnText}>📤 Share</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.receiptBtn, { flex: 1, backgroundColor: '#1A1A1A', borderColor: '#1A1A1A' }]} 
+            onPress={() => printReceipt(order)}
+          >
+            <Text style={[styles.receiptBtnText, { color: '#fff' }]}>🖨️ View/Print</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }
@@ -224,11 +262,41 @@ export default function MyOrdersScreen({ navigation }: any) {
 
   if (loading && !refreshing) {
     return (
-      <View style={styles.loader}>
-        <ActivityIndicator size="large" color="#FF4500" />
-      </View>
+      <SafeAreaView style={styles.container}>
+        {/* Header Skeleton */}
+        <View style={styles.header}>
+           <SkeletonLoader width={150} height={24} />
+        </View>
+
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 16 }}>
+           <View style={{ paddingHorizontal: 16, marginBottom: 12 }}>
+             <SkeletonLoader width={100} height={16} />
+           </View>
+           {[...Array(3)].map((_, i) => (
+              <View key={i} style={[styles.orderCard, { marginHorizontal: 16, marginBottom: 16 }]}>
+                 <View style={styles.orderHeader}>
+                    <SkeletonLoader width={80} height={20} />
+                    <SkeletonLoader width={80} height={24} borderRadius={12} />
+                 </View>
+                 <SkeletonLoader width={120} height={14} style={{ marginVertical: 8 }} />
+                 <View style={styles.orderDivider} />
+                 <View style={styles.orderBody}>
+                    <View style={{ flex: 1 }}>
+                       <SkeletonLoader width="70%" height={16} style={{ marginBottom: 6 }} />
+                       <SkeletonLoader width="50%" height={16} />
+                    </View>
+                    <SkeletonLoader width={60} height={20} />
+                 </View>
+                 <View style={styles.orderActions}>
+                    <SkeletonLoader width="100%" height={40} borderRadius={10} />
+                 </View>
+              </View>
+           ))}
+        </ScrollView>
+      </SafeAreaView>
     );
   }
+
 
   const filteredOrders = activeFilter === 'All'
     ? orders
@@ -359,4 +427,16 @@ const styles = StyleSheet.create({
   emptySubtitle: { fontSize: 14, color: '#888', textAlign: 'center', lineHeight: 20 },
   shopBtn: { marginTop: 24, backgroundColor: '#FF4500', paddingHorizontal: 32, paddingVertical: 14, borderRadius: 14 },
   shopBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  receiptBtn: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#FF4500',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  receiptBtnText: { color: '#FF4500', fontWeight: 'bold', fontSize: 13 },
+  cardReceiptRow: { flexDirection: 'row', marginTop: 12 },
 });

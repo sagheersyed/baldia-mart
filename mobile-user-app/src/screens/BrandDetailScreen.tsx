@@ -6,6 +6,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { brandsApi, productsApi, categoriesApi } from '../api/api';
 import { useCart } from '../context/CartContext';
 import { isBusinessOpen } from '../utils/helpers';
+import SkeletonLoader from '../components/SkeletonLoader';
 
 const ProductCard = memo(({ prod, cartQty, onAdd, brandClosed }: { prod: any; cartQty: number; onAdd: (p: any) => void; brandClosed: boolean }) => {
   const productClosed = !isBusinessOpen(prod.openingTime, prod.closingTime);
@@ -104,11 +105,45 @@ export default function BrandDetailScreen({ navigation, route }: any) {
 
   if (loading) {
     return (
-      <View style={styles.loaderContainer}>
-        <ActivityIndicator size="large" color="#FF4500" />
-      </View>
+      <SafeAreaView style={styles.container}>
+        {/* Header Skeleton */}
+        <View style={styles.header}>
+           <SkeletonLoader width={40} height={40} borderRadius={20} />
+           <SkeletonLoader width={150} height={22} />
+           <SkeletonLoader width={40} height={40} borderRadius={20} />
+        </View>
+
+        <ScrollView showsVerticalScrollIndicator={false}>
+           {/* Banner Skeleton */}
+           <View style={styles.brandBannerContainer}>
+              <SkeletonLoader width="100%" height="100%" borderRadius={10} />
+           </View>
+
+           {/* Categories Skeleton */}
+           <View style={styles.catBar}>
+              <View style={{ flexDirection: 'row', paddingHorizontal: 15 }}>
+                 {[...Array(4)].map((_, i) => (
+                    <SkeletonLoader key={i} width={100} height={34} borderRadius={20} style={{ marginRight: 10 }} />
+                 ))}
+              </View>
+           </View>
+
+           {/* Product Grid Skeleton */}
+           <View style={styles.productsGrid}>
+              {[...Array(4)].map((_, i) => (
+                 <View key={i} style={[styles.prodCard, { padding: 12 }]}>
+                    <SkeletonLoader width="100%" height={100} borderRadius={10} style={{ marginBottom: 10 }} />
+                    <SkeletonLoader width="80%" height={16} style={{ marginBottom: 4 }} />
+                    <SkeletonLoader width="40%" height={18} style={{ marginBottom: 10 }} />
+                    <SkeletonLoader width="100%" height={34} borderRadius={8} />
+                 </View>
+              ))}
+           </View>
+        </ScrollView>
+      </SafeAreaView>
     );
   }
+
 
   return (
     <SafeAreaView style={styles.container}>

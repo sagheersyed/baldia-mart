@@ -40,8 +40,11 @@ export class OrderItem {
   @Column()
   quantity: number;
 
-  @Column('decimal', { name: 'price_at_time', precision: 10, scale: 2 })
+  @Column({ name: 'price_at_time', type: 'decimal', precision: 10, scale: 2 })
   priceAtTime: number;
+
+  @Column({ default: 'active' })
+  status: string; // active, missing
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, memo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, memo, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   ScrollView, ActivityIndicator, RefreshControl, FlatList, Dimensions
@@ -139,12 +139,18 @@ export default function HomeScreen({ navigation }: any) {
   const [refreshing, setRefreshing] = useState(false);
   const [showAllCats, setShowAllCats] = useState(false);
 
+  // Pagination State
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const PAGE_LIMIT = 6;
+
   // ── Load Data ──
   const loadData = useCallback(async () => {
     try {
       const [catRes, prodRes, addrRes, brandRes, zonesRes] = await Promise.all([
         categoriesApi.getAll('mart'),
-        productsApi.getAll(),
+        productsApi.getAll(1, PAGE_LIMIT),
         addressesApi.getAll().catch(() => ({ data: [] })),
         brandsApi.getAll('mart').catch(() => ({ data: [] })),
         deliveryZonesApi.getActive().catch(() => ({ data: [] })),
@@ -168,7 +174,10 @@ export default function HomeScreen({ navigation }: any) {
       const bannerRes = await bannersApi.getBySection('mart', zoneId).catch(() => ({ data: [] }));
 
       setCategories(catRes.data || []);
-      setProducts((prodRes.data || []).filter((p: any) => p.isActive !== false));
+      const newProds = (prodRes.data || []).filter((p: any) => p.isActive !== false);
+      setProducts(newProds);
+      setHasMore(newProds.length >= PAGE_LIMIT);
+      setPage(1);
       setBrands((brandRes.data || []).filter((b: any) => b.isActive !== false));
       setBanners(bannerRes.data || []);
       setAddress(currentAddr);
@@ -179,6 +188,29 @@ export default function HomeScreen({ navigation }: any) {
       setRefreshing(false);
     }
   }, []);
+
+  const loadMoreProducts = useCallback(async () => {
+    if (loadingMore || !hasMore || selectedCatId) return; // Disable pagination while filtering by category for now (simpler)
+
+    setLoadingMore(true);
+    try {
+      const nextPage = page + 1;
+      const res = await productsApi.getAll(nextPage, PAGE_LIMIT);
+      const newProds = (res.data || []).filter((p: any) => p.isActive !== false);
+
+      if (newProds.length > 0) {
+        setProducts(prev => [...prev, ...newProds]);
+        setPage(nextPage);
+        setHasMore(newProds.length >= PAGE_LIMIT);
+      } else {
+        setHasMore(false);
+      }
+    } catch (e) {
+      console.error('Failed to load more products:', e);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadingMore, hasMore, page, selectedCatId]);
 
   useFocusEffect(useCallback(() => {
     setActiveMode('mart');
@@ -219,7 +251,10 @@ export default function HomeScreen({ navigation }: any) {
   }, []));
 
 
-  const onRefresh = useCallback(() => { setRefreshing(true); loadData(); }, [loadData]);
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadData();
+  }, [loadData]);
 
   const handleAddToCart = (prod: any) => {
     if ((prod.stock ?? prod.stockQuantity ?? 1) <= 0) return;
@@ -238,6 +273,126 @@ export default function HomeScreen({ navigation }: any) {
     ? `${address.label ? address.label + ', ' : ''}${address.streetAddress?.substring(0, 28) || ''}`
     : 'Select your location';
 
+  // ── Renders (Hooks must be called at top level) ──
+  const headerContent = useMemo(() => (
+    <>
+      {/* ── Rotating Banner Carousel ── */}
+      <BannerCarousel
+        banners={banners}
+        autoScrollInterval={5000}
+        fallbackBanner={{
+          id: 'mart-fallback',
+          title: 'Welcome to BaldiaMart',
+          subtitle: 'Get 20% off on your first order. Use code: FIRST20',
+          tagLabel: '🎉 New Users',
+          backgroundColor: '#FF4500',
+          textColor: '#fff',
+        }}
+        onPress={(b: any) => {
+          if (b.linkType === 'product' && b.linkId) {
+            const product = products.find(p => p.id === b.linkId);
+            if (product) handleAddToCart(product);
+          } else if (b.linkType === 'brand' && b.linkId) {
+            const brand = brands.find(br => br.id === b.linkId);
+            if (brand) navigation.navigate('BrandDetail', { brandId: brand.id });
+          } else if (b.linkType === 'category' && b.linkId) {
+            setSelectedCatId(b.linkId);
+          } else if (b.linkType === 'restaurant' && b.linkId) {
+            navigation.navigate('RestaurantDetail', { restaurantId: b.linkId });
+          }
+        }}
+      />
+
+      {/* ─ BRANDS ─ */}
+      {brands.length > 0 && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Top Brands</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('BrandsList')}>
+              <Text style={styles.seeAll}>See All</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.brandsRow}>
+            {brands.map(b => (
+              <BrandChip key={b.id} brand={b} onPress={() => navigation.navigate('BrandDetail', { brandId: b.id })} />
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
+      {/* ─ CATEGORIES ─ */}
+      {displayCats.length > 0 && (
+        <View style={styles.section}>
+          <Text style={{ marginHorizontal: 16, marginBottom: 12, fontSize: 17, fontWeight: '700', color: '#111' }}>
+            Shop by Category
+          </Text>
+          <View style={styles.catsGrid}>
+            <CatPill
+              cat={{ id: null, name: 'All', imageUrl: null }}
+              isSelected={!selectedCatId}
+              onPress={() => setSelectedCatId(null)}
+            />
+            {(showAllCats ? displayCats : displayCats.slice(0, 6)).map(c => (
+              <CatPill
+                key={c.id}
+                cat={c}
+                isSelected={selectedCatId === c.id}
+                onPress={() => setSelectedCatId(selectedCatId === c.id ? null : c.id)}
+              />
+            ))}
+            {displayCats.length > 6 && (
+              <TouchableOpacity style={styles.catPill} onPress={() => setShowAllCats(!showAllCats)} activeOpacity={0.8}>
+                <View style={styles.catIconBox}>
+                  <Text style={{ fontSize: 20 }}>{showAllCats ? '⬆️' : '⬇️'}</Text>
+                </View>
+                <Text style={styles.catPillText}>{showAllCats ? 'Less' : 'More'}</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      )}
+
+      {/* ─ Best Sellers Title ─ */}
+      <View style={[styles.section, { marginBottom: 0 }]}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Best Sellers</Text>
+        </View>
+      </View>
+    </>
+  ), [banners, brands, displayCats, selectedCatId, showAllCats, handleAddToCart, navigation, setSelectedCatId, setShowAllCats, showAllCats]);
+
+  const renderProduct = useCallback(({ item: prod }: { item: any }) => (
+    <ProductCard
+      key={prod.id}
+      prod={prod}
+      cartQty={martCart.find((c: any) => c.id === prod.id)?.quantity || 0}
+      onAdd={handleAddToCart}
+      isFav={isFavourite(prod.id, 'products')}
+      onToggleFav={() => toggleFavourite(
+        {
+          id: prod.id,
+          name: prod.name,
+          imageUrl: prod.imageUrl,
+          price: prod.price,
+          discount: prod.discount,
+          category: prod.category,
+          brand: prod.brand,
+          openingTime: prod.openingTime,
+          closingTime: prod.closingTime
+        },
+        'products'
+      )}
+    />
+  ), [martCart, isFavourite, toggleFavourite, handleAddToCart]);
+
+  const renderFooter = useCallback(() => (
+    loadingMore ? (
+      <View style={{ paddingVertical: 20 }}>
+        <ActivityIndicator color="#FF4500" />
+      </View>
+    ) : null
+  ), [loadingMore]);
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -251,7 +406,7 @@ export default function HomeScreen({ navigation }: any) {
             </View>
           </View>
           <View style={{ marginBottom: 10 }}>
-             <SkeletonLoader width={200} height={16} />
+            <SkeletonLoader width={200} height={16} />
           </View>
           <SkeletonLoader width="100%" height={46} borderRadius={12} style={{ marginBottom: 12 }} />
         </View>
@@ -259,7 +414,7 @@ export default function HomeScreen({ navigation }: any) {
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
           {/* Banner Skeleton */}
           <View style={{ margin: 16 }}>
-             <SkeletonLoader width="100%" height={120} borderRadius={20} />
+            <SkeletonLoader width="100%" height={120} borderRadius={20} />
           </View>
 
           {/* Categories Skeleton */}
@@ -268,8 +423,8 @@ export default function HomeScreen({ navigation }: any) {
             <View style={styles.catsGrid}>
               {[...Array(8)].map((_, i) => (
                 <View key={i} style={{ alignItems: 'center', marginBottom: 16, width: (SCREEN_WIDTH - 24) / 4 }}>
-                   <SkeletonLoader width={56} height={56} borderRadius={14} style={{ marginBottom: 6 }} />
-                   <SkeletonLoader width={40} height={12} />
+                  <SkeletonLoader width={56} height={56} borderRadius={14} style={{ marginBottom: 6 }} />
+                  <SkeletonLoader width={40} height={12} />
                 </View>
               ))}
             </View>
@@ -278,20 +433,20 @@ export default function HomeScreen({ navigation }: any) {
           {/* Products Skeleton */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-               <SkeletonLoader width={100} height={20} />
+              <SkeletonLoader width={100} height={20} />
             </View>
             <View style={styles.productsGrid}>
-               {[...Array(4)].map((_, i) => (
-                 <View key={i} style={[styles.prodCard, { padding: 12 }]}>
-                    <SkeletonLoader width="100%" height={110} borderRadius={14} style={{ marginBottom: 10 }} />
-                    <SkeletonLoader width="80%" height={16} style={{ marginBottom: 4 }} />
-                    <SkeletonLoader width="50%" height={12} style={{ marginBottom: 14 }} />
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-                       <SkeletonLoader width={60} height={18} />
-                       <SkeletonLoader width={32} height={32} borderRadius={16} />
-                    </View>
-                 </View>
-               ))}
+              {[...Array(4)].map((_, i) => (
+                <View key={i} style={[styles.prodCard, { padding: 12 }]}>
+                  <SkeletonLoader width="100%" height={110} borderRadius={14} style={{ marginBottom: 10 }} />
+                  <SkeletonLoader width="80%" height={16} style={{ marginBottom: 4 }} />
+                  <SkeletonLoader width="50%" height={12} style={{ marginBottom: 14 }} />
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                    <SkeletonLoader width={60} height={18} />
+                    <SkeletonLoader width={32} height={32} borderRadius={16} />
+                  </View>
+                </View>
+              ))}
             </View>
           </View>
         </ScrollView>
@@ -299,19 +454,19 @@ export default function HomeScreen({ navigation }: any) {
     );
   }
 
+
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* ── HEADER ── */}
       <View style={styles.header}>
         <View style={styles.headerRow}>
-          {/* Logo + App Name */}
           <View style={styles.logoArea}>
             <Text style={styles.appName}>
               <Text style={styles.appNameBold}>Baldia</Text>
               <Text style={styles.appNameAccent}>Mart</Text>
             </Text>
           </View>
-          {/* Right icons */}
           <View style={styles.headerIcons}>
             <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Notifications')}>
               <Text style={styles.iconEmoji}>🔔</Text>
@@ -327,7 +482,6 @@ export default function HomeScreen({ navigation }: any) {
           </View>
         </View>
 
-        {/* Location Row */}
         <TouchableOpacity style={styles.locationRow} onPress={() => navigation.navigate('SavedAddresses')}>
           <Text style={styles.deliveryLabel}>Delivering to</Text>
           <View style={styles.locationInner}>
@@ -337,7 +491,6 @@ export default function HomeScreen({ navigation }: any) {
           </View>
         </TouchableOpacity>
 
-        {/* Search Bar */}
         <TouchableOpacity
           style={styles.searchBar}
           activeOpacity={0.85}
@@ -348,128 +501,37 @@ export default function HomeScreen({ navigation }: any) {
             Search groceries, daily essentials...
           </Text>
         </TouchableOpacity>
-
       </View>
 
-      {/* ── CONTENT ── */}
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FF4500" colors={['#FF4500']} />}
+      {/* ── CONTENT (Virtualized FlatList) ── */}
+      <FlatList
+        data={displayProducts}
+        keyExtractor={item => item.id}
+        renderItem={renderProduct}
+        numColumns={2}
+        columnWrapperStyle={{ paddingHorizontal: 10, justifyContent: 'space-between' }}
+        ListHeaderComponent={headerContent}
+        ListFooterComponent={renderFooter}
+        onEndReached={loadMoreProducts}
+        onEndReachedThreshold={0.5}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#FF4500"
+            colors={['#FF4500']}
+          />
+        }
         contentContainerStyle={{ paddingBottom: 100 }}
-      >
-        {/* ── Rotating Banner Carousel ── */}
-        <BannerCarousel
-          banners={banners}
-          autoScrollInterval={5000}
-          fallbackBanner={{
-            id: 'mart-fallback',
-            title: 'Welcome to BaldiaMart',
-            subtitle: 'Get 20% off on your first order. Use code: FIRST20',
-            tagLabel: '🎉 New Users',
-            backgroundColor: '#FF4500',
-            textColor: '#fff',
-          }}
-          onPress={(b: any) => {
-            if (b.linkType === 'product' && b.linkId) {
-              const product = products.find(p => p.id === b.linkId);
-              if (product) handleAddToCart(product);
-            } else if (b.linkType === 'brand' && b.linkId) {
-              const brand = brands.find(br => br.id === b.linkId);
-              if (brand) navigation.navigate('BrandDetail', { brandId: brand.id });
-            } else if (b.linkType === 'category' && b.linkId) {
-              setSelectedCatId(b.linkId);
-            } else if (b.linkType === 'restaurant' && b.linkId) {
-              navigation.navigate('RestaurantDetail', { restaurantId: b.linkId });
-            }
-          }}
-        />
-
-        {/* ─ BRANDS ─ */}
-        {brands.length > 0 && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Top Brands</Text>
-              <TouchableOpacity onPress={() => navigation.navigate('BrandsList')}>
-                <Text style={styles.seeAll}>See All</Text>
-              </TouchableOpacity>
-            </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.brandsRow}>
-              {brands.map(b => (
-                <BrandChip key={b.id} brand={b} onPress={() => navigation.navigate('BrandDetail', { brandId: b.id })} />
-              ))}
-            </ScrollView>
-          </View>
-        )}
-
-        {/* ─ CATEGORIES ─ */}
-        {displayCats.length > 0 && (
-          <View style={styles.section}>
-            <Text style={{ marginHorizontal: 16, marginBottom: 12, fontSize: 17, fontWeight: '700', color: '#111' }}>
-              Shop by Category
-            </Text>
-            <View style={styles.catsGrid}>
-              <CatPill
-                cat={{ id: null, name: 'All', imageUrl: null }}
-                isSelected={!selectedCatId}
-                onPress={() => setSelectedCatId(null)}
-              />
-              {(showAllCats ? displayCats : displayCats.slice(0, 6)).map(c => (
-                <CatPill
-                  key={c.id}
-                  cat={c}
-                  isSelected={selectedCatId === c.id}
-                  onPress={() => setSelectedCatId(selectedCatId === c.id ? null : c.id)}
-                />
-              ))}
-              {displayCats.length > 6 && (
-                <TouchableOpacity style={styles.catPill} onPress={() => setShowAllCats(!showAllCats)} activeOpacity={0.8}>
-                  <View style={styles.catIconBox}>
-                    <Text style={{ fontSize: 20 }}>{showAllCats ? '⬆️' : '⬇️'}</Text>
-                  </View>
-                  <Text style={styles.catPillText}>{showAllCats ? 'Less' : 'More'}</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
-        )}
-        {/* ─ PRODUCTS ─ */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Best Sellers</Text>
-          </View>
-          {displayProducts.length === 0 ? (
+        showsVerticalScrollIndicator={false}
+        ListEmptyComponent={() => (
+          !loading && displayProducts.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyStateText}>No items found</Text>
             </View>
-          ) : (
-            <View style={styles.productsGrid}>
-              {displayProducts.map(prod => (
-                <ProductCard
-                  key={prod.id}
-                  prod={prod}
-                  cartQty={martCart.find((c: any) => c.id === prod.id)?.quantity || 0}
-                  onAdd={handleAddToCart}
-                  isFav={isFavourite(prod.id, 'products')}
-                  onToggleFav={() => toggleFavourite(
-                    {
-                      id: prod.id,
-                      name: prod.name,
-                      imageUrl: prod.imageUrl,
-                      price: prod.price,
-                      discount: prod.discount,
-                      category: prod.category,
-                      brand: prod.brand,
-                      openingTime: prod.openingTime,
-                      closingTime: prod.closingTime
-                    },
-                    'products'
-                  )}
-                />
-              ))}
-            </View>
-          )}
-        </View>
-      </ScrollView>
+          ) : null
+        )}
+      />
     </SafeAreaView>
   );
 }
@@ -616,7 +678,7 @@ const styles = StyleSheet.create({
   // Products Grid
   productsGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 10 },
   prodCard: {
-    width: (SCREEN_WIDTH - 44) / 2,
+    flex: 1,
     backgroundColor: '#fff',
     borderRadius: 18,
     padding: 12,

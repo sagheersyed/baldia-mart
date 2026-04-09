@@ -718,13 +718,21 @@ export class OrdersService {
     return updatedOrder;
   }
 
-  async removeOrderItem(orderId: string, itemId: string, userId: string): Promise<Order> {
+  async removeOrderItem(orderId: string, itemId: string, requesterId: string, requesterRole?: string): Promise<Order> {
     const order = await this.ordersRepository.findOne({
-      where: { id: orderId, userId },
+      where: { id: orderId },
       relations: ['items'],
     });
 
-    if (!order) throw new NotFoundException('Order not found or access denied');
+    if (!order) throw new NotFoundException('Order not found');
+
+    const isOwner = order.userId === requesterId;
+    const isAssignedRider = order.riderId === requesterId;
+    const isRiderInFlow = requesterRole === 'rider' && (order.status === 'pending' || order.status === 'confirmed');
+
+    if (!isOwner && !isAssignedRider && !isRiderInFlow) {
+      throw new NotFoundException('Order not found or access denied');
+    }
 
     if (order.orderType === 'food') {
       throw new BadRequestException('Food order items cannot be removed after checkout.');
@@ -738,33 +746,38 @@ export class OrdersService {
     const itemToRemove = order.items.find(i => i.id === itemId);
     if (!itemToRemove) throw new NotFoundException('Item not found in this order');
 
-    const itemTotal = Number(itemToRemove.priceAtTime) * itemToRemove.quantity;
+    // Mark as missing instead of deleting
+    itemToRemove.status = 'missing';
+    await this.orderItemsRepository.save(itemToRemove);
 
-    // Delete item
-    await this.orderItemsRepository.delete(itemId);
+    // Recalculate totals based on active items only
+    const activeItems = order.items.filter(i => i.status === 'active' || i.id === itemId ? i.status === 'active' : true); 
+    // Wait, it's easier to just fetch them again
+    const allItems = await this.orderItemsRepository.find({ where: { orderId: order.id } });
+    const remainingActiveItems = allItems.filter(i => i.status === 'active');
 
-    // Update order totals
-    order.subtotal = Number(order.subtotal) - itemTotal;
-    order.total = Number(order.total) - itemTotal;
+    let newSubtotal = 0;
+    remainingActiveItems.forEach(i => {
+      newSubtotal += Number(i.priceAtTime) * i.quantity;
+    });
 
-    // Re-fetch items to check if empty
-    const remainingItems = await this.orderItemsRepository.find({ where: { orderId } });
-    if (remainingItems.length === 0) {
+    order.subtotal = newSubtotal;
+    // Total includes delivery fee + subtotal
+    order.total = newSubtotal + Number(order.deliveryFee);
+
+    if (remainingActiveItems.length === 0) {
       order.status = 'cancelled';
-      order.total = 0;
-      order.subtotal = 0;
-      this.ordersGateway.emitOrderStatusUpdate(orderId, 'cancelled');
+      order.notes = (order.notes ? order.notes + '\n' : '') + 'Cancelled: All items marked as missing.';
+      order.total = 0; 
+      // Keep subtotal as 0 but keep delivery fee record if needed? 
+      // Usually if cancelled, total is effectively 0.
+      this.ordersGateway.emitOrderStatusUpdate(orderId, 'cancelled', order.userId, order.riderId);
     }
 
     const updatedOrder = await this.ordersRepository.save(order);
 
-    if (remainingItems.length === 0) {
-      await this.ordersRepository.delete(orderId);
-      return { ...updatedOrder, deleted: true } as any;
-    }
-
     // Notify tracking screen and rider
-    await this.emitUpdateNotifications(orderId, updatedOrder.status, userId, updatedOrder.riderId);
+    await this.emitUpdateNotifications(orderId, updatedOrder.status, requesterId, updatedOrder.riderId);
 
     return updatedOrder;
   }

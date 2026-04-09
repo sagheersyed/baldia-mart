@@ -7,6 +7,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ordersApi } from '../api/api';
+import SkeletonLoader from '../components/SkeletonLoader';
 
 const STATUS_ICONS: Record<string, string> = {
   pending:          '📝',
@@ -82,11 +83,31 @@ export default function NotificationsScreen({ navigation }: any) {
 
   if (loading) {
     return (
-      <View style={styles.loader}>
-        <ActivityIndicator size="large" color="#FF4500" />
-      </View>
+      <SafeAreaView style={styles.container}>
+        {/* Header Skeleton */}
+        <View style={styles.header}>
+           <SkeletonLoader width={40} height={40} borderRadius={20} />
+           <SkeletonLoader width={150} height={22} />
+           <View style={{ width: 40 }} />
+        </View>
+
+        <View style={{ padding: 16 }}>
+           <SkeletonLoader width={120} height={16} style={{ marginBottom: 16 }} />
+           {[...Array(5)].map((_, i) => (
+              <View key={i} style={[styles.item, { padding: 14, marginBottom: 10 }]}>
+                 <SkeletonLoader width={46} height={46} borderRadius={23} style={{ marginRight: 14 }} />
+                 <View style={{ flex: 1 }}>
+                    <SkeletonLoader width="60%" height={16} style={{ marginBottom: 6 }} />
+                    <SkeletonLoader width="90%" height={14} style={{ marginBottom: 4 }} />
+                    <SkeletonLoader width="30%" height={12} />
+                 </View>
+              </View>
+           ))}
+        </View>
+      </SafeAreaView>
     );
   }
+
 
   return (
     <SafeAreaView style={styles.container}>

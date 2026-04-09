@@ -150,7 +150,7 @@ export class OrdersController {
     @Param('itemId', ParseUUIDPipe) itemId: string
   ) {
     const user = req.user as any;
-    return this.ordersService.removeOrderItem(orderId, itemId, user.id);
+    return this.ordersService.removeOrderItem(orderId, itemId, user.id, user.role);
   }
 
   @Patch(':id/items')

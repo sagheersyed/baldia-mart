@@ -9,6 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { ordersApi, socket } from '../api/api';
+import { generateReceiptPDF, printReceipt } from '../utils/receiptGenerator';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const DEFAULT_MART = { latitude: 24.91522600, longitude: 66.96431980 };
@@ -346,7 +347,7 @@ export default function NavigationScreen({ navigation, route }: any) {
   const handleReportMissing = (itemId: string, itemName: string) => {
     Alert.alert(
       'Report Missing Item',
-      `Are you sure ${itemName} is missing? This will remove it from the order and adjust the COD total.`,
+      `Are you sure ${itemName} is missing? This will adjust the order total and notify the customer.`,
       [
         { text: 'Cancel', style: 'cancel' },
         { 
@@ -355,7 +356,7 @@ export default function NavigationScreen({ navigation, route }: any) {
           onPress: async () => {
             try {
                await ordersApi.removeItem(orderId, itemId);
-               Alert.alert('Success', 'Item removed correctly.');
+               Alert.alert('Success', 'Item marked as missing.');
                await refreshOrder();
             } catch (e) { Alert.alert('Error', 'Failed to report item missing'); }
           }
@@ -536,15 +537,16 @@ export default function NavigationScreen({ navigation, route }: any) {
               order.items.reduce((acc: any, item: any) => {
                 const sub = order.subOrders?.find((s: any) => s.id === item.subOrderId);
                 const gName = sub?.vendor?.name || sub?.restaurant?.name || item.product?.brand?.name || item.menuItem?.restaurant?.name || order.restaurant?.name || 'Baldia Mart';
-                if (!acc[gName]) acc[gName] = { items: [], subOrderId: item.subOrderId, status: sub?.status };
-                acc[gName].items.push(item);
+                if (!acc[gName]) acc[gName] = { active: [], missing: [], subOrderId: item.subOrderId, status: sub?.status };
+                if (item.status === 'missing') acc[gName].missing.push(item);
+                else acc[gName].active.push(item);
                 return acc;
               }, {})
             ).map(([gName, group]: [any, any], gIdx) => (
-              <View key={gIdx} style={{ marginBottom: 10 }}>
+              <View key={gIdx} style={{ marginBottom: 15 }}>
                 <View style={styles.groupHeader}>
                   <Text style={styles.groupName}>{gName}</Text>
-                  {group.subOrderId && group.status !== 'picked_up' && group.status !== 'delivered' && (
+                  {group.subOrderId && group.status !== 'picked_up' && group.status !== 'delivered' && group.active.length > 0 && (
                     <TouchableOpacity style={styles.pickupChip} onPress={() => handlePickUpSubOrder(group.subOrderId)}>
                       <Text style={styles.pickupChipTxt}>PICKED UP ✓</Text>
                     </TouchableOpacity>
@@ -553,7 +555,9 @@ export default function NavigationScreen({ navigation, route }: any) {
                     <View style={styles.pickedChip}><Text style={styles.pickedChipTxt}>✅ DONE</Text></View>
                   )}
                 </View>
-                {group.items.map((item: any, idx: number) => {
+                
+                {/* Active Items */}
+                {group.active.map((item: any, idx: number) => {
                   const itemName = item.product?.name || item.menuItem?.name || 'Item';
                   return (
                     <View key={idx} style={[styles.itemRow, { justifyContent: 'space-between' }]}>
@@ -570,10 +574,24 @@ export default function NavigationScreen({ navigation, route }: any) {
                     </View>
                   );
                 })}
+
+                {/* Missing Items */}
+                {group.missing.map((item: any, idx: number) => {
+                  const itemName = item.product?.name || item.menuItem?.name || 'Item';
+                  return (
+                    <View key={`miss-${idx}`} style={[styles.itemRow, { justifyContent: 'space-between', opacity: 0.5 }]}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                        <Text style={[styles.itemQty, { color: '#666' }]}>{item.quantity}x</Text>
+                        <Text style={[styles.itemName, { flex: 1, marginRight: 5, textDecorationLine: 'line-through' }]} numberOfLines={1}>{itemName}</Text>
+                        <Text style={[styles.itemPrice, { color: '#C53030', fontSize: 10 }]}>MISSING</Text>
+                      </View>
+                    </View>
+                  );
+                })}
               </View>
             ))}
             <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Total (COD)</Text>
+              <Text style={styles.totalLabel}>Total (COD Collection)</Text>
               <Text style={styles.totalVal}>Rs {order.total}</Text>
             </View>
           </ScrollView>
@@ -586,10 +604,20 @@ export default function NavigationScreen({ navigation, route }: any) {
             : <SwipeToConfirm onConfirm={handleSwipeConfirm} label={statusLabel} />
         ) : (
           <View>
-            <View style={styles.completedBadge}>
-              <Text style={styles.completedTxt}>
-                {status === 'cancelled' ? '🛑 Order Cancelled' : '✅ Order Successfully Delivered'}
+            <View style={[styles.completedBadge, status === 'cancelled' && { backgroundColor: '#FFF5F5' }]}>
+              <Text style={[styles.completedTxt, status === 'cancelled' && { color: '#C53030' }]}>
+                {status === 'cancelled' 
+                  ? (order.notes?.includes('missing') ? '🛑 All items missing - Order Cancelled' : '🛑 Order Cancelled')
+                  : '✅ Order Successfully Delivered'}
               </Text>
+            </View>
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
+              <TouchableOpacity style={[styles.receiptSuccessBtn, { flex: 1, marginTop: 0 }]} onPress={() => generateReceiptPDF(order)}>
+                <Text style={styles.receiptSuccessBtnTxt}>📤 Share</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.receiptSuccessBtn, { flex: 1, marginTop: 0, backgroundColor: '#1A1A1A', borderColor: '#1A1A1A' }]} onPress={() => printReceipt(order)}>
+                <Text style={[styles.receiptSuccessBtnTxt, { color: '#fff' }]}>🖨️ View/Print</Text>
+              </TouchableOpacity>
             </View>
             <TouchableOpacity style={styles.closeBtn} onPress={() => navigation.replace('Main')}>
               <Text style={styles.closeBtnTxt}>Return to Dashboard</Text>
@@ -673,4 +701,15 @@ const styles = StyleSheet.create({
   completedTxt: { color: '#27ae60', fontSize: 15, fontWeight: '800' },
   closeBtn: { backgroundColor: '#1A1A1A', height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', marginTop: 12 },
   closeBtnTxt: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  receiptSuccessBtn: {
+    backgroundColor: '#FF450015',
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#FF450030',
+  },
+  receiptSuccessBtnTxt: { color: '#FF4500', fontSize: 15, fontWeight: '700' },
 });

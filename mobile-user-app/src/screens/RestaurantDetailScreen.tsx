@@ -9,6 +9,7 @@ import { restaurantsApi, menuItemsApi, normalizeUrl } from '../api/api';
 import { useCart } from '../context/CartContext';
 import { useFavourites } from '../hooks/useFavourites';
 import { formatRatingCount, isBusinessOpen } from '../utils/helpers';
+import SkeletonLoader from '../components/SkeletonLoader';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_W = (SCREEN_WIDTH - 44) / 2;
@@ -117,11 +118,57 @@ export default function RestaurantDetailScreen({ route, navigation }: any) {
 
   if (loading) {
     return (
-      <View style={styles.loader}>
-        <ActivityIndicator size="large" color="#FF4500" />
-      </View>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        {/* Header Skeleton */}
+        <View style={styles.header}>
+           <SkeletonLoader width={40} height={40} borderRadius={20} />
+           <View style={styles.headerCenter}>
+              <SkeletonLoader width={32} height={32} borderRadius={8} style={{ marginRight: 8 }} />
+              <SkeletonLoader width={140} height={20} />
+           </View>
+           <SkeletonLoader width={40} height={40} borderRadius={20} style={{ marginRight: 8 }} />
+           <SkeletonLoader width={40} height={40} borderRadius={20} />
+        </View>
+
+        <ScrollView showsVerticalScrollIndicator={false}>
+           {/* Info Banner Skeleton */}
+           <View style={styles.infoBanner}>
+              <View style={styles.infoRow}>
+                 {[...Array(3)].map((_, i) => (
+                    <SkeletonLoader key={i} width={80} height={28} borderRadius={20} />
+                 ))}
+              </View>
+              <SkeletonLoader width="90%" height={16} style={{ marginBottom: 6 }} />
+              <SkeletonLoader width="100%" height={14} style={{ marginBottom: 4 }} />
+              <SkeletonLoader width="100%" height={14} />
+           </View>
+
+           {/* Categories Skeleton */}
+           <View style={{ flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 12 }}>
+              {[...Array(4)].map((_, i) => (
+                 <SkeletonLoader key={i} width={70} height={34} borderRadius={20} style={{ marginRight: 8 }} />
+              ))}
+           </View>
+
+           {/* Grid Skeleton */}
+           <View style={styles.grid}>
+              {[...Array(4)].map((_, i) => (
+                 <View key={i} style={[styles.menuCard, { padding: 12 }]}>
+                    <SkeletonLoader width="100%" height={120} borderRadius={14} style={{ marginBottom: 10 }} />
+                    <SkeletonLoader width="30%" height={10} style={{ marginBottom: 4 }} />
+                    <SkeletonLoader width="80%" height={16} style={{ marginBottom: 10 }} />
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                       <SkeletonLoader width="50%" height={18} />
+                       <SkeletonLoader width={32} height={32} borderRadius={16} />
+                    </View>
+                 </View>
+              ))}
+           </View>
+        </ScrollView>
+      </SafeAreaView>
     );
   }
+
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>

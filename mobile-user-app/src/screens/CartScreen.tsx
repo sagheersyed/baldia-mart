@@ -7,7 +7,7 @@ import { useFocusEffect } from '@react-navigation/native';
 
 export default function CartScreen({ navigation, route }: any) {
   const { martCart, foodCart, updateQuantity, removeFromCart, getCartTotal, activeMode: contextMode, setActiveMode } = useCart();
-  
+
   const mode = contextMode || 'mart';
   const cart = mode === 'mart' ? martCart : foodCart;
 
@@ -57,8 +57,8 @@ export default function CartScreen({ navigation, route }: any) {
     }
     return cart.reduce((acc: any, item: any) => {
       const rid = item.restaurantId || 'unknown';
-      if (!acc[rid]) acc[rid] = { 
-        name: item.restaurantName || item.restaurant?.name || 'Restaurant', 
+      if (!acc[rid]) acc[rid] = {
+        name: item.restaurantName || item.restaurant?.name || 'Restaurant',
         items: [],
         maxPrep: 0
       };
@@ -197,7 +197,7 @@ const styles = StyleSheet.create({
   qtyBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF5F0', borderRadius: 12, padding: 4, borderWidth: 1, borderColor: '#FFE4D1' },
   qtyBtn: { fontSize: 20, color: '#FF4500', paddingHorizontal: 12, fontWeight: 'bold' },
   qtyText: { fontSize: 16, fontWeight: '900', color: '#1a1a1a', marginHorizontal: 2 },
-  summaryBox: { backgroundColor: '#fff', padding: 20, borderRadius: 25, marginTop: 10, borderWidth: 1, borderColor: '#f1f1f1', marginBottom: 5 },
+  summaryBox: { backgroundColor: '#fff', padding: 20, borderRadius: 25, marginTop: 10, borderWidth: 1, borderColor: '#f1f1f1', marginBottom: 35 },
   row: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
   summaryLabel: { color: '#666', fontWeight: '500' },
   summaryVal: { fontWeight: '700', color: '#1a1a1a' },

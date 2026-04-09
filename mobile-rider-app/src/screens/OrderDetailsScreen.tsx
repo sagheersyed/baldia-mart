@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { ordersApi } from '../api/api';
+import { ordersApi, socket } from '../api/api';
+import { generateReceiptPDF, printReceipt } from '../utils/receiptGenerator';
 
 export default function OrderDetailsScreen({ route, navigation }: any) {
   const { orderId } = route.params;
@@ -11,6 +12,20 @@ export default function OrderDetailsScreen({ route, navigation }: any) {
 
   useEffect(() => {
     fetchOrderDetails();
+  }, [orderId]);
+
+  useEffect(() => {
+    socket.connect();
+    const handleUpdate = (data: any) => {
+      if (data.orderId === orderId) {
+        console.log('OrderDetails: Order updated, refreshing...');
+        fetchOrderDetails();
+      }
+    };
+    socket.on('orderUpdated', handleUpdate);
+    return () => {
+      socket.off('orderUpdated', handleUpdate);
+    };
   }, [orderId]);
 
   const fetchOrderDetails = async () => {
@@ -54,6 +69,11 @@ export default function OrderDetailsScreen({ route, navigation }: any) {
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Order Details</Text>
+        {order.status === 'delivered' && (
+          <TouchableOpacity onPress={() => generateReceiptPDF(order)} style={styles.receiptHeaderBtn}>
+            <Ionicons name="document-text-outline" size={22} color="#FF4500" />
+          </TouchableOpacity>
+        )}
       </View>
 
       <ScrollView style={styles.content}>
@@ -87,12 +107,12 @@ export default function OrderDetailsScreen({ route, navigation }: any) {
               });
             }
             if (order.restaurant) {
-               return (
-                 <>
-                   <Text style={styles.customerName}>👨‍🍳 {order.restaurant.name}</Text>
-                   <Text style={styles.address}>📍 {order.restaurant.location}</Text>
-                 </>
-               );
+              return (
+                <>
+                  <Text style={styles.customerName}>👨‍🍳 {order.restaurant.name}</Text>
+                  <Text style={styles.address}>📍 {order.restaurant.location}</Text>
+                </>
+              );
             }
             return (
               <>
@@ -113,33 +133,50 @@ export default function OrderDetailsScreen({ route, navigation }: any) {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Order Items</Text>
           {order.items && (
-            Object.entries(
-              order.items.reduce((acc: any, item: any) => {
-                const sub = order.subOrders?.find((s: any) => s.id === item.subOrderId);
-                const groupName = sub?.vendor?.name || sub?.restaurant?.name || item.product?.brand?.name || item.menuItem?.restaurant?.name || order.restaurant?.name || 'Baldia Mart';
-                if (!acc[groupName]) acc[groupName] = [];
-                acc[groupName].push(item);
-                return acc;
-              }, {})
-            ).map(([groupName, items]: [any, any], groupIdx) => (
-              <View key={groupIdx} style={{ marginBottom: 15 }}>
-                <Text style={styles.groupHeader}>{groupName}</Text>
-                {items.map((item: any, idx: number) => {
-                  const itemName = item.orderType === 'food' || item.menuItem ? item.menuItem?.name : item.product?.name;
-                  return (
-                    <View key={idx} style={styles.itemRow}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.itemText}>{item.quantity}x {itemName || 'Item'}</Text>
-                        {(order.orderType === 'food' || item.menuItem) && item.menuItem?.prepTimeMinutes > 0 && (
-                          <Text style={{ fontSize: 11, color: '#FF8C00', marginTop: 2 }}>⏳ {item.menuItem.prepTimeMinutes} mins prep</Text>
-                        )}
+            <View>
+              {Object.entries(
+                order.items.filter((i: any) => i.status !== 'missing').reduce((acc: any, item: any) => {
+                  const sub = order.subOrders?.find((s: any) => s.id === item.subOrderId);
+                  const groupName = sub?.vendor?.name || sub?.restaurant?.name || item.product?.brand?.name || item.menuItem?.restaurant?.name || order.restaurant?.name || 'Baldia Mart';
+                  if (!acc[groupName]) acc[groupName] = [];
+                  acc[groupName].push(item);
+                  return acc;
+                }, {})
+              ).map(([groupName, items]: [any, any], groupIdx) => (
+                <View key={groupIdx} style={{ marginBottom: 15 }}>
+                  <Text style={styles.groupHeader}>{groupName}</Text>
+                  {items.map((item: any, idx: number) => {
+                    const itemName = item.orderType === 'food' || item.menuItem ? item.menuItem?.name : item.product?.name;
+                    return (
+                      <View key={idx} style={styles.itemRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.itemText}>{item.quantity}x {itemName || 'Item'}</Text>
+                        </View>
+                        <Text style={styles.itemPrice}>Rs. {Number(item.priceAtTime || 0) * item.quantity}</Text>
                       </View>
-                      <Text style={styles.itemPrice}>Rs. {Number(item.priceAtTime || 0) * item.quantity}</Text>
-                    </View>
-                  );
-                })}
-              </View>
-            ))
+                    );
+                  })}
+                </View>
+              ))}
+
+              {/* Missing Items Section (Rider Details) */}
+              {order.items.some((i: any) => i.status === 'missing') && (
+                <View style={{ marginTop: 10, padding: 10, backgroundColor: '#FFF5F5', borderRadius: 10 }}>
+                  <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#C53030', marginBottom: 8 }}>⚠️ Reported Missing</Text>
+                  {order.items.filter((i: any) => i.status === 'missing').map((item: any, idx: number) => {
+                    const itemName = item.orderType === 'food' || item.menuItem ? item.menuItem?.name : item.product?.name;
+                    return (
+                      <View key={idx} style={[styles.itemRow, { marginBottom: 5 }]}>
+                        <Text style={[styles.itemText, { color: '#666', textDecorationLine: 'line-through' }]}>
+                          {item.quantity}x {itemName}
+                        </Text>
+                        <Text style={{ fontSize: 11, color: '#C53030', fontWeight: 'bold' }}>REMOVED</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
           )}
           <View style={styles.divider} />
           <View style={styles.totalRow}>
@@ -151,7 +188,7 @@ export default function OrderDetailsScreen({ route, navigation }: any) {
         <View style={styles.infoBox}>
           <Ionicons name="information-circle-outline" size={20} color="#666" />
           <Text style={styles.infoText}>
-            {order.orderType === 'food' 
+            {order.orderType === 'food'
               ? "Pickup food carefully. Ensure it's hot and packaged well."
               : "Please verify all products with the merchant before picking up."}
           </Text>
@@ -159,17 +196,34 @@ export default function OrderDetailsScreen({ route, navigation }: any) {
       </ScrollView>
 
       <View style={styles.footer}>
-        <TouchableOpacity
-          style={[styles.acceptBtn, accepting && styles.disabledBtn]}
-          onPress={handleAccept}
-          disabled={accepting}
-        >
-          {accepting ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.acceptBtnText}>Accept Order & Navigate</Text>
-          )}
-        </TouchableOpacity>
+        {order.status === 'delivered' ? (
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <TouchableOpacity
+              style={[styles.acceptBtn, { flex: 1, backgroundColor: '#FF450015', borderWidth: 1, borderColor: '#FF4500' }]}
+              onPress={() => generateReceiptPDF(order)}
+            >
+              <Text style={[styles.acceptBtnText, { color: '#FF4500' }]}>📤 Share</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.acceptBtn, { flex: 1, backgroundColor: '#1A1A1A' }]}
+              onPress={() => printReceipt(order)}
+            >
+              <Text style={[styles.acceptBtnText, { color: '#fff' }]}>🖨️ View / Print</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={[styles.acceptBtn, accepting && styles.disabledBtn]}
+            onPress={handleAccept}
+            disabled={accepting}
+          >
+            {accepting ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.acceptBtnText}>Accept Order & Navigate</Text>
+            )}
+          </TouchableOpacity>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -178,7 +232,7 @@ export default function OrderDetailsScreen({ route, navigation }: any) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f9f9f9' },
   header: { backgroundColor: '#1E1E1E', padding: 20, flexDirection: 'row', alignItems: 'center' },
-  backBtn: { marginRight: 15 },
+  backBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#2A2A2A', justifyContent: 'center', alignItems: 'center' },
   headerTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
   loading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   content: { flex: 1, padding: 20 },
@@ -205,5 +259,6 @@ const styles = StyleSheet.create({
   acceptBtn: { backgroundColor: '#FF4500', padding: 18, borderRadius: 15, alignItems: 'center' },
   acceptBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
   disabledBtn: { opacity: 0.7 },
-  typeBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }
+  typeBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
+  receiptHeaderBtn: { marginLeft: 'auto', backgroundColor: '#fff', width: 38, height: 38, borderRadius: 19, justifyContent: 'center', alignItems: 'center' },
 });

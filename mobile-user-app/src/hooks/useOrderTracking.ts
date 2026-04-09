@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import io from 'socket.io-client';
+import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ordersApi, ridersApi, businessReviewsApi, productsApi, menuItemsApi } from '../api/api';
 import { ENV } from '../config/env';
@@ -152,8 +153,14 @@ export function useOrderTracking(orderId: string, navigation: any) {
     if (newQuantity < 0) return;
     const item = localItems.find(i => i.id === itemId);
     if (item && newQuantity > item.quantity) {
-      if (item.product?.maxQuantityPerOrder > 0 && newQuantity > item.product.maxQuantityPerOrder) return;
-      if (newQuantity > item.product?.stockQuantity) return;
+      if (item.product?.maxQuantityPerOrder > 0 && newQuantity > item.product.maxQuantityPerOrder) {
+        Alert.alert('Limit Reached ✋', `Maximum allowed per order is ${item.product.maxQuantityPerOrder} units for ${item.product.name}.`);
+        return;
+      }
+      if (newQuantity > (item.product?.stockQuantity || 0)) {
+        Alert.alert('Out of Stock', 'Sorry, no more stock available for this product.');
+        return;
+      }
     }
     setLocalItems(prev => prev.map(i => i.id === itemId ? { ...i, quantity: newQuantity } : i));
   };

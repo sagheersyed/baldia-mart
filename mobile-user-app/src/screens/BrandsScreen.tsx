@@ -9,6 +9,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { brandsApi, productsApi, normalizeUrl } from '../api/api';
 import { useCart } from '../context/CartContext';
 import { isBusinessOpen } from '../utils/helpers';
+import SkeletonLoader from '../components/SkeletonLoader';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_W = (SCREEN_WIDTH - 48) / 2;
@@ -137,12 +138,37 @@ export default function BrandsScreen({ navigation }: any) {
 
   if (loading) {
     return (
-      <View style={styles.loaderWrap}>
-        <ActivityIndicator size="large" color="#FF4500" />
-        <Text style={styles.loaderTxt}>Loading Brands...</Text>
-      </View>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        {/* Header Skeleton */}
+        <View style={styles.header}>
+           <SkeletonLoader width={40} height={40} borderRadius={20} />
+           <SkeletonLoader width={120} height={24} />
+           <SkeletonLoader width={40} height={40} borderRadius={20} />
+        </View>
+
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+           {/* Hero Banner Skeleton */}
+           <SkeletonLoader width="100%" height={100} borderRadius={20} style={{ marginBottom: 16 }} />
+
+           {/* Brands List Header Skeleton */}
+           <SkeletonLoader width={150} height={16} style={{ marginBottom: 16 }} />
+
+           {/* Brand Grid Skeleton */}
+           <View style={styles.brandGridContainer}>
+             {[...Array(6)].map((_, i) => (
+               <View key={i} style={[styles.brandGridCard, { width: GRID_CARD_W, padding: 16 }]}>
+                 <SkeletonLoader width={85} height={85} borderRadius={20} style={{ marginBottom: 14 }} />
+                 <SkeletonLoader width="80%" height={16} style={{ marginBottom: 6 }} />
+                 <SkeletonLoader width="50%" height={12} style={{ marginBottom: 14 }} />
+                 <SkeletonLoader width="100%" height={34} borderRadius={20} />
+               </View>
+             ))}
+           </View>
+        </ScrollView>
+      </SafeAreaView>
     );
   }
+
 
   // ── Products View (brand selected) ───────────────────────
   if (selectedBrand) {
@@ -318,6 +344,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
+    paddingBottom: 50
   },
 
   // Brand Grid Card (2-per-row)
