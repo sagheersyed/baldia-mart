@@ -6,8 +6,9 @@ import {
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { RidersService } from '../riders/riders.service';
 import { Inject, forwardRef } from '@nestjs/common';
+import { RidersService } from '../riders/riders.service';
+import { OrdersService } from './orders.service';
 
 @WebSocketGateway({
   cors: {
@@ -18,6 +19,8 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
   constructor(
     @Inject(forwardRef(() => RidersService))
     private ridersService: RidersService,
+    @Inject(forwardRef(() => OrdersService))
+    private ordersService: OrdersService,
   ) {}
 
   @WebSocketServer()
@@ -121,5 +124,29 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   emitOrderAccepted(orderId: string) {
     this.server.to('riders_room').emit('orderAccepted', { orderId });
+  }
+
+  @SubscribeMessage('sendMessage')
+  async handleSendMessage(client: Socket, payload: {
+    orderId: string,
+    senderId: string,
+    senderType: string,
+    message?: string,
+    imageUrl?: string,
+    type?: string,
+    metadata?: any,
+    replyToId?: string
+  }) {
+    const { orderId, senderId, senderType, message, imageUrl, type, metadata, replyToId } = payload;
+    
+    // Save to DB
+    const savedMsg = await this.ordersService.saveChatMessage(
+      orderId, senderId, senderType, message, imageUrl, type || 'text', metadata, replyToId
+    );
+
+    // Broadcast to the order room
+    this.server.to(`order_${orderId}`).emit('receiveMessage', savedMsg);
+    
+    console.log(`Chat message from ${senderType} ${senderId} in order_${orderId}`);
   }
 }

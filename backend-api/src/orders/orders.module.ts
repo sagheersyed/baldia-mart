@@ -4,6 +4,7 @@ import { Order } from './order.entity';
 import { OrderItem } from './order-item.entity';
 import { SubOrder } from './sub-order.entity';
 import { OrderHistory } from './order-history.entity';
+import { OrderChatMessage } from './order-chat-message.entity';
 import { OrdersService } from './orders.service';
 import { OrdersController } from './orders.controller';
 import { OrdersGateway } from './orders.gateway';
@@ -15,10 +16,11 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { Rider } from '../riders/rider.entity';
 import { RidersModule } from '../riders/riders.module';
 import { VendorsModule } from '../vendors/vendors.module';
+import { CleanupService } from './cleanup.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Order, OrderItem, OrderHistory, Rider, SubOrder]),
+    TypeOrmModule.forFeature([Order, OrderItem, OrderHistory, Rider, SubOrder, OrderChatMessage]),
     CartModule,
     DeliveryZonesModule,
     AddressesModule,
@@ -27,7 +29,7 @@ import { VendorsModule } from '../vendors/vendors.module';
     forwardRef(() => RidersModule),
     VendorsModule,
   ],
-  providers: [OrdersService, OrdersGateway],
+  providers: [OrdersService, OrdersGateway, CleanupService],
   controllers: [OrdersController],
   exports: [OrdersService, OrdersGateway],
 })

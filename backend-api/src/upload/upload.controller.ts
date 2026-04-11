@@ -9,15 +9,10 @@ export class UploadController {
   constructor(private readonly s3StorageService: S3StorageService) { }
 
   @Post()
-  @UseInterceptors(
-    FileInterceptor('file', ({
-      // We pass an empty object here because the interceptor needs it, 
-      // but we will override its behavior by manually configuring the storage
-    })),
-  )
+  @UseInterceptors(FileInterceptor('file'))
   async uploadFile(@UploadedFile() file: any) {
     // If using multer-s3, file.location is the URL. Otherwise we use local host.
-    const host = process.env.BACKEND_URL || 'https://00ad-175-107-236-228.ngrok-free.app';
+    const host = process.env.BACKEND_URL || 'https://384b-175-107-236-228.ngrok-free.app';
     const url = file.location || `${host}/uploads/${file.filename}`;
 
     return {

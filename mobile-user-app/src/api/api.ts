@@ -1,6 +1,15 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { io } from 'socket.io-client';
 import { ENV } from '../config/env';
+
+export const socket = io(ENV.SOCKET_URL, {
+  autoConnect: false,
+  transports: ['websocket'],
+  reconnection: true,
+  reconnectionAttempts: 10,
+  reconnectionDelay: 1000,
+});
 
 /**
  * Normalizes image and file URLs.
@@ -134,6 +143,7 @@ export const ordersApi = {
   getTimeline: (orderId: string) => api.get(`/orders/${orderId}/timeline`),
   getDeliveryFee: (addressId: string, restaurantId?: string) =>
     api.get(`/orders/preview-fee/${addressId}${restaurantId ? `?restaurantId=${restaurantId}` : ''}`),
+  getChatHistory: (orderId: string) => api.get(`/orders/${orderId}/chat`),
 };
 
 export const settingsApi = {

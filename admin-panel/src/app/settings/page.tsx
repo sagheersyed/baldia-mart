@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { Save, RefreshCw, Truck, ArrowRight, Ruler, Phone, Mail, MapPin, Building2, Shield, ToggleLeft, ToggleRight } from 'lucide-react';
-import { fetchWithAuth } from '@/lib/api';
+import { fetchWithAuth, BASE_URL } from '@/lib/api';
 
-const SETTINGS_API_URL = 'http://localhost:3000/api/v1/settings';
+const SETTINGS_API_URL = `${BASE_URL}/settings`;
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<any>({});
@@ -370,8 +370,8 @@ export default function SettingsPage() {
           </p>
 
           <div className="grid md:grid-cols-2 gap-8">
-            {['feature_show_restaurants', 'feature_show_brands'].map(key => {
-              const label = key.includes('restaurants') ? 'Restaurant Section' : 'Brand Carousel';
+            {['feature_show_mart', 'feature_show_restaurants', 'feature_show_brands'].map(key => {
+              const label = key.includes('mart') ? 'Mart Section' : key.includes('restaurants') ? 'Restaurant Section' : 'Brand Carousel';
               const isEnabled = settings[key] === 'true' || settings[key] === true;
               return (
                 <div key={key} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
@@ -383,6 +383,46 @@ export default function SettingsPage() {
                     disabled={saving}
                     onClick={() => handleUpdate(key, isEnabled ? 'false' : 'true')}
                     className={`transition ${isEnabled ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'} disabled:opacity-50`}
+                  >
+                    {isEnabled ? <ToggleRight size={44} /> : <ToggleLeft size={44} />}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Chat Configuration */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-8">
+        <div className="bg-gray-50 p-6 border-b border-gray-100 flex items-center space-x-3">
+          <Mail className="text-green-600" size={24} />
+          <h2 className="text-xl font-semibold text-gray-800">Chat Features</h2>
+        </div>
+
+        <div className="p-6 space-y-8">
+          <p className="text-sm text-gray-500 bg-green-50 p-4 rounded-xl border border-green-100">
+            <strong>Communication Control:</strong> Enable or disable advanced chat features for Riders and Customers.
+          </p>
+
+          <div className="grid md:grid-cols-2 gap-8">
+            {['feature_chat_enabled', 'chat_enable_replies', 'chat_enable_images'].map(key => {
+              const label = key === 'feature_chat_enabled' ? 'Enable Order Chat' : key.includes('replies') ? 'Message Replies (Quoted)' : 'Image Attachments';
+              const isEnabled = settings[key] === 'true' || settings[key] === true;
+              const isDisabled = key !== 'feature_chat_enabled' && (settings['feature_chat_enabled'] === 'false' || settings['feature_chat_enabled'] === false);
+
+              return (
+                <div key={key} className={`flex items-center justify-between p-4 bg-gray-50 rounded-xl ${isDisabled ? 'opacity-50' : ''}`}>
+                  <div>
+                    <p className="font-semibold text-gray-800">{label}</p>
+                    <p className="text-xs text-gray-500">
+                      {key === 'feature_chat_enabled' ? (isEnabled ? 'Visible in Apps' : 'Hidden from Apps') : (isEnabled ? 'Enabled' : 'Disabled')}
+                    </p>
+                  </div>
+                  <button
+                    disabled={saving || isDisabled}
+                    onClick={() => handleUpdate(key, isEnabled ? 'false' : 'true')}
+                    className={`transition ${isEnabled ? 'text-green-600' : 'text-gray-400 hover:text-gray-600'} disabled:opacity-50`}
                   >
                     {isEnabled ? <ToggleRight size={44} /> : <ToggleLeft size={44} />}
                   </button>

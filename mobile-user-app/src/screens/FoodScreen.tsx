@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { categoriesApi, addressesApi, bannersApi, restaurantsApi, settingsApi, deliveryZonesApi, normalizeUrl } from '../api/api';
+import { categoriesApi, addressesApi, bannersApi, restaurantsApi, settingsApi, deliveryZonesApi, normalizeUrl, socket } from '../api/api';
 import { ENV } from '../config/env';
 import { useFocusEffect } from '@react-navigation/native';
 import io from 'socket.io-client';
@@ -193,10 +193,8 @@ export default function FoodScreen({ navigation }: any) {
   };
 
   useEffect(() => {
-    const socket = io(ENV.SOCKET_URL, {
-      transports: ['websocket'],
-      forceNew: true
-    });
+    if (!socket.connected) socket.connect();
+    
     socket.on('connect', () => console.log('Food: Connected to socket'));
     socket.on('bannersUpdated', async () => {
       console.log('Food: Banners updated remotely, refreshing...');
@@ -209,7 +207,8 @@ export default function FoodScreen({ navigation }: any) {
     });
 
     return () => {
-      socket.disconnect();
+      socket.off('connect');
+      socket.off('bannersUpdated');
     };
   }, []);
 

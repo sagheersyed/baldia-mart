@@ -2,12 +2,14 @@ import { Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Setting } from './setting.entity';
+import { SettingsGateway } from './settings.gateway';
 
 @Injectable()
 export class SettingsService implements OnModuleInit {
   constructor(
     @InjectRepository(Setting)
-    private settingsRepository: Repository<Setting>
+    private settingsRepository: Repository<Setting>,
+    private settingsGateway: SettingsGateway,
   ) { }
 
   async onModuleInit() {
@@ -19,6 +21,14 @@ export class SettingsService implements OnModuleInit {
     await this.seedDefault('delivery_max_radius_km', '10'); // Max delivery zone
     await this.seedDefault('tax_rate_percentage', '1.00');
     await this.seedDefault('multi_restaurant_max_distance_km', '0.4');
+    
+    // Feature Visibility
+    await this.seedDefault('feature_show_mart', 'true');
+    await this.seedDefault('feature_show_restaurants', 'true');
+    await this.seedDefault('feature_show_brands', 'true');
+    await this.seedDefault('feature_chat_enabled', 'true');
+    await this.seedDefault('chat_enable_replies', 'true');
+    await this.seedDefault('chat_enable_images', 'true');
 
     // New Global Configuration
     await this.seedDefault('contact_phone', '+92 300 1234567');
@@ -64,6 +74,12 @@ export class SettingsService implements OnModuleInit {
       auth_customer_google_enabled: (await this.getByKey('auth_customer_google_enabled', 'true')) === 'true',
       auth_rider_mpin_enabled: (await this.getByKey('auth_rider_mpin_enabled', 'true')) === 'true',
       auth_rider_otp_enabled: (await this.getByKey('auth_rider_otp_enabled', 'true')) === 'true',
+      feature_show_mart: (await this.getByKey('feature_show_mart', 'true')) === 'true',
+      feature_show_restaurants: (await this.getByKey('feature_show_restaurants', 'true')) === 'true',
+      feature_show_brands: (await this.getByKey('feature_show_brands', 'true')) === 'true',
+      feature_chat_enabled: (await this.getByKey('feature_chat_enabled', 'true')) === 'true',
+      chat_enable_replies: (await this.getByKey('chat_enable_replies', 'true')) === 'true',
+      chat_enable_images: (await this.getByKey('chat_enable_images', 'true')) === 'true',
     };
   }
 
@@ -93,6 +109,11 @@ export class SettingsService implements OnModuleInit {
     } else {
       setting = this.settingsRepository.create({ key, value });
     }
-    return this.settingsRepository.save(setting);
+    const saved = await this.settingsRepository.save(setting);
+    
+    // Trigger real-time update
+    this.settingsGateway.emitSettingsUpdate();
+    
+    return saved;
   }
 }

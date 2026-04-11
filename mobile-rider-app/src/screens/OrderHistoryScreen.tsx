@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, SafeAreaView } from 'react-native';
-import { ordersApi } from '../api/api';
+import { ordersApi, socket } from '../api/api';
 
 export default function OrderHistoryScreen({ navigation }: any) {
   const [orders, setOrders] = useState<any[]>([]);
@@ -8,6 +8,17 @@ export default function OrderHistoryScreen({ navigation }: any) {
 
   useEffect(() => {
     fetchHistory();
+    
+    if (!socket.connected) socket.connect();
+    
+    const refresh = () => fetchHistory();
+    socket.on('orderStatusUpdated', refresh);
+    socket.on('orderUpdated', refresh);
+
+    return () => {
+      socket.off('orderStatusUpdated', refresh);
+      socket.off('orderUpdated', refresh);
+    };
   }, []);
 
   const fetchHistory = async () => {

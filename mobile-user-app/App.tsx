@@ -10,6 +10,7 @@ import { Text, ActivityIndicator, View } from 'react-native';
 
 import { CartProvider, useCart } from './src/context/CartContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
+import { SettingsProvider, useSettings } from './src/context/SettingsContext';
 import { categoriesApi, productsApi, addressesApi, settingsApi } from './src/api/api';
 
 import LoginScreen from './src/screens/LoginScreen';
@@ -35,6 +36,7 @@ import BrandDetailScreen from './src/screens/BrandDetailScreen';
 import RestaurantDetailScreen from './src/screens/RestaurantDetailScreen';
 import FavouritesScreen from './src/screens/FavouritesScreen';
 import AboutScreen from './src/screens/AboutScreen';
+import OrderChatScreen from './src/screens/OrderChatScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -42,28 +44,14 @@ const Tab = createBottomTabNavigator();
 import { Ionicons } from '@expo/vector-icons';
 
 function MainTabs() {
+  const { settings, loading } = useSettings();
   const { setActiveMode, currentCount, activeOrdersCount } = useCart();
-  const [showFood, setShowFood] = useState(true);
-  const [showBrands, setShowBrands] = useState(true);
+  
+  const showMart = settings?.feature_show_mart === true;
+  const showFood = settings?.feature_show_restaurants === true;
+  const showBrands = settings?.feature_show_brands === true;
 
-  useEffect(() => {
-    const fetchConfigs = async () => {
-      try {
-        const res = await settingsApi.getPublicSettings();
-        if (res.data) {
-          // Default to true if not specified, otherwise follow setting
-          setShowFood(res.data.feature_show_restaurants !== 'false');
-          setShowBrands(res.data.feature_show_brands !== 'false');
-        }
-      } catch (error) {
-        console.error('Failed to fetch feature configs:', error);
-        // On error, keep them visible
-        setShowFood(true);
-        setShowBrands(true);
-      }
-    };
-    fetchConfigs();
-  }, []);
+  if (loading) return null;
 
   return (
     <Tab.Navigator
@@ -99,12 +87,14 @@ function MainTabs() {
         },
       })}
     >
-      <Tab.Screen
-        name="Home"
-        component={HomeScreen}
-        options={{ tabBarLabel: 'Mart' }}
-        listeners={{ focus: () => setActiveMode('mart') }}
-      />
+      {showMart && (
+        <Tab.Screen
+          name="Home"
+          component={HomeScreen}
+          options={{ tabBarLabel: 'Mart' }}
+          listeners={{ focus: () => setActiveMode('mart') }}
+        />
+      )}
       {showFood && (
         <Tab.Screen
           name="Food"
@@ -196,21 +186,23 @@ function Navigation() {
             <Stack.Screen name="Help" component={HelpScreen} />
             <Stack.Screen name="Favourites" component={FavouritesScreen} />
             <Stack.Screen name="About" component={AboutScreen} />
+            <Stack.Screen name="OrderChat" component={OrderChatScreen} options={{ headerShown: true, headerStyle: { backgroundColor: '#fff' }, headerTintColor: '#1A1A1A' }} />
           </>
         )}
       </Stack.Navigator>
     </NavigationContainer>
   );
 }
-
 export default function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <CartProvider>
-          <Navigation />
-          <StatusBar style="auto" />
-        </CartProvider>
+        <SettingsProvider>
+          <CartProvider>
+            <Navigation />
+            <StatusBar style="auto" />
+          </CartProvider>
+        </SettingsProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );

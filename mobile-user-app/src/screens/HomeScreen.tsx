@@ -9,7 +9,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import io from 'socket.io-client';
 import {
   categoriesApi, productsApi, addressesApi, brandsApi, bannersApi,
-  deliveryZonesApi, normalizeUrl
+  deliveryZonesApi, normalizeUrl, socket
 } from '../api/api';
 import { ENV } from '../config/env';
 import { getDistanceKm, isBusinessOpen } from '../utils/helpers';
@@ -17,6 +17,7 @@ import BannerCarousel from '../components/BannerCarousel';
 import SkeletonLoader from '../components/SkeletonLoader';
 import { useCart } from '../context/CartContext';
 import { useFavourites } from '../hooks/useFavourites';
+import { useSettings } from '../context/SettingsContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -122,12 +123,27 @@ const BrandChip = memo(({ brand, onPress }: any) => {
   );
 });
 
-// ════════════════ MAIN SCREEN ════════════════
 export default function HomeScreen({ navigation }: any) {
+  const { settings } = useSettings();
   const { martCart, foodCart, addToCart, getCartCount, activeMode, setActiveMode } = useCart();
+  
+  const showMart = settings?.feature_show_mart !== false;
+  const showFood = settings?.feature_show_restaurants !== false;
+
   const [serviceMode, setServiceMode] = useState<'mart' | 'food'>(activeMode);
   const cart = serviceMode === 'mart' ? martCart : foodCart;
   const { isFavourite, toggleFavourite, reload: reloadFavs } = useFavourites();
+  
+  // Update mode if settings change
+  useEffect(() => {
+    if (!showMart && showFood) {
+      setServiceMode('food');
+      setActiveMode('food');
+    } else if (showMart && !showFood) {
+      setServiceMode('mart');
+      setActiveMode('mart');
+    }
+  }, [showMart, showFood]);
 
   const [categories, setCategories] = useState<any[]>([]);
   const [brands, setBrands] = useState<any[]>([]);
@@ -213,17 +229,22 @@ export default function HomeScreen({ navigation }: any) {
   }, [loadingMore, hasMore, page, selectedCatId]);
 
   useFocusEffect(useCallback(() => {
-    setActiveMode('mart');
+    // If only food is allowed, don't force mart here
+    if (showMart) {
+       setActiveMode('mart');
+       setServiceMode('mart');
+    } else if (showFood) {
+       setActiveMode('food');
+       setServiceMode('food');
+    }
     loadData();
     reloadFavs();
-  }, [loadData, reloadFavs]));
+  }, [loadData, reloadFavs, showMart, showFood]));
 
   // Real-time Banners Update
   useEffect(() => {
-    const socket = io(ENV.SOCKET_URL, {
-      transports: ['websocket'],
-      forceNew: true
-    });
+    if (!socket.connected) socket.connect();
+    
     socket.on('connect', () => console.log('Home: Connected to socket'));
     socket.on('bannersUpdated', async () => {
       console.log('Home: Banners updated remotely, refreshing...');
@@ -234,8 +255,10 @@ export default function HomeScreen({ navigation }: any) {
         console.error('Failed to sync banners', err);
       }
     });
+
     return () => {
-      socket.disconnect();
+      socket.off('connect');
+      socket.off('bannersUpdated');
     };
   }, []);
 
@@ -268,7 +291,7 @@ export default function HomeScreen({ navigation }: any) {
     ? products.filter(p => p.categoryId === selectedCatId)
     : products;
 
-  const cartCount = getCartCount('mart');
+  const cartCount = getCartCount(serviceMode);
   const locationLabel = address
     ? `${address.label ? address.label + ', ' : ''}${address.streetAddress?.substring(0, 28) || ''}`
     : 'Select your location';
@@ -490,6 +513,24 @@ export default function HomeScreen({ navigation }: any) {
             <Text style={styles.chevronIcon}>⌄</Text>
           </View>
         </TouchableOpacity>
+        
+        {/* Service Toggle (Only if both enabled) */}
+        {showMart && showFood && (
+          <View style={styles.toggleWrap}>
+            <TouchableOpacity 
+              style={[styles.toggleSegment, serviceMode === 'mart' && styles.toggleSegmentActive]} 
+              onPress={() => { setServiceMode('mart'); setActiveMode('mart'); }}
+            >
+              <Text style={[styles.toggleSegmentLabel, serviceMode === 'mart' && styles.toggleSegmentLabelActive]}>Mart</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.toggleSegment, serviceMode === 'food' && styles.toggleSegmentActive]} 
+              onPress={() => { setServiceMode('food'); setActiveMode('food'); }}
+            >
+              <Text style={[styles.toggleSegmentLabel, serviceMode === 'food' && styles.toggleSegmentLabelActive]}>Restaurants</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         <TouchableOpacity
           style={styles.searchBar}

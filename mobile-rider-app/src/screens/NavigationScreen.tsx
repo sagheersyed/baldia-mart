@@ -4,11 +4,13 @@ import {
   ActivityIndicator, ScrollView, Linking, Platform, Vibration,
   Animated, PanResponder, Dimensions, FlatList
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { ordersApi, socket } from '../api/api';
+import { useSettings } from '../context/SettingsContext';
 import { generateReceiptPDF, printReceipt } from '../utils/receiptGenerator';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -101,6 +103,7 @@ const getStatusLabel = (status: string, isFood: boolean, paymentMethod: string) 
 // ─── Main Routing/Navigation Screen ──────────────────────────────────────────
 export default function NavigationScreen({ navigation, route }: any) {
   const { orderId } = route.params || {};
+  const { settings } = useSettings();
   const [order, setOrder] = useState<any>(null);
   const [status, setStatus] = useState('confirmed');
   const [loading, setLoading] = useState(true);
@@ -389,6 +392,13 @@ export default function NavigationScreen({ navigation, route }: any) {
       Linking.openURL(`maps:0,0?q=${encodeURIComponent(firstName)}@${first.latitude},${first.longitude}`);
     }
   };
+  
+  const handleChat = () => {
+    navigation.navigate('OrderChat', { 
+      orderId: order.id, 
+      customerName: order.user?.name || 'Customer' 
+    });
+  };
 
   if (loading) return <View style={styles.centered}><ActivityIndicator size="large" color="#FF4500" /></View>;
   if (!order) return <View style={styles.centered}><Text>Order not found</Text></View>;
@@ -460,6 +470,11 @@ export default function NavigationScreen({ navigation, route }: any) {
             <Text style={styles.typeTxt}>{isFood ? '🍽️ Food Order' : '🛒 Mart Order'}</Text>
           </View>
         </View>
+        {settings?.feature_chat_enabled === true && (
+          <TouchableOpacity onPress={handleChat} style={styles.navChatBtn}>
+            <Ionicons name="chatbubbles-outline" size={24} color="#fff" />
+          </TouchableOpacity>
+        )}
         <TouchableOpacity onPress={openExternalMaps} style={styles.navBtn}>
           <Text style={styles.navBtnTxt}>🧭</Text>
         </TouchableOpacity>
@@ -519,6 +534,14 @@ export default function NavigationScreen({ navigation, route }: any) {
           >
             <Text style={styles.callIcon}>📞</Text>
           </TouchableOpacity>
+          {settings?.feature_chat_enabled === true && (
+            <TouchableOpacity
+              style={[styles.callBtn, { backgroundColor: '#FF450015', marginLeft: 8 }]}
+              onPress={handleChat}
+            >
+              <Ionicons name="chatbubbles-outline" size={20} color="#FF4500" />
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Item Checklist (collapsible) */}
@@ -712,4 +735,13 @@ const styles = StyleSheet.create({
     borderColor: '#FF450030',
   },
   receiptSuccessBtnTxt: { color: '#FF4500', fontSize: 15, fontWeight: '700' },
+  navChatBtn: { 
+    width: 40, 
+    height: 40, 
+    backgroundColor: '#FF4500', 
+    borderRadius: 20, 
+    justifyContent: 'center', 
+    alignItems: 'center',
+    marginRight: 4
+  },
 });

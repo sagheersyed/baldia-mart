@@ -7,12 +7,17 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useFavourites } from '../hooks/useFavourites';
 import { normalizeUrl, restaurantsApi, productsApi } from '../api/api';
 import { useCart } from '../context/CartContext';
+import { useSettings } from '../context/SettingsContext';
 import { formatRatingCount, isBusinessOpen } from '../utils/helpers';
 
 const TABS = ['Restaurants', 'Products'] as const;
 
 export default function FavouritesScreen({ navigation }: any) {
-  const [activeTab, setActiveTab] = useState<'Restaurants' | 'Products'>('Restaurants');
+  const { settings } = useSettings();
+  const showMart = settings?.feature_show_mart !== false;
+  const showFood = settings?.feature_show_restaurants !== false;
+
+  const [activeTab, setActiveTab] = useState<'Restaurants' | 'Products'>(showFood ? 'Restaurants' : 'Products');
   const [syncing, setSyncing] = useState(false);
   const { restaurants, products, toggleFavourite, reload, syncFromApi } = useFavourites();
   const { foodCart, martCart, addToCart } = useCart();
@@ -57,17 +62,22 @@ export default function FavouritesScreen({ navigation }: any) {
 
       {/* Tabs */}
       <View style={styles.tabs}>
-        {TABS.map((tab) => (
-          <TouchableOpacity
-            key={tab}
-            style={[styles.tab, activeTab === tab && styles.tabActive]}
-            onPress={() => setActiveTab(tab)}
-          >
-            <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
-              {tab === 'Restaurants' ? '🍽️' : '🛒'} {tab}
-            </Text>
-          </TouchableOpacity>
-        ))}
+        {TABS.map((tab) => {
+          if (tab === 'Restaurants' && !showFood) return null;
+          if (tab === 'Products' && !showMart) return null;
+
+          return (
+            <TouchableOpacity
+              key={tab}
+              style={[styles.tab, activeTab === tab && styles.tabActive]}
+              onPress={() => setActiveTab(tab)}
+            >
+              <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
+                {tab === 'Restaurants' ? '🍽️' : '🛒'} {tab}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       {isEmpty ? (

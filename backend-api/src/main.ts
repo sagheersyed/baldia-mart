@@ -21,9 +21,7 @@ async function bootstrap() {
   app.enableCors();
   
   // Serve static files from public directory
-  app.useStaticAssets(join(__dirname, '..', 'public'), {
-    prefix: '/public/',
-  });
+  app.useStaticAssets(join(__dirname, '..', 'public'));
 
   // Global Prefix for API endpoints
   app.setGlobalPrefix('api/v1');

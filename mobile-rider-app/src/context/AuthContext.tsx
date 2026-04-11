@@ -4,8 +4,9 @@ import { setAuthToken, authApi, registerSignOutCallback } from '../api/api';
 
 interface AuthContextType {
   isAuthenticated: boolean;
+  user: any | null;
   isLoading: boolean;
-  loginSuccess: (token: string) => Promise<void>;
+  loginSuccess: (token: string, user?: any) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -13,6 +14,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -22,12 +24,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (token) {
           setAuthToken(token);
           setIsAuthenticated(true);
+          const savedUser = await AsyncStorage.getItem('riderData');
+          if (savedUser) setUser(JSON.parse(savedUser));
 
           // Background verification
           try {
-            await authApi.getMe();
+            const res = await authApi.getMe();
+            setUser(res.data);
+            await AsyncStorage.setItem('riderData', JSON.stringify(res.data));
           } catch (error) {
-            await logout();
+            console.error('Auth verification failed:', error);
+            if (error.response?.status === 401) {
+              await logout();
+            }
           }
         }
       } catch (error) {
@@ -40,15 +49,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     checkToken();
   }, []);
 
-  const loginSuccess = async (token: string) => {
+  const loginSuccess = async (token: string, userInfo?: any) => {
     await AsyncStorage.setItem('riderToken', token);
     setAuthToken(token);
+    if (userInfo) {
+      setUser(userInfo);
+      await AsyncStorage.setItem('riderData', JSON.stringify(userInfo));
+    } else {
+      try {
+        const res = await authApi.getMe();
+        setUser(res.data);
+        await AsyncStorage.setItem('riderData', JSON.stringify(res.data));
+      } catch (e) {}
+    }
     setIsAuthenticated(true);
   };
 
   const logout = async () => {
     await AsyncStorage.removeItem('riderToken');
+    await AsyncStorage.removeItem('riderData');
     setAuthToken(null);
+    setUser(null);
     setIsAuthenticated(false);
   };
 
@@ -58,7 +79,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, isLoading, loginSuccess, logout }}>
+    <AuthContext.Provider value={{ isAuthenticated, user, isLoading, loginSuccess, logout }}>
       {children}
     </AuthContext.Provider>
   );

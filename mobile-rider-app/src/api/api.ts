@@ -6,6 +6,9 @@ import { ENV } from '../config/env';
 export const socket = io(ENV.SOCKET_URL, {
   autoConnect: false,
   transports: ['websocket'],
+  reconnection: true,
+  reconnectionAttempts: 10,
+  reconnectionDelay: 1000,
 });
 
 
@@ -75,6 +78,7 @@ export const ordersApi = {
     api.patch(`/orders/sub-orders/${subOrderId}/status`, { status }),
   removeItem: (orderId: string, itemId: string) => api.delete(`/orders/${orderId}/items/${itemId}`),
   getHistory: () => api.get('/orders/history/rider'),
+  getChatHistory: (orderId: string) => api.get(`/orders/${orderId}/chat`),
 };
 
 export const ridersApi = {

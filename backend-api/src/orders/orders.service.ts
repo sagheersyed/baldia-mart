@@ -1,10 +1,11 @@
-import { Injectable, BadRequestException, NotFoundException, UnauthorizedException, ForbiddenException, Query } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, UnauthorizedException, ForbiddenException, Query, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { Order } from './order.entity';
 import { OrderItem } from './order-item.entity';
 import { OrderHistory } from './order-history.entity';
 import { SubOrder } from './sub-order.entity';
+import { OrderChatMessage } from './order-chat-message.entity';
 import { CartService } from '../cart/cart.service';
 import { DeliveryZonesService } from '../delivery-zones/delivery-zones.service';
 import { AddressesService } from '../addresses/addresses.service';
@@ -23,12 +24,15 @@ export class OrdersService {
     @InjectRepository(OrderHistory) private orderHistoryRepository: Repository<OrderHistory>,
     @InjectRepository(Rider) private ridersRepository: Repository<Rider>,
     @InjectRepository(SubOrder) private subOrdersRepository: Repository<SubOrder>,
+    @InjectRepository(OrderChatMessage) private chatMessagesRepository: Repository<OrderChatMessage>,
     private cartService: CartService,
     private deliveryZonesService: DeliveryZonesService,
     private addressesService: AddressesService,
     private settingsService: SettingsService,
+    @Inject(forwardRef(() => OrdersGateway))
     private ordersGateway: OrdersGateway,
     private notificationsService: NotificationsService,
+    @Inject(forwardRef(() => RidersService))
     private ridersService: RidersService,
     private vendorsService: VendorsService,
   ) { }
@@ -1267,6 +1271,34 @@ export class OrdersService {
         console.error('Failed to notify rider of order update:', error);
       }
     }
+  }
+
+  async saveChatMessage(orderId: string, senderId: string, senderType: string, message?: string, imageUrl?: string, type: string = 'text', metadata?: any, replyToId?: string): Promise<OrderChatMessage> {
+    const chatMessage = this.chatMessagesRepository.create({
+      orderId,
+      senderId,
+      senderType,
+      message,
+      imageUrl,
+      type,
+      metadata,
+      replyToId
+    });
+    const saved = await this.chatMessagesRepository.save(chatMessage);
+    const result = await this.chatMessagesRepository.findOne({
+      where: { id: saved.id },
+      relations: ['replyTo']
+    });
+    if (!result) throw new NotFoundException('Message not found after save');
+    return result;
+  }
+
+  async getChatHistory(orderId: string): Promise<OrderChatMessage[]> {
+    return this.chatMessagesRepository.find({
+      where: { orderId },
+      order: { createdAt: 'ASC' },
+      relations: ['replyTo']
+    });
   }
 }
 

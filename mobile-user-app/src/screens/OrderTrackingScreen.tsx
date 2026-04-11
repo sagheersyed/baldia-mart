@@ -5,10 +5,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import { isBusinessOpen } from '../utils/helpers';
 import { useOrderTracking } from '../hooks/useOrderTracking';
+import { useSettings } from '../context/SettingsContext';
 import { generateReceiptPDF, printReceipt } from '../utils/receiptGenerator';
 
 export default function OrderTrackingScreen({ route, navigation }: any) {
   const { orderId } = route.params;
+  const { settings } = useSettings();
 
   const {
     order, status, loading, rider, riderLocation, localItems, timeline,
@@ -197,6 +199,14 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
                 <Text style={styles.riderName}>{rider.name || 'Your Rider'}</Text>
                 <Text style={styles.riderStatus}>Assign to your delivery</Text>
               </View>
+              {settings?.feature_chat_enabled === true && (
+                <TouchableOpacity
+                  style={[styles.callBtn, { marginRight: 10, backgroundColor: '#FF450015' }]}
+                  onPress={() => navigation.navigate('OrderChat', { orderId, riderName: rider.name })}
+                >
+                  <Text style={{ fontSize: 18 }}>💬</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
                 style={styles.callBtn}
                 onPress={() => {

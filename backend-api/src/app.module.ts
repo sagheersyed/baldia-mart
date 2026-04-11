@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import { LoggerModule } from 'nestjs-pino';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { OrderChatMessage } from './orders/order-chat-message.entity';
 import { TerminusModule } from '@nestjs/terminus';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AppController } from './app.controller';
@@ -59,6 +61,7 @@ import { APP_GUARD } from '@nestjs/core';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([{
       ttl: 60000,   // 1 minute window
       limit: 300,   // 300 requests per minute per IP (reasonable for a mobile app)
@@ -81,7 +84,7 @@ import { APP_GUARD } from '@nestjs/core';
         User, Address, DeliveryZone, Category, Product, 
         CartItem, Order, OrderItem, Payment, Notification, Rider, Otp,
         OrderHistory, RiderReview, Setting, Brand, Banner, Restaurant, MenuItem, SubOrder, BusinessReview,
-        Vendor, VendorProduct, Favorite,
+        Vendor, VendorProduct, Favorite, OrderChatMessage,
       ],
 
       synchronize: process.env.NODE_ENV !== 'production',

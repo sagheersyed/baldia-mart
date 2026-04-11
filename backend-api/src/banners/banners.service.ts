@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Banner } from './banner.entity';
 import { BannersGateway } from './banners.gateway';
+import { SettingsService } from '../settings/settings.service';
 
 @Injectable()
 export class BannersService {
@@ -10,9 +11,21 @@ export class BannersService {
     @InjectRepository(Banner)
     private bannerRepository: Repository<Banner>,
     private bannersGateway: BannersGateway,
+    private settingsService: SettingsService,
   ) {}
 
   async findAll(section?: string, zoneId?: string): Promise<Banner[]> {
+    // Check global settings first
+    const publicSettings = await this.settingsService.getPublic();
+    
+    if (section === 'mart' && publicSettings.feature_show_mart !== true) {
+      return [];
+    }
+    
+    if (section === 'food' && publicSettings.feature_show_restaurants !== true) {
+      return [];
+    }
+
     const query = this.bannerRepository.createQueryBuilder('banner')
       .where('banner.isActive = :isActive', { isActive: true })
       .orderBy('banner.sortOrder', 'ASC')

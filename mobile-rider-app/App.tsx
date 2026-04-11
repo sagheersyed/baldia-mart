@@ -19,12 +19,14 @@ import MpinSetupDirectScreen from './src/screens/MpinSetupDirectScreen';
 import OrderDetailsScreen from './src/screens/OrderDetailsScreen';
 import OrderHistoryScreen from './src/screens/OrderHistoryScreen';
 import WalletScreen from './src/screens/WalletScreen';
+import OrderChatScreen from './src/screens/OrderChatScreen';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { setAuthToken, authApi } from './src/api/api';
 import { ActivityIndicator, View } from 'react-native';
 
 import { AuthProvider, useAuth } from './src/context/AuthContext';
+import { SettingsProvider } from './src/context/SettingsContext';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -83,6 +85,7 @@ function AppInner() {
             <Stack.Screen name="Navigation" component={NavigationScreen} />
             <Stack.Screen name="OrderHistory" component={OrderHistoryScreen} />
             <Stack.Screen name="WalletDetail" component={WalletScreen} />
+            <Stack.Screen name="OrderChat" component={OrderChatScreen} options={{ headerShown: true, headerStyle: { backgroundColor: '#1E1E1E' }, headerTintColor: '#fff' }} />
           </>
         )}
       </Stack.Navigator>
@@ -94,7 +97,9 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <AppInner />
+        <SettingsProvider>
+          <AppInner />
+        </SettingsProvider>
       </AuthProvider>
       <StatusBar style="auto" />
     </SafeAreaProvider>

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import io from 'socket.io-client';
 import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ordersApi, ridersApi, businessReviewsApi, productsApi, menuItemsApi } from '../api/api';
+import { ordersApi, ridersApi, businessReviewsApi, productsApi, menuItemsApi, socket } from '../api/api';
 import { ENV } from '../config/env';
 import { isBusinessOpen } from '../utils/helpers';
 
@@ -112,20 +112,34 @@ export function useOrderTracking(orderId: string, navigation: any) {
   useEffect(() => {
     fetchOrderDetails();
 
-    const socket = io(ENV.SOCKET_URL, { transports: ['websocket'], forceNew: true });
-    socket.on('connect', () => socket.emit('joinOrder', orderId));
-    socket.on('orderStatusUpdated', async (data: any) => {
+    // Use centralized socket
+    if (!socket.connected) socket.connect();
+    
+    socket.emit('joinOrder', orderId);
+
+    const onStatusUpdate = async (data: any) => {
       if (data.orderId === orderId) { setStatus(data.status); await fetchOrderDetails(); }
-    });
-    socket.on('orderUpdated', async (data: any) => {
+    };
+
+    const onOrderUpdate = async (data: any) => {
       if (data.orderId === orderId) await fetchOrderDetails();
-    });
-    socket.on('riderLocationUpdate', (data: any) => {
+    };
+
+    const onRiderLocation = (data: any) => {
       if (data.orderId === orderId && data.latitude && data.longitude) {
         setRiderLocation({ latitude: Number(data.latitude), longitude: Number(data.longitude) });
       }
-    });
-    return () => { socket.disconnect(); };
+    };
+
+    socket.on('orderStatusUpdated', onStatusUpdate);
+    socket.on('orderUpdated', onOrderUpdate);
+    socket.on('riderLocationUpdate', onRiderLocation);
+
+    return () => {
+      socket.off('orderStatusUpdated', onStatusUpdate);
+      socket.off('orderUpdated', onOrderUpdate);
+      socket.off('riderLocationUpdate', onRiderLocation);
+    };
   }, [orderId, fetchOrderDetails]);
 
   // ── Derived values ────────────────────────────────────────────────────────

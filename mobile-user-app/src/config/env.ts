@@ -6,7 +6,7 @@
  */
 
 // ── Change this single value when your tunnel/server changes ──
-const SERVER_BASE = 'https://00ad-175-107-236-228.ngrok-free.app';
+const SERVER_BASE = 'https://384b-175-107-236-228.ngrok-free.app';
 
 export const ENV = {
   BASE_URL: `${SERVER_BASE}/api/v1`,

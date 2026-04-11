@@ -8,10 +8,21 @@ import { AssignRiderDto } from './dto/assign-rider.dto';
 import { AddItemToOrderDto } from './dto/add-item-to-order.dto';
 import { Request } from 'express';
 
+import { CleanupService } from './cleanup.service';
+
 @Controller('orders')
 @UseGuards(AuthGuard('jwt'))
 export class OrdersController {
-  constructor(private readonly ordersService: OrdersService) {}
+  constructor(
+    private readonly ordersService: OrdersService,
+    private readonly cleanupService: CleanupService,
+  ) {}
+
+  @Post('cleanup')
+  @UseGuards(AdminRoleGuard)
+  async triggerCleanup() {
+    return this.cleanupService.triggerManualCleanup();
+  }
 
   @Get('all')
   @UseGuards(AdminRoleGuard)
@@ -176,5 +187,10 @@ export class OrdersController {
     @Body('status') status: string,
   ) {
     return this.ordersService.updateSubOrderStatus(subOrderId, status);
+  }
+
+  @Get(':id/chat')
+  async getChatHistory(@Param('id', ParseUUIDPipe) id: string) {
+    return this.ordersService.getChatHistory(id);
   }
 }

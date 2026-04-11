@@ -6,12 +6,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useCart } from '../context/CartContext';
-import { ordersApi, authApi } from '../api/api';
-import io from 'socket.io-client';
+import { ordersApi, authApi, socket } from '../api/api';
+import { ENV } from '../config/env';
 import { generateReceiptPDF, printReceipt } from '../utils/receiptGenerator';
 import SkeletonLoader from '../components/SkeletonLoader';
 
-const BASE_IP = 'https://00ad-175-107-236-228.ngrok-free.app';
+const BASE_IP = 'https://384b-175-107-236-228.ngrok-free.app';
 const SOCKET_URL = BASE_IP;
 
 const STATUS_CONFIG: Record<string, { color: string; bg: string; label: string; icon: string }> = {
@@ -46,8 +46,8 @@ function OrderCard({ order, onTrack, onCancel }: any) {
         </View>
         <View style={[styles.statusBadge, { backgroundColor: cfg.bg }]}>
           <Text style={[styles.statusText, { color: cfg.color }]}>
-            {order.status === 'cancelled' && order.notes?.includes('missing') 
-              ? '❌ STOCK OUT' 
+            {order.status === 'cancelled' && order.notes?.includes('missing')
+              ? '❌ STOCK OUT'
               : `${cfg.icon} ${cfg.label}`}
           </Text>
         </View>
@@ -109,14 +109,14 @@ function OrderCard({ order, onTrack, onCancel }: any) {
       </View>
       {order.status === 'delivered' && (
         <View style={styles.cardReceiptRow}>
-          <TouchableOpacity 
-            style={[styles.receiptBtn, { flex: 1, marginRight: 8 }]} 
+          <TouchableOpacity
+            style={[styles.receiptBtn, { flex: 1, marginRight: 8 }]}
             onPress={() => generateReceiptPDF(order)}
           >
             <Text style={styles.receiptBtnText}>📤 Share</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.receiptBtn, { flex: 1, backgroundColor: '#1A1A1A', borderColor: '#1A1A1A' }]} 
+          <TouchableOpacity
+            style={[styles.receiptBtn, { flex: 1, backgroundColor: '#1A1A1A', borderColor: '#1A1A1A' }]}
             onPress={() => printReceipt(order)}
           >
             <Text style={[styles.receiptBtnText, { color: '#fff' }]}>🖨️ View/Print</Text>
@@ -146,7 +146,7 @@ export default function MyOrdersScreen({ navigation }: any) {
 
       const res = await ordersApi.getHistory(pageNum, 15);
       const newOrders = res.data || [];
-      
+
       setHasMore(newOrders.length === 15);
 
       setOrders(prev => {
@@ -179,40 +179,34 @@ export default function MyOrdersScreen({ navigation }: any) {
   }, [orders, setActiveOrdersCount]);
 
   useEffect(() => {
-    let socket: any;
-
     const setupSocket = async () => {
       try {
         const userRes = await authApi.getMe();
         const user = userRes.data;
 
-        socket = io(SOCKET_URL, {
-          transports: ['websocket'],
-          forceNew: true
-        });
+        if (!socket.connected) socket.connect();
 
-        socket.on('connect', () => {
-          console.log('MyOrders: Connected to socket');
-          if (user?.id) {
-            socket.emit('joinUserRoom', user.id);
-          }
-        });
+        if (user?.id) {
+          socket.emit('joinUserRoom', user.id);
+        }
 
-        socket.on('orderStatusUpdated', (data: any) => {
+        const onStatusUpdate = (data: any) => {
           console.log('MyOrders: Received order update:', data);
           setPage(1);
           fetchOrders(1, false);
-        });
+        };
+
+        socket.on('orderStatusUpdated', onStatusUpdate);
+
+        return () => {
+          socket.off('orderStatusUpdated', onStatusUpdate);
+        };
       } catch (e) {
         console.error('Socket setup error:', e);
       }
     };
 
     setupSocket();
-
-    return () => {
-      if (socket) socket.disconnect();
-    };
   }, [fetchOrders]);
 
   const onRefresh = useCallback(() => {
@@ -265,33 +259,33 @@ export default function MyOrdersScreen({ navigation }: any) {
       <SafeAreaView style={styles.container}>
         {/* Header Skeleton */}
         <View style={styles.header}>
-           <SkeletonLoader width={150} height={24} />
+          <SkeletonLoader width={150} height={24} />
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 16 }}>
-           <View style={{ paddingHorizontal: 16, marginBottom: 12 }}>
-             <SkeletonLoader width={100} height={16} />
-           </View>
-           {[...Array(3)].map((_, i) => (
-              <View key={i} style={[styles.orderCard, { marginHorizontal: 16, marginBottom: 16 }]}>
-                 <View style={styles.orderHeader}>
-                    <SkeletonLoader width={80} height={20} />
-                    <SkeletonLoader width={80} height={24} borderRadius={12} />
-                 </View>
-                 <SkeletonLoader width={120} height={14} style={{ marginVertical: 8 }} />
-                 <View style={styles.orderDivider} />
-                 <View style={styles.orderBody}>
-                    <View style={{ flex: 1 }}>
-                       <SkeletonLoader width="70%" height={16} style={{ marginBottom: 6 }} />
-                       <SkeletonLoader width="50%" height={16} />
-                    </View>
-                    <SkeletonLoader width={60} height={20} />
-                 </View>
-                 <View style={styles.orderActions}>
-                    <SkeletonLoader width="100%" height={40} borderRadius={10} />
-                 </View>
+          <View style={{ paddingHorizontal: 16, marginBottom: 12 }}>
+            <SkeletonLoader width={100} height={16} />
+          </View>
+          {[...Array(3)].map((_, i) => (
+            <View key={i} style={[styles.orderCard, { marginHorizontal: 16, marginBottom: 16 }]}>
+              <View style={styles.orderHeader}>
+                <SkeletonLoader width={80} height={20} />
+                <SkeletonLoader width={80} height={24} borderRadius={12} />
               </View>
-           ))}
+              <SkeletonLoader width={120} height={14} style={{ marginVertical: 8 }} />
+              <View style={styles.orderDivider} />
+              <View style={styles.orderBody}>
+                <View style={{ flex: 1 }}>
+                  <SkeletonLoader width="70%" height={16} style={{ marginBottom: 6 }} />
+                  <SkeletonLoader width="50%" height={16} />
+                </View>
+                <SkeletonLoader width={60} height={20} />
+              </View>
+              <View style={styles.orderActions}>
+                <SkeletonLoader width="100%" height={40} borderRadius={10} />
+              </View>
+            </View>
+          ))}
         </ScrollView>
       </SafeAreaView>
     );

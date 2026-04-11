@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ordersApi, socket } from '../api/api';
+import { useSettings } from '../context/SettingsContext';
 import { generateReceiptPDF, printReceipt } from '../utils/receiptGenerator';
 
 export default function OrderDetailsScreen({ route, navigation }: any) {
   const { orderId } = route.params;
+  const { settings } = useSettings();
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [accepting, setAccepting] = useState(false);
@@ -69,11 +71,21 @@ export default function OrderDetailsScreen({ route, navigation }: any) {
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Order Details</Text>
-        {order.status === 'delivered' && (
-          <TouchableOpacity onPress={() => generateReceiptPDF(order)} style={styles.receiptHeaderBtn}>
-            <Ionicons name="document-text-outline" size={22} color="#FF4500" />
-          </TouchableOpacity>
-        )}
+        <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'flex-end', gap: 10 }}>
+          {order.status !== 'delivered' && order.status !== 'cancelled' && settings?.feature_chat_enabled === true && (
+            <TouchableOpacity 
+              onPress={() => navigation.navigate('OrderChat', { orderId: order.id, customerName: order.user?.name })} 
+              style={styles.chatHeaderBtn}
+            >
+              <Ionicons name="chatbubble-ellipses-outline" size={22} color="#fff" />
+            </TouchableOpacity>
+          )}
+          {order.status === 'delivered' && (
+            <TouchableOpacity onPress={() => generateReceiptPDF(order)} style={styles.receiptHeaderBtn}>
+              <Ionicons name="document-text-outline" size={22} color="#FF4500" />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       <ScrollView style={styles.content}>
@@ -260,5 +272,6 @@ const styles = StyleSheet.create({
   acceptBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
   disabledBtn: { opacity: 0.7 },
   typeBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
-  receiptHeaderBtn: { marginLeft: 'auto', backgroundColor: '#fff', width: 38, height: 38, borderRadius: 19, justifyContent: 'center', alignItems: 'center' },
+  receiptHeaderBtn: { backgroundColor: '#fff', width: 38, height: 38, borderRadius: 19, justifyContent: 'center', alignItems: 'center' },
+  chatHeaderBtn: { backgroundColor: '#FF4500', width: 38, height: 38, borderRadius: 19, justifyContent: 'center', alignItems: 'center' },
 });
