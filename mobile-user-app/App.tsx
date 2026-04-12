@@ -37,6 +37,7 @@ import RestaurantDetailScreen from './src/screens/RestaurantDetailScreen';
 import FavouritesScreen from './src/screens/FavouritesScreen';
 import AboutScreen from './src/screens/AboutScreen';
 import OrderChatScreen from './src/screens/OrderChatScreen';
+import RashanOrderScreen from './src/screens/RashanOrderScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -187,6 +188,7 @@ function Navigation() {
             <Stack.Screen name="Favourites" component={FavouritesScreen} />
             <Stack.Screen name="About" component={AboutScreen} />
             <Stack.Screen name="OrderChat" component={OrderChatScreen} options={{ headerShown: true, headerStyle: { backgroundColor: '#fff' }, headerTintColor: '#1A1A1A' }} />
+            <Stack.Screen name="RashanOrder" component={RashanOrderScreen} />
           </>
         )}
       </Stack.Navigator>

@@ -146,15 +146,19 @@ export default function NavigationScreen({ navigation, route }: any) {
       });
     } else {
       pickupStops.push({
-        id: 'mart', stopNum: 1, name: 'Baldia Mart', description: 'Main Colony, Baldia Town',
-        coords: DEFAULT_MART, emoji: '🏪',
+        id: 'mart', 
+        stopNum: 1, 
+        name: order.orderType === 'rashan' ? 'Wholesale Market / Warehouse' : 'Baldia Mart', 
+        description: order.orderType === 'rashan' ? 'Monthly Bulk Sourcing Point' : 'Main Colony, Baldia Town',
+        coords: DEFAULT_MART, 
+        emoji: order.orderType === 'rashan' ? '📦' : '🏪',
       });
     }
   }
 
   const customerCoords = {
-    latitude: Number(order?.address?.latitude || 24.9144),
-    longitude: Number(order?.address?.longitude || 66.9748),
+    latitude: Number(order?.address?.latitude || order?.addressLat || 24.9144),
+    longitude: Number(order?.address?.longitude || order?.addressLng || 66.9748),
   };
 
   const isPickupPhase = status === 'confirmed' || status === 'preparing';
@@ -466,8 +470,10 @@ export default function NavigationScreen({ navigation, route }: any) {
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={styles.orderTitle}>Order #{(orderId || '').slice(0, 8).toUpperCase()}</Text>
-          <View style={styles.typeBadge}>
-            <Text style={styles.typeTxt}>{isFood ? '🍽️ Food Order' : '🛒 Mart Order'}</Text>
+          <View style={[styles.typeBadge, order.orderType === 'rashan' && { backgroundColor: '#FF4500' }]}>
+            <Text style={[styles.typeTxt, order.orderType === 'rashan' && { color: '#fff' }]}>
+              {order.orderType === 'food' ? '🍽️ Food Order' : order.orderType === 'rashan' ? '📦 RASHAN BULK' : '🛒 Mart Order'}
+            </Text>
           </View>
         </View>
         {settings?.feature_chat_enabled === true && (
@@ -518,7 +524,7 @@ export default function NavigationScreen({ navigation, route }: any) {
       <View style={styles.bottomSheet}>
         {/* Next stop info */}
         <View style={styles.stopInfo}>
-          <Text style={{ fontSize: 28 }}>{isPickupPhase ? (isFood ? '🍽️' : '🏪') : '🏠'}</Text>
+          <Text style={{ fontSize: 28 }}>{isPickupPhase ? (order.orderType === 'rashan' ? '📦' : (isFood ? '🍽️' : '🏪')) : '🏠'}</Text>
           <View style={{ flex: 1, marginLeft: 14 }}>
             <Text style={styles.stopLabel}>{isPickupPhase ? 'Pick up from' : 'Deliver to'}</Text>
             <Text style={styles.stopName} numberOfLines={1}>{nextStopName}</Text>

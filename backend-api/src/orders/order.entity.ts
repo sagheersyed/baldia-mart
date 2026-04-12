@@ -28,7 +28,7 @@ export class Order {
   @JoinColumn({ name: 'rider_id' })
   rider: Rider;
 
-  @Column({ name: 'address_id' })
+  @Column({ name: 'address_id', nullable: true })
   addressId: string;
 
   @ManyToOne(() => Address)
@@ -84,7 +84,50 @@ export class Order {
   notes: string;
 
   @Column({ name: 'order_type', default: 'mart' })
-  orderType: string; // mart, food
+  orderType: string; // mart, food, rashan
+
+  // ── Monthly Rashan Bulk Order Fields ──────────────────────────────────────
+  @Column({ name: 'bulk_list_text', type: 'text', nullable: true })
+  bulkListText: string;
+
+  @Column({ name: 'bulk_list_photo_url', nullable: true })
+  bulkListPhotoUrl: string;
+
+  @Column({ name: 'bulk_mobile_number', nullable: true })
+  bulkMobileNumber: string;
+
+  @Column({ name: 'bulk_street_address', nullable: true })
+  bulkStreetAddress: string;
+
+  @Column({ name: 'bulk_city', nullable: true })
+  bulkCity: string;
+
+  @Column({ name: 'bulk_landmark', nullable: true })
+  bulkLandmark: string;
+
+  @Column({ name: 'bulk_floor', type: 'int', nullable: true })
+  bulkFloor: number;
+
+  @Column({ name: 'bulk_placement', nullable: true })
+  bulkPlacement: string; // gate, doorstep, inside
+
+  @Column({ name: 'bulk_weight_tier', nullable: true })
+  bulkWeightTier: string; // light (<20kg), medium (20-50kg), heavy (50kg+)
+
+  @Column({ name: 'bulk_additional_notes', type: 'text', nullable: true })
+  bulkAdditionalNotes: string;
+
+  @Column({ name: 'rashan_status', default: 'pending_review' })
+  rashanStatus: string; // pending_review, quoted, approved, sourcing, delivered, rejected
+
+  @Column({ name: 'estimated_total', type: 'decimal', precision: 10, scale: 2, nullable: true })
+  estimatedTotal: number;
+
+  @Column({ name: 'is_estimate_approved', default: false })
+  isEstimateApproved: boolean;
+
+  @Column({ name: 'admin_rejection_reason', type: 'text', nullable: true })
+  adminRejectionReason: string;
 
   @OneToMany(() => OrderItem, item => item.order)
   items: OrderItem[];

@@ -22,7 +22,8 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
     steps, currentStepIndex,
     fetchOrderDetails, hasChanges,
     handleReorder: _handleReorder, handleUpdateQuantityLocal, handleConfirmBatchUpdates, handleRemoveItem,
-    handleAddNewProductToOrder, handleDismissRating, handleSubmitReview,
+    handleAddNewProductToOrder, handleDismissRating, handleSubmitReview, handleApproveQuotation,
+    handleCancelRashanRequest,
   } = useOrderTracking(orderId, navigation);
 
   const handleReorder = () => {
@@ -105,7 +106,9 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
                 <Text style={styles.idBadgeValue}>#{orderId.slice(0, 8).toUpperCase()}</Text>
               </View>
               <View style={styles.typeTag}>
-                <Text style={styles.typeTagText}>{order?.orderType === 'food' ? '🍽️ FOOD' : '🛒 MART'}</Text>
+                <Text style={styles.typeTagText}>
+                  {order?.orderType === 'food' ? '🍽️ FOOD' : order?.orderType === 'rashan' ? '📦 RASHAN BULK' : '🛒 MART'}
+                </Text>
               </View>
             </View>
             <View style={styles.mainStatusContent}>
@@ -134,13 +137,52 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
             </View>
 
             <View style={styles.progressBarBg}>
-              <View style={[styles.progressBarFill, { width: `${((currentStepIndex + 1) / steps.length) * 100}%` }]} />
+              <View style={[styles.progressBarFill, { width: `${Math.max(5, ((currentStepIndex + 1) / steps.length) * 100)}%` }]} />
             </View>
+
+            {order?.orderType === 'rashan' && order.rashanStatus === 'quoted' && (
+              <View style={styles.quotationBlock}>
+                <Text style={styles.quoteTitle}>Quotation Received</Text>
+                <View style={styles.quoteBreakdown}>
+                  <View style={styles.quoteRow}>
+                    <Text style={styles.quoteLabel}>Products (Wholesale):</Text>
+                    <Text style={styles.quoteAmount}>Rs. {Number(order.subtotal || 0).toLocaleString()}</Text>
+                  </View>
+                  <View style={styles.quoteRow}>
+                    <Text style={styles.quoteLabel}>Sourcing & Logistics:</Text>
+                    <Text style={styles.quoteAmount}>Rs. {Number(order.deliveryFee || 0).toLocaleString()}</Text>
+                  </View>
+                  <View style={styles.quoteTotalRow}>
+                    <Text style={styles.quoteTotalLabel}>Final Quotation:</Text>
+                    <Text style={styles.quoteTotalAmount}>Rs. {Number(order.total).toLocaleString()}</Text>
+                  </View>
+                </View>
+                <TouchableOpacity style={styles.approveBtn} onPress={handleApproveQuotation}>
+                  <Text style={styles.approveBtnText}>✅ Approve & Start Sourcing</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {order?.orderType === 'rashan' && ['pending_review', 'quoted', 'approved'].includes(order.rashanStatus) && (
+              <TouchableOpacity 
+                style={styles.cancelOrderBtn} 
+                onPress={handleCancelRashanRequest}
+              >
+                <Text style={styles.cancelOrderBtnText}>🛑 Cancel Request</Text>
+              </TouchableOpacity>
+            )}
+
+            {order?.orderType === 'rashan' && order.rashanStatus === 'rejected' && (
+              <View style={[styles.quotationBlock, { backgroundColor: '#FFF5F5', borderColor: '#FED7D7' }]}>
+                <Text style={[styles.quoteTitle, { color: '#C53030' }]}>Request Rejected</Text>
+                <Text style={styles.quoteReason}>{order.adminRejectionReason || 'No reason provided.'}</Text>
+              </View>
+            )}
           </View>
         )}
 
         {order?.subOrders && order.subOrders.length > 1 && order.orderType === 'food' && (
-          <View style={[styles.subOrderCard]}>
+          <View style={styles.subOrderCard}>
             <View style={styles.subOrderHeader}>
               <Text style={styles.subOrderTitle}>
                 {order.orderType === 'food' ? 'Batch Order' : 'Multi-Vendor Route'}
@@ -220,50 +262,77 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
           </View>
         )}
 
-        {/* ── Live Tracking Map (Hiding per request) ──────────────────────
-        {(status === 'confirmed' || status === 'preparing' || status === 'out_for_delivery') && (
-          <View style={styles.mapContainer}>
-            <Text style={styles.mapTitle}>📍 Live Tracking</Text>
-            <MapView
-              style={styles.map}
-              initialRegion={{
-                latitude: Number(order?.address?.latitude || 24.9144),
-                longitude: Number(order?.address?.longitude || 66.9748),
-                latitudeDelta: 0.05,
-                longitudeDelta: 0.05,
-              }}
-            >
-              {riderLocation && (
-                <Marker coordinate={riderLocation} title={rider?.name || 'Rider'} description="Your rider's current location" pinColor="#FF4500" />
-              )}
-              <Marker
-                coordinate={{ latitude: Number(order?.address?.latitude || 24.9144), longitude: Number(order?.address?.longitude || 66.9748) }}
-                title={order?.address?.label || 'Delivery Address'} description="Your delivery location" pinColor="#22C55E"
-              />
-              {order?.orderType === 'food' && order?.subOrders?.map((sub: any, idx: number) => {
-                const entity = sub.restaurant || sub.vendor;
-                if (!entity) return null;
-                const lat = Number(entity.latitude || entity.lat || 0);
-                const lng = Number(entity.longitude || entity.lng || 0);
-                if (!lat || !lng) return null;
-                return <Marker key={sub.id || idx} coordinate={{ latitude: lat, longitude: lng }} title={entity.name || 'Pickup'} description={entity.location || entity.address || 'Pickup Point'} pinColor="#3B82F6" />;
-              })}
-              {riderLocation && (
-                <Polyline
-                  coordinates={[riderLocation, { latitude: Number(order?.address?.latitude || 24.9144), longitude: Number(order?.address?.longitude || 66.9748) }]}
-                  strokeColor="#FF4500" strokeWidth={3} lineDashPattern={[10, 5]}
+        {order && order.orderType === 'rashan' && (
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryTitle}>Bulk Rashan Details</Text>
+            
+            {order.bulkListPhotoUrl && (
+              <View style={{ marginBottom: 15 }}>
+                <Text style={styles.detailLabel}>Grocery List Photo:</Text>
+                <Image 
+                  source={{ uri: order.bulkListPhotoUrl }} 
+                  style={{ width: '100%', height: 200, borderRadius: 12, marginTop: 8 }} 
+                  contentFit="cover"
                 />
-              )}
-            </MapView>
+              </View>
+            )}
+
+            {order.bulkListText && (
+              <View style={{ marginBottom: 15 }}>
+                <Text style={styles.detailLabel}>Grocery List Item(s):</Text>
+                <View style={styles.textListPanel}>
+                  <Text style={styles.textListContent}>{order.bulkListText}</Text>
+                </View>
+              </View>
+            )}
+
+            <View style={styles.logisticsGrid}>
+              <View style={styles.logisticsItem}>
+                <Text style={styles.logisticsLabel}>Weight</Text>
+                <Text style={styles.logisticsValue}>{order.bulkWeightTier?.toUpperCase()}</Text>
+              </View>
+              <View style={styles.logisticsItem}>
+                <Text style={styles.logisticsLabel}>Floor</Text>
+                <Text style={styles.logisticsValue}>{order.bulkFloor}</Text>
+              </View>
+              <View style={styles.logisticsItem}>
+                <Text style={styles.logisticsLabel}>Placement</Text>
+                <Text style={styles.logisticsValue}>{order.bulkPlacement?.toUpperCase()}</Text>
+              </View>
+            </View>
+
+            <View style={styles.summaryDivider} />
+            <Text style={styles.detailLabel}>Delivery Address:</Text>
+            <Text style={styles.addressLine}>{order.bulkStreetAddress}, {order.bulkCity}</Text>
+            {order.bulkLandmark && <Text style={styles.landmarkLine}>Near {order.bulkLandmark}</Text>}
+            <Text style={styles.phoneLine}>📞 {order.bulkMobileNumber}</Text>
+            
+            {order.total > 0 && (
+              <>
+                <View style={styles.summaryDivider} />
+                <View style={styles.rashanFinancials}>
+                   <View style={styles.rashanPriceRow}>
+                      <Text style={styles.rashanPriceLabel}>Market Products Total:</Text>
+                      <Text style={styles.rashanPriceValue}>Rs. {Number(order.subtotal || 0).toLocaleString()}</Text>
+                   </View>
+                   <View style={styles.rashanPriceRow}>
+                      <Text style={styles.rashanPriceLabel}>Sourcing & Delivery Fee:</Text>
+                      <Text style={styles.rashanPriceValue}>Rs. {Number(order.deliveryFee || 0).toLocaleString()}</Text>
+                   </View>
+                   <View style={[styles.rashanPriceRow, { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#f0f0f0' }]}>
+                      <Text style={[styles.rashanPriceLabel, { fontWeight: '800', color: '#1A1A1A' }]}>Grand Total:</Text>
+                      <Text style={[styles.rashanPriceValue, { fontSize: 18, color: '#FF4500' }]}>Rs. {Number(order.total).toLocaleString()}</Text>
+                   </View>
+                </View>
+              </>
+            )}
           </View>
         )}
-        ───────────────────────────────────────────────────────────── */}
 
-        {order && order.items && order.items.length > 0 && (
+        {order && order.items && order.items.length > 0 && order.orderType !== 'rashan' && (
           <View style={styles.summaryCard}>
             <Text style={styles.summaryTitle}>Order Summary</Text>
             
-            {/* Active Items Section */}
             {localItems.filter((i: any) => i.status !== 'missing').map((itemValue: any) => (
               <View key={itemValue.id} style={styles.itemRow}>
                 <View style={styles.itemInfo}>
@@ -294,7 +363,6 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
               </View>
             ))}
 
-            {/* Missing Items Section */}
             {order.items.filter((i: any) => i.status === 'missing').length > 0 && (
               <View style={{ marginTop: 20 }}>
                 <Text style={[styles.summaryTitle, { color: '#E53E3E', fontSize: 13 }]}>⚠️ Missing Items (Not Charged)</Text>
@@ -768,4 +836,166 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   receiptActionRow: { flexDirection: 'row', marginTop: 10, width: '100%', paddingHorizontal: 0 },
+  
+  // Rashan Styles
+  quotationBlock: {
+    marginTop: 20,
+    padding: 18,
+    backgroundColor: '#F0F9FF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  quoteTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0369A1',
+    marginBottom: 4,
+  },
+  quoteBreakdown: {
+    marginVertical: 12,
+    gap: 8,
+  },
+  quoteRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  quoteLabel: {
+    fontSize: 13,
+    color: '#075985',
+    fontWeight: '600',
+  },
+  quoteAmount: {
+    fontSize: 14,
+    color: '#075985',
+    fontWeight: '700',
+  },
+  quoteTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#BAE6FD',
+  },
+  quoteTotalLabel: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0369A1',
+  },
+  quoteTotalAmount: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#1A1A1A',
+  },
+  quoteReason: {
+    fontSize: 14,
+    color: '#C53030',
+    lineHeight: 20,
+  },
+  approveBtn: {
+    backgroundColor: '#22C55E',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  approveBtnText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  detailLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#94A3B8',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  textListPanel: {
+    backgroundColor: '#F8FAFC',
+    padding: 15,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  textListContent: {
+    fontSize: 15,
+    color: '#334155',
+    lineHeight: 22,
+  },
+  logisticsGrid: {
+    flexDirection: 'row',
+    marginTop: 20,
+    gap: 10,
+  },
+  logisticsItem: {
+    flex: 1,
+    backgroundColor: '#F1F5F9',
+    padding: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  logisticsLabel: {
+    fontSize: 10,
+    color: '#64748B',
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  logisticsValue: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#1E293B',
+  },
+  addressLine: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1E293B',
+    marginTop: 4,
+  },
+  landmarkLine: {
+    fontSize: 14,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  phoneLine: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FF4500',
+    marginTop: 8,
+  },
+  rashanFinancials: {
+    gap: 6,
+  },
+  rashanPriceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  rashanPriceLabel: {
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  rashanPriceValue: {
+    fontSize: 14,
+    color: '#1E293B',
+    fontWeight: '700',
+  },
+  cancelOrderBtn: {
+    marginTop: 15,
+    backgroundColor: '#FFF5F5',
+    paddingVertical: 15,
+    borderRadius: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FED7D7',
+  },
+  cancelOrderBtnText: {
+    color: '#C53030',
+    fontWeight: '700',
+    fontSize: 14,
+  },
 });

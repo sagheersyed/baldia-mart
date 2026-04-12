@@ -15,6 +15,7 @@ interface Settings {
   feature_show_restaurants: boolean;
   feature_show_brands: boolean;
   feature_chat_enabled: boolean;
+  feature_rashan_enabled: boolean;
   chat_enable_replies: boolean;
   chat_enable_images: boolean;
   auth_customer_mpin_enabled: boolean;

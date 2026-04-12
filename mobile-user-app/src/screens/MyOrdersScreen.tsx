@@ -11,7 +11,7 @@ import { ENV } from '../config/env';
 import { generateReceiptPDF, printReceipt } from '../utils/receiptGenerator';
 import SkeletonLoader from '../components/SkeletonLoader';
 
-const BASE_IP = 'https://384b-175-107-236-228.ngrok-free.app';
+const BASE_IP = 'https://9090-175-107-236-228.ngrok-free.app';
 const SOCKET_URL = BASE_IP;
 
 const STATUS_CONFIG: Record<string, { color: string; bg: string; label: string; icon: string }> = {

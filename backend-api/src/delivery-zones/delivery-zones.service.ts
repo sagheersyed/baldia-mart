@@ -49,30 +49,35 @@ export class DeliveryZonesService {
     return distance;
   }
 
+  // GPS drift tolerance — accounts for GPS inaccuracy in dense/indoor areas
+  private readonly GPS_DRIFT_BUFFER_KM = 0.5;
+
   async validateAddressInZone(lat: number, lng: number): Promise<{ isValid: boolean, distance: number, zone?: DeliveryZone, maxRadius?: number }> {
     const activeZones = await this.findAllActive();
-    
+
     console.log(`Validating coordinates (${lat}, ${lng}) against ${activeZones.length} active zones`);
 
     if (activeZones.length === 0) {
-      console.warn('NO ACTIVE DELIVERY ZONES FOUND IN DATABASE');
+      console.warn('NO ACTIVE DELIVERY ZONES FOUND IN DATABASE — all orders will be blocked');
+      return { isValid: false, distance: -1, maxRadius: 0 };
     }
 
     let maxRadius = 0;
-    // For Baldia Town standard setup, we want max 50km
     for (const zone of activeZones) {
-      if (Number(zone.radiusKm) > maxRadius) {
-        maxRadius = Number(zone.radiusKm);
-      }
-      
+      const effectiveRadius = Number(zone.radiusKm) + this.GPS_DRIFT_BUFFER_KM;
+      if (effectiveRadius > maxRadius) maxRadius = effectiveRadius;
+
       const distance = this.calculateDistance(lat, lng, Number(zone.centerLat), Number(zone.centerLng));
-      console.log(`Zone "${zone.name}": Distance to center is ${distance.toFixed(2)}km (Radius: ${zone.radiusKm}km)`);
-      
-      if (distance <= Number(zone.radiusKm)) {
+      console.log(
+        `Zone "${zone.name}": distance=${distance.toFixed(2)}km, ` +
+        `radius=${zone.radiusKm}km (+${this.GPS_DRIFT_BUFFER_KM}km buffer = ${effectiveRadius}km)`
+      );
+
+      if (distance <= effectiveRadius) {
         return { isValid: true, distance, zone };
       }
     }
-    
+
     return { isValid: false, distance: -1, maxRadius };
   }
 }

@@ -24,6 +24,15 @@ const GET_STATUS_STEPS = (orderType: string = 'mart'): TrackingStep[] => [
   { key: 'delivered', label: 'Delivered', icon: '🎁', description: orderType === 'food' ? 'Enjoy your meal!' : 'Your package has been delivered' },
 ];
 
+const GET_RASHAN_STEPS = (): TrackingStep[] => [
+  { key: 'pending_review', label: 'Request Sent', icon: '📝', description: 'Admin is reviewing your list' },
+  { key: 'quoted', label: 'Price Quoted', icon: '💰', description: 'Review and approve the estimate' },
+  { key: 'approved', label: 'Approved', icon: '✅', description: 'Awaiting procurement start' },
+  { key: 'sourcing', label: 'Sourcing', icon: '📦', description: 'We are buying items from market' },
+  { key: 'out_for_delivery', label: 'Out for Delivery', icon: '🚚', description: 'Suzuki/Rickshaw is on the way' },
+  { key: 'delivered', label: 'Delivered', icon: '🎁', description: 'Your stash has arrived!' },
+];
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Hook
 // ─────────────────────────────────────────────────────────────────────────────
@@ -143,8 +152,19 @@ export function useOrderTracking(orderId: string, navigation: any) {
   }, [orderId, fetchOrderDetails]);
 
   // ── Derived values ────────────────────────────────────────────────────────
-  const steps = useMemo(() => GET_STATUS_STEPS(order?.orderType), [order?.orderType]);
-  const currentStepIndex = status === 'cancelled' ? -1 : steps.findIndex(s => s.key === status);
+  const steps = useMemo(() => {
+    if (order?.orderType === 'rashan') return GET_RASHAN_STEPS();
+    return GET_STATUS_STEPS(order?.orderType);
+  }, [order?.orderType]);
+
+  const currentStepIndex = useMemo(() => {
+    if (status === 'cancelled') return -1;
+    if (order?.orderType === 'rashan') {
+      const rStatus = order.rashanStatus || 'pending_review';
+      return steps.findIndex(s => s.key === rStatus);
+    }
+    return steps.findIndex(s => s.key === status);
+  }, [status, order?.orderType, order?.rashanStatus, steps]);
 
   const filteredProducts = useMemo(() => {
     if (!searchQuery) return allProducts;
@@ -243,6 +263,45 @@ export function useOrderTracking(orderId: string, navigation: any) {
     }
   };
 
+  const handleApproveQuotation = async () => {
+    setLoading(true);
+    try {
+      const { rashanApi } = require('../api/api');
+      await rashanApi.approveQuotation(orderId);
+      await fetchOrderDetails();
+      Alert.alert('Success', 'Quotation approved! We will start sourcing shortly.');
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.message || 'Failed to approve quotation.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancelRashanRequest = async () => {
+    Alert.alert(
+      'Cancel Request?',
+      'Are you sure you want to cancel this Rashan order request?',
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Yes, Cancel',
+          style: 'destructive',
+          onPress: async () => {
+            setLoading(true);
+            try {
+              const { rashanApi } = require('../api/api');
+              await rashanApi.cancelRequest(orderId);
+              navigation.navigate('MyOrders');
+            } catch (err: any) {
+              Alert.alert('Error', err.response?.data?.message || 'Failed to cancel request.');
+              setLoading(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
   return {
     // State
     order, status, loading, rider, riderLocation, localItems, timeline,
@@ -258,6 +317,7 @@ export function useOrderTracking(orderId: string, navigation: any) {
     // Handlers
     fetchOrderDetails, hasChanges,
     handleReorder, handleUpdateQuantityLocal, handleConfirmBatchUpdates, handleRemoveItem,
-    handleAddNewProductToOrder, handleDismissRating, handleSubmitReview,
+    handleAddNewProductToOrder, handleDismissRating, handleSubmitReview, handleApproveQuotation,
+    handleCancelRashanRequest,
   };
 }

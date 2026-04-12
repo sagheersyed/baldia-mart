@@ -29,6 +29,15 @@ export class SettingsService implements OnModuleInit {
     await this.seedDefault('feature_chat_enabled', 'true');
     await this.seedDefault('chat_enable_replies', 'true');
     await this.seedDefault('chat_enable_images', 'true');
+    await this.seedDefault('feature_rashan_enabled', 'true');
+
+    // Rashan Service Pricing Configuration
+    await this.seedDefault('rashan_base_fee', '750');
+    await this.seedDefault('rashan_surcharge_medium', '200');
+    await this.seedDefault('rashan_surcharge_heavy', '450');
+    await this.seedDefault('rashan_floor_surcharge_low', '150');
+    await this.seedDefault('rashan_floor_surcharge_high', '300');
+    await this.seedDefault('rashan_placement_fee', '150');
 
     // New Global Configuration
     await this.seedDefault('contact_phone', '+92 300 1234567');
@@ -80,6 +89,13 @@ export class SettingsService implements OnModuleInit {
       feature_chat_enabled: (await this.getByKey('feature_chat_enabled', 'true')) === 'true',
       chat_enable_replies: (await this.getByKey('chat_enable_replies', 'true')) === 'true',
       chat_enable_images: (await this.getByKey('chat_enable_images', 'true')) === 'true',
+      feature_rashan_enabled: (await this.getByKey('feature_rashan_enabled', 'true')) === 'true',
+      rashan_base_fee: await this.getNumber('rashan_base_fee', 750),
+      rashan_surcharge_medium: await this.getNumber('rashan_surcharge_medium', 200),
+      rashan_surcharge_heavy: await this.getNumber('rashan_surcharge_heavy', 450),
+      rashan_floor_surcharge_low: await this.getNumber('rashan_floor_surcharge_low', 150),
+      rashan_floor_surcharge_high: await this.getNumber('rashan_floor_surcharge_high', 300),
+      rashan_placement_fee: await this.getNumber('rashan_placement_fee', 150),
     };
   }
 

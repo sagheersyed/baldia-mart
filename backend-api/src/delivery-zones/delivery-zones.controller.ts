@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Param, Body, ParseUUIDPipe } from '@nestjs/common';
+import { Controller, Get, Post, Put, Param, Body, ParseUUIDPipe, Query } from '@nestjs/common';
 import { DeliveryZonesService } from './delivery-zones.service';
 
 @Controller(['delivery-zones', 'zones'])
@@ -14,6 +14,14 @@ export class DeliveryZonesController {
   @Get('active')
   async getActiveZones() {
     return this.zonesService.findAllActive();
+  }
+
+  @Get('validate')
+  async validateLocation(
+    @Query('lat') lat: number,
+    @Query('lng') lng: number,
+  ) {
+    return this.zonesService.validateAddressInZone(Number(lat), Number(lng));
   }
 
   @Post()

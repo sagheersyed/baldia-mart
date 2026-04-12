@@ -1,7 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Home, ShoppingBag, List, Users, Bike, Map, Tag, Settings, LogOut, Star, Megaphone, Layers, UtensilsCrossed, Store } from 'lucide-react';
+import { Home, ShoppingBag, List, Users, Bike, Map, Tag, Settings, LogOut, Star, Megaphone, Layers, UtensilsCrossed, Store, Package } from 'lucide-react';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -23,6 +23,7 @@ export default function Sidebar({ isOpen, isCollapsed, onToggleCollapse }: Sideb
   const menuItems = [
     { name: 'Dashboard', icon: Home, path: '/' },
     { name: 'Products', icon: ShoppingBag, path: '/products' },
+    { name: 'Rashan Requests', icon: Package, path: '/rashan' },
     { name: 'Categories', icon: List, path: '/categories' },
     { name: 'Brands', icon: Tag, path: '/brands' },
     { name: 'Restaurants', icon: UtensilsCrossed, path: '/restaurants' },

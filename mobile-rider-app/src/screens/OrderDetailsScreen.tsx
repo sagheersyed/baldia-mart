@@ -96,6 +96,10 @@ export default function OrderDetailsScreen({ route, navigation }: any) {
               <View style={[styles.typeBadge, { backgroundColor: '#FFF5E0' }]}>
                 <Text style={{ color: '#FF8C00', fontSize: 10, fontWeight: 'bold' }}>🍽️ FOOD ORDER</Text>
               </View>
+            ) : order.orderType === 'rashan' ? (
+              <View style={[styles.typeBadge, { backgroundColor: '#FF4500' }]}>
+                <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}>📦 RASHAN BULK</Text>
+              </View>
             ) : (
               <View style={[styles.typeBadge, { backgroundColor: '#E8F5E9' }]}>
                 <Text style={{ color: '#2E7D32', fontSize: 10, fontWeight: 'bold' }}>🛒 MART ORDER</Text>
@@ -128,8 +132,8 @@ export default function OrderDetailsScreen({ route, navigation }: any) {
             }
             return (
               <>
-                <Text style={styles.customerName}>🏬 Baldia Mart</Text>
-                <Text style={styles.address}>📍 Main Colony, Baldia Town</Text>
+                <Text style={styles.customerName}>{order.orderType === 'rashan' ? '📦 Wholesale Market' : '🏬 Baldia Mart'}</Text>
+                <Text style={styles.address}>📍 {order.orderType === 'rashan' ? 'Bulk Sourcing Center' : 'Main Colony, Baldia Town'}</Text>
               </>
             );
           })()}
@@ -138,7 +142,10 @@ export default function OrderDetailsScreen({ route, navigation }: any) {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Customer & Delivery</Text>
           <Text style={styles.customerName}>👤 {order.user?.name || 'Customer'}</Text>
-          <Text style={styles.address}>📍 {order?.address?.streetAddress || 'Local Area'}</Text>
+          <Text style={styles.address}>📍 {order?.address?.streetAddress || order?.bulkStreetAddress || 'Local Area'}</Text>
+          {order.address?.landmark && <Text style={styles.landmark}>🏢 Near: {order.address.landmark}</Text>}
+          {order.bulkLandmark && <Text style={styles.landmark}>🏢 Near: {order.bulkLandmark}</Text>}
+          {(order.address?.city || order.bulkCity) && <Text style={styles.address}>🌆 {order.address?.city || order.bulkCity}</Text>}
           <Text style={styles.distance}>🚚 {order?.deliveryDistanceKm || '?'} km distance</Text>
         </View>
 
@@ -252,6 +259,7 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 14, color: '#888', fontWeight: 'bold', marginBottom: 10, textTransform: 'uppercase' },
   customerName: { fontSize: 18, fontWeight: 'bold', marginBottom: 5 },
   address: { fontSize: 16, color: '#444', marginBottom: 5 },
+  landmark: { fontSize: 15, color: '#FF4500', fontWeight: '700', marginBottom: 8, backgroundColor: '#FFF5F0', padding: 8, borderRadius: 8 },
   distance: { fontSize: 14, color: '#FF4500', fontWeight: 'bold' },
   groupHeader: {
     fontSize: 14, fontWeight: 'bold', color: '#B45309',

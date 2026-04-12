@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Save, RefreshCw, Truck, ArrowRight, Ruler, Phone, Mail, MapPin, Building2, Shield, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Save, RefreshCw, Truck, ArrowRight, Ruler, Phone, Mail, MapPin, Building2, Shield, ToggleLeft, ToggleRight, Boxes, Scale, ArrowUpCircle } from 'lucide-react';
 import { fetchWithAuth, BASE_URL } from '@/lib/api';
 
 const SETTINGS_API_URL = `${BASE_URL}/settings`;
@@ -201,6 +201,168 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        {/* Rashan Bulk Grocery Pricing */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="bg-gray-50 p-6 border-b border-gray-100 flex items-center space-x-3">
+            <Boxes className="text-orange-600" size={24} />
+            <h2 className="text-xl font-semibold text-gray-800">Rashan Bulk Grocery Pricing</h2>
+          </div>
+
+          <div className="p-6 space-y-8">
+            <p className="text-sm text-gray-500 bg-orange-50 p-4 rounded-xl border border-orange-100">
+              <strong>Refined Logic:</strong> These rates define the service fee (sourcing & logistics) for Rashan orders. Subtotal = Groceries + Service Fee.
+            </p>
+
+            <div className="grid md:grid-cols-2 gap-8">
+              {/* Rashan Base Fee */}
+              <div className="space-y-3">
+                <label className="text-sm font-medium text-gray-700">Base Sourcing Fee (Rs.)</label>
+                <div className="flex space-x-2">
+                  <div className="relative flex-1">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">Rs.</span>
+                    <input
+                      type="number"
+                      value={settings.rashan_base_fee || ''}
+                      onChange={(e) => handleSettingChange('rashan_base_fee', e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-orange-600/20 focus:border-orange-600 outline-none transition"
+                      placeholder="750"
+                    />
+                  </div>
+                  <button
+                    onClick={() => handleUpdate('rashan_base_fee', settings.rashan_base_fee)}
+                    disabled={saving}
+                    className="p-3 bg-orange-600 text-white rounded-xl hover:bg-orange-700 transition disabled:opacity-50"
+                  >
+                    <Save size={20} />
+                  </button>
+                </div>
+                <p className="text-xs text-gray-400 italic">Starting fee for any Rashan sourcing request.</p>
+              </div>
+
+              {/* Placement Fee */}
+              <div className="space-y-3">
+                <label className="text-sm font-medium text-gray-700">Inside Placement Surcharge (Rs.)</label>
+                <div className="flex space-x-2">
+                  <div className="relative flex-1">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">Rs.</span>
+                    <input
+                      type="number"
+                      value={settings.rashan_placement_fee || ''}
+                      onChange={(e) => handleSettingChange('rashan_placement_fee', e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-orange-600/20 focus:border-orange-600 outline-none transition"
+                      placeholder="150"
+                    />
+                  </div>
+                  <button
+                    onClick={() => handleUpdate('rashan_placement_fee', settings.rashan_placement_fee)}
+                    disabled={saving}
+                    className="p-3 bg-orange-600 text-white rounded-xl hover:bg-orange-700 transition disabled:opacity-50"
+                  >
+                    <Save size={20} />
+                  </button>
+                </div>
+                <p className="text-xs text-gray-400 italic">Added when the rider delivers inside the kitchen/pantry.</p>
+              </div>
+
+              {/* Medium Weight Surcharge */}
+              <div className="space-y-3">
+                <label className="text-sm font-medium text-gray-700">Medium Weight Surcharge (Rs.)</label>
+                <div className="flex space-x-2">
+                  <div className="relative flex-1">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><Scale size={16} /></span>
+                    <input
+                      type="number"
+                      value={settings.rashan_surcharge_medium || ''}
+                      onChange={(e) => handleSettingChange('rashan_surcharge_medium', e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-orange-600/20 focus:border-orange-600 outline-none transition"
+                      placeholder="200"
+                    />
+                  </div>
+                  <button
+                    onClick={() => handleUpdate('rashan_surcharge_medium', settings.rashan_surcharge_medium)}
+                    disabled={saving}
+                    className="p-3 bg-orange-600 text-white rounded-xl hover:bg-orange-700 transition disabled:opacity-50"
+                  >
+                    <Save size={20} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Heavy Weight Surcharge */}
+              <div className="space-y-3">
+                <label className="text-sm font-medium text-gray-700">Heavy Weight Surcharge (Rs.)</label>
+                <div className="flex space-x-2">
+                  <div className="relative flex-1">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><Scale size={16} /></span>
+                    <input
+                      type="number"
+                      value={settings.rashan_surcharge_heavy || ''}
+                      onChange={(e) => handleSettingChange('rashan_surcharge_heavy', e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-orange-600/20 focus:border-orange-600 outline-none transition"
+                      placeholder="450"
+                    />
+                  </div>
+                  <button
+                    onClick={() => handleUpdate('rashan_surcharge_heavy', settings.rashan_surcharge_heavy)}
+                    disabled={saving}
+                    className="p-3 bg-orange-600 text-white rounded-xl hover:bg-orange-700 transition disabled:opacity-50"
+                  >
+                    <Save size={20} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Floor Low Surcharge */}
+              <div className="space-y-3">
+                <label className="text-sm font-medium text-gray-700">Floor (1-2) Surcharge (Rs.)</label>
+                <div className="flex space-x-2">
+                  <div className="relative flex-1">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><ArrowUpCircle size={16} /></span>
+                    <input
+                      type="number"
+                      value={settings.rashan_floor_surcharge_low || ''}
+                      onChange={(e) => handleSettingChange('rashan_floor_surcharge_low', e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-orange-600/20 focus:border-orange-600 outline-none transition"
+                      placeholder="150"
+                    />
+                  </div>
+                  <button
+                    onClick={() => handleUpdate('rashan_floor_surcharge_low', settings.rashan_floor_surcharge_low)}
+                    disabled={saving}
+                    className="p-3 bg-orange-600 text-white rounded-xl hover:bg-orange-700 transition disabled:opacity-50"
+                  >
+                    <Save size={20} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Floor High Surcharge */}
+              <div className="space-y-3">
+                <label className="text-sm font-medium text-gray-700">Floor (3+) Surcharge (Rs.)</label>
+                <div className="flex space-x-2">
+                  <div className="relative flex-1">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><ArrowUpCircle size={16} /></span>
+                    <input
+                      type="number"
+                      value={settings.rashan_floor_surcharge_high || ''}
+                      onChange={(e) => handleSettingChange('rashan_floor_surcharge_high', e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-orange-600/20 focus:border-orange-600 outline-none transition"
+                      placeholder="300"
+                    />
+                  </div>
+                  <button
+                    onClick={() => handleUpdate('rashan_floor_surcharge_high', settings.rashan_floor_surcharge_high)}
+                    disabled={saving}
+                    className="p-3 bg-orange-600 text-white rounded-xl hover:bg-orange-700 transition disabled:opacity-50"
+                  >
+                    <Save size={20} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Store Information */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="bg-gray-50 p-6 border-b border-gray-100 flex items-center space-x-3">
@@ -370,8 +532,8 @@ export default function SettingsPage() {
           </p>
 
           <div className="grid md:grid-cols-2 gap-8">
-            {['feature_show_mart', 'feature_show_restaurants', 'feature_show_brands'].map(key => {
-              const label = key.includes('mart') ? 'Mart Section' : key.includes('restaurants') ? 'Restaurant Section' : 'Brand Carousel';
+            {['feature_show_mart', 'feature_show_restaurants', 'feature_show_brands', 'feature_rashan_enabled'].map(key => {
+              const label = key === 'feature_rashan_enabled' ? 'Rashan/Bulk Module' : key.includes('mart') ? 'Mart Section' : key.includes('restaurants') ? 'Restaurant Section' : 'Brand Carousel';
               const isEnabled = settings[key] === 'true' || settings[key] === true;
               return (
                 <div key={key} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">

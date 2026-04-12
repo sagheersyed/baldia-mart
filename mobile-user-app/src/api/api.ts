@@ -150,6 +150,16 @@ export const settingsApi = {
   getPublicSettings: () => api.get('/settings/public'),
 };
 
+export const rashanApi = {
+  submitRequest: (data: any) => api.post('/orders/rashan', data),
+  getMyOrders: () => api.get('/orders/rashan/my'),
+  getById: (id: string) => api.get(`/orders/rashan/${id}`),
+  approveQuotation: (id: string) => api.patch(`/orders/rashan/${id}/approve`),
+  previewFee: (data: { weightTier: string; floor: number; placement: string }) =>
+    api.post('/orders/rashan/fee-preview', data),
+};
+
+
 export const ridersApi = {
   getMe: () => api.get('/riders/me'),
   postReview: (riderId: string, data: { rating: number; comment?: string; orderId: string }) =>

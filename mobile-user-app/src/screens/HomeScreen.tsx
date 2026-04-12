@@ -126,14 +126,14 @@ const BrandChip = memo(({ brand, onPress }: any) => {
 export default function HomeScreen({ navigation }: any) {
   const { settings } = useSettings();
   const { martCart, foodCart, addToCart, getCartCount, activeMode, setActiveMode } = useCart();
-  
+
   const showMart = settings?.feature_show_mart !== false;
   const showFood = settings?.feature_show_restaurants !== false;
 
   const [serviceMode, setServiceMode] = useState<'mart' | 'food'>(activeMode);
   const cart = serviceMode === 'mart' ? martCart : foodCart;
   const { isFavourite, toggleFavourite, reload: reloadFavs } = useFavourites();
-  
+
   // Update mode if settings change
   useEffect(() => {
     if (!showMart && showFood) {
@@ -231,11 +231,11 @@ export default function HomeScreen({ navigation }: any) {
   useFocusEffect(useCallback(() => {
     // If only food is allowed, don't force mart here
     if (showMart) {
-       setActiveMode('mart');
-       setServiceMode('mart');
+      setActiveMode('mart');
+      setServiceMode('mart');
     } else if (showFood) {
-       setActiveMode('food');
-       setServiceMode('food');
+      setActiveMode('food');
+      setServiceMode('food');
     }
     loadData();
     reloadFavs();
@@ -244,7 +244,7 @@ export default function HomeScreen({ navigation }: any) {
   // Real-time Banners Update
   useEffect(() => {
     if (!socket.connected) socket.connect();
-    
+
     socket.on('connect', () => console.log('Home: Connected to socket'));
     socket.on('bannersUpdated', async () => {
       console.log('Home: Banners updated remotely, refreshing...');
@@ -341,6 +341,24 @@ export default function HomeScreen({ navigation }: any) {
             ))}
           </ScrollView>
         </View>
+      )}
+
+      {/* ─ MONTHLY RASHAN (BULK SERVICE) ─ */}
+      {settings?.feature_rashan_enabled === true && (
+        <TouchableOpacity
+          style={styles.rashanBanner}
+          activeOpacity={0.9}
+          onPress={() => navigation.navigate('RashanOrder')}
+        >
+          <View style={styles.rashanBannerContent}>
+            <Text style={styles.rashanTag}>BULK SERVICE 🚚</Text>
+            <Text style={styles.rashanTitle}>Monthly Rashan</Text>
+            <Text style={styles.rashanSub}>Upload your list, we deliver bulk via Suzuki/Rickshaw!</Text>
+          </View>
+          <View style={styles.rashanIconBox}>
+            <Text style={styles.rashanIcon}>📦</Text>
+          </View>
+        </TouchableOpacity>
       )}
 
       {/* ─ CATEGORIES ─ */}
@@ -513,9 +531,9 @@ export default function HomeScreen({ navigation }: any) {
             <Text style={styles.chevronIcon}>⌄</Text>
           </View>
         </TouchableOpacity>
-        
+
         {/* Service Toggle (Only if both enabled) */}
-        {showMart && showFood && (
+        {/* {showMart && showFood && (
           <View style={styles.toggleWrap}>
             <TouchableOpacity 
               style={[styles.toggleSegment, serviceMode === 'mart' && styles.toggleSegmentActive]} 
@@ -530,7 +548,7 @@ export default function HomeScreen({ navigation }: any) {
               <Text style={[styles.toggleSegmentLabel, serviceMode === 'food' && styles.toggleSegmentLabelActive]}>Restaurants</Text>
             </TouchableOpacity>
           </View>
-        )}
+        )} */}
 
         <TouchableOpacity
           style={styles.searchBar}
@@ -676,6 +694,55 @@ const styles = StyleSheet.create({
   bannerTitle: { fontSize: 22, fontWeight: '900', color: '#fff', marginBottom: 4, lineHeight: 26 },
   bannerSub: { fontSize: 12, color: '#FFD8C4', fontWeight: '600' },
   bannerImgArea: { width: 110, justifyContent: 'center', alignItems: 'center' },
+
+  // Rashan Banner
+  rashanBanner: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 20,
+    backgroundColor: '#1A1A1A',
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 20,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+  },
+  rashanBannerContent: {
+    flex: 1,
+  },
+  rashanTag: {
+    color: '#FFD700',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1,
+    marginBottom: 6,
+  },
+  rashanTitle: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '900',
+    marginBottom: 4,
+  },
+  rashanSub: {
+    color: '#CCC',
+    fontSize: 12,
+    lineHeight: 16,
+    paddingRight: 10,
+  },
+  rashanIconBox: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  rashanIcon: {
+    fontSize: 32,
+  },
 
   // Sections
   section: { marginBottom: 8 },
