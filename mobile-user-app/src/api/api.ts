@@ -155,6 +155,7 @@ export const rashanApi = {
   getMyOrders: () => api.get('/orders/rashan/my'),
   getById: (id: string) => api.get(`/orders/rashan/${id}`),
   approveQuotation: (id: string) => api.patch(`/orders/rashan/${id}/approve`),
+  cancelRequest: (id: string) => api.patch(`/orders/rashan/${id}/cancel`),
   previewFee: (data: { weightTier: string; floor: number; placement: string }) =>
     api.post('/orders/rashan/fee-preview', data),
 };

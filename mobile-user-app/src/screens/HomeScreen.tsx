@@ -18,6 +18,7 @@ import SkeletonLoader from '../components/SkeletonLoader';
 import { useCart } from '../context/CartContext';
 import { useFavourites } from '../hooks/useFavourites';
 import { useSettings } from '../context/SettingsContext';
+import Animated3DCard from '../components/Animated3DCard';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -29,77 +30,79 @@ const ProductCard = memo(({ prod, cartQty, onAdd, isFav, onToggleFav }: any) => 
 
   return (
     <View style={styles.prodCard}>
-      <View style={styles.prodImgWrap}>
-        {prod.imageUrl
-          ? <Image source={{ uri: prod.imageUrl }} style={styles.fillImg} resizeMode="cover" />
-          : <View style={styles.prodImgPlaceholder} />}
-        {cartQty > 0 && (
-          <View style={styles.qtyBadge}><Text style={styles.qtyBadgeText}>{cartQty}</Text></View>
-        )}
-
-        {/* Hierarchical Business Hours Check */}
-        {(() => {
-          const productWait = !isBusinessOpen(prod.openingTime, prod.closingTime);
-          const brandWait = prod.brand && !isBusinessOpen(prod.brand.openingTime, prod.brand.closingTime);
-          const catWait = prod.category && !isBusinessOpen(prod.category.openingTime, prod.category.closingTime);
-
-          if (productWait || brandWait || catWait) {
-            return (
-              <View style={styles.oosOverlay}>
-                <Text style={styles.oosText}>Currently Closed</Text>
-              </View>
-            );
-          }
-          if (isOOS) {
-            return (
-              <View style={styles.oosOverlay}>
-                <Text style={styles.oosText}>Out of Stock</Text>
-              </View>
-            );
-          }
-          return null;
-        })()}
-
-        <TouchableOpacity style={styles.prodHeart} onPress={onToggleFav}>
-          <Text style={styles.prodHeartIcon}>{isFav ? '❤️' : '🤍'}</Text>
-        </TouchableOpacity>
-      </View>
-      <Text style={styles.prodName} numberOfLines={2}>{prod.name}</Text>
-      {prod.category?.name && <Text style={styles.prodCatLabel}>{prod.category.name}</Text>}
-      <View style={styles.prodBottom}>
-        <View>
-          <Text style={styles.prodPrice}>Rs {finalPrice}</Text>
-          {Number(prod.discount) > 0 && (
-            <Text style={styles.prodOldPrice}>Rs {Number(prod.price).toFixed(0)}</Text>
+        <View style={styles.prodImgWrap}>
+          {prod.imageUrl
+            ? <Image source={{ uri: prod.imageUrl }} style={styles.fillImg} contentFit="cover" />
+            : <View style={styles.prodImgPlaceholder} />}
+          {cartQty > 0 && (
+            <View style={styles.qtyBadge}><Text style={styles.qtyBadgeText}>{cartQty}</Text></View>
           )}
+
+          {/* Hierarchical Business Hours Check */}
+          {(() => {
+            const productWait = !isBusinessOpen(prod.openingTime, prod.closingTime);
+            const brandWait = prod.brand && !isBusinessOpen(prod.brand.openingTime, prod.brand.closingTime);
+            const catWait = prod.category && !isBusinessOpen(prod.category.openingTime, prod.category.closingTime);
+
+            if (productWait || brandWait || catWait) {
+              return (
+                <View style={styles.oosOverlay}>
+                  <Text style={styles.oosText}>Currently Closed</Text>
+                </View>
+              );
+            }
+            if (isOOS) {
+              return (
+                <View style={styles.oosOverlay}>
+                  <Text style={styles.oosText}>Out of Stock</Text>
+                </View>
+              );
+            }
+            return null;
+          })()}
+
+          <TouchableOpacity style={styles.prodHeart} onPress={onToggleFav}>
+            <Text style={styles.prodHeartIcon}>{isFav ? '❤️' : '🤍'}</Text>
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity
-          style={[styles.addCircle, (isOOS || !isBusinessOpen(prod.openingTime, prod.closingTime) || (prod.brand && !isBusinessOpen(prod.brand.openingTime, prod.brand.closingTime)) || (prod.category && !isBusinessOpen(prod.category.openingTime, prod.category.closingTime))) && styles.addCircleDisabled]}
-          onPress={() => onAdd(prod)}
-          disabled={isOOS || !isBusinessOpen(prod.openingTime, prod.closingTime) || (prod.brand && !isBusinessOpen(prod.brand.openingTime, prod.brand.closingTime)) || (prod.category && !isBusinessOpen(prod.category.openingTime, prod.category.closingTime))}
-        >
-          <Text style={styles.addCircleText}>+</Text>
-        </TouchableOpacity>
+        <Text style={styles.prodName} numberOfLines={2}>{prod.name}</Text>
+        {prod.category?.name && <Text style={styles.prodCatLabel}>{prod.category.name}</Text>}
+        <View style={styles.prodBottom}>
+          <View>
+            <Text style={styles.prodPrice}>Rs {finalPrice}</Text>
+            {Number(prod.discount) > 0 && (
+              <Text style={styles.prodOldPrice}>Rs {Number(prod.price).toFixed(0)}</Text>
+            )}
+          </View>
+          <TouchableOpacity
+            style={[styles.addCircle, (isOOS || !isBusinessOpen(prod.openingTime, prod.closingTime) || (prod.brand && !isBusinessOpen(prod.brand.openingTime, prod.brand.closingTime)) || (prod.category && !isBusinessOpen(prod.category.openingTime, prod.category.closingTime))) && styles.addCircleDisabled]}
+            onPress={() => onAdd(prod)}
+            disabled={isOOS || !isBusinessOpen(prod.openingTime, prod.closingTime) || (prod.brand && !isBusinessOpen(prod.brand.openingTime, prod.brand.closingTime)) || (prod.category && !isBusinessOpen(prod.category.openingTime, prod.category.closingTime))}
+          >
+            <Text style={styles.addCircleText}>+</Text>
+          </TouchableOpacity>
+        </View>
       </View>
-    </View>
   );
 });
 
 // ─────────────── Category Pill ───────────────
 const CatPill = memo(({ cat, isSelected, onPress }: any) => (
-  <TouchableOpacity style={styles.catPill} onPress={onPress} activeOpacity={0.8}>
-    <View style={[styles.catIconBox, isSelected && styles.catIconBoxActive]}>
-      {cat.imageUrl
-        ? <Image source={{ uri: normalizeUrl(cat.imageUrl) }} style={styles.catIcon} resizeMode="cover" />
-        : <Image
-          source={{ uri: 'https://cdn-icons-png.flaticon.com/512/3081/3081840.png' }}
-          style={{ width: 30, height: 30, opacity: 0.4 }}
-        />}
-    </View>
-    <Text style={[styles.catPillText, isSelected && styles.catPillTextActive]} numberOfLines={1}>
-      {cat.name}
-    </Text>
-  </TouchableOpacity>
+  <View style={styles.catPill}>
+    <TouchableOpacity onPress={onPress} activeOpacity={0.8} style={{ alignItems: 'center' }}>
+      <View style={[styles.catIconBox, isSelected && styles.catIconBoxActive]}>
+        {cat.imageUrl
+          ? <Image source={{ uri: normalizeUrl(cat.imageUrl) }} style={styles.catIcon} resizeMode="cover" />
+          : <Image
+            source={{ uri: 'https://cdn-icons-png.flaticon.com/512/3081/3081840.png' }}
+            style={{ width: 30, height: 30, opacity: 0.4 }}
+          />}
+      </View>
+      <Text style={[styles.catPillText, isSelected && styles.catPillTextActive]} numberOfLines={1}>
+        {cat.name}
+      </Text>
+    </TouchableOpacity>
+  </View>
 ));
 
 // ─────────────── Brand Chip ───────────────
@@ -107,19 +110,21 @@ const BrandChip = memo(({ brand, onPress }: any) => {
   const imgUri = normalizeUrl(brand.logoUrl || brand.imageUrl);
   const isOpen = isBusinessOpen(brand.openingTime, brand.closingTime);
   return (
-    <TouchableOpacity style={styles.brandChip} onPress={onPress} activeOpacity={0.85}>
-      <View style={styles.brandChipImg}>
-        {imgUri
-          ? <Image source={{ uri: imgUri }} style={styles.fillImg} />
-          : <Text style={{ fontSize: 28 }}>🏬</Text>}
-        {!isOpen && (
-          <View style={[styles.oosOverlay, { borderRadius: 16 }]}>
-            <Text style={[styles.oosText, { fontSize: 8 }]}>CLOSED</Text>
-          </View>
-        )}
-      </View>
-      <Text style={styles.brandChipName} numberOfLines={1}>{brand.name}</Text>
-    </TouchableOpacity>
+    <View style={styles.brandChip}>
+      <TouchableOpacity onPress={onPress} activeOpacity={0.85} style={{ alignItems: 'center' }}>
+        <View style={styles.brandChipImg}>
+          {imgUri
+            ? <Image source={{ uri: imgUri }} style={styles.fillImg} />
+            : <Text style={{ fontSize: 28 }}>🏬</Text>}
+          {!isOpen && (
+            <View style={[styles.oosOverlay, { borderRadius: 16 }]}>
+              <Text style={[styles.oosText, { fontSize: 8 }]}>CLOSED</Text>
+            </View>
+          )}
+        </View>
+        <Text style={styles.brandChipName} numberOfLines={1}>{brand.name}</Text>
+      </TouchableOpacity>
+    </View>
   );
 });
 
@@ -345,20 +350,22 @@ export default function HomeScreen({ navigation }: any) {
 
       {/* ─ MONTHLY RASHAN (BULK SERVICE) ─ */}
       {settings?.feature_rashan_enabled === true && (
-        <TouchableOpacity
-          style={styles.rashanBanner}
-          activeOpacity={0.9}
-          onPress={() => navigation.navigate('RashanOrder')}
-        >
-          <View style={styles.rashanBannerContent}>
-            <Text style={styles.rashanTag}>BULK SERVICE 🚚</Text>
-            <Text style={styles.rashanTitle}>Monthly Rashan</Text>
-            <Text style={styles.rashanSub}>Upload your list, we deliver bulk via Suzuki/Rickshaw!</Text>
-          </View>
-          <View style={styles.rashanIconBox}>
-            <Text style={styles.rashanIcon}>📦</Text>
-          </View>
-        </TouchableOpacity>
+        <Animated3DCard maxRotation={12}>
+          <TouchableOpacity
+            style={styles.rashanBanner}
+            activeOpacity={0.9}
+            onPress={() => navigation.navigate('RashanOrder')}
+          >
+            <View style={styles.rashanBannerContent}>
+              <Text style={styles.rashanTag}>BULK SERVICE 🚚</Text>
+              <Text style={styles.rashanTitle}>Monthly Rashan</Text>
+              <Text style={styles.rashanSub}>Upload your list, we deliver bulk via Suzuki/Rickshaw!</Text>
+            </View>
+            <View style={styles.rashanIconBox}>
+              <Text style={styles.rashanIcon}>📦</Text>
+            </View>
+          </TouchableOpacity>
+        </Animated3DCard>
       )}
 
       {/* ─ CATEGORIES ─ */}
@@ -424,7 +431,7 @@ export default function HomeScreen({ navigation }: any) {
         'products'
       )}
     />
-  ), [martCart, isFavourite, toggleFavourite, handleAddToCart]);
+  ), [martCart.length, isFavourite, toggleFavourite, handleAddToCart]);
 
   const renderFooter = useCallback(() => (
     loadingMore ? (
@@ -573,6 +580,10 @@ export default function HomeScreen({ navigation }: any) {
         ListFooterComponent={renderFooter}
         onEndReached={loadMoreProducts}
         onEndReachedThreshold={0.5}
+        initialNumToRender={6}
+        maxToRenderPerBatch={10}
+        windowSize={10}
+        removeClippedSubviews={true}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

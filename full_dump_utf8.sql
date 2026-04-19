@@ -382,12 +382,12 @@ COPY public.cart_items (id, user_id, product_id, quantity, created_at, updated_a
 --
 
 COPY public.categories (id, description, is_active, name, image_url, created_at, updated_at) FROM stdin;
-dfef9360-e2b6-4ca2-ab13-c859fa18b7e8	Farm fresh local produce	t	Vegetables	https://9090-175-107-236-228.ngrok-free.app/public/cat_veg.png	2026-03-14 11:36:25.996316	2026-03-14 11:36:25.996316
-dc81ff83-b968-44b9-a689-27ae1d12b602	Seasonal and exotic fruits	t	Fruits	https://9090-175-107-236-228.ngrok-free.app/public/cat_fruit.png	2026-03-14 11:36:25.996316	2026-03-14 11:36:25.996316
-c449c570-4544-4e7b-a519-a0e92d7e7e15	Fresh halal meat	t	Meat & Poultry	https://9090-175-107-236-228.ngrok-free.app/public/cat_meat.png	2026-03-14 11:36:25.996316	2026-03-14 11:36:25.996316
-6914c166-4424-46df-a6f4-b10279dbe19f	Milk, eggs, and bread	t	Dairy & Breakfast	https://9090-175-107-236-228.ngrok-free.app/public/cat_dairy.png	2026-03-14 11:36:25.996316	2026-03-14 11:36:25.996316
-f95aec00-89cc-4d96-8c8e-ca0b6ecb87ab	Soft drinks and juices	t	Beverages	https://9090-175-107-236-228.ngrok-free.app/public/cat_bev.png	2026-03-14 11:36:25.996316	2026-03-14 11:36:25.996316
-2f7ee868-ad74-4fd5-a352-5e19ea7dcdc5	Chips and biscuits	t	Snacks	https://9090-175-107-236-228.ngrok-free.app/public/cat_snack.png	2026-03-14 11:36:25.996316	2026-03-14 11:36:25.996316
+dfef9360-e2b6-4ca2-ab13-c859fa18b7e8	Farm fresh local produce	t	Vegetables	https://8d6b-175-107-236-228.ngrok-free.app/public/cat_veg.png	2026-03-14 11:36:25.996316	2026-03-14 11:36:25.996316
+dc81ff83-b968-44b9-a689-27ae1d12b602	Seasonal and exotic fruits	t	Fruits	https://8d6b-175-107-236-228.ngrok-free.app/public/cat_fruit.png	2026-03-14 11:36:25.996316	2026-03-14 11:36:25.996316
+c449c570-4544-4e7b-a519-a0e92d7e7e15	Fresh halal meat	t	Meat & Poultry	https://8d6b-175-107-236-228.ngrok-free.app/public/cat_meat.png	2026-03-14 11:36:25.996316	2026-03-14 11:36:25.996316
+6914c166-4424-46df-a6f4-b10279dbe19f	Milk, eggs, and bread	t	Dairy & Breakfast	https://8d6b-175-107-236-228.ngrok-free.app/public/cat_dairy.png	2026-03-14 11:36:25.996316	2026-03-14 11:36:25.996316
+f95aec00-89cc-4d96-8c8e-ca0b6ecb87ab	Soft drinks and juices	t	Beverages	https://8d6b-175-107-236-228.ngrok-free.app/public/cat_bev.png	2026-03-14 11:36:25.996316	2026-03-14 11:36:25.996316
+2f7ee868-ad74-4fd5-a352-5e19ea7dcdc5	Chips and biscuits	t	Snacks	https://8d6b-175-107-236-228.ngrok-free.app/public/cat_snack.png	2026-03-14 11:36:25.996316	2026-03-14 11:36:25.996316
 e0c0a88b-dfd6-43d7-8f67-bcd6c361ce0a	Ready to cook	t	Frozen Foods	https://images.unsplash.com/photo-1584210228185-04d89c164104?q=80&w=600	2026-03-14 11:36:25.996316	2026-03-14 11:36:25.996316
 aaf2cf5e-84f4-4eac-a8be-b29cc5182928	Hygiene and soaps	t	Personal Care	https://images.unsplash.com/photo-1556228578-0d85b1a4d571?q=80&w=600	2026-03-14 11:36:25.996316	2026-03-14 11:36:25.996316
 \.

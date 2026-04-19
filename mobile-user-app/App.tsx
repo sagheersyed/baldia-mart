@@ -6,6 +6,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Text, ActivityIndicator, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 
 import { CartProvider, useCart } from './src/context/CartContext';
@@ -197,15 +198,17 @@ function Navigation() {
 }
 export default function App() {
   return (
-    <SafeAreaProvider>
-      <AuthProvider>
-        <SettingsProvider>
-          <CartProvider>
-            <Navigation />
-            <StatusBar style="auto" />
-          </CartProvider>
-        </SettingsProvider>
-      </AuthProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <AuthProvider>
+          <SettingsProvider>
+            <CartProvider>
+              <Navigation />
+              <StatusBar style="auto" />
+            </CartProvider>
+          </SettingsProvider>
+        </AuthProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

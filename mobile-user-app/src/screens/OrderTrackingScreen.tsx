@@ -26,6 +26,8 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
     handleCancelRashanRequest,
   } = useOrderTracking(orderId, navigation);
 
+  const [selectedImageUrl, setSelectedImageUrl] = React.useState<string | null>(null);
+
   const handleReorder = () => {
     Alert.alert(
       'Reorder',
@@ -269,11 +271,16 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
             {order.bulkListPhotoUrl && (
               <View style={{ marginBottom: 15 }}>
                 <Text style={styles.detailLabel}>Grocery List Photo:</Text>
-                <Image 
-                  source={{ uri: order.bulkListPhotoUrl }} 
-                  style={{ width: '100%', height: 200, borderRadius: 12, marginTop: 8 }} 
-                  contentFit="cover"
-                />
+                <TouchableOpacity activeOpacity={0.9} onPress={() => setSelectedImageUrl(order.bulkListPhotoUrl)}>
+                  <Image 
+                    source={{ uri: order.bulkListPhotoUrl }} 
+                    style={{ width: '100%', height: 220, borderRadius: 16, marginTop: 10, borderWidth: 1, borderColor: '#eee' }} 
+                    contentFit="cover"
+                  />
+                  <View style={styles.expandHint}>
+                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>🔍 Tap to Expand</Text>
+                  </View>
+                </TouchableOpacity>
               </View>
             )}
 
@@ -599,6 +606,21 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
             </SafeAreaView>
           </View>
         </Modal>
+        {/* Full Screen Image Viewer */}
+        <Modal visible={!!selectedImageUrl} transparent animationType="fade">
+          <View style={styles.fullImageOverlay}>
+            <TouchableOpacity style={styles.fullImageClose} onPress={() => setSelectedImageUrl(null)}>
+              <Text style={styles.fullImageCloseText}>✕ Close</Text>
+            </TouchableOpacity>
+            {selectedImageUrl && (
+              <Image 
+                source={{ uri: selectedImageUrl }} 
+                style={styles.fullImage} 
+                contentFit="contain"
+              />
+            )}
+          </View>
+        </Modal>
       </ScrollView>
 
       <TouchableOpacity
@@ -798,6 +820,12 @@ const styles = StyleSheet.create({
   addProductCloseText: { fontSize: 16, color: '#666', fontWeight: 'bold' },
 
   searchBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5F6FA', borderRadius: 16, paddingHorizontal: 15, marginBottom: 20 },
+  expandHint: { position: 'absolute', bottom: 12, right: 12, backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
+  
+  fullImageOverlay: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
+  fullImage: { width: '100%', height: '85%' },
+  fullImageClose: { position: 'absolute', top: 50, right: 20, backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 25, zIndex: 10 },
+  fullImageCloseText: { color: '#fff', fontWeight: 'bold' },
   searchIcon: { fontSize: 18, marginRight: 10 },
   searchInput: { flex: 1, height: 50, fontSize: 16, color: '#1A1A1A', fontWeight: '500' },
 

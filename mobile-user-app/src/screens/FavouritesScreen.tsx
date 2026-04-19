@@ -1,8 +1,9 @@
 import React, { useCallback, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Image, FlatList, SafeAreaView, Alert
+  Image, FlatList, Alert
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useFavourites } from '../hooks/useFavourites';
 import { normalizeUrl, restaurantsApi, productsApi } from '../api/api';

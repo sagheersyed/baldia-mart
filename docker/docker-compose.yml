@@ -36,7 +36,7 @@ services:
     ports:
       - "3001:3000" # Maps Next.js to 3001
     environment:
-      - NEXT_PUBLIC_API_URL=https://9090-175-107-236-228.ngrok-free.app/api/v1
+      - NEXT_PUBLIC_API_URL=https://8d6b-175-107-236-228.ngrok-free.app/api/v1
     depends_on:
       - backend-api
     networks:

@@ -18,7 +18,7 @@ export const options = {
   },
 };
 
-const BASE_URL = __ENV.API_URL || 'https://9090-175-107-236-228.ngrok-free.app/api/v1';
+const BASE_URL = __ENV.API_URL || 'https://8d6b-175-107-236-228.ngrok-free.app/api/v1';
 
 // Mock data
 const PHONE_NUMBERS = ['+923452621787', '+923118438350', '+923412248616'];
