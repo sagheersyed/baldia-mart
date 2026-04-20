@@ -8,6 +8,8 @@ import { Logger } from 'nestjs-pino';
 import { GlobalHttpExceptionFilter } from './common/global-exception.filter';
 import { LoggingInterceptor } from './common/logging.interceptor';
 
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
   app.useLogger(app.get(Logger));
@@ -39,8 +41,20 @@ async function bootstrap() {
   // Global Logging Interceptor
   app.useGlobalInterceptors(new LoggingInterceptor());
   
+  // Swagger Configuration
+  const config = new DocumentBuilder()
+    .setTitle('Baldia-Mart API')
+    .setDescription('The complete API documentation for Baldia-Mart hyperlocal platform.')
+    .setVersion('1.0')
+    .addBearerAuth()
+    .build();
+  const document = SwaggerModule.createDocument(app, config);
+  // Swagger will be served at http://localhost:3000/docs
+  SwaggerModule.setup('docs', app, document);
+
   await app.listen(3000, '0.0.0.0');
   console.log(`Application is running on: ${await app.getUrl()}`);
+  console.log(`Swagger Docs available at: ${await app.getUrl()}/docs`);
 }
 bootstrap();
 

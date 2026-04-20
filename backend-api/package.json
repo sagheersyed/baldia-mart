@@ -23,6 +23,7 @@
     "@nestjs/platform-express": "^10.0.0",
     "@nestjs/platform-socket.io": "^10.4.22",
     "@nestjs/schedule": "^4.1.2",
+    "@nestjs/swagger": "^7.4.2",
     "@nestjs/terminus": "^11.1.1",
     "@nestjs/throttler": "^6.5.0",
     "@nestjs/typeorm": "^10.0.0",
@@ -46,6 +47,7 @@
     "reflect-metadata": "^0.1.13",
     "rxjs": "^7.8.1",
     "socket.io": "^4.8.3",
+    "swagger-ui-express": "^5.0.1",
     "twilio": "^5.13.0",
     "typeorm": "^0.3.17",
     "uuid": "^9.0.0"
