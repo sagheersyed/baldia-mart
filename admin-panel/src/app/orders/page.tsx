@@ -16,12 +16,13 @@ import {
   User,
   Bike
 } from 'lucide-react';
-import { fetchWithAuth } from '@/lib/api';
+import { fetchWithAuth, BASE_URL } from '@/lib/api';
 
 interface OrderItem {
   id: string;
   quantity: number;
   priceAtTime: number;
+  status: string;
   product: {
     id: string;
     name: string;
@@ -35,6 +36,7 @@ interface Order {
   total: number;
   deliveryFee: number;
   subtotal: number;
+  notes?: string;
   createdAt: string;
   paymentMethod: string;
   user: {
@@ -64,12 +66,19 @@ interface Order {
       zoneId?: string;
     };
   }[];
+  orderHistory?: {
+    id: string;
+    status: string;
+    notes: string;
+    createdAt: string;
+  }[];
+  releaseCount?: number;
 }
 
-const API_URL = 'http://localhost:3000/api/v1/orders/all';
-const ZONES_URL = 'http://localhost:3000/api/v1/delivery-zones/all';
-const SETTINGS_URL = 'http://localhost:3000/api/v1/settings/public';
-const STATUS_UPDATE_URL = (id: string) => `http://localhost:3000/api/v1/orders/${id}/status`;
+const API_URL = `${BASE_URL}/orders/all`;
+const ZONES_URL = `${BASE_URL}/delivery-zones/all`;
+const SETTINGS_URL = `${BASE_URL}/settings/public`;
+const STATUS_UPDATE_URL = (id: string) => `${BASE_URL}/orders/${id}/status`;
 
 const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
   const R = 6371;
@@ -123,7 +132,7 @@ export default function OrdersPage() {
 
   const fetchRiders = async () => {
     try {
-      const res = await fetchWithAuth('http://localhost:3000/api/v1/riders/all');
+      const res = await fetchWithAuth(`${BASE_URL}/riders/all`);
       if (res.ok) {
         const body = await res.json();
         // Only get active riders with complete profiles
@@ -140,7 +149,8 @@ export default function OrdersPage() {
       const res = await fetchWithAuth(API_URL);
       if (!res.ok) throw new Error('Failed to fetch orders');
       const data = await res.json();
-      setOrders(data);
+      // Adjusting to new paginated response: { data: Order[], total: number, ... }
+      setOrders(data.data || []);
     } catch (error) {
       console.error('Error fetching orders:', error);
     } finally {
@@ -173,7 +183,7 @@ export default function OrdersPage() {
   const handleAssignRider = async (orderId: string, riderId: string) => {
     if (!riderId) return;
     try {
-      const res = await fetchWithAuth(`http://localhost:3000/api/v1/orders/${orderId}/assign`, {
+      const res = await fetchWithAuth(`${BASE_URL}/orders/${orderId}/assign`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ riderId }),
@@ -225,7 +235,12 @@ export default function OrdersPage() {
   };
 
   const filteredOrders = orders.filter(order => {
-    const matchesFilter = filter === 'ALL' || order.status.toUpperCase() === filter;
+    let matchesFilter = filter === 'ALL' || order.status.toUpperCase() === filter;
+    
+    if (filter === 'INSTABILITY') {
+      matchesFilter = (order.releaseCount || 0) >= 3;
+    }
+
     const orderZoneId = getOrderZoneId(order);
     const matchesZone = selectedZone === 'all' || orderZoneId === selectedZone;
     const matchesSearch =
@@ -286,11 +301,11 @@ export default function OrdersPage() {
             ))}
           </select>
           <div className="flex bg-white rounded-2xl border border-gray-100 p-1">
-            {['ALL', 'PENDING', 'CONFIRMED', 'DELIVERING', 'DELIVERED', 'CANCELLED'].map(f => (
+            {['ALL', 'PENDING', 'CONFIRMED', 'DELIVERING', 'DELIVERED', 'CANCELLED', 'INSTABILITY'].map(f => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${filter === f ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${filter === f ? (f === 'INSTABILITY' ? 'bg-red-600 text-white' : 'bg-primary text-white') + ' shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}
               >
                 {f}
               </button>
@@ -337,6 +352,11 @@ export default function OrdersPage() {
                       </span>
                       {getStatusBadge(order.status)}
                     </div>
+                    {order.releaseCount && order.releaseCount > 0 ? (
+                      <div className={`mt-2 flex items-center text-[10px] font-black uppercase tracking-widest ${order.releaseCount >= 3 ? 'text-red-600 bg-red-50' : 'text-orange-600 bg-orange-50'} px-2 py-1 rounded-lg self-start`}>
+                        <Bike size={10} className="mr-1" /> Released {order.releaseCount} times
+                      </div>
+                    ) : null}
                   </li>
                 ))}
               </ul>
@@ -371,6 +391,17 @@ export default function OrdersPage() {
                   <button onClick={() => handleUpdateStatus(selectedOrder.id, 'delivered')} className="py-2 px-3 rounded-xl bg-green-50 text-green-600 font-bold text-xs border border-green-100 hover:bg-green-100">Force Deliver</button>
                   <button onClick={() => handleUpdateStatus(selectedOrder.id, 'cancelled')} className="py-2 px-3 rounded-xl bg-red-50 text-red-600 font-bold text-xs border border-red-100 hover:bg-red-100">Cancel</button>
                 </div>
+                {selectedOrder.releaseCount && selectedOrder.releaseCount > 0 ? (
+                  <div className={`mt-4 p-3 rounded-2xl flex items-center ${selectedOrder.releaseCount >= 3 ? 'bg-red-50 text-red-700 border border-red-100' : 'bg-orange-50 text-orange-700 border border-orange-100'}`}>
+                    <div className={`p-2 rounded-xl mr-3 ${selectedOrder.releaseCount >= 3 ? 'bg-red-100' : 'bg-orange-100'}`}>
+                      <Bike size={18} />
+                    </div>
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-tight">Logistics Instability Detected</p>
+                      <p className="text-sm font-bold">This order has been released by riders {selectedOrder.releaseCount} times. Investigation recommended.</p>
+                    </div>
+                  </div>
+                ) : null}
               </div>
 
               {/* Users Info */}
@@ -429,13 +460,23 @@ export default function OrdersPage() {
                   {selectedOrder.items?.map(item => (
                     <li key={item.id} className="flex justify-between items-center p-3 bg-white border border-gray-100 rounded-xl">
                       <div className="flex items-center space-x-3">
-                        <div className="w-12 h-12 bg-gray-50 rounded-lg overflow-hidden flex items-center justify-center">
+                        <div className="w-12 h-12 bg-gray-50 rounded-lg overflow-hidden flex items-center justify-center relative">
                           {item.product?.imageUrl ? (
                             <img src={item.product.imageUrl} alt={item.product.name} className="w-full h-full object-cover" />
                           ) : <Package size={20} className="text-gray-300" />}
+                          {item.status === 'missing' && (
+                            <div className="absolute inset-0 bg-red-500/20 flex items-center justify-center">
+                              <XOctagon size={16} className="text-red-600" />
+                            </div>
+                          )}
                         </div>
                         <div>
-                          <p className="font-bold text-gray-900">{item.product?.name || (item as any).menuItem?.name || 'Item'}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-bold text-gray-900">{item.product?.name || (item as any).menuItem?.name || 'Item'}</p>
+                            {item.status === 'missing' && (
+                              <span className="bg-red-100 text-red-600 text-[10px] font-black px-1.5 py-0.5 rounded uppercase">Missing</span>
+                            )}
+                          </div>
                           <p className="text-xs font-bold text-gray-400">Qty: {item.quantity} × Rs.{Number(item.priceAtTime || 0).toFixed(2)}</p>
                         </div>
                       </div>
@@ -459,6 +500,46 @@ export default function OrdersPage() {
                         {getStatusBadge(sub.status || selectedOrder.status)}
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Order Timeline & Audit Trail */}
+              {((selectedOrder.orderHistory && selectedOrder.orderHistory.length > 0) || selectedOrder.notes) && (
+                <div>
+                  <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center">
+                    <Clock size={14} className="mr-2" /> Order Timeline & Audit Trail
+                  </h3>
+                  <div className="space-y-4">
+                    {/* Dynamic History from DB */}
+                    {selectedOrder.orderHistory?.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()).map((entry, idx) => (
+                      <div key={entry.id} className="relative pl-6 pb-2 border-l-2 border-gray-100 last:border-0 last:pb-0">
+                        <div className="absolute left-[-9px] top-0 w-4 h-4 rounded-full bg-white border-2 border-primary flex items-center justify-center">
+                          <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+                        </div>
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-primary bg-primary/5 px-1.5 py-0.5 rounded">
+                              {entry.status.replace(/_/g, ' ')}
+                            </span>
+                            <p className="text-sm font-bold text-gray-700 mt-1">{entry.notes || 'Status updated'}</p>
+                          </div>
+                          <span className="text-[10px] font-bold text-gray-400 whitespace-nowrap">
+                            {new Date(entry.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* Legacy/Aggregated Notes as Fallback/Additional Info */}
+                    {selectedOrder.notes && !selectedOrder.orderHistory?.some(h => h.notes === selectedOrder.notes) && (
+                      <div className="p-4 bg-yellow-50 rounded-2xl border border-yellow-100 mt-2">
+                        <p className="text-[10px] font-black text-yellow-600 uppercase mb-2">Aggregate Notes</p>
+                        <pre className="text-xs font-bold text-yellow-800 whitespace-pre-wrap font-sans">
+                          {selectedOrder.notes}
+                        </pre>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

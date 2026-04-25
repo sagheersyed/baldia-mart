@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException, NotFoundException, UnauthorizedException, ForbiddenException, Query, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository, In, Between } from 'typeorm';
 import { Order } from './order.entity';
 import { OrderItem } from './order-item.entity';
 import { OrderHistory } from './order-history.entity';
@@ -15,6 +15,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { Rider } from '../riders/rider.entity';
 import { RidersService } from '../riders/riders.service';
 import { VendorsService } from '../vendors/vendors.service';
+import { WalletsService } from '../wallets/wallets.service';
 
 @Injectable()
 export class OrdersService {
@@ -35,6 +36,7 @@ export class OrdersService {
     @Inject(forwardRef(() => RidersService))
     private ridersService: RidersService,
     private vendorsService: VendorsService,
+    private walletsService: WalletsService,
   ) { }
 
   private isBusinessOpen(openingTime: string | null, closingTime: string | null): boolean {
@@ -393,22 +395,81 @@ export class OrdersService {
         if (delayMinutes > 0) {
           console.log(`[Smart Logistics] Delaying rider dispatch for ${delayMinutes} minutes to ensure food is fresh for Order ${savedOrder.id}.`);
           setTimeout(async () => {
-            this.ordersGateway.emitNewOrderToRiders(orderWithDetails);
-            this.notifyOnlineRiders(orderWithDetails);
+            this.startSmartDispatch(orderWithDetails);
           }, delayMinutes * 60 * 1000);
         } else {
           // Dispatch immediately
-          this.ordersGateway.emitNewOrderToRiders(orderWithDetails);
-          this.notifyOnlineRiders(orderWithDetails);
+          this.startSmartDispatch(orderWithDetails);
         }
       } else {
         // Mart Orders dispatch immediately
-        this.ordersGateway.emitNewOrderToRiders(orderWithDetails);
-        this.notifyOnlineRiders(orderWithDetails);
+        this.startSmartDispatch(orderWithDetails);
       }
     }
 
     return savedOrder;
+  }
+
+  private async startSmartDispatch(order: any) {
+    console.log(`[Smart Dispatch] Starting targeted dispatch for Order #${order.id}`);
+    
+    // 1. Get best riders
+    let bestRiders: any[] = [];
+    try {
+      bestRiders = await this.ridersService.findBestRidersForOrder(order) || [];
+    } catch (err) {
+      console.warn(`[Smart Dispatch] Error finding best riders for Order #${order.id}:`, err);
+    }
+    
+    if (!bestRiders || bestRiders.length === 0) {
+      console.log(`[Smart Dispatch] No suitable riders found. Falling back to general broadcast.`);
+      this.ordersGateway.emitNewOrderToRiders(order);
+      this.notifyOnlineRiders(order); // Notify everyone
+      return;
+    }
+
+    // 2. Start the dispatch waterfall
+    this.dispatchToNextRider(order, bestRiders, 0);
+  }
+
+  private async dispatchToNextRider(order: any, ridersInfo: any[], index: number) {
+    // Check if order is already accepted or cancelled
+    const currentOrder = await this.ordersRepository.findOne({ where: { id: order.id } });
+    if (!currentOrder || currentOrder.status !== 'pending') {
+      console.log(`[Smart Dispatch] Order #${order.id} is no longer pending (${currentOrder?.status}). Stopping dispatch.`);
+      return;
+    }
+
+    if (index >= ridersInfo.length) {
+      console.log(`[Smart Dispatch] Exhausted targeted riders for Order #${order.id}. Falling back to general broadcast.`);
+      this.ordersGateway.emitNewOrderToRiders(order);
+      this.notifyOnlineRiders(order);
+      return;
+    }
+
+    const { rider: targetRider, isBatchable } = ridersInfo[index];
+    console.log(`[Smart Dispatch] Pinging Rider #${targetRider.id} (Attempt ${index + 1}/${ridersInfo.length}) - Batched: ${isBatchable}`);
+    
+    // Attach batch flag to the payload for the mobile app
+    const payload = { ...order, isBatchedOpportunity: isBatchable };
+
+    // Ping specific rider via Socket and FCM
+    this.ordersGateway.emitNewOrderToSpecificRider(payload, targetRider.id);
+    if (targetRider.fcmToken) {
+      this.notificationsService.sendToRider(
+        targetRider.id,
+        targetRider.fcmToken,
+        isBatchable ? 'Batched Route Opportunity! 🛣️' : 'Exclusive Order! 🚀',
+        isBatchable 
+          ? `Earn an extra Rs. ${order.total} on your current route!`
+          : `You have 30 seconds to accept this Rs. ${order.total} order near you.`
+      ).catch(e => console.error('FCM Error:', e));
+    }
+
+    // Wait 30 seconds, then recursively call for next rider
+    setTimeout(() => {
+      this.dispatchToNextRider(order, ridersInfo, index + 1);
+    }, 30000);
   }
 
   private async notifyOnlineRiders(order: Order) {
@@ -448,15 +509,28 @@ export class OrdersService {
       .getMany();
   }
 
-  async getAllOrdersForAdmin(): Promise<Order[]> {
-    return this.ordersRepository.find({
-      relations: ['items', 'items.product', 'address', 'user', 'rider', 'subOrders', 'subOrders.restaurant', 'subOrders.vendor'],
-      order: { createdAt: 'DESC' }
+  async getAllOrdersForAdmin(page = 1, limit = 20, startDate?: string, endDate?: string): Promise<{ data: Order[], total: number, page: number, limit: number }> {
+    const where: any = {};
+    if (startDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      const end = endDate ? new Date(endDate) : new Date(startDate);
+      end.setHours(23, 59, 59, 999);
+      where.createdAt = Between(start, end);
+    }
+
+    const [data, total] = await this.ordersRepository.findAndCount({
+      where,
+      relations: ['items', 'items.product', 'address', 'user', 'rider', 'subOrders', 'subOrders.restaurant', 'subOrders.vendor', 'orderHistory'],
+      order: { createdAt: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
     });
+    return { data, total, page, limit };
   }
 
-  async getRiderOrderHistory(riderId: string): Promise<Order[]> {
-    return this.ordersRepository.createQueryBuilder('order')
+  async getRiderOrderHistory(riderId: string, page = 1, limit = 20, startDate?: string, endDate?: string): Promise<{ data: Order[], total: number, page: number, limit: number }> {
+    const query = this.ordersRepository.createQueryBuilder('order')
       .leftJoinAndSelect('order.items', 'items')
       .leftJoinAndSelect('items.product', 'product')
       .leftJoinAndSelect('order.address', 'address')
@@ -465,10 +539,24 @@ export class OrdersService {
       .leftJoinAndSelect('subOrders.restaurant', 'subOrderRestaurant')
       .leftJoinAndSelect('subOrders.vendor', 'subOrderVendor')
       .where('order.riderId = :riderId', { riderId })
-      .andWhere('order.status IN (:...statuses)', { statuses: ['delivered', 'cancelled'] })
+      .andWhere('order.status IN (:...statuses)', { statuses: ['delivered', 'cancelled'] });
+
+    if (startDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      const end = endDate ? new Date(endDate) : new Date(startDate);
+      end.setHours(23, 59, 59, 999);
+      query.andWhere('order.createdAt BETWEEN :start AND :end', { start, end });
+    }
+
+    const [data, total] = await query
       .orderBy('order.updatedAt', 'DESC')
-      .withDeleted() // Ensure we see orders even if address/products are soft-deleted
-      .getMany();
+      .withDeleted()
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+
+    return { data, total, page, limit };
   }
 
   async acceptOrder(orderId: string, riderId: string): Promise<Order> {
@@ -581,19 +669,31 @@ export class OrdersService {
       .getMany();
   }
 
-  async getOrderHistory(userId: string, page = 1, limit = 20): Promise<Order[]> {
-    return this.ordersRepository.createQueryBuilder('order')
+  async getOrderHistory(userId: string, page = 1, limit = 20, startDate?: string, endDate?: string): Promise<{ data: Order[], total: number, page: number, limit: number }> {
+    const query = this.ordersRepository.createQueryBuilder('order')
       .leftJoinAndSelect('order.items', 'items')
       .leftJoinAndSelect('items.product', 'product')
       .leftJoinAndSelect('order.address', 'address')
       .leftJoinAndSelect('order.subOrders', 'subOrders')
       .leftJoinAndSelect('subOrders.restaurant', 'subOrderRestaurant')
-      .where('order.userId = :userId', { userId })
+      .where('order.userId = :userId', { userId });
+
+    if (startDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      const end = endDate ? new Date(endDate) : new Date(startDate);
+      end.setHours(23, 59, 59, 999);
+      query.andWhere('order.createdAt BETWEEN :start AND :end', { start, end });
+    }
+
+    const [data, total] = await query
       .orderBy('order.createdAt', 'DESC')
       .withDeleted()
       .skip((page - 1) * limit)
       .take(limit)
-      .getMany();
+      .getManyAndCount();
+
+    return { data, total, page, limit };
   }
 
   async getOrderById(id: string, requesterId: string, requesterRole?: string): Promise<Order> {
@@ -648,19 +748,32 @@ export class OrdersService {
       this.orderHistoryRepository.create({ orderId: id, status: status })
     );
 
-    // If order is delivered, update rider's total earnings
-    if (status === 'delivered' && oldStatus !== 'delivered' && order.riderId) {
-      const riderRepo = this.ordersRepository.manager.getRepository('Rider');
-      const rider = await riderRepo.findOne({ where: { id: order.riderId } }) as any;
-      if (rider) {
-        // Rider only gets the delivery fee, not the total order amount
-        rider.totalEarnings = Number(rider.totalEarnings || 0) + Number(order.deliveryFee);
-        await riderRepo.save(rider);
+    // If order is delivered, trigger financial settlement
+    if (status === 'delivered' && oldStatus !== 'delivered') {
+      const orderToSettle = await this.ordersRepository.findOne({
+        where: { id },
+        relations: ['items', 'items.product', 'items.menuItem', 'subOrders', 'subOrders.vendor', 'subOrders.restaurant', 'restaurant']
+      });
+      if (orderToSettle) {
+        // We do this in a transaction to ensure atomic wallet updates
+        await this.ordersRepository.manager.transaction(async (manager) => {
+          await this.walletsService.processOrderSettlement(orderToSettle, manager);
+        });
+
+        // Also update legacy totalEarnings for Rider backward compatibility
+        if (order.riderId) {
+          const riderRepo = this.ordersRepository.manager.getRepository('Rider');
+          const rider = await riderRepo.findOne({ where: { id: order.riderId } }) as any;
+          if (rider) {
+            rider.totalEarnings = Number(rider.totalEarnings || 0) + Number(order.deliveryFee);
+            await riderRepo.save(rider);
+          }
+        }
       }
     }
 
-    // Emit real-time update
-    this.ordersGateway.emitOrderStatusUpdate(id, status, order.userId);
+    // Emit real-time update — notify both user AND rider
+    this.ordersGateway.emitOrderStatusUpdate(id, status, order.userId, order.riderId);
 
     return updatedOrder;
   }
@@ -692,6 +805,52 @@ export class OrdersService {
 
     // Notify User and Rider
     this.ordersGateway.emitOrderStatusUpdate(id, 'cancelled', userId, order.riderId);
+    
+    // Broadcast to other riders to remove from list
+    this.ordersGateway.emitOrderAccepted(id);
+
+    return updatedOrder;
+  }
+
+  async releaseOrder(id: string, riderId: string, reason: string): Promise<Order> {
+    console.log(`[OrdersService] Attempting to release order: ${id} for rider: ${riderId}`);
+    const order = await this.ordersRepository.findOne({ where: { id, riderId } });
+    if (!order) {
+      console.warn(`[OrdersService] Release failed: Order ${id} not found or not assigned to rider ${riderId}`);
+      throw new NotFoundException('Order not found or not assigned to you');
+    }
+
+    if (order.status === 'delivered' || order.status === 'cancelled') {
+      throw new BadRequestException('Cannot release an order that is already completed or cancelled.');
+    }
+
+    // Return to pool
+    const prevRiderId = order.riderId;
+    order.status = 'pending';
+    order.riderId = null as any; // Detach rider
+    order.releaseCount = (order.releaseCount || 0) + 1;
+    order.notes = (order.notes ? order.notes + '\n' : '') + `Rider Released (${order.releaseCount}). Reason: ${reason}`;
+    
+    const updatedOrder = await this.ordersRepository.save(order);
+    
+    if (order.releaseCount >= 3) {
+      await this.notificationsService.sendAdminAlert(
+        'Order Repeatedly Released',
+        `Order #${id.slice(0, 8)} has been released ${order.releaseCount} times. Last reason: ${reason}`,
+        'high'
+      );
+    }
+    
+    await this.orderHistoryRepository.save(
+      this.orderHistoryRepository.create({ orderId: id, status: 'pending', notes: `Released by rider (Count: ${order.releaseCount}). Reason: ${reason}` })
+    );
+
+    // Notify user that status is back to pending
+    this.ordersGateway.emitOrderStatusUpdate(id, 'pending', order.userId, prevRiderId);
+    
+    // Broadcast as a NEW order available to all riders so it appears back in their pool
+    const orderWithDetails = await this.getOrderById(id, order.userId); // Get full details for broadcast
+    this.ordersGateway.emitNewOrderToRiders(orderWithDetails);
 
     return updatedOrder;
   }
@@ -722,68 +881,89 @@ export class OrdersService {
     return updatedOrder;
   }
 
-  async removeOrderItem(orderId: string, itemId: string, requesterId: string, requesterRole?: string): Promise<Order> {
-    const order = await this.ordersRepository.findOne({
-      where: { id: orderId },
-      relations: ['items'],
+  async removeOrderItem(orderId: string, itemId: string, requesterId: string, requesterRole?: string, reason?: string): Promise<Order> {
+    return this.ordersRepository.manager.transaction(async (manager) => {
+      const order = await manager.findOne(Order, {
+        where: { id: orderId },
+        relations: ['items', 'items.product', 'items.menuItem', 'address'],
+      });
+
+      if (!order) throw new NotFoundException('Order not found');
+
+      const isOwner = order.userId === requesterId;
+      const isAssignedRider = order.riderId === requesterId;
+      const isRiderInFlow = requesterRole === 'rider' && (order.status === 'pending' || order.status === 'confirmed' || order.status === 'preparing');
+      const isVendorOrAdmin = requesterRole === 'vendor' || requesterRole === 'admin' || requesterRole === 'mart';
+
+      if (!isOwner && !isAssignedRider && !isRiderInFlow && !isVendorOrAdmin) {
+        throw new ForbiddenException('Access denied to modify this order');
+      }
+
+      // Only allow removal while pending, confirmed, or preparing (while at mart/restaurant)
+      const allowedStatuses = ['pending', 'confirmed', 'preparing'];
+      if (!allowedStatuses.includes(order.status) && !isVendorOrAdmin) {
+        throw new BadRequestException(`Cannot remove items when order is ${order.status}`);
+      }
+
+      const itemToRemove = order.items.find(i => i.id === itemId);
+      if (!itemToRemove) throw new NotFoundException('Item not found in this order');
+
+      itemToRemove.status = 'missing';
+      await manager.save(OrderItem, itemToRemove);
+
+      // --- ADMIN ALERT FOR HIGH-VALUE ITEMS ---
+      try {
+        const threshold = await this.settingsService.getNumber('high_value_item_threshold', 1000);
+        const itemValue = Number(itemToRemove.priceAtTime) * itemToRemove.quantity;
+        if (itemValue >= threshold) {
+          const itemName = itemToRemove.product?.name || itemToRemove.menuItem?.name || 'Unknown Item';
+          await this.notificationsService.sendAdminAlert(
+            'High-Value Item Missing',
+            `Order #${orderId.slice(0, 8)}: "${itemName}" (Rs ${itemValue}) marked missing by ${requesterRole}. Reason: ${reason || 'N/A'}`,
+            'high'
+          );
+        }
+      } catch (e) {
+        console.error('Failed to trigger admin missing item alert:', e);
+      }
+
+      // Recalculate totals based on active items only
+      const allItems = await manager.find(OrderItem, { where: { orderId: order.id } });
+      const remainingActiveItems = allItems.filter(i => i.status === 'active');
+
+      let newSubtotal = 0;
+      remainingActiveItems.forEach(i => {
+        newSubtotal += Number(i.priceAtTime) * i.quantity;
+      });
+
+      order.subtotal = newSubtotal;
+      order.total = newSubtotal + Number(order.deliveryFee) - Number(order.discountAmount || 0);
+
+      if (remainingActiveItems.length === 0) {
+        order.status = 'cancelled';
+        const cancelReason = reason ? `Reason: ${reason}` : 'All items marked as missing.';
+        order.notes = (order.notes ? order.notes + '\n' : '') + `Cancelled: ${cancelReason}`;
+        order.total = 0; 
+      } else if (reason) {
+        order.notes = (order.notes ? order.notes + '\n' : '') + `Item marked missing: ${reason}`;
+      }
+
+      const updatedOrder = await manager.save(Order, order);
+
+      // Sync sub-orders to ensure restaurant-wise totals and counts are correct
+      await this.syncSubOrdersInternal(manager, orderId);
+
+      // Notify tracking screen and rider
+      await this.emitUpdateNotifications(orderId, updatedOrder.status, order.userId, updatedOrder.riderId);
+
+      // If the order became cancelled, notify ALL riders to remove it from their pool/list
+      if (updatedOrder.status === 'cancelled') {
+        this.ordersGateway.emitOrderAccepted(orderId); // Trigger dashboard removal
+        this.ordersGateway.server.to('riders_room').emit('orderCancelled', { orderId });
+      }
+
+      return updatedOrder;
     });
-
-    if (!order) throw new NotFoundException('Order not found');
-
-    const isOwner = order.userId === requesterId;
-    const isAssignedRider = order.riderId === requesterId;
-    const isRiderInFlow = requesterRole === 'rider' && (order.status === 'pending' || order.status === 'confirmed');
-
-    if (!isOwner && !isAssignedRider && !isRiderInFlow) {
-      throw new NotFoundException('Order not found or access denied');
-    }
-
-    if (order.orderType === 'food') {
-      throw new BadRequestException('Food order items cannot be removed after checkout.');
-    }
-
-    // Only allow removal while pending or confirmed (un-prepared)
-    if (order.status !== 'pending' && order.status !== 'confirmed') {
-      throw new BadRequestException(`Cannot remove items when order is ${order.status}`);
-    }
-
-    const itemToRemove = order.items.find(i => i.id === itemId);
-    if (!itemToRemove) throw new NotFoundException('Item not found in this order');
-
-    // Mark as missing instead of deleting
-    itemToRemove.status = 'missing';
-    await this.orderItemsRepository.save(itemToRemove);
-
-    // Recalculate totals based on active items only
-    const activeItems = order.items.filter(i => i.status === 'active' || i.id === itemId ? i.status === 'active' : true); 
-    // Wait, it's easier to just fetch them again
-    const allItems = await this.orderItemsRepository.find({ where: { orderId: order.id } });
-    const remainingActiveItems = allItems.filter(i => i.status === 'active');
-
-    let newSubtotal = 0;
-    remainingActiveItems.forEach(i => {
-      newSubtotal += Number(i.priceAtTime) * i.quantity;
-    });
-
-    order.subtotal = newSubtotal;
-    // Total includes delivery fee + subtotal
-    order.total = newSubtotal + Number(order.deliveryFee);
-
-    if (remainingActiveItems.length === 0) {
-      order.status = 'cancelled';
-      order.notes = (order.notes ? order.notes + '\n' : '') + 'Cancelled: All items marked as missing.';
-      order.total = 0; 
-      // Keep subtotal as 0 but keep delivery fee record if needed? 
-      // Usually if cancelled, total is effectively 0.
-      this.ordersGateway.emitOrderStatusUpdate(orderId, 'cancelled', order.userId, order.riderId);
-    }
-
-    const updatedOrder = await this.ordersRepository.save(order);
-
-    // Notify tracking screen and rider
-    await this.emitUpdateNotifications(orderId, updatedOrder.status, requesterId, updatedOrder.riderId);
-
-    return updatedOrder;
   }
 
   async updateItemQuantity(orderId: string, itemId: string, quantity: number): Promise<any> {
@@ -1108,11 +1288,13 @@ export class OrdersService {
   private async syncSubOrdersInternal(manager: any, orderId: string) {
     const order = await manager.findOne(Order, {
       where: { id: orderId },
-      relations: ['items', 'items.product', 'items.menuItem', 'address'],
+      relations: ['items', 'items.product', 'items.menuItem', 'items.menuItem.restaurant', 'address'],
     });
     if (!order) return;
 
-    // Get existing sub-orders to sync instead of blind delete
+    const allItems = order.items;
+
+    // Get existing sub-orders
     const existingSubOrders = await manager.find(SubOrder, { where: { orderId } });
     const existingMap = new Map();
     existingSubOrders.forEach(s => {
@@ -1120,46 +1302,48 @@ export class OrdersService {
       existingMap.set(key, s);
     });
 
-    const activeKeys = new Set();
-    const subOrderDataMap = new Map();
+    const neededKeys = new Set(); 
+    const subOrderDataMap = new Map(); 
 
-    if (order.orderType === 'food') {
-      for (const item of order.items) {
-        let restaurantId = null;
-        if (item.menuItem && item.menuItem.restaurantId) {
-          restaurantId = item.menuItem.restaurantId;
-        } else if (item.menuItemId) {
-          const mItem = await manager.getRepository('MenuItem').findOne({ where: { id: item.menuItemId } });
-          if (mItem) restaurantId = mItem.restaurantId;
+    // Batch lookup for Mart orders to avoid N+1 queries
+    let martVendorMap = new Map();
+    if (order.orderType !== 'food') {
+      const productIds = allItems.map(i => i.productId).filter(Boolean);
+      martVendorMap = await this.vendorsService.findBestVendorsForProducts(
+        productIds,
+        Number(order.address?.latitude || 0),
+        Number(order.address?.longitude || 0)
+      );
+    }
+
+    for (const item of allItems) {
+      if (item.status !== 'active') continue; // Only process active items for sub-order generation
+
+      let key: string | null = null;
+      let vLat = 0;
+      let vLng = 0;
+
+      if (order.orderType === 'food') {
+        if (item.menuItem?.restaurantId) {
+          key = item.menuItem.restaurantId;
+          vLat = Number(item.menuItem.restaurant?.latitude || 0);
+          vLng = Number(item.menuItem.restaurant?.longitude || 0);
         }
-        
-        if (restaurantId) {
-          activeKeys.add(restaurantId);
-          if (!subOrderDataMap.has(restaurantId)) {
-            subOrderDataMap.set(restaurantId, { items: [], id: restaurantId });
-          }
-          subOrderDataMap.get(restaurantId).items.push(item);
+      } else {
+        const vp = martVendorMap.get(item.productId);
+        if (vp) {
+          key = vp.vendorId;
+          vLat = Number(vp.vendor?.lat || 0);
+          vLng = Number(vp.vendor?.lng || 0);
         }
       }
-    } else {
-      for (const item of order.items) {
-        const vendorProduct = await this.vendorsService.findBestVendorForProduct(
-          item.productId, 
-          Number(order.address.latitude), 
-          Number(order.address.longitude)
-        );
-        if (vendorProduct) {
-          activeKeys.add(vendorProduct.vendorId);
-          if (!subOrderDataMap.has(vendorProduct.vendorId)) {
-            subOrderDataMap.set(vendorProduct.vendorId, { 
-              items: [], 
-              id: vendorProduct.vendorId,
-              lat: Number(vendorProduct.vendor.lat),
-              lng: Number(vendorProduct.vendor.lng) 
-            });
-          }
-          subOrderDataMap.get(vendorProduct.vendorId).items.push({ ...item, vendorProductId: vendorProduct.id });
+
+      if (key) {
+        neededKeys.add(key);
+        if (!subOrderDataMap.has(key)) {
+          subOrderDataMap.set(key, { items: [], id: key, lat: vLat, lng: vLng });
         }
+        subOrderDataMap.get(key).items.push(item);
       }
     }
 
@@ -1169,45 +1353,47 @@ export class OrdersService {
       const coords = Array.from(subOrderDataMap.values()).map(v => ({
         vendorId: v.id, lat: v.lat, lng: v.lng,
       }));
-      const sequence = this.vendorsService.optimizePickupSequence(coords, Number(order.address.latitude), Number(order.address.longitude));
+      const sequence = this.vendorsService.optimizePickupSequence(coords, Number(order.address?.latitude || 0), Number(order.address?.longitude || 0));
       sequenceMap = new Map(sequence.map(s => [s.vendorId, s.sequence]));
     }
 
-    // 1. Delete sub-orders that are no longer needed
+    // 1. Delete sub-orders that are no longer needed (have ZERO items associated)
     for (const sub of existingSubOrders) {
       const key = order.orderType === 'food' ? sub.restaurantId : sub.vendorId;
-      if (!activeKeys.has(key)) {
+      if (!neededKeys.has(key)) {
         await manager.delete(SubOrder, sub.id);
       }
     }
 
     // 2. Create or Update sub-orders
     for (const [key, data] of subOrderDataMap) {
-      const subtotal = data.items.reduce((acc, i) => acc + (Number(i.priceAtTime) * i.quantity), 0);
+      const activeItemsInSub = data.items.filter(i => i.status === 'active');
+      const subtotal = activeItemsInSub.reduce((acc, i) => acc + (Number(i.priceAtTime) * i.quantity), 0);
+      const sequence = order.orderType === 'food' ? 1 : (sequenceMap.get(key) ?? 1);
+      
       let subOrder = existingMap.get(key);
       
       if (subOrder) {
-        // Update existing
         await manager.update(SubOrder, subOrder.id, {
           subtotal,
-          pickupSequence: order.orderType === 'food' ? 1 : (sequenceMap.get(key) ?? 1),
+          pickupSequence: sequence
         });
       } else {
-        // Create new
         subOrder = manager.create(SubOrder, {
           orderId,
           restaurantId: order.orderType === 'food' ? key : undefined,
           vendorId: order.orderType !== 'food' ? key : undefined,
           status: 'pending',
           subtotal,
-          pickupSequence: order.orderType === 'food' ? 1 : (sequenceMap.get(key) ?? 1),
+          pickupSequence: sequence
         });
         subOrder = await manager.save(SubOrder, subOrder);
       }
 
-      // Update item relationships
-      for (const item of data.items) {
-        await manager.update(OrderItem, item.id, { subOrderId: subOrder.id });
+      // Update item relationships for ALL items in this group in a single batch
+      const itemsToUpdate = data.items.filter(item => item.subOrderId !== subOrder.id);
+      if (itemsToUpdate.length > 0) {
+        await manager.update(OrderItem, { id: In(itemsToUpdate.map(i => i.id)) }, { subOrderId: subOrder.id });
       }
     }
   }

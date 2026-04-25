@@ -9,6 +9,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import io from 'socket.io-client';
 import {
   categoriesApi, productsApi, addressesApi, brandsApi, bannersApi,
+  connectSocket,
   deliveryZonesApi, normalizeUrl, socket
 } from '../api/api';
 import { ENV } from '../config/env';
@@ -246,12 +247,13 @@ export default function HomeScreen({ navigation }: any) {
     reloadFavs();
   }, [loadData, reloadFavs, showMart, showFood]));
 
-  // Real-time Banners Update
+  // Real-time Banners + Products Update via WebSocket
   useEffect(() => {
-    if (!socket.connected) socket.connect();
+    connectSocket();
 
-    socket.on('connect', () => console.log('Home: Connected to socket'));
-    socket.on('bannersUpdated', async () => {
+    const onConnect = () => console.log('Home: Connected to socket');
+
+    const onBannersUpdated = async () => {
       console.log('Home: Banners updated remotely, refreshing...');
       try {
         const res = await bannersApi.getBySection('mart');
@@ -259,11 +261,42 @@ export default function HomeScreen({ navigation }: any) {
       } catch (err) {
         console.error('Failed to sync banners', err);
       }
-    });
+    };
+
+    // ── Real-time Products Cache Invalidation ──
+    const onProductsUpdated = async (payload: { event: string; productId?: string; stock?: number }) => {
+      console.log(`Home: productsUpdated [${payload?.event}] – refreshing product list...`);
+      try {
+        if (payload?.event === 'stock_updated' && payload.productId) {
+          // Surgical update – only patch the affected product's stock
+          setProducts(prev =>
+            prev.map(p =>
+              p.id === payload.productId
+                ? { ...p, stockQuantity: payload.stock, stock: payload.stock }
+                : p,
+            )
+          );
+        } else {
+          // Full refresh for create / update / delete
+          const res = await productsApi.getAll(1, PAGE_LIMIT);
+          const newProds = (Array.isArray(res.data) ? res.data : res.data?.data || []).filter((p: any) => p.isActive !== false);
+          setProducts(newProds);
+          setPage(1);
+          setHasMore(newProds.length >= PAGE_LIMIT);
+        }
+      } catch (err) {
+        console.error('Failed to sync products', err);
+      }
+    };
+
+    socket.on('connect', onConnect);
+    socket.on('bannersUpdated', onBannersUpdated);
+    socket.on('productsUpdated', onProductsUpdated);
 
     return () => {
-      socket.off('connect');
-      socket.off('bannersUpdated');
+      socket.off('connect', onConnect);
+      socket.off('bannersUpdated', onBannersUpdated);
+      socket.off('productsUpdated', onProductsUpdated);
     };
   }, []);
 

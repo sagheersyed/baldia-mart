@@ -21,6 +21,8 @@ import { CleanupService } from './cleanup.service';
 import { RashanService } from './rashan.service';
 import { RashanController } from './rashan.controller';
 
+import { WalletsModule } from '../wallets/wallets.module';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([Order, OrderItem, OrderHistory, Rider, SubOrder, OrderChatMessage, Address]),
@@ -31,6 +33,7 @@ import { RashanController } from './rashan.controller';
     NotificationsModule,
     forwardRef(() => RidersModule),
     VendorsModule,
+    WalletsModule,
   ],
   providers: [OrdersService, OrdersGateway, CleanupService, RashanService],
   controllers: [OrdersController, RashanController],

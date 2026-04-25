@@ -26,8 +26,18 @@ export class OrdersController {
 
   @Get('all')
   @UseGuards(AdminRoleGuard)
-  async getAllOrders() {
-    return this.ordersService.getAllOrdersForAdmin();
+  async getAllOrders(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string
+  ) {
+    return this.ordersService.getAllOrdersForAdmin(
+      page ? parseInt(page, 10) : 1,
+      limit ? parseInt(limit, 10) : 20,
+      startDate,
+      endDate
+    );
   }
 
   @Get('pending')
@@ -48,21 +58,37 @@ export class OrdersController {
   async getHistory(
     @Req() req: Request,
     @Query('page') page?: string,
-    @Query('limit') limit?: string
+    @Query('limit') limit?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string
   ) {
     const user = req.user as any;
     return this.ordersService.getOrderHistory(
       user.id,
       page ? parseInt(page, 10) : 1,
-      limit ? parseInt(limit, 10) : 20
+      limit ? parseInt(limit, 10) : 20,
+      startDate,
+      endDate
     );
   }
 
   @Get('history/rider')
-  async getRiderHistory(@Req() req: Request) {
+  async getRiderHistory(
+    @Req() req: Request,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string
+  ) {
     const user = req.user as any;
     if (user.role !== 'rider') throw new BadRequestException('Only riders can access rider history');
-    return this.ordersService.getRiderOrderHistory(user.id);
+    return this.ordersService.getRiderOrderHistory(
+      user.id,
+      page ? parseInt(page, 10) : 1,
+      limit ? parseInt(limit, 10) : 20,
+      startDate,
+      endDate
+    );
   }
 
   @Post('checkout')
@@ -126,6 +152,18 @@ export class OrdersController {
     return this.ordersService.cancelOrder(id, user.id);
   }
 
+  @Post(':id/release')
+  async releaseOrder(
+    @Req() req: Request,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body('reason') reason: string
+  ) {
+    const user = req.user as any;
+    console.log(`[DEBUG] Release Order Request: orderId=${id}, riderId=${user.id}, reason=${reason}`);
+    if (user.role !== 'rider') throw new BadRequestException('Only riders can release orders');
+    return this.ordersService.releaseOrder(id, user.id, reason);
+  }
+
   /**
    * Rider-only: progress an order through rider-controlled statuses.
    * Admins use PUT /:id/status for full control.
@@ -158,10 +196,12 @@ export class OrdersController {
   async removeItem(
     @Req() req: Request,
     @Param('id', ParseUUIDPipe) orderId: string,
-    @Param('itemId', ParseUUIDPipe) itemId: string
+    @Param('itemId', ParseUUIDPipe) itemId: string,
+    @Body('reason') reason?: string
   ) {
     const user = req.user as any;
-    return this.ordersService.removeOrderItem(orderId, itemId, user.id, user.role);
+    console.log(`[DEBUG] Remove Item Request: orderId=${orderId}, itemId=${itemId}, requesterId=${user.id}, role=${user.role}, reason=${reason}`);
+    return this.ordersService.removeOrderItem(orderId, itemId, user.id, user.role, reason);
   }
 
   @Patch(':id/items')

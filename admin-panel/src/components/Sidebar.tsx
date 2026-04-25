@@ -1,7 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Home, ShoppingBag, List, Users, Bike, Map, Tag, Settings, LogOut, Star, Megaphone, Layers, UtensilsCrossed, Store, Package } from 'lucide-react';
+import { Home, ShoppingBag, List, Users, Bike, Map, Tag, Settings, LogOut, Star, Megaphone, Layers, UtensilsCrossed, Store, Package, Radar, Wallet } from 'lucide-react';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -17,6 +17,7 @@ export default function Sidebar({ isOpen, isCollapsed, onToggleCollapse }: Sideb
     localStorage.removeItem('adminToken');
     localStorage.removeItem('adminEmail');
     localStorage.removeItem('adminName');
+    document.cookie = 'adminToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=Strict';
     router.replace('/login');
   };
 
@@ -32,6 +33,8 @@ export default function Sidebar({ isOpen, isCollapsed, onToggleCollapse }: Sideb
     { name: 'Orders', icon: ShoppingBag, path: '/orders' },
     { name: 'Users', icon: Users, path: '/users' },
     { name: 'Riders', icon: Bike, path: '/riders' },
+    { name: 'Live Map', icon: Radar, path: '/live-map' },
+    { name: 'Wallets', icon: Wallet, path: '/wallets' },
     { name: 'Delivery Zones', icon: Map, path: '/zones' },
     { name: 'Marketing', icon: Megaphone, path: '/marketing' },
     { name: 'Ratings', icon: Star, path: '/ratings' },

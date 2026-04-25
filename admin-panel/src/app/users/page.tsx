@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Users as UsersIcon, Search, Mail, Phone, Calendar, Ban, CheckCircle, UserX, UserCheck, RefreshCcw } from 'lucide-react';
-import { fetchWithAuth } from '@/lib/api';
+import { fetchWithAuth, BASE_URL } from '@/lib/api';
 
 interface User {
   id: string;
@@ -15,7 +15,7 @@ interface User {
   createdAt: string;
 }
 
-const API_URL = 'http://localhost:3000/api/v1/users/all';
+const API_URL = `${BASE_URL}/users/all`;
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -44,7 +44,7 @@ export default function UsersPage() {
   const handleToggleActive = async (user: User) => {
     setUpdating(user.id);
     try {
-      const res = await fetchWithAuth(`http://localhost:3000/api/v1/users/${user.id}/status`, {
+      const res = await fetchWithAuth(`${BASE_URL}/users/${user.id}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isActive: !user.isActive }),

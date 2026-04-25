@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, X, RefreshCcw, Package, Filter, MoreHorizontal, Pencil } from 'lucide-react';
-import { fetchWithAuth } from '@/lib/api';
+import { fetchWithAuth, BASE_URL } from '@/lib/api';
 
 interface Category {
   id: string;
@@ -38,8 +38,8 @@ interface Brand {
   name: string;
 }
 
-const API_URL = 'http://localhost:3000/api/v1/products';
-const CAT_URL = 'http://localhost:3000/api/v1/categories';
+const API_URL = `${BASE_URL}/products`;
+const CAT_URL = `${BASE_URL}/categories`;
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -74,7 +74,7 @@ export default function ProductsPage() {
       const [prodRes, catRes, brandRes] = await Promise.all([
         fetchWithAuth(API_URL),
         fetchWithAuth(CAT_URL),
-        fetchWithAuth('http://localhost:3000/api/v1/brands')
+        fetchWithAuth(`${BASE_URL}/brands`)
       ]);
       const [prodData, catData, brandData] = await Promise.all([
         prodRes.json(),

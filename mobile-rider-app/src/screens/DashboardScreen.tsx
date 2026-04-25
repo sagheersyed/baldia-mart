@@ -76,20 +76,36 @@ export default function DashboardScreen({ navigation }: any) {
 
   // ── Location tracking ───────────────────────────────────────────────
   useEffect(() => {
+    let locationSubscription: Location.LocationSubscription | null = null;
+    
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') return;
-      Location.watchPositionAsync(
+      
+      locationSubscription = await Location.watchPositionAsync(
         { accuracy: Location.Accuracy.High, distanceInterval: 15 },
         (loc) => {
           setRiderLoc(loc.coords);
           if (isOnline) {
-            syncRiderStatus(true, loc.coords);
+            // Push real-time coordinates via WebSockets only (Avoid HTTP overhead here)
+            if (rider?.id) {
+              socket.emit('updateLocation', {
+                riderId: rider.id,
+                lat: loc.coords.latitude,
+                lng: loc.coords.longitude
+              });
+            }
           }
         },
       );
     })();
-  }, [isOnline]);
+    
+    return () => {
+      if (locationSubscription) {
+        locationSubscription.remove();
+      }
+    };
+  }, [isOnline, rider?.id]);
 
   // ── Socket lifecycle ────────────────────────────────────────────────
   useEffect(() => {
@@ -410,8 +426,10 @@ export default function DashboardScreen({ navigation }: any) {
         <View style={styles.sheetOverlay}>
           <TouchableOpacity style={{ flex: 1 }} onPress={dismissIncoming} />
           <Animated.View style={[styles.newOrderSheet, { transform: [{ translateY: sheetY }] }]}>
-            <View style={styles.sheetPulse}>
-              <Text style={styles.sheetPulseTxt}>🔔 NEW ORDER!</Text>
+            <View style={[styles.sheetPulse, incomingOrder?.isBatchedOpportunity && { backgroundColor: '#8B5CF6' }]}>
+              <Text style={styles.sheetPulseTxt}>
+                {incomingOrder?.isBatchedOpportunity ? '🛣️ BATCHED ROUTE!' : '🔔 NEW ORDER!'}
+              </Text>
             </View>
             <Text style={styles.sheetOrderId}>#{(incomingOrder?.id || '').slice(0, 8).toUpperCase()}</Text>
             <View style={styles.sheetRow}>

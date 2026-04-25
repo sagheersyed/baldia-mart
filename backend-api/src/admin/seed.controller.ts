@@ -88,7 +88,7 @@ export class SeedController {
     );
 
     // 3. Create Categories
-    const baseUrl = 'https://8d6b-175-107-236-228.ngrok-free.app';
+    const baseUrl = 'http://192.168.100.80:3000';
     const categoriesData = [
       { name: 'Vegetables', description: 'Farm fresh local produce', imageUrl: `${baseUrl}/public/cat_veg.png` },
       { name: 'Fruits', description: 'Seasonal and exotic fruits', imageUrl: `${baseUrl}/public/cat_fruit.png` },

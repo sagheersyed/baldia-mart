@@ -140,7 +140,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
       const orderData = {
         addressId: selectedAddress.id,
         paymentMethod: selectedPayment,
-        orderType: mode, // Identifies if it's a Mart or Food order
+        orderType: mode,
         restaurantId,
         notes: '',
         items: cart.map(item => ({
@@ -153,7 +153,18 @@ export default function CheckoutScreen({ navigation, route }: any) {
 
       if (res.data && res.data.id) {
         clearCart(mode);
-        navigation.replace('OrderTracking', { orderId: res.data.id });
+
+        // For digital payments, redirect to the payment WebView
+        if (selectedPayment === 'jazzcash' || selectedPayment === 'easypaisa') {
+          navigation.replace('PaymentWebView', {
+            orderId: res.data.id,
+            provider: selectedPayment,
+            amount: total,
+          });
+        } else {
+          // COD — go straight to order tracking
+          navigation.replace('OrderTracking', { orderId: res.data.id });
+        }
       }
     } catch (error: any) {
       console.error('Checkout failed:', error);
@@ -209,19 +220,46 @@ export default function CheckoutScreen({ navigation, route }: any) {
         >
           <View style={styles.paymentRow}>
             <View style={[styles.radio, selectedPayment === 'cod' && styles.radioActive]} />
-            <Text style={styles.paymentText}>Cash on Delivery (COD)</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.paymentText}>💵 Cash on Delivery</Text>
+              <Text style={styles.paymentDesc}>Pay when your order arrives</Text>
+            </View>
           </View>
         </TouchableOpacity>
 
-        {/* <TouchableOpacity 
-          style={[styles.paymentBox, selectedPayment === 'card' && styles.paymentSelected]}
-          onPress={() => setSelectedPayment('card')}
+        <TouchableOpacity
+          style={[styles.paymentBox, selectedPayment === 'jazzcash' && styles.paymentSelected,
+            selectedPayment === 'jazzcash' && { borderColor: '#E31837' }]}
+          onPress={() => setSelectedPayment('jazzcash')}
         >
           <View style={styles.paymentRow}>
-             <View style={[styles.radio, selectedPayment === 'card' && styles.radioActive]} />
-             <Text style={styles.paymentText}>Credit/Debit Card (Stripe)</Text>
+            <View style={[styles.radio, selectedPayment === 'jazzcash' && [styles.radioActive, { borderColor: '#E31837' }]]} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.paymentText}>📱 JazzCash</Text>
+              <Text style={styles.paymentDesc}>Pay via JazzCash mobile wallet</Text>
+            </View>
+            <View style={[styles.providerBadge, { backgroundColor: '#E31837' }]}>
+              <Text style={styles.providerBadgeText}>JazzCash</Text>
+            </View>
           </View>
-        </TouchableOpacity> */}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.paymentBox, selectedPayment === 'easypaisa' && styles.paymentSelected,
+            selectedPayment === 'easypaisa' && { borderColor: '#4CAF50' }]}
+          onPress={() => setSelectedPayment('easypaisa')}
+        >
+          <View style={styles.paymentRow}>
+            <View style={[styles.radio, selectedPayment === 'easypaisa' && [styles.radioActive, { borderColor: '#4CAF50' }]]} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.paymentText}>📱 EasyPaisa</Text>
+              <Text style={styles.paymentDesc}>Pay via EasyPaisa mobile wallet</Text>
+            </View>
+            <View style={[styles.providerBadge, { backgroundColor: '#4CAF50' }]}>
+              <Text style={styles.providerBadgeText}>EasyPaisa</Text>
+            </View>
+          </View>
+        </TouchableOpacity>
 
         <View style={styles.summaryContainer}>
           <Text style={styles.sectionTitle}>Order Summary</Text>
@@ -377,6 +415,9 @@ const styles = StyleSheet.create({
   radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: '#ddd', marginRight: 15 },
   radioActive: { borderColor: '#FF4500', borderWidth: 6 },
   paymentText: { fontWeight: '700', fontSize: 15, color: '#333' },
+  paymentDesc: { fontSize: 12, color: '#999', marginTop: 2 },
+  providerBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
+  providerBadgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
   summaryContainer: { marginTop: 10, backgroundColor: '#fff', padding: 20, borderRadius: 25, marginBottom: 30 },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
   summaryLabel: { color: '#888', fontWeight: '500' },

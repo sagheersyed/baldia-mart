@@ -19,6 +19,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const checkToken = async () => {
+      const fallbackTimer = setTimeout(() => setIsLoading(false), 5000);
       try {
         const token = await AsyncStorage.getItem('riderToken');
         if (token) {
@@ -32,7 +33,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const res = await authApi.getMe();
             setUser(res.data);
             await AsyncStorage.setItem('riderData', JSON.stringify(res.data));
-          } catch (error) {
+          } catch (error: any) {
             console.error('Auth verification failed:', error);
             if (error.response?.status === 401) {
               await logout();
@@ -42,6 +43,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (error) {
         console.error('Failed to load token:', error);
       } finally {
+        clearTimeout(fallbackTimer);
         setIsLoading(false);
       }
     };

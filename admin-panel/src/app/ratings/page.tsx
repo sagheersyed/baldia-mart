@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Star, User, ShoppingBag, MessageSquare, Calendar, Filter, RefreshCcw, Bike } from 'lucide-react';
-import { fetchWithAuth } from '@/lib/api';
+import { fetchWithAuth, BASE_URL } from '@/lib/api';
 
 interface Review {
   id: string;
@@ -14,7 +14,7 @@ interface Review {
   order: { id: string; total: number };
 }
 
-const API_URL = 'http://localhost:3000/api/v1/riders/reviews/all';
+const API_URL = `${BASE_URL}/riders/reviews/all`;
 
 export default function RatingsPage() {
   const [reviews, setReviews] = useState<Review[]>([]);

@@ -5,9 +5,8 @@ import {
   ActivityIndicator, Alert, Modal, Pressable, Vibration
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { ordersApi } from '../api/api';
+import { connectSocket, ordersApi, socket } from '../api/api';
 import { ENV } from '../config/env';
-import io from 'socket.io-client';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
@@ -27,7 +26,6 @@ export default function OrderChatScreen() {
   const [messages, setMessages] = useState<any[]>([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(true);
-  const [socket, setSocket] = useState<any>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [replyingTo, setReplyingTo] = useState<any | null>(null);
   const flatListRef = useRef<FlatList>(null);
@@ -35,15 +33,12 @@ export default function OrderChatScreen() {
   useEffect(() => {
     navigation.setOptions({ headerTitle: riderName || 'Chat with Rider' });
     loadHistory();
+    connectSocket();
 
-    const newSocket = io(ENV.SOCKET_URL, { transports: ['websocket'], forceNew: true });
-    setSocket(newSocket);
-
-    newSocket.on('connect', () => {
-      newSocket.emit('joinOrder', orderId);
-    });
-
-    newSocket.on('receiveMessage', (msg: any) => {
+    const onConnect = () => {
+      socket.emit('joinOrder', orderId);
+    };
+    const onReceiveMessage = (msg: any) => {
       setMessages(prev => {
         const filtered = prev.filter(m => !m.sending || m.message !== msg.message || m.type !== msg.type);
         if (filtered.some(m => m.id === msg.id)) return filtered;
@@ -56,13 +51,18 @@ export default function OrderChatScreen() {
       }
 
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-    });
+    };
+
+    if (socket.connected) onConnect();
+    socket.on('connect', onConnect);
+    socket.on('receiveMessage', onReceiveMessage);
 
     return () => {
-      newSocket.emit('leaveOrder', orderId);
-      newSocket.disconnect();
+      socket.emit('leaveOrder', orderId);
+      socket.off('connect', onConnect);
+      socket.off('receiveMessage', onReceiveMessage);
     };
-  }, [orderId]);
+  }, [navigation, orderId, riderName]);
 
   const loadHistory = async () => {
     try {
@@ -76,7 +76,7 @@ export default function OrderChatScreen() {
   };
 
   const handleSend = () => {
-    if (!inputText.trim() || !socket) return;
+    if (!inputText.trim()) return;
 
     const optimisticMsg = {
       id: `temp-${Date.now()}`,
@@ -114,7 +114,6 @@ export default function OrderChatScreen() {
   };
 
   const handleDecision = (msgId: string, decision: 'approved' | 'rejected') => {
-    if (!socket) return;
     socket.emit('sendMessage', {
       orderId,
       senderId: userData?.id,

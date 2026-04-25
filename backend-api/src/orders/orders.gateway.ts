@@ -96,6 +96,21 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     console.log(`Admin ${client.id} joined admin_room`);
   }
 
+  @SubscribeMessage('updateLocation')
+  async handleUpdateLocation(client: Socket, payload: { riderId: string, lat: number, lng: number }) {
+    if (!payload.riderId || !payload.lat || !payload.lng) return;
+    // Update the rider's location in the DB
+    await this.ridersService.updateLocation(payload.riderId, payload.lat, payload.lng);
+    
+    // Broadcast the new location to the admin map
+    this.server.to('admin_room').emit('riderLocationUpdated', {
+      riderId: payload.riderId,
+      lat: payload.lat,
+      lng: payload.lng,
+      timestamp: new Date().toISOString()
+    });
+  }
+
   emitOrderStatusUpdate(orderId: string, status: string, userId?: string, riderId?: string) {
     this.server.to(`order_${orderId}`).emit('orderStatusUpdated', { orderId, status });
     if (userId) {
@@ -124,6 +139,10 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   emitNewOrderToRiders(order: any) {
     this.server.to('riders_room').emit('newOrder', order);
+  }
+
+  emitNewOrderToSpecificRider(order: any, riderId: string) {
+    this.server.to(`rider_${riderId}`).emit('newOrder', order);
   }
 
   emitOrderAccepted(orderId: string) {

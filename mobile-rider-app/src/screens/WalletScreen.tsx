@@ -4,7 +4,7 @@ import {
   TouchableOpacity, RefreshControl, Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ordersApi, ridersApi } from '../api/api';
+import { ordersApi, ridersApi, walletsApi } from '../api/api';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -27,14 +27,14 @@ export default function WalletScreen({ navigation }: any) {
 
   const fetchAll = async () => {
     try {
-      const [statsRes, earningsRes, historyRes] = await Promise.all([
+      const [statsRes, walletRes, historyRes] = await Promise.all([
         ridersApi.getStats(),
-        ridersApi.getEarnings().catch(() => ({ data: null })),
-        ordersApi.getHistory().catch(() => ({ data: [] })),
+        walletsApi.getMyWallet().catch(() => ({ data: { wallet: null, history: [] } })),
+        ordersApi.getHistory().catch(() => ({ data: { data: [] } })),
       ]);
       setStats(statsRes.data);
-      setEarnings(earningsRes.data);
-      setHistory(historyRes.data || []);
+      setEarnings(walletRes.data);
+      setHistory(historyRes.data.data || []);
     } catch (e) {
       console.error('WalletScreen fetch error', e);
     } finally {
@@ -56,14 +56,16 @@ export default function WalletScreen({ navigation }: any) {
   const todayDeliveries  = stats?.todayDeliveries  || 0;
   const totalDeliveries  = stats?.totalDeliveries  || 0;
   
-  const codCollected     = earnings?.codCollected  || 0;
-  const codRemitted      = earnings?.codRemitted   || 0;
-  const codOwed          = Math.max(0, codCollected - codRemitted);
-  const remitThreshold   = earnings?.remitThreshold || 5000;
-
-  const monthlyHistory   = earnings?.monthly || [];
-  const bonusBalance     = earnings?.performanceBonus || 0;
-  const totalCommission  = earnings?.lifetimeCommission || 0;
+  // Extract values from the new Wallet API response
+  const walletBalance = Number(earnings?.wallet?.balance || 0);
+  const ledgerHistory = earnings?.history || [];
+  
+  // If balance is negative, the rider owes the platform
+  const codOwed = walletBalance < 0 ? Math.abs(walletBalance) : 0;
+  // If balance is positive, the platform owes the rider
+  const platformOwes = walletBalance > 0 ? walletBalance : 0;
+  
+  const remitThreshold   = 5000;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -106,66 +108,60 @@ export default function WalletScreen({ navigation }: any) {
           </View>
         </View>
 
-        {/* Monthly Performance */}
-        {monthlyHistory.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>📅 Monthly Performance</Text>
-            <View style={styles.monthsGrid}>
-              {monthlyHistory.map((m: any, idx: number) => (
-                <View key={idx} style={styles.monthCol}>
-                  <Text style={styles.monthName}>{m.month.split('-')[1]}/{m.month.split('-')[0].slice(2)}</Text>
-                  <Text style={styles.monthEarn}>Rs {m.earnings.toFixed(0)}</Text>
-                  <Text style={styles.monthTrips}>{m.deliveries} trips</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {/* Commission & Bonus Section */}
+        {/* Wallet Balance Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>✨ Bonuses & Commissions</Text>
-          <View style={styles.bonusRow}>
-            <View style={styles.bonusItem}>
-              <Text style={styles.bonusLabel}>Performance Bonus</Text>
-              <Text style={[styles.bonusVal, { color: '#27ae60' }]}>Rs {bonusBalance.toFixed(0)}</Text>
-            </View>
-            <View style={styles.bonusDivider} />
-            <View style={styles.bonusItem}>
-              <Text style={styles.bonusLabel}>Lifetime Commission</Text>
-              <Text style={styles.bonusVal}>Rs {totalCommission.toFixed(0)}</Text>
-            </View>
-          </View>
-          <Text style={styles.bonusHint}>Admin grants bonuses based on high ratings and speed.</Text>
-        </View>
-
-        {/* COD Remittance */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>💵 COD Cash Tracker</Text>
+          <Text style={styles.sectionTitle}>💼 Digital Ledger</Text>
           <View style={styles.codRow}>
             <View>
-              <Text style={styles.codLabel}>Collected from customers</Text>
-              <Text style={styles.codVal}>Rs {codCollected.toFixed(0)}</Text>
+              <Text style={styles.codLabel}>Current Balance</Text>
+              <Text style={[styles.codVal, walletBalance < 0 ? { color: '#e74c3c' } : { color: '#27ae60' }]}>
+                {walletBalance < 0 ? '-' : ''}Rs {Math.abs(walletBalance).toFixed(0)}
+              </Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
-              <Text style={styles.codLabel}>Submitted to office</Text>
-              <Text style={[styles.codVal, { color: '#27ae60' }]}>Rs {codRemitted.toFixed(0)}</Text>
+              <Text style={styles.codLabel}>Status</Text>
+              <Text style={[styles.codVal, { color: '#1A1A1A', fontSize: 16 }]}>
+                {walletBalance < 0 ? 'You owe platform' : walletBalance > 0 ? 'Platform owes you' : 'Settled'}
+              </Text>
             </View>
           </View>
 
           {codOwed > 0 && (
             <View style={styles.oweWrap}>
-              <Text style={styles.oweTitle}>You owe the company</Text>
+              <Text style={styles.oweTitle}>Cash Remittance Required</Text>
               <Text style={styles.oweVal}>Rs {codOwed.toFixed(0)}</Text>
               <ProgressBar value={codOwed} max={remitThreshold} color={codOwed >= remitThreshold ? '#e74c3c' : '#FF8C00'} />
               <Text style={[styles.oweHint, { color: codOwed >= remitThreshold ? '#e74c3c' : '#888' }]}>
                 {codOwed >= remitThreshold
-                  ? '⚠️ Wallet locked! Please remit cash now.'
+                  ? '⚠️ Please remit cash to office ASAP.'
                   : `Please remit before Rs ${remitThreshold.toFixed(0)}`}
               </Text>
             </View>
           )}
         </View>
+
+        {/* Ledger Transactions */}
+        <Text style={styles.sectionTitle}>📜 Ledger History</Text>
+        {ledgerHistory.length === 0 ? (
+          <View style={styles.emptyWrap}>
+            <Text style={styles.emptyTxt}>No transactions yet.</Text>
+          </View>
+        ) : (
+          ledgerHistory.slice(0, 10).map((tx: any) => (
+            <View key={tx.id} style={styles.historyCard}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.historyId}>{tx.description}</Text>
+                <Text style={styles.historyAddr}>{new Date(tx.createdAt).toLocaleDateString()} {new Date(tx.createdAt).toLocaleTimeString()}</Text>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={[styles.historyEarning, tx.type === 'DEBIT' ? { color: '#e74c3c' } : { color: '#27ae60' }]}>
+                  {tx.type === 'DEBIT' ? '-' : '+'} Rs {Number(tx.amount).toFixed(0)}
+                </Text>
+                <Text style={styles.historySubEarning}>{tx.type}</Text>
+              </View>
+            </View>
+          ))
+        )}
 
         {/* Recent deliveries */}
         <Text style={styles.sectionTitle}>📋 Recent Trips</Text>

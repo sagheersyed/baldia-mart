@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Bike, Search, Phone, ShieldCheck, ShieldX, Star, Clock, X, FileText, AlertCircle, CheckCircle, RefreshCcw } from 'lucide-react';
-import { fetchWithAuth } from '@/lib/api';
+import { fetchWithAuth, BASE_URL } from '@/lib/api';
 
 interface Rider {
   id: string;
@@ -23,7 +23,7 @@ interface Rider {
   createdAt: string;
 }
 
-const API_URL = 'http://localhost:3000/api/v1/riders';
+const API_URL = `${BASE_URL}/riders`;
 
 export default function RidersPage() {
   const [riders, setRiders] = useState<Rider[]>([]);

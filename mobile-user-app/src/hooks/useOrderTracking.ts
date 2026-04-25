@@ -1,8 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import io from 'socket.io-client';
 import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ordersApi, ridersApi, businessReviewsApi, productsApi, menuItemsApi, socket } from '../api/api';
+import { connectSocket, ordersApi, ridersApi, businessReviewsApi, productsApi, menuItemsApi, socket } from '../api/api';
 import { ENV } from '../config/env';
 import { isBusinessOpen } from '../utils/helpers';
 
@@ -121,10 +120,11 @@ export function useOrderTracking(orderId: string, navigation: any) {
   useEffect(() => {
     fetchOrderDetails();
 
-    // Use centralized socket
-    if (!socket.connected) socket.connect();
-    
-    socket.emit('joinOrder', orderId);
+    connectSocket();
+
+    const joinRoom = () => socket.emit('joinOrder', orderId);
+    if (socket.connected) joinRoom();
+    socket.on('connect', joinRoom);
 
     const onStatusUpdate = async (data: any) => {
       if (data.orderId === orderId) { setStatus(data.status); await fetchOrderDetails(); }
@@ -145,6 +145,7 @@ export function useOrderTracking(orderId: string, navigation: any) {
     socket.on('riderLocationUpdate', onRiderLocation);
 
     return () => {
+      socket.off('connect', joinRoom);
       socket.off('orderStatusUpdated', onStatusUpdate);
       socket.off('orderUpdated', onOrderUpdate);
       socket.off('riderLocationUpdate', onRiderLocation);

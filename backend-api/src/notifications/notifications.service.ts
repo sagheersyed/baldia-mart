@@ -5,6 +5,7 @@ import { Notification } from './notification.entity';
 import { User } from '../users/user.entity';
 import { Rider } from '../riders/rider.entity';
 import * as firebaseAdmin from 'firebase-admin';
+import axios from 'axios';
 
 @Injectable()
 export class NotificationsService {
@@ -91,5 +92,33 @@ export class NotificationsService {
       imageUrl,
     }));
     await this.notificationsRepository.save(notifications);
+  }
+
+  async sendAdminAlert(title: string, body: string, priority: 'low' | 'high' = 'low') {
+    console.log(`[ADMIN ALERT] ${priority.toUpperCase()}: ${title} - ${body}`);
+    
+    // Save in DB for all admins
+    const admins = await this.usersRepository.find({ where: { role: 'admin' } });
+    if (admins.length > 0) {
+      const notes = admins.map(admin => this.notificationsRepository.create({
+        userId: admin.id,
+        title: `⚠️ ${title}`,
+        body,
+      }));
+      await this.notificationsRepository.save(notes);
+    }
+
+    // Optional: Webhook (Slack/Discord/Teams)
+    // We can fetch this from settings in the caller or here if we inject SettingsService
+    const webhookUrl = process.env.ADMIN_ALERT_WEBHOOK_URL;
+    if (webhookUrl) {
+      try {
+        await axios.post(webhookUrl, {
+          text: `*${priority === 'high' ? '🚨 HIGH PRIORITY ALERT' : '⚠️ ADMIN ALERT'}*\n*${title}*\n${body}`,
+        });
+      } catch (e) {
+        console.error('Failed to send admin webhook alert:', e.message);
+      }
+    }
   }
 }

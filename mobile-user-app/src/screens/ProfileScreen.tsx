@@ -71,7 +71,11 @@ export default function ProfileScreen({ navigation }: any) {
       ]);
       if (userRes.status === 'fulfilled') setUser(userRes.value.data);
       if (addrRes.status === 'fulfilled') setAddresses(addrRes.value.data || []);
-      if (ordersRes.status === 'fulfilled') setOrderCount((ordersRes.value.data || []).length);
+      if (ordersRes.status === 'fulfilled') {
+        const d = ordersRes.value.data || {};
+        const arr = Array.isArray(d) ? d : (d.data || []);
+        setOrderCount(d.total ?? arr.length);
+      }
     } catch (error) {
       console.error('Profile fetch error:', error);
     } finally {

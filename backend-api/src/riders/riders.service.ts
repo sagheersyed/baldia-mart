@@ -29,10 +29,20 @@ export class RidersService {
     return this.ridersRepository.findOne({ where: { id } });
   }
 
-  async findAll(): Promise<Rider[]> {
-    return this.ridersRepository.find({
+  async findAll(): Promise<any[]> {
+    const riders = await this.ridersRepository.find({
       order: { createdAt: 'DESC' }
     });
+
+    const activeOrders = await this.ordersRepository.find({
+      where: { status: In(['confirmed', 'preparing', 'out_for_delivery']) },
+      select: ['id', 'riderId', 'status', 'total']
+    });
+
+    return riders.map(rider => ({
+      ...rider,
+      activeOrders: activeOrders.filter(o => o.riderId === rider.id)
+    }));
   }
 
   async create(riderData: Partial<Rider>): Promise<Rider> {
@@ -53,6 +63,10 @@ export class RidersService {
     }
 
     return this.ridersRepository.findOne({ where: { id } });
+  }
+
+  async updateLocation(id: string, lat: number, lng: number): Promise<void> {
+    await this.ridersRepository.update(id, { currentLat: lat, currentLng: lng });
   }
 
   async getRiderStats(riderId: string) {
@@ -126,7 +140,7 @@ export class RidersService {
     };
   }
 
-  async findBestRidersForOrder(order: any): Promise<Rider[]> {
+  async findBestRidersForOrder(order: any): Promise<any[]> {
     // 1. Get all online and active riders
     const onlineRiders = await this.ridersRepository.find({
       where: { isOnline: true, isActive: true },
@@ -134,50 +148,99 @@ export class RidersService {
 
     if (onlineRiders.length === 0) return [];
 
-    // 2. Pickup coordinates
+    // 2. Pickup coordinates for the NEW order
     let pLat = 24.91522600; 
     let pLng = 66.96431980;
     
     if (order.orderType === 'food' && order.restaurant) {
-      pLat = Number(order.restaurant.latitude);
-      pLng = Number(order.restaurant.longitude);
+      pLat = Number(order.restaurant.latitude) || pLat;
+      pLng = Number(order.restaurant.longitude) || pLng;
     } else if (order.orderType === 'food' && order.subOrders?.length > 0) {
       const first = order.subOrders[0].restaurant;
       if (first) {
-        pLat = Number(first.latitude);
-        pLng = Number(first.longitude);
+        pLat = Number(first.latitude) || pLat;
+        pLng = Number(first.longitude) || pLng;
       }
     } else if (order.orderType === 'mart' && order.subOrders?.length > 0) {
       const firstStop = order.subOrders.find((s: any) => s.pickupSequence === 1) || order.subOrders[0];
       if (firstStop && firstStop.vendor) {
-        pLat = Number(firstStop.vendor.lat);
-        pLng = Number(firstStop.vendor.lng);
+        pLat = Number(firstStop.vendor.lat) || pLat;
+        pLng = Number(firstStop.vendor.lng) || pLng;
       }
     }
 
+    // New order Drop-off coordinates
+    let dLat = Number(order.address?.latitude) || pLat;
+    let dLng = Number(order.address?.longitude) || pLng;
+
     // 3. Score riders
-    // Score = (Distance * 0.6) + (ActiveOrders * 0.3) - (Rating * 0.1)
+    // Score = (Distance * 10) + (ActiveOrdersPenalty) - (Rating * 2) - (BatchBonus)
     // Lower score is better
     const scoredRiders = await Promise.all(onlineRiders.map(async (rider) => {
-      const dist = this.deliveryZonesService.calculateDistance(
-        pLat, pLng, Number(rider.currentLat || 0), Number(rider.currentLng || 0)
+      let score = 0;
+      let isBatchable = false;
+
+      const riderLat = Number(rider.currentLat) || pLat;
+      const riderLng = Number(rider.currentLng) || pLng;
+
+      const distToPickup = this.deliveryZonesService.calculateDistance(
+        pLat, pLng, riderLat, riderLng
       );
 
-      // Count active orders for this rider
-      const activeCount = await this.ordersRepository.manager.getRepository('Order').count({
-        where: { riderId: rider.id, status: In(['confirmed', 'preparing', 'out_for_delivery']) }
+      // Fetch active orders for this rider
+      const activeOrders = await this.ordersRepository.manager.getRepository(Order).find({
+        where: { riderId: rider.id, status: In(['confirmed', 'preparing', 'out_for_delivery']) },
+        relations: ['address']
       });
 
-      const score = (dist * 10) + (activeCount * 5) - (Number(rider.averageRating || 5) * 2);
+      let activeOrdersPenalty = activeOrders.length * 5;
+      let batchBonus = 0;
+
+      // Check for Batched Order Opportunity
+      for (const activeOrder of activeOrders) {
+        // If the order is already out for delivery, it's too late to batch a new pickup
+        if (activeOrder.status === 'out_for_delivery') {
+          activeOrdersPenalty += 10; // Extra penalty for disrupting an ongoing delivery
+          continue;
+        }
+
+        // Calculate pickup proximity
+        let activePLat = 24.91522600, activePLng = 66.96431980;
+        // In a fully optimized system we'd join restaurant/vendor for activeOrder too, 
+        // but since we don't have it loaded here, we can assume Baldia Mart default or roughly the same area.
+        // Actually, if we use orderType we can do a rough check. For now, let's focus on Drop-off proximity.
+        
+        let activeDLat = Number(activeOrder.address?.latitude) || pLat;
+        let activeDLng = Number(activeOrder.address?.longitude) || pLng;
+        
+        if (activeDLat && activeDLng && dLat && dLng) {
+          const dropoffDist = this.deliveryZonesService.calculateDistance(dLat, dLng, activeDLat, activeDLng);
+          
+          // If drop-offs are within 2km, this is a highly batchable route
+          if (dropoffDist <= 2.0) {
+            isBatchable = true;
+            batchBonus = 20; // Massive score reduction to prioritize this rider
+            activeOrdersPenalty = 0; // Remove penalty because batching is efficient
+            break;
+          }
+        }
+      }
+
+      // Final Score Calculation
+      score = (distToPickup * 10) + activeOrdersPenalty - ((Number(rider.averageRating) || 5) * 2) - batchBonus;
       
-      return { rider, score, dist };
+      return { rider, score, dist: distToPickup, isBatchable };
     }));
 
-    // 4. Return top 5 best matches
+    // 4. Return top 5 best matches with metadata
     return scoredRiders
       .sort((a, b) => a.score - b.score)
       .slice(0, 5)
-      .map(s => s.rider);
+      .map(s => ({
+        rider: s.rider,
+        score: s.score,
+        isBatchable: s.isBatchable
+      }));
   }
 
   async createReview(reviewData: Partial<RiderReview>): Promise<RiderReview> {

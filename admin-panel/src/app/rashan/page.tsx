@@ -18,7 +18,7 @@ import {
   DollarSign,
   AlertCircle
 } from 'lucide-react';
-import { fetchWithAuth } from '@/lib/api';
+import { fetchWithAuth, BASE_URL } from '@/lib/api';
 
 interface RashanOrder {
   id: string;
@@ -52,9 +52,9 @@ interface RashanOrder {
   isEstimateApproved: boolean;
 }
 
-const RASHAN_API = 'http://localhost:3000/api/v1/orders/rashan';
-const RASHAN_ADMIN_API = 'http://localhost:3000/api/v1/orders/rashan/all';
-const RIDERS_API = 'http://localhost:3000/api/v1/riders/all';
+const RASHAN_API = `${BASE_URL}/orders/rashan`;
+const RASHAN_ADMIN_API = `${BASE_URL}/orders/rashan/all`;
+const RIDERS_API = `${BASE_URL}/riders/all`;
 
 export default function RashanRequestsPage() {
   const [orders, setOrders] = useState<RashanOrder[]>([]);

@@ -24,7 +24,8 @@ export default function OrderHistoryScreen({ navigation }: any) {
   const fetchHistory = async () => {
     try {
       const res = await ordersApi.getHistory();
-      setOrders(res.data);
+      // Adjusting to new paginated response: { data: Order[], total: number, ... }
+      setOrders(res.data.data || []);
     } catch (e) {
       console.error('Fetch history error:', e);
     } finally {

@@ -9,7 +9,17 @@ export const socket = io(ENV.SOCKET_URL, {
   reconnection: true,
   reconnectionAttempts: 10,
   reconnectionDelay: 1000,
+  extraHeaders: {
+    'ngrok-skip-browser-warning': 'true',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'
+  }
 });
+
+export const connectSocket = () => {
+  const authToken = (socket.auth as any)?.token;
+  if (typeof authToken !== 'string' || !authToken.trim()) return;
+  if (!socket.connected) socket.connect();
+};
 
 /**
  * Normalizes image and file URLs.
@@ -43,6 +53,10 @@ export const normalizePhone = (phone: string): string => {
 const api = axios.create({
   baseURL: ENV.BASE_URL,
   timeout: 15000,
+  headers: {
+    'ngrok-skip-browser-warning': 'true',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'
+  },
 });
 
 // ── Global 401 interceptor — auto sign-out on token expiry ──
@@ -62,9 +76,15 @@ api.interceptors.response.use(
 export const setAuthToken = (token: string | null) => {
   if (token) {
     api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    socket.auth = { token: `Bearer ${token}` };
     AsyncStorage.setItem('userToken', token);
+    // Ensure future handshakes include auth; reconnect only if already connected.
+    if (socket.connected) socket.disconnect();
+    connectSocket();
   } else {
     delete api.defaults.headers.common['Authorization'];
+    socket.auth = {};
+    if (socket.connected) socket.disconnect();
     AsyncStorage.removeItem('userToken');
   }
 };
@@ -144,6 +164,13 @@ export const ordersApi = {
   getDeliveryFee: (addressId: string, restaurantId?: string) =>
     api.get(`/orders/preview-fee/${addressId}${restaurantId ? `?restaurantId=${restaurantId}` : ''}`),
   getChatHistory: (orderId: string) => api.get(`/orders/${orderId}/chat`),
+};
+
+export const paymentsApi = {
+  initiate: (data: { orderId: string; provider: string; amount: number; mobileNumber?: string }) =>
+    api.post('/payments/initiate', data),
+  getStatus: (paymentId: string) => api.get(`/payments/status/${paymentId}`),
+  getByOrder: (orderId: string) => api.get(`/payments/order/${orderId}`),
 };
 
 export const settingsApi = {

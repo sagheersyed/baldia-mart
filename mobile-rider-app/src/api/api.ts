@@ -9,6 +9,10 @@ export const socket = io(ENV.SOCKET_URL, {
   reconnection: true,
   reconnectionAttempts: 10,
   reconnectionDelay: 1000,
+  extraHeaders: {
+    'ngrok-skip-browser-warning': 'true',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'
+  }
 });
 
 
@@ -28,6 +32,10 @@ export const normalizePhone = (phone: string): string => {
 export const api = axios.create({
   baseURL: ENV.BASE_URL,
   timeout: 15000,
+  headers: {
+    'ngrok-skip-browser-warning': 'true',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'
+  },
 });
 
 // ── Global 401 interceptor — auto sign-out on token expiry ──
@@ -76,7 +84,10 @@ export const ordersApi = {
     api.patch(`/orders/${orderId}/rider-status`, { status }),
   updateSubOrderStatus: (subOrderId: string, status: string) =>
     api.patch(`/orders/sub-orders/${subOrderId}/status`, { status }),
-  removeItem: (orderId: string, itemId: string) => api.delete(`/orders/${orderId}/items/${itemId}`),
+  removeItem: (orderId: string, itemId: string, reason?: string) => 
+    api.delete(`/orders/${orderId}/items/${itemId}`, { data: { reason } }),
+  releaseOrder: (orderId: string, reason: string) => 
+    api.post(`/orders/${orderId}/release`, { reason }),
   getHistory: () => api.get('/orders/history/rider'),
   getChatHistory: (orderId: string) => api.get(`/orders/${orderId}/chat`),
 };
@@ -93,4 +104,8 @@ export const ridersApi = {
 
 export const settingsApi = {
   getPublicSettings: () => api.get('/settings/public'),
+};
+
+export const walletsApi = {
+  getMyWallet: () => api.get('/wallets/my-wallet'),
 };

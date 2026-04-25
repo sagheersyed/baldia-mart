@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { BASE_URL } from '@/lib/api';
 import { Lock, Mail, ArrowRight } from 'lucide-react';
 
 export default function LoginPage() {
@@ -17,7 +18,7 @@ export default function LoginPage() {
     setError('');
 
     try {
-      const res = await fetch('http://localhost:3000/api/v1/auth/admin/login', {
+      const res = await fetch(`${BASE_URL}/auth/admin/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -31,6 +32,9 @@ export default function LoginPage() {
       localStorage.setItem('adminToken', data.access_token);
       localStorage.setItem('adminEmail', data.user.email);
       localStorage.setItem('adminName', data.user.name);
+
+      // Set cookie for Next.js middleware
+      document.cookie = `adminToken=${data.access_token}; path=/; max-age=86400; SameSite=Strict`;
 
       router.push('/');
     } catch (err: any) {

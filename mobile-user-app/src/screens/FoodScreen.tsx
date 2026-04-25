@@ -5,10 +5,9 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { categoriesApi, addressesApi, bannersApi, restaurantsApi, settingsApi, deliveryZonesApi, normalizeUrl, socket } from '../api/api';
+import { categoriesApi, addressesApi, bannersApi, restaurantsApi, settingsApi, deliveryZonesApi, normalizeUrl, socket, connectSocket } from '../api/api';
 import { ENV } from '../config/env';
 import { useFocusEffect } from '@react-navigation/native';
-import io from 'socket.io-client';
 import BannerCarousel from '../components/BannerCarousel';
 import SkeletonLoader from '../components/SkeletonLoader';
 import { useCart } from '../context/CartContext';
@@ -193,10 +192,10 @@ export default function FoodScreen({ navigation }: any) {
   };
 
   useEffect(() => {
-    if (!socket.connected) socket.connect();
-    
-    socket.on('connect', () => console.log('Food: Connected to socket'));
-    socket.on('bannersUpdated', async () => {
+    connectSocket();
+
+    const onConnect = () => console.log('Food: Connected to socket');
+    const onBannersUpdated = async () => {
       console.log('Food: Banners updated remotely, refreshing...');
       try {
         const res = await bannersApi.getBySection('food');
@@ -204,11 +203,14 @@ export default function FoodScreen({ navigation }: any) {
       } catch (err) {
         console.error('Failed to sync food banners', err);
       }
-    });
+    };
+
+    socket.on('connect', onConnect);
+    socket.on('bannersUpdated', onBannersUpdated);
 
     return () => {
-      socket.off('connect');
-      socket.off('bannersUpdated');
+      socket.off('connect', onConnect);
+      socket.off('bannersUpdated', onBannersUpdated);
     };
   }, []);
 

@@ -1,0 +1,114 @@
+# Production Deployment Guide: Baldia-Mart Backend
+
+Deploying an enterprise-grade NestJS backend with real-time sockets, PostgreSQL, and Redis requires a robust configuration. This guide outlines the recommended architecture and step-by-step deployment strategies.
+
+---
+
+## 1. Production Architecture Overview
+
+For a high-availability hyperlocal marketplace, your infrastructure should be divided into isolated containers.
+
+*   **API Gateway & Load Balancer:** Nginx or AWS ALB (routes traffic to Node.js instances).
+*   **Application Layer:** Multiple replicas of your NestJS backend running in Docker containers.
+*   **Database Layer:** Managed PostgreSQL database (e.g., AWS RDS, DigitalOcean Managed Database) or containerized Postgres with volume mounting.
+*   **Caching & Sub/Pub Layer:** Redis (used for Socket.io state management, rate limiting, OTP session handling, and query caching).
+
+---
+
+## 2. Infrastructure Deployment Options
+
+### Option A: Virtual Private Server (VPS) / Dedicated Server
+*Best for cost-efficiency (e.g., DigitalOcean Droplet, Hetzner, AWS EC2).*
+
+Using **Docker Compose**, you can launch the entire stack on a single server.
+
+**`docker-compose.prod.yml` Structure:**
+```yaml
+version: '3.8'
+
+services:
+  api:
+    build: 
+      context: .
+      target: production
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - REDIS_HOST=redis
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: baldia_mart
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME}"]
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redisdata:/data
+
+volumes:
+  pgdata:
+  redisdata:
+```
+
+### Option B: Cloud Native PaaS
+*Best for Zero-DevOps (e.g., Render.com, Heroku, AWS Fargate/AppRunner).*
+1.  **PostgreSQL & Redis:** Provision managed databases via the platform's UI.
+2.  **NestJS Deployment:** Simply connect your GitHub repository to Render/Railway. The platform auto-builds using the `Dockerfile`.
+3.  **Environment Variables:** Add your production secrets to the platform dashboard.
+
+---
+
+## 3. Checklist Before Going Live
+
+### 1. Database Migrations (TypeORM)
+*   **Action:** Ensure `synchronize: false` is set in your TypeORM configuration natively for production (`NODE_ENV=production`).
+*   **Execution:** Run database migrations manually during the CI/CD pipeline step to update table schemas without accidental data loss.
+
+### 2. Redis Integration (For WebSockets & Caching)
+Currently, basic setups might use in-memory state. For production:
+*   Integrate the `@nestjs/platform-ws` or Socket.io Redis adapter in `OrdersGateway`. This ensures that if you run 2 or more replicas of your backend, all servers share the WebSocket state.
+*   Use Redis for API Rate Limiting (`@nestjs/throttler` with a Redis driver) to prevent DDoS attacks on your OTP endpoints.
+
+### 3. Proper Dockerfile Configuration
+Ensure your `Dockerfile` utilizes a multi-stage build.
+*   **Build Stage:** Copies source code, installs `devDependencies`, and runs `npm run build`.
+*   **Production Stage:** Uses a lightweight `node:alpine` image, copies only `package.json` for `npm install --omit=dev`, and runs the compiled `dist/main.js` to save RAM and Image size.
+
+### 4. PM2 or built-in Cluster (If running natively without Docker Replicas)
+If not using Kubernetes or Docker Swarm/Compose replicas, use `pm2` inside the Docker container to spawn processing threads matching CPU cores.
+
+---
+
+## 4. Setting up a VPS Deployment Flow (Summary)
+
+1.  **Provision Server:** Rent an Ubuntu 22.04 LTS instance.
+2.  **Install Prerequisites:** Install Docker and Docker Compose.
+3.  **Setup Domain & SSL:**
+    *   Point `api.baldiamart.com` to your server IP.
+    *   Install Nginx Proxy Manager or Traefik container to handle auto-SSL certificates (Let's Encrypt).
+4.  **Transfer Secrets:** Create a `.env.production` file on the server.
+5.  **Run Build:**
+    ```bash
+    git pull origin main
+    docker compose -f docker-compose.prod.yml up -d --build
+    ```
+6.  **Verify Status:** Check logs using `docker compose logs -f api`.

@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { Vendor } from './vendor.entity';
 import { VendorProduct } from './vendor-product.entity';
 
@@ -62,6 +62,53 @@ export class VendorsService {
     });
 
     return available[0];
+  }
+
+  // ── Find Best Vendors for Multiple Products (Batched) ─────────────────────
+  async findBestVendorsForProducts(
+    productIds: string[],
+    userLat: number,
+    userLng: number,
+  ): Promise<Map<string, VendorProduct>> {
+    if (productIds.length === 0) return new Map();
+
+    const allCandidates = await this.vendorProductsRepository.find({
+      where: { productId: In(productIds), isAvailable: true },
+      relations: ['vendor', 'product', 'product.brand', 'product.category'],
+    });
+
+    const result = new Map<string, VendorProduct>();
+    const grouped: Record<string, VendorProduct[]> = {};
+
+    allCandidates.forEach(vp => {
+      if (!grouped[vp.productId]) grouped[vp.productId] = [];
+      grouped[vp.productId].push(vp);
+    });
+
+    for (const productId of productIds) {
+      const candidates = grouped[productId] || [];
+      const available = candidates.filter(vp => {
+        const v = vp.vendor;
+        const p = vp.product;
+        if (!v || !v.isOpen || !v.isActive || vp.stockQty <= 0) return false;
+        if (!this.isBusinessOpen(v.openingTime, v.closingTime)) return false;
+        if (p?.category && !this.isBusinessOpen(p.category.openingTime, p.category.closingTime)) return false;
+        if (p?.brand && !this.isBusinessOpen(p.brand.openingTime, p.brand.closingTime)) return false;
+        if (p && !this.isBusinessOpen(p.openingTime, p.closingTime)) return false;
+        return true;
+      });
+
+      if (available.length > 0) {
+        available.sort((a, b) => {
+          const distA = this.haversine(userLat, userLng, Number(a.vendor.lat), Number(a.vendor.lng));
+          const distB = this.haversine(userLat, userLng, Number(b.vendor.lat), Number(b.vendor.lng));
+          return distA - distB;
+        });
+        result.set(productId, available[0]);
+      }
+    }
+
+    return result;
   }
 
   private isBusinessOpen(openingTime: string | null, closingTime: string | null): boolean {

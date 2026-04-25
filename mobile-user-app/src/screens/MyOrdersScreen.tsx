@@ -6,13 +6,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useCart } from '../context/CartContext';
-import { ordersApi, authApi, socket } from '../api/api';
-import { ENV } from '../config/env';
+import { authApi, connectSocket, ordersApi, socket } from '../api/api';
 import { generateReceiptPDF, printReceipt } from '../utils/receiptGenerator';
 import SkeletonLoader from '../components/SkeletonLoader';
-
-const BASE_IP = 'https://8d6b-175-107-236-228.ngrok-free.app';
-const SOCKET_URL = BASE_IP;
 
 const STATUS_CONFIG: Record<string, { color: string; bg: string; label: string; icon: string }> = {
   pending: { color: '#F59E0B', bg: '#FFFBEB', label: 'Pending', icon: '⏳' },
@@ -145,7 +141,8 @@ export default function MyOrdersScreen({ navigation }: any) {
       else if (pageNum > 1) setLoadingMore(true);
 
       const res = await ordersApi.getHistory(pageNum, 15);
-      const newOrders = res.data || [];
+      const resData = res.data || {};
+      const newOrders = Array.isArray(resData) ? resData : (resData.data || resData.orders || resData.items || []);
 
       setHasMore(newOrders.length === 15);
 
@@ -179,34 +176,40 @@ export default function MyOrdersScreen({ navigation }: any) {
   }, [orders, setActiveOrdersCount]);
 
   useEffect(() => {
+    let isMounted = true;
+    let joinRoom: (() => void) | null = null;
+    const onStatusUpdate = (data: any) => {
+      if (!isMounted) return;
+      console.log('MyOrders: Received order update:', data);
+      setPage(1);
+      fetchOrders(1, false);
+    };
+
     const setupSocket = async () => {
       try {
         const userRes = await authApi.getMe();
         const user = userRes.data;
+        if (!isMounted) return;
 
-        if (!socket.connected) socket.connect();
+        connectSocket();
+        joinRoom = () => { if (user?.id) socket.emit('joinUserRoom', user.id); };
+        if (socket.connected) joinRoom();
+        socket.on('connect', joinRoom);
 
-        if (user?.id) {
-          socket.emit('joinUserRoom', user.id);
-        }
-
-        const onStatusUpdate = (data: any) => {
-          console.log('MyOrders: Received order update:', data);
-          setPage(1);
-          fetchOrders(1, false);
-        };
-
+        socket.off('orderStatusUpdated', onStatusUpdate);
         socket.on('orderStatusUpdated', onStatusUpdate);
-
-        return () => {
-          socket.off('orderStatusUpdated', onStatusUpdate);
-        };
       } catch (e) {
         console.error('Socket setup error:', e);
       }
     };
 
-    setupSocket();
+    void setupSocket();
+
+    return () => {
+      isMounted = false;
+      if (joinRoom) socket.off('connect', joinRoom);
+      socket.off('orderStatusUpdated', onStatusUpdate);
+    };
   }, [fetchOrders]);
 
   const onRefresh = useCallback(() => {

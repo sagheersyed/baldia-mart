@@ -58,6 +58,9 @@ import { VendorProduct } from './vendors/vendor-product.entity';
 import { Favorite } from './favorites/favorite.entity';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
+import { WalletsModule } from './wallets/wallets.module';
+import { Wallet } from './wallets/wallet.entity';
+import { WalletTransaction } from './wallets/wallet-transaction.entity';
 
 @Module({
   imports: [
@@ -85,6 +88,7 @@ import { APP_GUARD } from '@nestjs/core';
         CartItem, Order, OrderItem, Payment, Notification, Rider, Otp,
         OrderHistory, RiderReview, Setting, Brand, Banner, Restaurant, MenuItem, SubOrder, BusinessReview,
         Vendor, VendorProduct, Favorite, OrderChatMessage,
+        Wallet, WalletTransaction,
       ],
 
       synchronize: process.env.NODE_ENV !== 'production',
@@ -113,6 +117,7 @@ import { APP_GUARD } from '@nestjs/core';
     ReviewsModule,
     VendorsModule,
     FavoritesModule,
+    WalletsModule,
   ],
   controllers: [AppController, HealthController],
   providers: [

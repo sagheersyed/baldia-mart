@@ -33,7 +33,7 @@ export class OrderItem {
   @Column({ name: 'sub_order_id', nullable: true })
   subOrderId: string;
 
-  @ManyToOne(() => SubOrder, subOrder => subOrder.items, { onDelete: 'CASCADE', nullable: true })
+  @ManyToOne(() => SubOrder, subOrder => subOrder.items, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'sub_order_id' })
   subOrder: SubOrder;
 

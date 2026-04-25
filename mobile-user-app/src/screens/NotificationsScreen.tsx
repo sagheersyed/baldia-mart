@@ -61,7 +61,9 @@ export default function NotificationsScreen({ navigation }: any) {
   const fetchNotifications = useCallback(async () => {
     try {
       const res = await ordersApi.getHistory();
-      setOrders(res.data || []);
+      const resData = res.data || {};
+      const orderData = Array.isArray(resData) ? resData : (resData.data || []);
+      setOrders(orderData);
     } catch (e) {
       console.error('Failed to load notifications', e);
     } finally {

@@ -18,25 +18,15 @@ export default function RootLayout({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [initialCheckDone, setInitialCheckDone] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   const isLoginPage = pathname === '/login';
 
   useEffect(() => {
-    const token = localStorage.getItem('adminToken');
-    if (!token && !isLoginPage) {
-      router.replace('/login');
-    } else if (token && isLoginPage) {
-      router.replace('/');
-    }
-    
     const savedCollapse = localStorage.getItem('sidebarCollapsed');
     if (savedCollapse === 'true') setIsSidebarCollapsed(true);
-    
-    setInitialCheckDone(true);
-  }, [pathname, router]);
+  }, []);
 
   // Close sidebar on navigation
   useEffect(() => {
@@ -48,16 +38,6 @@ export default function RootLayout({
     setIsSidebarCollapsed(newState);
     localStorage.setItem('sidebarCollapsed', newState.toString());
   };
-
-  if (!initialCheckDone) {
-    return (
-      <html lang="en">
-        <body className={`${inter.className} bg-gray-50 flex items-center justify-center min-h-screen`}>
-          {/* Prevent flash of content */}
-        </body>
-      </html>
-    );
-  }
 
   return (
     <html lang="en">

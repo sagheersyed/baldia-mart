@@ -9,9 +9,12 @@ import { Text, ActivityIndicator, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 
-import { CartProvider, useCart } from './src/context/CartContext';
-import { AuthProvider, useAuth } from './src/context/AuthContext';
-import { SettingsProvider, useSettings } from './src/context/SettingsContext';
+import { useCart } from './src/context/CartContext';
+import { useAuth } from './src/context/AuthContext';
+import { useSettings } from './src/context/SettingsContext';
+import { useCartStore } from './src/store/cartStore';
+import { useAuthStore } from './src/store/authStore';
+import { useSettingsStore } from './src/store/settingsStore';
 import { categoriesApi, productsApi, addressesApi, settingsApi } from './src/api/api';
 
 import LoginScreen from './src/screens/LoginScreen';
@@ -39,6 +42,7 @@ import FavouritesScreen from './src/screens/FavouritesScreen';
 import AboutScreen from './src/screens/AboutScreen';
 import OrderChatScreen from './src/screens/OrderChatScreen';
 import RashanOrderScreen from './src/screens/RashanOrderScreen';
+import PaymentWebViewScreen from './src/screens/PaymentWebViewScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -190,6 +194,7 @@ function Navigation() {
             <Stack.Screen name="About" component={AboutScreen} />
             <Stack.Screen name="OrderChat" component={OrderChatScreen} options={{ headerShown: true, headerStyle: { backgroundColor: '#fff' }, headerTintColor: '#1A1A1A' }} />
             <Stack.Screen name="RashanOrder" component={RashanOrderScreen} />
+            <Stack.Screen name="PaymentWebView" component={PaymentWebViewScreen} />
           </>
         )}
       </Stack.Navigator>
@@ -197,17 +202,18 @@ function Navigation() {
   );
 }
 export default function App() {
+  useEffect(() => {
+    useAuthStore.getState().loadStorageData();
+    useSettingsStore.getState().refreshSettings();
+    useSettingsStore.getState().initSocketListeners();
+    useCartStore.getState().rehydrate();
+  }, []);
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <AuthProvider>
-          <SettingsProvider>
-            <CartProvider>
-              <Navigation />
-              <StatusBar style="auto" />
-            </CartProvider>
-          </SettingsProvider>
-        </AuthProvider>
+        <Navigation />
+        <StatusBar style="auto" />
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

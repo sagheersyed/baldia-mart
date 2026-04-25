@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { Megaphone, Send, RefreshCw, Bell, History, ShieldAlert } from 'lucide-react';
-import { fetchWithAuth } from '@/lib/api';
+import { fetchWithAuth, BASE_URL } from '@/lib/api';
 
 export default function MarketingPage() {
   const [title, setTitle] = useState('');
@@ -14,7 +14,7 @@ export default function MarketingPage() {
     if (!title || !message) return;
     try {
       setSaving(true);
-      const res = await fetchWithAuth('http://localhost:3000/api/v1/notifications/broadcast', {
+      const res = await fetchWithAuth(`${BASE_URL}/notifications/broadcast`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title, message }),

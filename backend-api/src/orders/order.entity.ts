@@ -6,6 +6,7 @@ import { OrderItem } from './order-item.entity';
 import { Restaurant } from '../restaurants/restaurant.entity';
 import { SubOrder } from './sub-order.entity';
 import { Brand } from '../brands/brand.entity';
+import { OrderHistory } from './order-history.entity';
 
 @Entity('orders')
 export class Order {
@@ -135,11 +136,17 @@ export class Order {
   @OneToMany(() => SubOrder, subOrder => subOrder.order)
   subOrders: SubOrder[];
 
+  @OneToMany(() => OrderHistory, history => history.order)
+  orderHistory: OrderHistory[];
+
   @Column({ name: 'is_rated', default: false })
   isRated: boolean;
 
   @Column({ name: 'is_business_rated', default: false })
   isBusinessRated: boolean;
+
+  @Column({ name: 'release_count', default: 0 })
+  releaseCount: number;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

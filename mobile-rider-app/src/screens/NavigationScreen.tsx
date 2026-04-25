@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Alert,
   ActivityIndicator, ScrollView, Linking, Platform, Vibration,
-  Animated, PanResponder, Dimensions, FlatList
+  Animated, PanResponder, Dimensions, FlatList, Modal, TextInput
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -108,8 +108,20 @@ export default function NavigationScreen({ navigation, route }: any) {
   const [status, setStatus] = useState('confirmed');
   const [loading, setLoading] = useState(true);
   const [riderLoc, setRiderLoc] = useState<any>(null);
+  const [isLocationBlocked, setIsLocationBlocked] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [expandedChecklist, setExpandedChecklist] = useState(true);
+  
+  // Guard: prevents double-navigation when rider self-releases order
+  // (submitReason navigates away AND backend emits 'pending' status via socket)
+  const isNavigatingAway = useRef(false);
+
+  // Reason Modal State
+  const [reasonModalVisible, setReasonModalVisible] = useState(false);
+  const [reasonText, setReasonText] = useState('');
+  const [reasonType, setReasonType] = useState<'missing' | 'release'>('missing');
+  const [pendingItem, setPendingItem] = useState<{ id: string; name: string } | null>(null);
+  
   const mapRef = useRef<MapView>(null);
 
   // ── Derived logic (Must be before useEffect/Handlers) ───────────────
@@ -178,35 +190,48 @@ export default function NavigationScreen({ navigation, route }: any) {
   useEffect(() => {
     const init = async () => {
       try {
-        // Save current active order ID for auto-resume logic
-        if (orderId) {
-          await AsyncStorage.setItem('activeOrderId', orderId);
-        }
-
-        const [orderRes, { status: locStatus }] = await Promise.all([
-          ordersApi.getById(orderId),
-          Location.requestForegroundPermissionsAsync(),
-        ]);
+        setLoading(true);
+        // 1. Fetch Order Data First (Crucial for UI)
+        const orderRes = await ordersApi.getById(orderId);
         if (orderRes.data) {
           setOrder(orderRes.data);
           setStatus(orderRes.data.status);
+          if (orderId) await AsyncStorage.setItem('activeOrderId', orderId);
+          
           if (orderRes.data.status === 'cancelled') {
             Alert.alert('Order Cancelled', 'This order is no longer active.');
             navigation.replace('Main');
             return;
           }
         }
-        if (locStatus === 'granted') {
-          const loc = await Location.getCurrentPositionAsync({});
-          setRiderLoc(loc.coords);
-          Location.watchPositionAsync(
-            { accuracy: Location.Accuracy.High, distanceInterval: 10 },
-            (l) => setRiderLoc(l.coords),
-          );
+
+        // 2. Location Handling (Non-blocking init)
+        const { status: locPerm } = await Location.requestForegroundPermissionsAsync();
+        if (locPerm !== 'granted') {
+          setIsLocationBlocked(true);
+          Alert.alert('Permission Denied', 'Location permission is required for navigation.');
+        } else {
+          const servicesEnabled = await Location.hasServicesEnabledAsync();
+          if (!servicesEnabled) {
+            setIsLocationBlocked(true);
+          } else {
+            // Background location fetch
+            Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+              .then(loc => setRiderLoc(loc.coords))
+              .catch(() => {});
+
+            Location.watchPositionAsync(
+              { accuracy: Location.Accuracy.High, distanceInterval: 10 },
+              (l) => {
+                setRiderLoc(l.coords);
+                setIsLocationBlocked(false); // Unblock once location is active
+              }
+            );
+          }
         }
       } catch (e) {
-        console.error('NavigationScreen init:', e);
-        Alert.alert('Error', 'Failed to load order navigation data.');
+        console.error('NavigationScreen init error:', e);
+        Alert.alert('Error', 'Failed to load navigation data.');
       } finally {
         setLoading(false);
       }
@@ -216,23 +241,40 @@ export default function NavigationScreen({ navigation, route }: any) {
     socket.connect();
     socket.emit('joinOrder', orderId);
 
-    const onCancelled = (data: any) => {
+    const onStatusUpdate = (data: any) => {
       try {
+        // Guard: if rider already self-navigated (e.g., via submitReason),
+        // ignore any incoming socket events to prevent double-navigation/stale alerts
+        if (isNavigatingAway.current) return;
         if (!data) return;
         const targetId = data.orderId || (typeof data === 'string' ? data : null);
+        const newStatus = data.status || (typeof data === 'string' ? data : null);
 
-        // CRITICAL FIX: Only trigger alert IF the status provided is actually 'cancelled'
-        if ((targetId === orderId && data.status === 'cancelled') || (typeof data === 'string' && data === 'cancelled')) {
-          Vibration.vibrate([100, 500]);
-          AsyncStorage.removeItem('activeOrderId')
-            .then(() => {
-              Alert.alert('Order Cancelled 🛑', 'The customer has cancelled this order.', [
-                { text: 'Okay', onPress: () => navigation.replace('Main') },
-              ]);
-            })
-            .catch(e => console.error(e));
+        if (targetId === orderId) {
+          if (newStatus === 'cancelled') {
+            Vibration.vibrate([100, 500]);
+            AsyncStorage.removeItem('activeOrderId')
+              .then(() => {
+                isNavigatingAway.current = true;
+                Alert.alert('Order Cancelled 🛑', 'The customer has cancelled this order.', [
+                  { text: 'Okay', onPress: () => navigation.replace('Main') },
+                ]);
+              })
+              .catch(e => console.error(e));
+          } else if (newStatus === 'pending') {
+            // Order was released by ADMIN (not by this rider via submitReason)
+            Vibration.vibrate(500);
+            AsyncStorage.removeItem('activeOrderId')
+              .then(() => {
+                isNavigatingAway.current = true;
+                Alert.alert('Order Released 🔓', 'This order has been released by admin.', [
+                  { text: 'Okay', onPress: () => navigation.replace('Main') },
+                ]);
+              })
+              .catch(e => console.error(e));
+          }
         }
-      } catch (err) { console.error('onCancelled error', err); }
+      } catch (err) { console.error('onStatusUpdate error', err); }
     };
 
     const onUpdated = (data: any) => {
@@ -241,10 +283,10 @@ export default function NavigationScreen({ navigation, route }: any) {
       } catch (err) { console.error('onUpdated error', err); }
     };
 
-    socket.on('orderStatusUpdated', onCancelled);
+    socket.on('orderStatusUpdated', onStatusUpdate);
     socket.on('orderUpdated', onUpdated);
     return () => {
-      socket.off('orderStatusUpdated', onCancelled);
+      socket.off('orderStatusUpdated', onStatusUpdate);
       socket.off('orderUpdated', onUpdated);
     };
   }, [orderId]);
@@ -344,32 +386,57 @@ export default function NavigationScreen({ navigation, route }: any) {
     }
   };
 
+  const handleReportMissing = (itemId: string, itemName: string) => {
+    setPendingItem({ id: itemId, name: itemName });
+    setReasonType('missing');
+    setReasonText('');
+    setReasonModalVisible(true);
+  };
+
+  const submitReason = async () => {
+    if (!reasonText.trim()) {
+      Alert.alert('Required', 'Please provide a reason.');
+      return;
+    }
+
+    const currentReason = reasonText.trim();
+    setReasonModalVisible(false);
+    setUpdatingStatus(true);
+
+    try {
+      if (reasonType === 'missing' && pendingItem) {
+        await ordersApi.removeItem(orderId, pendingItem.id, currentReason);
+        Alert.alert('Success', `${pendingItem.name} marked as missing.`);
+        await refreshOrder();
+      } else if (reasonType === 'release') {
+        // Set guard BEFORE API call to prevent socket's 'pending' event
+        // from triggering a second navigation while we're already navigating away
+        isNavigatingAway.current = true;
+        await ordersApi.releaseOrder(orderId, currentReason);
+        Alert.alert('Order Released', 'This order has been released. Reason logged.');
+        navigation.replace('Main');
+      }
+    } catch (e: any) {
+      console.error('Submit reason error:', e);
+      const serverMsg = e.response?.data?.message || e.message || `Failed to ${reasonType === 'missing' ? 'report missing item' : 'release order'}`;
+      Alert.alert('Error', serverMsg);
+    } finally {
+      setUpdatingStatus(false);
+      setPendingItem(null);
+    }
+  };
+
+  const handleReleaseOrder = () => {
+    setReasonType('release');
+    setReasonText('');
+    setReasonModalVisible(true);
+  };
+
   const handlePickUpSubOrder = async (subOrderId: string) => {
     try {
       await ordersApi.updateSubOrderStatus(subOrderId, 'picked_up');
       await refreshOrder();
     } catch (e) { Alert.alert('Error', 'Failed to update stop status.'); }
-  };
-
-  const handleReportMissing = (itemId: string, itemName: string) => {
-    Alert.alert(
-      'Report Missing Item',
-      `Are you sure ${itemName} is missing? This will adjust the order total and notify the customer.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Mark Missing', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-               await ordersApi.removeItem(orderId, itemId);
-               Alert.alert('Success', 'Item marked as missing.');
-               await refreshOrder();
-            } catch (e) { Alert.alert('Error', 'Failed to report item missing'); }
-          }
-        }
-      ]
-    );
   };
 
   // ── External maps ───────────────────────────────────────────────────
@@ -483,6 +550,9 @@ export default function NavigationScreen({ navigation, route }: any) {
         )}
         <TouchableOpacity onPress={openExternalMaps} style={styles.navBtn}>
           <Text style={styles.navBtnTxt}>🧭</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={handleReleaseOrder} style={[styles.navBtn, { backgroundColor: '#C53030' }]}>
+          <Text style={[styles.navBtnTxt, { fontSize: 16 }]}>🚫</Text>
         </TouchableOpacity>
       </SafeAreaView>
 
@@ -654,6 +724,77 @@ export default function NavigationScreen({ navigation, route }: any) {
           </View>
         )}
       </View>
+
+      {/* ── Location Block Overlay ── */}
+      {isLocationBlocked && (
+        <View style={styles.blockOverlay}>
+          <Ionicons name="location" size={64} color="#FF4500" />
+          <Text style={styles.blockTitle}>Location Required 📍</Text>
+          <Text style={styles.blockMsg}>
+            Please enable GPS to continue. We need your live location to track delivery progress.
+          </Text>
+          <TouchableOpacity 
+            style={styles.retryBtn} 
+            onPress={async () => {
+              const enabled = await Location.hasServicesEnabledAsync();
+              if (enabled) {
+                setIsLocationBlocked(false);
+                // Trigger re-init or just let watchPosition handle it
+              } else {
+                Alert.alert('GPS Still Off', 'Please enable location services in your device settings.');
+              }
+            }}
+          >
+            <Text style={styles.retryBtnTxt}>I've Enabled GPS</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* ── Reason Modal ── */}
+      <Modal
+        visible={reasonModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setReasonModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>
+              {reasonType === 'missing' ? 'Report Missing Item' : 'Release/Cancel Order'}
+            </Text>
+            <Text style={styles.modalSub}>
+              {reasonType === 'missing' 
+                ? `Please explain why "${pendingItem?.name}" is missing.`
+                : 'Please explain why you are releasing/cancelling this order.'}
+            </Text>
+            
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Enter reason here..."
+              placeholderTextColor="#999"
+              multiline
+              value={reasonText}
+              onChangeText={setReasonText}
+              autoFocus
+            />
+
+            <View style={styles.modalRow}>
+              <TouchableOpacity 
+                style={[styles.modalBtn, { backgroundColor: '#F5F5F5' }]} 
+                onPress={() => setReasonModalVisible(false)}
+              >
+                <Text style={[styles.modalBtnTxt, { color: '#666' }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.modalBtn, { backgroundColor: '#FF4500' }]} 
+                onPress={submitReason}
+              >
+                <Text style={styles.modalBtnTxt}>Submit</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -750,4 +891,57 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 4
   },
+  blockOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255,255,255,0.98)',
+    zIndex: 1000,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 30,
+  },
+  blockTitle: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#1A1A1A',
+    marginTop: 20,
+    textAlign: 'center',
+  },
+  blockMsg: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 12,
+    lineHeight: 24,
+  },
+  retryBtn: {
+    backgroundColor: '#FF4500',
+    paddingHorizontal: 30,
+    paddingVertical: 15,
+    borderRadius: 30,
+    marginTop: 30,
+    elevation: 4,
+  },
+  retryBtnTxt: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', 
+    justifyContent: 'center', alignItems: 'center', padding: 20 
+  },
+  modalContent: {
+    backgroundColor: '#fff', width: '100%', borderRadius: 20, padding: 24,
+    elevation: 10, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 10
+  },
+  modalTitle: { fontSize: 20, fontWeight: '900', color: '#1A1A1A', marginBottom: 8 },
+  modalSub: { fontSize: 14, color: '#666', marginBottom: 20, lineHeight: 20 },
+  modalInput: {
+    backgroundColor: '#F9F9F9', borderRadius: 12, padding: 16, height: 100,
+    textAlignVertical: 'top', fontSize: 15, color: '#1A1A1A', borderWidth: 1, borderColor: '#EEE',
+    marginBottom: 24
+  },
+  modalRow: { flexDirection: 'row', gap: 12 },
+  modalBtn: { flex: 1, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center' },
+  modalBtnTxt: { color: '#fff', fontSize: 16, fontWeight: '700' },
 });
