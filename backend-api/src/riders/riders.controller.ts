@@ -3,6 +3,7 @@ import { RidersService } from './riders.service';
 import { AuthGuard } from '@nestjs/passport';
 import { AdminRoleGuard } from '../auth/admin-role.guard';
 import { UpdateRiderDto } from './dto/update-rider.dto';
+import { UpdateRiderMeDto } from './dto/update-rider-me.dto';
 import { Request } from 'express';
 
 @Controller('riders')
@@ -17,7 +18,7 @@ export class RidersController {
   }
 
   @Patch('me')
-  async updateProfile(@Req() req: Request, @Body() body: any) {
+  async updateProfile(@Req() req: Request, @Body() body: UpdateRiderMeDto) {
     const user = req.user as any;
     
     console.log(`[DEBUG] Updating profile for rider ${user.id}:`, JSON.stringify(body, null, 2));

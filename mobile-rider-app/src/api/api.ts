@@ -15,6 +15,11 @@ export const socket = io(ENV.SOCKET_URL, {
   }
 });
 
+export const connectSocket = () => {
+  const authToken = (socket.auth as any)?.token;
+  if (typeof authToken !== 'string' || !authToken.trim()) return;
+  if (!socket.connected) socket.connect();
+};
 
 export const normalizePhone = (phone: string): string => {
   if (!phone) return phone;
@@ -55,9 +60,14 @@ api.interceptors.response.use(
 export const setAuthToken = (token: string | null) => {
   if (token) {
     api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    socket.auth = { token: `Bearer ${token}` };
     AsyncStorage.setItem('riderToken', token);
+    if (socket.connected) socket.disconnect();
+    connectSocket();
   } else {
     delete api.defaults.headers.common['Authorization'];
+    socket.auth = {};
+    if (socket.connected) socket.disconnect();
     AsyncStorage.removeItem('riderToken');
   }
 };

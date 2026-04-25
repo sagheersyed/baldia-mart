@@ -1,6 +1,7 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { Wallet } from './wallet.entity';
 
+@Index('IDX_WITHDRAWAL_REQUESTS_STATUS_CREATED_AT', ['status', 'createdAt'])
 @Entity('withdrawal_requests')
 export class WithdrawalRequest {
   @PrimaryGeneratedColumn('uuid')

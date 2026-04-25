@@ -16,13 +16,43 @@ export class AnalyticsService {
     private riderRepository: Repository<Rider>,
   ) { }
 
-  async getDashboardMetrics() {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+  private resolveDateRange(range?: string, startDate?: string, endDate?: string): { start: Date; end: Date; labelFormat: 'weekday' | 'date' } {
+    const now = new Date();
+    const end = new Date(now);
+    end.setHours(23, 59, 59, 999);
 
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(today.getDate() - 6);
-    sevenDaysAgo.setHours(0, 0, 0, 0);
+    if (range === 'custom' && startDate && endDate) {
+      const start = new Date(startDate);
+      const customEnd = new Date(endDate);
+      if (!Number.isNaN(start.getTime()) && !Number.isNaN(customEnd.getTime())) {
+        start.setHours(0, 0, 0, 0);
+        customEnd.setHours(23, 59, 59, 999);
+        return { start, end: customEnd, labelFormat: 'date' };
+      }
+    }
+
+    const start = new Date(now);
+    if (range === 'yearly') {
+      start.setFullYear(now.getFullYear() - 1);
+      start.setDate(now.getDate() + 1);
+      start.setHours(0, 0, 0, 0);
+      return { start, end, labelFormat: 'date' };
+    }
+    if (range === 'monthly') {
+      start.setMonth(now.getMonth() - 1);
+      start.setDate(now.getDate() + 1);
+      start.setHours(0, 0, 0, 0);
+      return { start, end, labelFormat: 'date' };
+    }
+
+    // Default weekly (7 days)
+    start.setDate(now.getDate() - 6);
+    start.setHours(0, 0, 0, 0);
+    return { start, end, labelFormat: 'weekday' };
+  }
+
+  async getDashboardMetrics(range?: string, startDate?: string, endDate?: string) {
+    const { start: periodStart, end: periodEnd, labelFormat } = this.resolveDateRange(range, startDate, endDate);
 
     try {
       const [
@@ -61,25 +91,29 @@ export class AnalyticsService {
         .addSelect('SUM(CAST(order.total AS NUMERIC))', 'revenue')
         .addSelect('COUNT(order.id)', 'orders')
         .where('order.status = :status', { status: 'delivered' })
-        .andWhere('order.createdAt >= :startDate', { startDate: sevenDaysAgo })
+        .andWhere('order.createdAt >= :startDate', { startDate: periodStart })
+        .andWhere('order.createdAt <= :endDate', { endDate: periodEnd })
         .groupBy("TO_CHAR(order.createdAt, 'YYYY-MM-DD'), TO_CHAR(order.createdAt, 'Mon DD')")
         .orderBy("TO_CHAR(order.createdAt, 'YYYY-MM-DD')", 'ASC')
         .getRawMany();
 
       const salesChartData: { date: string; revenue: number; orders: number }[] = [];
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(today.getDate() - i);
-        d.setHours(0, 0, 0, 0);
+      const cursor = new Date(periodStart);
+      while (cursor <= periodEnd) {
+        const d = new Date(cursor);
         
         const formattedLabel = d.toLocaleDateString('en-US', { month: 'short' }) + ' ' + d.getDate().toString().padStart(2, '0');
         const existing = chartStats.find(s => s.date === formattedLabel);
 
         salesChartData.push({
-          date: d.toLocaleDateString('en-US', { weekday: 'short' }),
+          date: labelFormat === 'weekday'
+            ? d.toLocaleDateString('en-US', { weekday: 'short' })
+            : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
           revenue: Number(existing?.revenue) || 0,
           orders: Number(existing?.orders) || 0,
         });
+
+        cursor.setDate(cursor.getDate() + 1);
       }
 
       return {
@@ -90,6 +124,7 @@ export class AnalyticsService {
           activeRiders: totalRiders,
         },
         salesChartData,
+        selectedRange: range || 'weekly',
         recentOrders: recentOrders.map(order => ({
           id: order.id,
           customerName: order.user?.name || 'Unknown',

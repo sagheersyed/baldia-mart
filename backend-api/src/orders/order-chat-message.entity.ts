@@ -39,6 +39,7 @@ export class OrderChatMessage {
   @Column({ type: 'jsonb', nullable: true })
   metadata: any; // Store product details for replacement suggestions
 
+  @Index()
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

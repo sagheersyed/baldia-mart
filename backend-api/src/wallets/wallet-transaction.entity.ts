@@ -1,7 +1,9 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { Wallet } from './wallet.entity';
 import { Order } from '../orders/order.entity';
 
+@Index('IDX_WALLET_TRANSACTIONS_ORDER_ID', ['orderId'])
+@Index('IDX_WALLET_TRANSACTIONS_WALLET_CREATED_AT', ['walletId', 'createdAt'])
 @Entity('wallet_transactions')
 export class WalletTransaction {
   @PrimaryGeneratedColumn('uuid')

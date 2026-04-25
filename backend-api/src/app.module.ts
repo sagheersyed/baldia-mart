@@ -30,6 +30,7 @@ import { MenuItemsModule } from './menu-items/menu-items.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { VendorsModule } from './vendors/vendors.module';
 import { FavoritesModule } from './favorites/favorites.module';
+import { AppCacheModule } from './cache/cache.module';
 
 // Entities
 import { User } from './users/user.entity';
@@ -61,9 +62,12 @@ import { APP_GUARD } from '@nestjs/core';
 import { WalletsModule } from './wallets/wallets.module';
 import { Wallet } from './wallets/wallet.entity';
 import { WalletTransaction } from './wallets/wallet-transaction.entity';
+import { WalletSettlement } from './wallets/wallet-settlement.entity';
+import { WithdrawalRequest } from './wallets/withdrawal-request.entity';
 
 @Module({
   imports: [
+    AppCacheModule,
     ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([{
       ttl: 60000,   // 1 minute window
@@ -88,7 +92,7 @@ import { WalletTransaction } from './wallets/wallet-transaction.entity';
         CartItem, Order, OrderItem, Payment, Notification, Rider, Otp,
         OrderHistory, RiderReview, Setting, Brand, Banner, Restaurant, MenuItem, SubOrder, BusinessReview,
         Vendor, VendorProduct, Favorite, OrderChatMessage,
-        Wallet, WalletTransaction,
+        Wallet, WalletTransaction, WalletSettlement, WithdrawalRequest,
       ],
 
       synchronize: process.env.NODE_ENV !== 'production',

@@ -2,6 +2,8 @@ import { Controller, Post, Get, Delete, Patch, Body, Param, Req, UseGuards } fro
 import { AddressesService } from './addresses.service';
 import { AuthGuard } from '@nestjs/passport';
 import { Request } from 'express';
+import { CreateAddressDto } from './dto/create-address.dto';
+import { UpdateAddressDto } from './dto/update-address.dto';
 
 @Controller('addresses')
 @UseGuards(AuthGuard('jwt'))
@@ -15,7 +17,7 @@ export class AddressesController {
   }
 
   @Post()
-  async createAddress(@Req() req: Request, @Body() body: any) {
+  async createAddress(@Req() req: Request, @Body() body: CreateAddressDto) {
     const user = req.user as any;
     return this.addressesService.create(user.id, body);
   }
@@ -33,7 +35,7 @@ export class AddressesController {
   }
 
   @Patch(':id')
-  async updateAddress(@Req() req: Request, @Param('id') id: string, @Body() body: any) {
+  async updateAddress(@Req() req: Request, @Param('id') id: string, @Body() body: UpdateAddressDto) {
     const user = req.user as any;
     return this.addressesService.update(id, user.id, body);
   }

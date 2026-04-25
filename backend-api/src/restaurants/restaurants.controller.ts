@@ -1,5 +1,9 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
 import { RestaurantsService } from './restaurants.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { AdminRoleGuard } from '../auth/admin-role.guard';
+import { CreateRestaurantDto } from './dto/create-restaurant.dto';
+import { UpdateRestaurantDto } from './dto/update-restaurant.dto';
 
 @Controller('restaurants')
 export class RestaurantsController {
@@ -16,16 +20,19 @@ export class RestaurantsController {
   }
 
   @Post()
-  create(@Body() data: any) {
+  @UseGuards(JwtAuthGuard, AdminRoleGuard)
+  create(@Body() data: CreateRestaurantDto) {
     return this.restaurantsService.create(data);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() data: any) {
+  @UseGuards(JwtAuthGuard, AdminRoleGuard)
+  update(@Param('id') id: string, @Body() data: UpdateRestaurantDto) {
     return this.restaurantsService.update(id, data);
   }
 
   @Delete(':id')
+  @UseGuards(JwtAuthGuard, AdminRoleGuard)
   remove(@Param('id') id: string) {
     return this.restaurantsService.remove(id);
   }

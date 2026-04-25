@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { ordersApi, socket } from '../api/api';
+import { connectSocket, ordersApi, socket } from '../api/api';
 import { useSettings } from '../context/SettingsContext';
 import { generateReceiptPDF, printReceipt } from '../utils/receiptGenerator';
 
@@ -17,7 +17,7 @@ export default function OrderDetailsScreen({ route, navigation }: any) {
   }, [orderId]);
 
   useEffect(() => {
-    socket.connect();
+    connectSocket();
     const handleUpdate = (data: any) => {
       if (data.orderId === orderId) {
         console.log('OrderDetails: Order updated, refreshing...');

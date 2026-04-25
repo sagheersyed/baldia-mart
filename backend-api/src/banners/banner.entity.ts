@@ -20,6 +20,12 @@ export class Banner {
   @Column({ nullable: true })
   imageUrl: string;
 
+  @Column({ name: 'background_image_url', nullable: true })
+  backgroundImageUrl: string;
+
+  @Column({ name: 'banner_type', default: 'image' })
+  bannerType: string; // 'image' | 'text' | 'hybrid'
+
   @Column({ nullable: true })
   tagLabel: string; // e.g. "FLASH SALE 🔥"
 

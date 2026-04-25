@@ -44,17 +44,15 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     refreshSettings();
 
-    // Ensure socket is connected for real-time updates
-    if (!socket.connected) socket.connect();
-
     // Real-time synchronization
-    socket.on('settings_updated', () => {
+    const onSettingsUpdated = () => {
       console.log('[SettingsContext] Received settings_updated, refreshing...');
       refreshSettings();
-    });
+    };
+    socket.on('settings_updated', onSettingsUpdated);
 
     return () => {
-      socket.off('settings_updated');
+      socket.off('settings_updated', onSettingsUpdated);
     };
   }, []);
 

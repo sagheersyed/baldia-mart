@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { Layers, Plus, Trash2, Edit2, CheckCircle, XCircle, RefreshCw, Image as ImageIcon } from 'lucide-react';
-import { fetchWithAuth, BASE_URL } from '@/lib/api';
+import { fetchWithAuth, BASE_URL, getErrorMessage, parseApiError } from '@/lib/api';
+import { showToast } from '@/hooks/useToast';
 
 interface Banner {
   id: string;
@@ -12,6 +13,8 @@ interface Banner {
   description: string;
   tagLabel: string;
   imageUrl: string;
+  backgroundImageUrl?: string;
+  bannerType?: 'image' | 'text' | 'hybrid';
   isActive: boolean;
   sortOrder: number;
   backgroundColor: string;
@@ -50,21 +53,28 @@ export default function BannersPage() {
 
       if (!endpoint) return;
       const res = await fetchWithAuth(endpoint);
+      if (!res.ok) {
+        showToast({ title: await parseApiError(res, 'Failed to load link entities'), variant: 'error' });
+        return;
+      }
       const data = await res.json();
       setLinkEntities(Array.isArray(data) ? data.map((item: any) => ({ id: item.id, name: item.name || item.title || item.id })) : []);
     } catch (error) {
       console.error('Failed to fetch link entities:', error);
+      showToast({ title: getErrorMessage(error, 'Failed to load link entities'), variant: 'error' });
     }
   };
 
   const fetchBanners = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${BASE_URL}/banners`);
+      const res = await fetchWithAuth(`${BASE_URL}/banners`);
+      if (!res.ok) throw new Error(await parseApiError(res, 'Failed to fetch banners'));
       const data = await res.json();
       setBanners(data);
     } catch (error) {
       console.error('Failed to fetch banners:', error);
+      showToast({ title: getErrorMessage(error, 'Failed to fetch banners'), variant: 'error' });
     } finally {
       setLoading(false);
     }
@@ -87,14 +97,15 @@ export default function BannersPage() {
         body: JSON.stringify(editingBanner),
       });
 
-      if (!res.ok) throw new Error('Failed to save banner');
+      if (!res.ok) throw new Error(await parseApiError(res, 'Failed to save banner'));
 
       setIsModalOpen(false);
       setEditingBanner(null);
       fetchBanners();
+      showToast({ title: 'Banner saved', variant: 'success' });
     } catch (error) {
       console.error('Save failed:', error);
-      alert('Failed to save banner');
+      showToast({ title: getErrorMessage(error, 'Failed to save banner'), variant: 'error' });
     } finally {
       setSaving(false);
     }
@@ -106,11 +117,12 @@ export default function BannersPage() {
       const res = await fetchWithAuth(`${BASE_URL}/banners/${id}`, {
         method: 'DELETE',
       });
-      if (!res.ok) throw new Error('Delete failed');
+      if (!res.ok) throw new Error(await parseApiError(res, 'Failed to delete banner'));
       fetchBanners();
+      showToast({ title: 'Banner deleted', variant: 'success' });
     } catch (error) {
       console.error('Delete failed:', error);
-      alert('Failed to delete banner');
+      showToast({ title: getErrorMessage(error, 'Failed to delete banner'), variant: 'error' });
     }
   };
 
@@ -119,7 +131,7 @@ export default function BannersPage() {
       <header className="flex justify-between items-center">
         <div>
           <h1 className="text-4xl font-black text-gray-900 tracking-tight flex items-center">
-            <Layers className="mr-4 text-primary" size={40} />
+            <Layers className="mr-4 text-primary-600" size={40} />
             Promotional Banners
           </h1>
           <p className="text-gray-500 mt-2 font-medium">Manage advertisements for Mart and Food sections.</p>
@@ -134,27 +146,38 @@ export default function BannersPage() {
               textColor: '#FFFFFF',
               description: '',
               tagLabel: '',
+              bannerType: 'image',
+              backgroundImageUrl: '',
               linkType: 'none',
               linkId: ''
             });
             setIsModalOpen(true);
           }}
-          className="bg-primary text-white p-4 rounded-2xl font-black flex items-center shadow-lg shadow-orange-500/30 hover:scale-105 transition-transform"
+          className="bg-primary-600 text-white p-4 rounded-2xl font-black flex items-center shadow-lg shadow-orange-500/30 hover:scale-105 transition-transform"
         >
           <Plus size={20} className="mr-2" /> Add New Banner
         </button>
       </header>
 
       {loading ? (
-        <div className="flex justify-center p-20"><RefreshCw className="animate-spin text-primary" size={40} /></div>
+        <div className="flex justify-center p-20"><RefreshCw className="animate-spin text-primary-600" size={40} /></div>
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {banners.map(banner => (
             <div key={banner.id} className="bg-white rounded-[2rem] border border-gray-100 shadow-xl overflow-hidden group">
               <div
                 className="h-40 p-6 flex flex-col justify-center relative"
-                style={{ backgroundColor: banner.backgroundColor }}
+                style={{
+                  backgroundColor: banner.backgroundColor,
+                  backgroundImage: banner.backgroundImageUrl ? `url(${banner.backgroundImageUrl})` : undefined,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                }}
               >
+                {banner.bannerType === 'image' && banner.imageUrl ? (
+                  <img src={banner.imageUrl} alt={banner.title} className="absolute inset-0 w-full h-full object-cover" />
+                ) : null}
+                <div className="absolute inset-0 bg-black/10" />
                 <div className="absolute top-4 right-4">
                   {banner.isActive ? <CheckCircle className="text-white opacity-80" /> : <XCircle className="text-white opacity-40" />}
                 </div>
@@ -163,11 +186,17 @@ export default function BannersPage() {
                     {banner.tagLabel}
                   </span>
                 )}
-                <h3 className="text-xl font-black mb-1" style={{ color: banner.textColor }}>{banner.title}</h3>
-                <p className="text-sm font-bold opacity-90" style={{ color: banner.textColor }}>{banner.subtitle}</p>
-                <span className="mt-2 inline-block px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-white/20 text-white w-fit">
-                  {banner.section}
-                </span>
+                <div className="relative z-10">
+                  {banner.bannerType !== 'image' && (
+                    <>
+                      <h3 className="text-xl font-black mb-1" style={{ color: banner.textColor }}>{banner.title}</h3>
+                      <p className="text-sm font-bold opacity-90" style={{ color: banner.textColor }}>{banner.subtitle}</p>
+                    </>
+                  )}
+                  <span className="mt-2 inline-block px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-white/20 text-white w-fit">
+                    {banner.section} • {banner.bannerType || 'image'}
+                  </span>
+                </div>
               </div>
               <div className="p-4 flex justify-between items-center bg-gray-50">
                 <span className="text-xs font-black text-gray-400">Order: {banner.sortOrder}</span>
@@ -247,6 +276,18 @@ export default function BannersPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
+                  <label className="block text-xs font-black text-gray-400 uppercase mb-1">Banner Mode</label>
+                  <select
+                    value={editingBanner?.bannerType || 'image'}
+                    onChange={e => setEditingBanner({ ...editingBanner!, bannerType: e.target.value as any })}
+                    className="w-full p-3 bg-gray-50 border rounded-xl font-bold"
+                  >
+                    <option value="image">Image Only</option>
+                    <option value="text">Text + Colors</option>
+                    <option value="hybrid">Text + Background Image</option>
+                  </select>
+                </div>
+                <div>
                   <label className="block text-xs font-black text-gray-400 uppercase mb-1">Tag Label</label>
                   <input
                     type="text"
@@ -285,6 +326,19 @@ export default function BannersPage() {
                     placeholder="https://..."
                   />
                 </div>
+                <div>
+                  <label className="block text-xs font-black text-gray-400 uppercase mb-1">Background Image URL</label>
+                  <input
+                    type="text"
+                    value={editingBanner?.backgroundImageUrl || ''}
+                    onChange={e => setEditingBanner({ ...editingBanner!, backgroundImageUrl: e.target.value })}
+                    className="w-full p-3 bg-gray-50 border rounded-xl font-bold"
+                    placeholder="https://..."
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-black text-gray-400 uppercase mb-1">Link Destination</label>
                   <div className="flex gap-2">
@@ -356,7 +410,7 @@ export default function BannersPage() {
               <button
                 type="submit"
                 disabled={saving}
-                className="w-full py-4 bg-primary text-white rounded-2xl font-black text-lg mt-4 shadow-xl shadow-orange-500/20"
+                className="w-full py-4 bg-primary-600 text-white rounded-2xl font-black text-lg mt-4 shadow-xl shadow-orange-500/20"
               >
                 {saving ? <RefreshCw className="animate-spin mx-auto" /> : 'Save Banner'}
               </button>

@@ -1,6 +1,9 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards } from '@nestjs/common';
 import { BannersService } from './banners.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { AdminRoleGuard } from '../auth/admin-role.guard';
+import { CreateBannerDto } from './dto/create-banner.dto';
+import { UpdateBannerDto } from './dto/update-banner.dto';
 
 @Controller('banners')
 export class BannersController {
@@ -23,19 +26,19 @@ export class BannersController {
 
   // Admin only - create/update/delete
   @Post()
-  @UseGuards(JwtAuthGuard)
-  create(@Body() data: any) {
+  @UseGuards(JwtAuthGuard, AdminRoleGuard)
+  create(@Body() data: CreateBannerDto) {
     return this.bannersService.create(data);
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard)
-  update(@Param('id') id: string, @Body() data: any) {
+  @UseGuards(JwtAuthGuard, AdminRoleGuard)
+  update(@Param('id') id: string, @Body() data: UpdateBannerDto) {
     return this.bannersService.update(id, data);
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, AdminRoleGuard)
   remove(@Param('id') id: string) {
     return this.bannersService.remove(id);
   }

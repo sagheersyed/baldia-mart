@@ -3,6 +3,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { BusinessReviewsService } from './business-reviews.service';
 import { Request } from 'express';
 import { AdminRoleGuard } from '../auth/admin-role.guard';
+import { CreateBusinessReviewDto } from './dto/create-business-review.dto';
 
 @Controller('business-reviews')
 export class BusinessReviewsController {
@@ -15,7 +16,7 @@ export class BusinessReviewsController {
 
   @Post()
   @UseGuards(AuthGuard('jwt'))
-  async create(@Req() req: Request, @Body() body: any) {
+  async create(@Req() req: Request, @Body() body: CreateBusinessReviewDto) {
     const user = req.user as any;
     return this.reviewsService.create({
       userId: user.id,

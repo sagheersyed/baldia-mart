@@ -7,6 +7,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { Logger } from 'nestjs-pino';
 import { GlobalHttpExceptionFilter } from './common/global-exception.filter';
 import { LoggingInterceptor } from './common/logging.interceptor';
+import { getAllowedOrigins, isOriginAllowed } from './common/cors';
 
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 
@@ -19,8 +20,18 @@ async function bootstrap() {
     crossOriginResourcePolicy: false, // Allow loading images from different origins
   }));
 
-  // Enable CORS
-  app.enableCors();
+  // Enable CORS with strict allowlist (set ALLOWED_ORIGINS in env)
+  const allowedOrigins = getAllowedOrigins();
+  app.enableCors({
+    origin: (origin, callback) => {
+      if (isOriginAllowed(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error('CORS origin denied'));
+    },
+    credentials: true,
+  });
   
   // Serve static files from public directory
   app.useStaticAssets(join(__dirname, '..', 'public'));
@@ -55,6 +66,7 @@ async function bootstrap() {
   await app.listen(3000, '0.0.0.0');
   console.log(`Application is running on: ${await app.getUrl()}`);
   console.log(`Swagger Docs available at: ${await app.getUrl()}/docs`);
+  console.log(`Allowed CORS origins: ${allowedOrigins.join(', ')}`);
 }
 bootstrap();
 

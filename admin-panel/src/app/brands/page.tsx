@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, X, RefreshCcw, Building2, Pencil } from 'lucide-react';
-import { fetchWithAuth, BASE_URL } from '@/lib/api';
+import { fetchWithAuth, BASE_URL, getErrorMessage, parseApiError } from '@/lib/api';
+import { showToast } from '@/hooks/useToast';
 
 interface Brand {
   id: string;
@@ -41,10 +42,12 @@ export default function BrandsPage() {
     setLoading(true);
     try {
       const res = await fetchWithAuth(API_URL);
+      if (!res.ok) throw new Error(await parseApiError(res, 'Failed to fetch brands'));
       const data = await res.json();
       setBrands(data);
     } catch (error) {
       console.error('Failed to fetch brands:', error);
+      showToast({ title: getErrorMessage(error, 'Failed to fetch brands'), variant: 'error' });
     } finally {
       setLoading(false);
     }
@@ -74,9 +77,13 @@ export default function BrandsPage() {
         setEditingBrand(null);
         setFormData({ name: '', description: '', logoUrl: '', section: 'mart', location: '', latitude: '', longitude: '', openingTime: '09:00', closingTime: '23:00', category: '', isActive: true });
         fetchBrands();
+        showToast({ title: editingBrand ? 'Brand updated' : 'Brand created', variant: 'success' });
+      } else {
+        showToast({ title: await parseApiError(res, 'Failed to save brand'), variant: 'error' });
       }
     } catch (error) {
       console.error('Failed to save brand:', error);
+      showToast({ title: getErrorMessage(error, 'Failed to save brand'), variant: 'error' });
     } finally {
       setIsSubmitting(false);
     }
@@ -103,10 +110,13 @@ export default function BrandsPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this brand? Products associated with it will lose their brand association.')) return;
     try {
-      await fetchWithAuth(`${API_URL}/${id}`, { method: 'DELETE' });
+      const res = await fetchWithAuth(`${API_URL}/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(await parseApiError(res, 'Failed to delete brand'));
       fetchBrands();
+      showToast({ title: 'Brand deleted', variant: 'success' });
     } catch (error) {
       console.error('Failed to delete brand:', error);
+      showToast({ title: getErrorMessage(error, 'Failed to delete brand'), variant: 'error' });
     }
   };
 
@@ -120,7 +130,7 @@ export default function BrandsPage() {
         <div className="flex space-x-3">
           <button 
             onClick={fetchBrands}
-            className="p-3 bg-white text-gray-600 rounded-2xl hover:bg-gray-50 border border-gray-100 transition-all active:scale-95 flex items-center shadow-sm"
+            className="btn-ghost btn-icon"
           >
             <RefreshCcw size={20} className={loading ? 'animate-spin' : ''} />
           </button>

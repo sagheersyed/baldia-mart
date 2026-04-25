@@ -3,9 +3,13 @@ import {
 } from '@nestjs/common';
 import { VendorsService } from './vendors.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { AdminRoleGuard } from '../auth/admin-role.guard';
+import { CreateVendorDto } from './dto/create-vendor.dto';
+import { UpdateVendorDto } from './dto/update-vendor.dto';
+import { VendorProductDto } from './dto/vendor-product.dto';
 
 @Controller('vendors')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, AdminRoleGuard)
 export class VendorsController {
   constructor(private readonly vendorsService: VendorsService) {}
 
@@ -26,12 +30,12 @@ export class VendorsController {
 
   // Admin: manage vendors
   @Post()
-  create(@Body() body: any) {
+  create(@Body() body: CreateVendorDto) {
     return this.vendorsService.create(body);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() body: any) {
+  update(@Param('id') id: string, @Body() body: UpdateVendorDto) {
     return this.vendorsService.update(id, body);
   }
 
@@ -44,7 +48,7 @@ export class VendorsController {
   @Post(':id/products')
   addProduct(
     @Param('id') vendorId: string,
-    @Body() body: { productId: string; price: number; stockQty: number },
+    @Body() body: VendorProductDto,
   ) {
     return this.vendorsService.addProductToVendor(
       vendorId, body.productId, body.price, body.stockQty,
@@ -55,7 +59,7 @@ export class VendorsController {
   updateProduct(
     @Param('id') vendorId: string,
     @Param('productId') productId: string,
-    @Body() body: any,
+    @Body() body: Partial<VendorProductDto>,
   ) {
     return this.vendorsService.updateVendorProduct(vendorId, productId, body);
   }

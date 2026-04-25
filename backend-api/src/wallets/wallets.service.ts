@@ -1,12 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, EntityManager } from 'typeorm';
+import { Repository, EntityManager, QueryFailedError } from 'typeorm';
 import { Wallet } from './wallet.entity';
 import { WalletTransaction } from './wallet-transaction.entity';
 import { WithdrawalRequest } from './withdrawal-request.entity';
 import { Order } from '../orders/order.entity';
 import { Rider } from '../riders/rider.entity';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { WalletSettlement } from './wallet-settlement.entity';
 
 @Injectable()
 export class WalletsService {
@@ -46,7 +47,11 @@ export class WalletsService {
     orderId?: string,
     auditData?: { adminId?: string; referenceId?: string; attachmentUrl?: string }
   ) {
-    let wallet = await manager.findOne(Wallet, { where: { userId, userType } });
+    // NOTE: Must be called inside a DB transaction for locks to be effective.
+    let wallet = await manager.findOne(Wallet, {
+      where: { userId, userType },
+      lock: { mode: 'pessimistic_write' },
+    });
     if (!wallet) {
       wallet = manager.create(Wallet, { userId, userType, balance: 0 });
       await manager.save(wallet);
@@ -80,13 +85,21 @@ export class WalletsService {
    * Assumes payment method is either 'cash_on_delivery' or 'card'.
    */
   async processOrderSettlement(order: Order, manager: EntityManager) {
-    // Idempotency check: ensure this order hasn't already been settled
-    const existingSettlement = await manager.findOne(WalletTransaction, {
-      where: { orderId: order.id },
-    });
-    if (existingSettlement) {
-      console.warn(`[WalletsService] Order ${order.id} already settled. Skipping duplicate.`);
-      return;
+    // Idempotency: create a unique settlement record per order.
+    // This prevents double-settlement under concurrency without blocking multiple wallet txs per order.
+    try {
+      await manager.insert(WalletSettlement, { orderId: order.id });
+    } catch (err) {
+      const isUniqueViolation =
+        err instanceof QueryFailedError &&
+        // Postgres unique violation
+        ((err as any).code === '23505' ||
+          typeof (err as any).message === 'string' && (err as any).message.toLowerCase().includes('duplicate'));
+      if (isUniqueViolation) {
+        console.warn(`[WalletsService] Order ${order.id} already settled. Skipping duplicate.`);
+        return;
+      }
+      throw err;
     }
 
     const riderId = order.riderId;

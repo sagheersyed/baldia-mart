@@ -7,7 +7,8 @@ import 'leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility
 import 'leaflet-defaulticon-compatibility';
 import { Bike, Phone, Clock, Navigation, Map as MapIcon, Users } from 'lucide-react';
 import { io, Socket } from 'socket.io-client';
-import { fetchWithAuth, BASE_URL } from '@/lib/api';
+import { fetchWithAuth, BASE_URL, getAdminToken, getErrorMessage, parseApiError } from '@/lib/api';
+import { showToast } from '@/hooks/useToast';
 
 interface RiderLocation {
   id: string;
@@ -64,36 +65,41 @@ export default function RiderMap() {
     const fetchInitialRiders = async () => {
       try {
         const res = await fetchWithAuth(`${BASE_URL}/riders/all`);
-        if (res.ok) {
-          const data = await res.json();
-          const riderMap = new Map<string, RiderLocation>();
-          data.forEach((r: any) => {
-            if (r.currentLat && r.currentLng) {
-              riderMap.set(r.id, {
-                id: r.id,
-                name: r.name || 'Unknown Rider',
-                phoneNumber: r.phoneNumber,
-                lat: Number(r.currentLat),
-                lng: Number(r.currentLng),
-                isActive: r.isActive,
-                isOnline: r.isOnline,
-                vehicleNumber: r.vehicleNumber || 'N/A',
-                lastUpdated: r.updatedAt,
-                activeOrders: r.activeOrders || [],
-              });
-            }
-          });
-          setRiders(riderMap);
-        }
+        if (!res.ok) throw new Error(await parseApiError(res, 'Failed to fetch riders'));
+        const data = await res.json();
+        const riderMap = new Map<string, RiderLocation>();
+        data.forEach((r: any) => {
+          if (r.currentLat && r.currentLng) {
+            riderMap.set(r.id, {
+              id: r.id,
+              name: r.name || 'Unknown Rider',
+              phoneNumber: r.phoneNumber,
+              lat: Number(r.currentLat),
+              lng: Number(r.currentLng),
+              isActive: r.isActive,
+              isOnline: r.isOnline,
+              vehicleNumber: r.vehicleNumber || 'N/A',
+              lastUpdated: r.updatedAt,
+              activeOrders: r.activeOrders || [],
+            });
+          }
+        });
+        setRiders(riderMap);
       } catch (error) {
         console.error('Failed to fetch riders', error);
+        showToast({ title: getErrorMessage(error, 'Failed to fetch riders'), variant: 'error' });
       }
     };
 
     fetchInitialRiders();
 
     const socketUrl = BASE_URL.replace('/api/v1', '');
-    const socket: Socket = io(socketUrl);
+    const token = getAdminToken();
+    if (!token) return;
+    const socket: Socket = io(socketUrl, {
+      auth: { token: `Bearer ${token}` },
+      extraHeaders: { Authorization: `Bearer ${token}` },
+    });
     
     socket.on('connect', () => {
       socket.emit('joinAdminRoom');

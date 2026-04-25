@@ -18,7 +18,9 @@ import {
   DollarSign,
   AlertCircle
 } from 'lucide-react';
-import { fetchWithAuth, BASE_URL } from '@/lib/api';
+import { fetchWithAuth, BASE_URL, getErrorMessage, parseApiError } from '@/lib/api';
+import { showToast } from '@/hooks/useToast';
+import Pagination from '@/components/Pagination';
 
 interface RashanOrder {
   id: string;
@@ -70,6 +72,8 @@ export default function RashanRequestsPage() {
   const [rejectionReason, setRejectionReason] = useState('');
   const [selectedRiderId, setSelectedRiderId] = useState('');
   const [processing, setProcessing] = useState(false);
+  const [page, setPage] = useState(1);
+  const [limit] = useState(12);
 
   useEffect(() => {
     fetchOrders();
@@ -79,8 +83,13 @@ export default function RashanRequestsPage() {
   const fetchOrders = async () => {
     try {
       const res = await fetchWithAuth(RASHAN_ADMIN_API);
-      if (res.ok) setOrders(await res.json());
-    } catch (e) { console.error('Failed to fetch rashan orders', e); }
+      if (!res.ok) throw new Error(await parseApiError(res, 'Failed to fetch rashan requests'));
+      const data = await res.json();
+      setOrders(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error('Failed to fetch rashan orders', e);
+      showToast({ title: getErrorMessage(e, 'Failed to fetch rashan requests'), variant: 'error' });
+    }
     finally { setLoading(false); }
   };
 
@@ -112,9 +121,13 @@ export default function RashanRequestsPage() {
         setSelectedOrder(updated);
         setProductTotal('');
         setDeliveryFeeOverride('');
-        alert('Quotation sent to user!');
+        showToast({ title: 'Quotation sent to user', variant: 'success' });
+      } else {
+        showToast({ title: await parseApiError(res, 'Failed to set quote'), variant: 'error' });
       }
-    } catch (e) { alert('Failed to set quote'); }
+    } catch (e) {
+      showToast({ title: getErrorMessage(e, 'Failed to set quote'), variant: 'error' });
+    }
     finally { setProcessing(false); }
   };
 
@@ -132,9 +145,13 @@ export default function RashanRequestsPage() {
         setOrders(orders.map(o => o.id === updated.id ? updated : o));
         setSelectedOrder(updated);
         setRejectionReason('');
-        alert('Order rejected.');
+        showToast({ title: 'Order rejected', variant: 'success' });
+      } else {
+        showToast({ title: await parseApiError(res, 'Failed to reject order'), variant: 'error' });
       }
-    } catch (e) { alert('Failed to reject order'); }
+    } catch (e) {
+      showToast({ title: getErrorMessage(e, 'Failed to reject order'), variant: 'error' });
+    }
     finally { setProcessing(false); }
   };
 
@@ -151,9 +168,13 @@ export default function RashanRequestsPage() {
         const updated = await res.json();
         setOrders(orders.map(o => o.id === updated.id ? updated : o));
         setSelectedOrder(updated);
-        alert('Order moved to Sourcing phase!');
+        showToast({ title: 'Order moved to sourcing phase', variant: 'success' });
+      } else {
+        showToast({ title: await parseApiError(res, 'Failed to update status'), variant: 'error' });
       }
-    } catch (e) { alert('Failed to update status'); }
+    } catch (e) {
+      showToast({ title: getErrorMessage(e, 'Failed to update status'), variant: 'error' });
+    }
     finally { setProcessing(false); }
   };
 
@@ -168,9 +189,13 @@ export default function RashanRequestsPage() {
         const updated = await res.json();
         setOrders(orders.map(o => o.id === updated.id ? updated : o));
         setSelectedOrder(updated);
-        alert('Order marked as Delivered!');
+        showToast({ title: 'Order marked as delivered', variant: 'success' });
+      } else {
+        showToast({ title: await parseApiError(res, 'Failed to update status'), variant: 'error' });
       }
-    } catch (e) { alert('Failed to update status'); }
+    } catch (e) {
+      showToast({ title: getErrorMessage(e, 'Failed to update status'), variant: 'error' });
+    }
     finally { setProcessing(false); }
   };
 
@@ -179,6 +204,13 @@ export default function RashanRequestsPage() {
     const matchesSearch = o.id.includes(searchTerm) || o.user.name.toLowerCase().includes(searchTerm.toLowerCase());
     return matchesFilter && matchesSearch;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / limit));
+  const paginatedOrders = filteredOrders.slice((page - 1) * limit, page * limit);
+
+  useEffect(() => {
+    setPage(1);
+  }, [filter, searchTerm]);
 
   const getRashanStatusBadge = (status: string) => {
     const styles: any = {
@@ -202,7 +234,7 @@ export default function RashanRequestsPage() {
       <header className="mb-8 flex justify-between items-end shrink-0">
         <div>
           <h1 className="text-4xl font-black text-gray-900 tracking-tight flex items-center">
-            <Package className="mr-3 text-primary" size={36} /> 
+            <Package className="mr-3 text-primary-600" size={36} /> 
             Rashan Requests
           </h1>
           <p className="text-gray-500 mt-2 font-medium">Monthly Bulk Grocery Service Management</p>
@@ -214,7 +246,7 @@ export default function RashanRequestsPage() {
             <input
               type="text"
               placeholder="Search by ID or Customer..."
-              className="pl-12 pr-4 py-3 bg-white border border-gray-100 rounded-2xl w-64 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-medium shadow-sm transition-all"
+              className="pl-12 pr-4 py-3 bg-white border border-gray-100 rounded-2xl w-64 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500-500 font-medium shadow-sm transition-all"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -224,7 +256,7 @@ export default function RashanRequestsPage() {
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`px-4 py-2 rounded-xl text-[10px] font-black transition-all ${filter === f ? 'bg-primary text-white shadow-md' : 'text-gray-400 hover:bg-gray-50'}`}
+                className={`px-4 py-2 rounded-xl text-[10px] font-black transition-all ${filter === f ? 'bg-primary-600 text-white shadow-md' : 'text-gray-400 hover:bg-gray-50'}`}
               >
                 {f.split('_')[0]}
               </button>
@@ -238,7 +270,7 @@ export default function RashanRequestsPage() {
         <div className={`bg-white rounded-[2.5rem] shadow-xl shadow-gray-200/40 border border-gray-100 flex flex-col ${selectedOrder ? 'w-2/5' : 'w-full'} transition-all duration-300 overflow-hidden`}>
           <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
             {loading ? (
-              <div className="flex items-center justify-center h-full"><div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div></div>
+              <div className="flex items-center justify-center h-full"><div className="w-10 h-10 border-4 border-primary-500 border-t-transparent rounded-full animate-spin"></div></div>
             ) : filteredOrders.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-gray-400">
                 <Package size={64} className="mb-4 opacity-20" />
@@ -246,11 +278,11 @@ export default function RashanRequestsPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {filteredOrders.map(order => (
+                {paginatedOrders.map(order => (
                   <div
                     key={order.id}
                     onClick={() => setSelectedOrder(order)}
-                    className={`p-5 rounded-3xl border cursor-pointer transition-all ${selectedOrder?.id === order.id ? 'bg-primary/5 border-primary shadow-inner scale-[0.98]' : 'bg-gray-50 border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-lg hover:scale-[1.01]'}`}
+                    className={`p-5 rounded-3xl border cursor-pointer transition-all ${selectedOrder?.id === order.id ? 'bg-primary-600/5 border-primary-500 shadow-inner scale-[0.98]' : 'bg-gray-50 border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-lg hover:scale-[1.01]'}`}
                   >
                     <div className="flex justify-between items-start mb-2">
                       <div>
@@ -263,7 +295,7 @@ export default function RashanRequestsPage() {
                       </div>
                     </div>
                     <div className="flex items-center text-xs text-gray-500 font-bold mt-3">
-                       <MapPin size={12} className="mr-1 text-primary" /> {order.bulkCity} 
+                       <MapPin size={12} className="mr-1 text-primary-600" /> {order.bulkCity} 
                        <span className="mx-2 opacity-20">|</span>
                        <ImageIcon size={12} className="mr-1 text-blue-500" /> {order.bulkListPhotoUrl ? 'Photo attached' : 'Text list only'}
                     </div>
@@ -271,6 +303,9 @@ export default function RashanRequestsPage() {
                 ))}
               </div>
             )}
+          </div>
+          <div className="p-4 border-t border-gray-100">
+            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
           </div>
         </div>
 
@@ -418,7 +453,7 @@ export default function RashanRequestsPage() {
                    <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Customer Details</h3>
                    <div className="bg-gray-50 p-6 rounded-3xl border border-gray-100">
                       <p className="text-lg font-black text-gray-900">{selectedOrder.user.name}</p>
-                      <p className="text-sm font-bold text-primary mt-1 flex items-center"><Phone size={14} className="mr-2" /> {selectedOrder.bulkMobileNumber}</p>
+                      <p className="text-sm font-bold text-primary-600 mt-1 flex items-center"><Phone size={14} className="mr-2" /> {selectedOrder.bulkMobileNumber}</p>
                    </div>
                    
                    <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mt-8 mb-4">Logistics Requirements</h3>
@@ -493,7 +528,7 @@ export default function RashanRequestsPage() {
                  <div className="flex justify-between items-center">
                     <div>
                        <p className="text-gray-400 font-bold text-xs uppercase tracking-widest mb-1">Financial Status</p>
-                       <p className="text-2xl font-black text-primary">
+                       <p className="text-2xl font-black text-primary-600">
                           {selectedOrder.rashanStatus === 'pending_review' ? 'Awaiting Quote' : `Rs. ${selectedOrder.total.toLocaleString()}`}
                        </p>
                     </div>
@@ -511,11 +546,11 @@ export default function RashanRequestsPage() {
                          <span>Financial Breakdown:</span>
                          <span className="text-white text-sm">Products: Rs. {Number(selectedOrder.subtotal).toLocaleString()}</span>
                          <span className="text-white text-sm">Logistics: Rs. {Number(selectedOrder.deliveryFee).toLocaleString()}</span>
-                         <span className="text-primary text-lg font-black mt-2">Total: Rs. {Number(selectedOrder.total).toLocaleString()}</span>
+                         <span className="text-primary-600 text-lg font-black mt-2">Total: Rs. {Number(selectedOrder.total).toLocaleString()}</span>
                       </div>
                       <div className="text-sm font-bold text-gray-400 flex flex-col text-right">
                          <span>Payment Mode:</span>
-                         <span className="text-primary text-lg uppercase">Cash on Delivery</span>
+                         <span className="text-primary-600 text-lg uppercase">Cash on Delivery</span>
                       </div>
                    </div>
                  )}

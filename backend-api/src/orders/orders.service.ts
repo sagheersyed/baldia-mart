@@ -64,57 +64,95 @@ export class OrdersService {
     console.log('OrderType:', orderType);
     if (restaurantId) console.log('Legacy RestaurantId:', restaurantId);
 
-    // 1. Get cart items with correct entity fetching
+    // 1. Get cart items with batched entity fetching (avoid per-item queries)
     let cartItems: any[] = [];
     if (items && items.length > 0) {
-      for (const item of items) {
-        if (orderType === 'food' && item.menuItemId) {
-          const menuItem = await this.orderItemsRepository.manager.getRepository('MenuItem').findOne({ where: { id: item.menuItemId }, relations: ['restaurant'] }) as any;
-          if (menuItem) {
-            cartItems.push({
-              menuItemId: item.menuItemId,
-              quantity: item.quantity,
-              product: menuItem,
-              restaurantId: menuItem.restaurantId,
-              restaurant: menuItem.restaurant
-            });
-          }
-        } else if (item.productId) {
-          const product = await this.orderItemsRepository.manager.getRepository('Product').findOne({ 
-            where: { id: item.productId },
-            relations: ['brand', 'category']
-          }) as any;
-          if (product) {
-            cartItems.push({
-              productId: item.productId,
-              quantity: item.quantity,
-              product: product
-            });
-          }
+      if (orderType === 'food') {
+        const menuItemIds = Array.from(
+          new Set(items.map((item: any) => item.menuItemId).filter(Boolean)),
+        );
+        const menuItems = menuItemIds.length
+          ? await this.orderItemsRepository.manager.getRepository('MenuItem').find({
+              where: { id: In(menuItemIds) },
+              relations: ['restaurant'],
+            } as any)
+          : [];
+        const menuItemMap = new Map(menuItems.map((menuItem: any) => [menuItem.id, menuItem]));
+
+        for (const item of items) {
+          if (!item.menuItemId) continue;
+          const menuItem = menuItemMap.get(item.menuItemId);
+          if (!menuItem) continue;
+          cartItems.push({
+            menuItemId: item.menuItemId,
+            quantity: item.quantity,
+            product: menuItem,
+            restaurantId: menuItem.restaurantId,
+            restaurant: menuItem.restaurant,
+          });
+        }
+      } else {
+        const productIds = Array.from(
+          new Set(items.map((item: any) => item.productId).filter(Boolean)),
+        );
+        const products = productIds.length
+          ? await this.orderItemsRepository.manager.getRepository('Product').find({
+              where: { id: In(productIds) },
+              relations: ['brand', 'category'],
+            } as any)
+          : [];
+        const productMap = new Map(products.map((product: any) => [product.id, product]));
+
+        for (const item of items) {
+          if (!item.productId) continue;
+          const product = productMap.get(item.productId);
+          if (!product) continue;
+          cartItems.push({
+            productId: item.productId,
+            quantity: item.quantity,
+            product,
+          });
         }
       }
     } else {
       cartItems = await this.cartService.getCartByUserId(userId);
       if (orderType === 'food') {
+        const menuItemIds = Array.from(
+          new Set(cartItems.map((item: any) => item.menuItemId).filter(Boolean)),
+        );
+        const menuItems = menuItemIds.length
+          ? await this.orderItemsRepository.manager.getRepository('MenuItem').find({
+              where: { id: In(menuItemIds) },
+              relations: ['restaurant'],
+            } as any)
+          : [];
+        const menuItemMap = new Map(menuItems.map((menuItem: any) => [menuItem.id, menuItem]));
+
         for (const item of cartItems) {
-          if (item.menuItemId) {
-            const menuItem = await this.orderItemsRepository.manager.getRepository('MenuItem').findOne({ where: { id: item.menuItemId }, relations: ['restaurant'] }) as any;
-            if (menuItem) {
-              item.product = menuItem;
-              item.restaurantId = menuItem.restaurantId;
-              item.restaurant = menuItem.restaurant;
-            }
-          }
+          if (!item.menuItemId) continue;
+          const menuItem = menuItemMap.get(item.menuItemId);
+          if (!menuItem) continue;
+          item.product = menuItem;
+          item.restaurantId = menuItem.restaurantId;
+          item.restaurant = menuItem.restaurant;
         }
       } else {
+        const productIds = Array.from(
+          new Set(cartItems.map((item: any) => item.productId).filter(Boolean)),
+        );
+        const products = productIds.length
+          ? await this.orderItemsRepository.manager.getRepository('Product').find({
+              where: { id: In(productIds) },
+              relations: ['brand', 'category'],
+            } as any)
+          : [];
+        const productMap = new Map(products.map((product: any) => [product.id, product]));
+
         for (const item of cartItems) {
-          if (item.productId) {
-            const product = await this.orderItemsRepository.manager.getRepository('Product').findOne({ 
-              where: { id: item.productId },
-              relations: ['brand', 'category']
-            }) as any;
-            if (product) item.product = product;
-          }
+          if (!item.productId) continue;
+          const product = productMap.get(item.productId);
+          if (!product) continue;
+          item.product = product;
         }
       }
     }
@@ -210,13 +248,12 @@ export class OrdersService {
 
         // Validate Multi-Restaurant Logic (Distance & Prep Time)
         if (distinctRestaurants.length > 1) {
+          const maxDist = await this.settingsService.getNumber('multi_restaurant_max_distance_km', 0.4);
           for (let i = 0; i < distinctRestaurants.length; i++) {
             for (let j = i + 1; j < distinctRestaurants.length; j++) {
               const r1 = distinctRestaurants[i];
               const r2 = distinctRestaurants[j];
               const dist = this.deliveryZonesService.calculateDistance(Number(r1.latitude), Number(r1.longitude), Number(r2.latitude), Number(r2.longitude));
-
-              const maxDist = await this.settingsService.getNumber('multi_restaurant_max_distance_km', 0.4);
               if (dist > maxDist) {
                 throw new BadRequestException(`Multi-restaurant orders are only allowed for restaurants within ${(maxDist * 1000).toFixed(0)} meters of each other.`);
               }
@@ -478,17 +515,17 @@ export class OrdersService {
         where: { isOnline: true, isActive: true },
         select: ['id', 'fcmToken'],
       });
-
-      for (const rider of onlineRiders) {
-        if (rider.fcmToken) {
-          await this.notificationsService.sendToRider(
+      const sendJobs = onlineRiders
+        .filter((rider) => !!rider.fcmToken)
+        .map((rider) =>
+          this.notificationsService.sendToRider(
             rider.id,
-            rider.fcmToken,
+            rider.fcmToken!,
             'New Order Available! 🛍️',
             `A new order for Rs. ${order.total} has been placed nearby.`,
-          );
-        }
-      }
+          ),
+        );
+      await Promise.allSettled(sendJobs);
     } catch (error) {
       console.error('Error notifying riders:', error);
     }
@@ -726,7 +763,7 @@ export class OrdersService {
       (!order.riderId || order.riderId === requesterId);
 
     if (!isOwner && !isAssignedRider && !isRiderInAcceptanceFlow) {
-      throw new UnauthorizedException('Access denied to this order');
+      throw new ForbiddenException('Access denied to this order');
     }
 
     return order;

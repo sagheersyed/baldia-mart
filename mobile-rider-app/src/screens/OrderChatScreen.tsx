@@ -45,13 +45,12 @@ export default function OrderChatScreen() {
     navigation.setOptions({ headerTitle: customerName || 'Chat with Customer' });
     loadHistory();
 
-    socket.connect();
     const onConnect = () => {
       socket.emit('joinOrder', orderId);
     };
     socket.on('connect', onConnect);
     
-    socket.on('receiveMessage', (msg: any) => {
+    const onReceiveMessage = (msg: any) => {
       setMessages(prev => {
         const filtered = prev.filter(m => !m.sending || m.message !== msg.message || m.type !== msg.type);
         if (filtered.some(m => m.id === msg.id)) return filtered;
@@ -64,14 +63,16 @@ export default function OrderChatScreen() {
       }
 
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-    });
+    };
+
+    socket.on('receiveMessage', onReceiveMessage);
 
     if (socket.connected) onConnect();
 
     return () => {
       socket.emit('leaveOrder', orderId);
       socket.off('connect', onConnect);
-      socket.off('receiveMessage');
+      socket.off('receiveMessage', onReceiveMessage);
     };
   }, [orderId]);
 

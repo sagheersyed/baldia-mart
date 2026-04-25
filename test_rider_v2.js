@@ -1,6 +1,6 @@
 const axios = require('axios');
 const phone = '+923' + Math.floor(Math.random() * 900000000).toString().padStart(9, '0');
-const BASE_URL = 'http://192.168.100.80:3000/api/v1';
+const BASE_URL = 'http://192.168.100.142:3000/api/v1';
 
 async function run() {
     try {

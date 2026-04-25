@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { Star, User, ShoppingBag, MessageSquare, Calendar, Filter, RefreshCcw, Bike } from 'lucide-react';
-import { fetchWithAuth, BASE_URL } from '@/lib/api';
+import { fetchWithAuth, BASE_URL, getErrorMessage, parseApiError } from '@/lib/api';
+import { showToast } from '@/hooks/useToast';
 
 interface Review {
   id: string;
@@ -33,9 +34,12 @@ export default function RatingsPage() {
       if (res.ok) {
         const data = await res.json();
         setReviews(data);
+      } else {
+        showToast({ title: await parseApiError(res, 'Failed to fetch reviews'), variant: 'error' });
       }
     } catch (error) {
       console.error('Failed to fetch reviews:', error);
+      showToast({ title: getErrorMessage(error, 'Failed to fetch reviews'), variant: 'error' });
     } finally {
       setLoading(false);
     }
@@ -60,19 +64,19 @@ export default function RatingsPage() {
     <div className="p-8 animate-in fade-in duration-500 max-w-7xl mx-auto space-y-8">
       <header className="flex justify-between items-end">
         <div>
-          <h1 className="text-4xl font-black text-gray-900 tracking-tight">Rider Ratings</h1>
+          <h1 className="page-title">Rider Ratings</h1>
           <p className="text-gray-500 mt-2 font-medium flex items-center">
-            <Star size={16} className="mr-2 text-primary" fill="currentColor" />
+            <Star size={16} className="mr-2 text-primary-600" fill="currentColor" />
             Monitor service quality and customer feedback
           </p>
         </div>
-        <button onClick={fetchReviews} className="p-3 bg-white border border-gray-100 rounded-xl text-gray-500 hover:text-primary hover:border-primary/20 transition shadow-sm">
+        <button onClick={fetchReviews} className="p-3 bg-white border border-gray-100 rounded-xl text-gray-500 hover:text-primary-600 hover:border-primary-500-500/20 transition shadow-sm">
           <RefreshCcw size={18} className={loading ? 'animate-spin' : ''} />
         </button>
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-gradient-to-br from-primary to-orange-600 p-8 rounded-[2.5rem] text-white shadow-xl shadow-orange-500/20">
+        <div className="bg-gradient-to-br from-primary-600 to-orange-600 p-8 rounded-[2.5rem] text-white shadow-xl shadow-orange-500/20">
           <div className="flex items-center space-x-4 mb-4">
             <div className="p-3 bg-white/20 rounded-2xl backdrop-blur-md">
               <Star size={24} fill="currentColor" />
@@ -102,17 +106,17 @@ export default function RatingsPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-[2.5rem] shadow-xl shadow-gray-200/40 border border-gray-100 overflow-hidden">
+      <div className="card overflow-hidden">
         <div className="p-8 border-b border-gray-50 flex justify-between items-center bg-gray-50/30">
           <h2 className="text-xl font-black text-gray-900 flex items-center">
-            <MessageSquare size={20} className="mr-3 text-primary" />
+            <MessageSquare size={20} className="mr-3 text-primary-600" />
             Recent Feedback
           </h2>
           <div className="flex items-center space-x-2">
             <select
               value={filterRider}
               onChange={(e) => setFilterRider(e.target.value)}
-              className="mr-2 h-10 px-3 rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/20"
+              className="mr-2 h-10 px-3 rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
             >
               <option value="all">All Riders</option>
               {uniqueRiders.map((r: any) => (
@@ -124,7 +128,7 @@ export default function RatingsPage() {
               <button
                 key={r}
                 onClick={() => setFilterRating(filterRating === r ? 'all' : r)}
-                className={`w-10 h-10 rounded-xl font-bold transition-all flex items-center justify-center ${filterRating === r ? 'bg-primary text-white scale-110 shadow-md' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                className={`w-10 h-10 rounded-xl font-bold transition-all flex items-center justify-center ${filterRating === r ? 'bg-primary-600 text-white scale-110 shadow-md' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
               >
                 {r} <Star size={10} className="ml-1" fill={filterRating === r ? "currentColor" : "none"} />
               </button>
@@ -135,7 +139,7 @@ export default function RatingsPage() {
         <div className="divide-y divide-gray-50">
           {loading ? (
             <div className="py-20 flex justify-center">
-              <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+              <div className="w-10 h-10 border-4 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
             </div>
           ) : filteredReviews.length === 0 ? (
             <div className="py-20 text-center">
@@ -147,8 +151,8 @@ export default function RatingsPage() {
               <div className="flex justify-between items-start mb-6">
                 <div className="flex items-start space-x-6">
                   <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100 flex flex-col items-center justify-center min-w-[70px]">
-                    <span className="text-3xl font-black text-primary">{review.rating}</span>
-                    <div className="flex text-primary mt-1">
+                    <span className="text-3xl font-black text-primary-600">{review.rating}</span>
+                    <div className="flex text-primary-600 mt-1">
                       {[...Array(review.rating)].map((_, i) => <Star key={i} size={8} fill="currentColor" />)}
                     </div>
                   </div>
@@ -164,7 +168,7 @@ export default function RatingsPage() {
                         <span className="font-bold text-gray-600">{review.user.name}</span>
                       </div>
                       <div className="flex items-center">
-                        <div className="w-8 h-8 rounded-full bg-orange-50 flex items-center justify-center text-primary mr-2 border border-orange-100">
+                        <div className="w-8 h-8 rounded-full bg-orange-50 flex items-center justify-center text-primary-600 mr-2 border border-orange-100">
                           <Bike size={14} />
                         </div>
                         <span className="font-bold text-gray-600">{review.rider.name}</span>

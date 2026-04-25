@@ -92,6 +92,34 @@ export class NotificationsService {
       imageUrl,
     }));
     await this.notificationsRepository.save(notifications);
+    return {
+      targetedUsers: users.length,
+      deliveredTokenCount: tokens.length,
+    };
+  }
+
+  async getRecentBroadcasts(limit = 10) {
+    const rows = await this.notificationsRepository
+      .createQueryBuilder('n')
+      .select('n.title', 'title')
+      .addSelect('n.body', 'body')
+      .addSelect('n.imageUrl', 'imageUrl')
+      .addSelect('n.createdAt', 'createdAt')
+      .addSelect('COUNT(n.id)', 'recipientCount')
+      .where('n.userId IS NOT NULL')
+      .andWhere('n.riderId IS NULL')
+      .groupBy('n.title, n.body, n.imageUrl, n.createdAt')
+      .orderBy('n.createdAt', 'DESC')
+      .limit(limit)
+      .getRawMany();
+
+    return rows.map((item) => ({
+      title: item.title,
+      body: item.body,
+      imageUrl: item.imageUrl,
+      createdAt: item.createdAt,
+      recipientCount: Number(item.recipientCount) || 0,
+    }));
   }
 
   async sendAdminAlert(title: string, body: string, priority: 'low' | 'high' = 'low') {

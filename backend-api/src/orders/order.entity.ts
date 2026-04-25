@@ -8,6 +8,8 @@ import { SubOrder } from './sub-order.entity';
 import { Brand } from '../brands/brand.entity';
 import { OrderHistory } from './order-history.entity';
 
+@Index('IDX_ORDERS_USER_CREATED_AT', ['userId', 'createdAt'])
+@Index('IDX_ORDERS_RIDER_STATUS_UPDATED_AT', ['riderId', 'status', 'updatedAt'])
 @Entity('orders')
 export class Order {
   @PrimaryGeneratedColumn('uuid')

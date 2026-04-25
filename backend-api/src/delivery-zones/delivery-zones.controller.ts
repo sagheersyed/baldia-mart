@@ -1,12 +1,16 @@
-import { Controller, Get, Post, Put, Param, Body, ParseUUIDPipe, Query } from '@nestjs/common';
+import { Controller, Get, Post, Put, Param, Body, ParseUUIDPipe, Query, UseGuards } from '@nestjs/common';
 import { DeliveryZonesService } from './delivery-zones.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { AdminRoleGuard } from '../auth/admin-role.guard';
+import { CreateDeliveryZoneDto } from './dto/create-delivery-zone.dto';
+import { UpdateDeliveryZoneDto } from './dto/update-delivery-zone.dto';
 
 @Controller(['delivery-zones', 'zones'])
 export class DeliveryZonesController {
   constructor(private readonly zonesService: DeliveryZonesService) {}
 
   @Get('all')
-  // TODO: Add AdminRoleGuard
+  @UseGuards(JwtAuthGuard, AdminRoleGuard)
   async getAllZones() {
     return this.zonesService.findAll();
   }
@@ -25,16 +29,19 @@ export class DeliveryZonesController {
   }
 
   @Post()
-  async createZone(@Body() body: any) {
+  @UseGuards(JwtAuthGuard, AdminRoleGuard)
+  async createZone(@Body() body: CreateDeliveryZoneDto) {
     return this.zonesService.create(body);
   }
 
   @Put(':id')
-  async updateZone(@Param('id', ParseUUIDPipe) id: string, @Body() body: any) {
+  @UseGuards(JwtAuthGuard, AdminRoleGuard)
+  async updateZone(@Param('id', ParseUUIDPipe) id: string, @Body() body: UpdateDeliveryZoneDto) {
     return this.zonesService.update(id, body);
   }
 
   @Put(':id/toggle')
+  @UseGuards(JwtAuthGuard, AdminRoleGuard)
   async toggleZone(@Param('id', ParseUUIDPipe) id: string) {
     return this.zonesService.toggleActive(id);
   }

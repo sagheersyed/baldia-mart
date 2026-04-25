@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { Save, RefreshCw, Truck, ArrowRight, Ruler, Phone, Mail, MapPin, Building2, Shield, ToggleLeft, ToggleRight, Boxes, Scale, ArrowUpCircle } from 'lucide-react';
-import { fetchWithAuth, BASE_URL } from '@/lib/api';
+import { fetchWithAuth, BASE_URL, getErrorMessage, parseApiError } from '@/lib/api';
+import { showToast } from '@/hooks/useToast';
 
 const SETTINGS_API_URL = `${BASE_URL}/settings`;
 
@@ -20,12 +21,13 @@ export default function SettingsPage() {
     try {
       setLoading(true);
       const res = await fetchWithAuth(SETTINGS_API_URL);
-      if (!res.ok) throw new Error('Failed to fetch');
+      if (!res.ok) throw new Error(await parseApiError(res, 'Failed to load settings'));
       const data = await res.json();
       setSettings(data);
     } catch (error) {
       console.error('Failed to fetch settings:', error);
       setMessage('Failed to load settings');
+      showToast({ title: getErrorMessage(error, 'Failed to load settings'), variant: 'error' });
     } finally {
       setLoading(false);
     }
@@ -42,14 +44,16 @@ export default function SettingsPage() {
         body: JSON.stringify({ value }),
       });
 
-      if (!res.ok) throw new Error('Update failed');
+      if (!res.ok) throw new Error(await parseApiError(res, 'Update failed'));
 
       setMessage(`${key} updated successfully!`);
+      showToast({ title: `${key} updated successfully`, variant: 'success' });
       setTimeout(() => setMessage(''), 3000);
       fetchSettings();
     } catch (error) {
       console.error('Update failed:', error);
       setMessage('Update failed. Please try again.');
+      showToast({ title: getErrorMessage(error, 'Update failed. Please try again.'), variant: 'error' });
     } finally {
       setSaving(false);
     }
@@ -366,7 +370,7 @@ export default function SettingsPage() {
         {/* Store Information */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="bg-gray-50 p-6 border-b border-gray-100 flex items-center space-x-3">
-            <Building2 className="text-primary" size={24} />
+            <Building2 className="text-primary-600" size={24} />
             <h2 className="text-xl font-semibold text-gray-800">Store Profile & Location</h2>
           </div>
 
@@ -386,14 +390,14 @@ export default function SettingsPage() {
                       type="text"
                       value={settings.contact_phone || ''}
                       onChange={(e) => handleSettingChange('contact_phone', e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition"
+                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500-500 outline-none transition"
                       placeholder="+92 300 0000000"
                     />
                   </div>
                   <button
                     onClick={() => handleUpdate('contact_phone', settings.contact_phone)}
                     disabled={saving}
-                    className="p-3 bg-primary text-white rounded-xl hover:bg-orange-600 transition disabled:opacity-50"
+                    className="p-3 bg-primary-600 text-white rounded-xl hover:bg-orange-600 transition disabled:opacity-50"
                   >
                     <Save size={20} />
                   </button>
@@ -410,14 +414,14 @@ export default function SettingsPage() {
                       type="email"
                       value={settings.contact_email || ''}
                       onChange={(e) => handleSettingChange('contact_email', e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition"
+                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500-500 outline-none transition"
                       placeholder="support@baldiamart.com"
                     />
                   </div>
                   <button
                     onClick={() => handleUpdate('contact_email', settings.contact_email)}
                     disabled={saving}
-                    className="p-3 bg-primary text-white rounded-xl hover:bg-orange-600 transition disabled:opacity-50"
+                    className="p-3 bg-primary-600 text-white rounded-xl hover:bg-orange-600 transition disabled:opacity-50"
                   >
                     <Save size={20} />
                   </button>
@@ -433,7 +437,7 @@ export default function SettingsPage() {
                     <textarea
                       value={settings.mart_location || ''}
                       onChange={(e) => handleSettingChange('mart_location', e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition resize-none h-24"
+                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500-500 outline-none transition resize-none h-24"
                       placeholder="Baldia Town, Sector 4, Karachi"
                     />
                   </div>
@@ -441,7 +445,7 @@ export default function SettingsPage() {
                     <button
                       onClick={() => handleUpdate('mart_location', settings.mart_location)}
                       disabled={saving}
-                      className="p-3 bg-primary text-white rounded-xl hover:bg-orange-600 transition disabled:opacity-50 h-[46px]"
+                      className="p-3 bg-primary-600 text-white rounded-xl hover:bg-orange-600 transition disabled:opacity-50 h-[46px]"
                     >
                       <Save size={20} />
                     </button>

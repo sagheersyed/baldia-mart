@@ -20,6 +20,7 @@ import { VendorsModule } from '../vendors/vendors.module';
 import { CleanupService } from './cleanup.service';
 import { RashanService } from './rashan.service';
 import { RashanController } from './rashan.controller';
+import { UsersModule } from '../users/users.module';
 
 import { WalletsModule } from '../wallets/wallets.module';
 
@@ -32,6 +33,7 @@ import { WalletsModule } from '../wallets/wallets.module';
     SettingsModule,
     NotificationsModule,
     forwardRef(() => RidersModule),
+    UsersModule,
     VendorsModule,
     WalletsModule,
   ],

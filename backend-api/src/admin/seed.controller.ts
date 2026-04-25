@@ -1,4 +1,4 @@
-import { Controller, Post } from '@nestjs/common';
+import { Controller, ForbiddenException, Post, UseGuards } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Category } from '../categories/category.entity';
@@ -7,8 +7,10 @@ import { DeliveryZone } from '../delivery-zones/delivery-zone.entity';
 import { Address } from '../addresses/address.entity';
 import { User } from '../users/user.entity';
 import * as bcrypt from 'bcryptjs';
+import { AdminRoleGuard } from '../auth/admin-role.guard';
 
 @Controller('admin/seed')
+@UseGuards(AdminRoleGuard)
 export class SeedController {
   constructor(
     @InjectRepository(Category)
@@ -25,6 +27,10 @@ export class SeedController {
 
   @Post()
   async seed() {
+    if (process.env.ALLOW_ADMIN_SEED !== 'true') {
+      throw new ForbiddenException('Seeding is disabled. Set ALLOW_ADMIN_SEED=true explicitly to run.');
+    }
+
     // 1. Clear existing data (dependent tables first to avoid FK errors)
     const manager = this.categoryRepository.manager;
     const tables = [
@@ -88,7 +94,7 @@ export class SeedController {
     );
 
     // 3. Create Categories
-    const baseUrl = 'http://192.168.100.80:3000';
+    const baseUrl = 'http://192.168.100.142:3000';
     const categoriesData = [
       { name: 'Vegetables', description: 'Farm fresh local produce', imageUrl: `${baseUrl}/public/cat_veg.png` },
       { name: 'Fruits', description: 'Seasonal and exotic fruits', imageUrl: `${baseUrl}/public/cat_fruit.png` },

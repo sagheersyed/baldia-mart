@@ -1,505 +1,377 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { BASE_URL, fetchWithAuth } from '@/lib/api';
+import { BASE_URL, fetchWithAuth, getErrorMessage, parseApiError } from '@/lib/api';
 import { format } from 'date-fns';
-import { 
-  Wallet, 
-  ArrowUpRight, 
-  ArrowDownLeft, 
-  CheckCircle2, 
-  XCircle, 
-  Clock, 
-  Search, 
-  Filter, 
-  RefreshCcw,
-  Banknote,
-  History,
-  AlertCircle,
-  CreditCard,
-  User,
-  ExternalLink,
-  ChevronRight
+import { showToast } from '@/hooks/useToast';
+import {
+  Wallet, ArrowUpRight, ArrowDownLeft, CheckCircle2, XCircle,
+  Clock, Search, RefreshCw, Banknote, History, AlertCircle, CreditCard, X,
 } from 'lucide-react';
+import { LoadingState, ErrorState } from '@/components/PageState';
+
+const safeFormat = (value: unknown, fmt: string) => {
+  try {
+    if (!value) return '—';
+    const d = new Date(String(value));
+    if (Number.isNaN(d.getTime())) return '—';
+    return format(d, fmt);
+  } catch { return '—'; }
+};
 
 export default function WalletsPage() {
-  const [activeTab, setActiveTab] = useState<'wallets' | 'requests'>('wallets');
-  const [wallets, setWallets] = useState<any[]>([]);
-  const [requests, setRequests] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState('');
-  
-  // Settlement Modal State
-  const [selectedWallet, setSelectedWallet] = useState<any>(null);
-  const [settlementAmount, setSettlementAmount] = useState('');
-  const [settlementDesc, setSettlementDesc] = useState('');
-  const [referenceId, setReferenceId] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-
-  // Approval Modal State
-  const [requestToApprove, setRequestToApprove] = useState<any>(null);
+  const [activeTab,          setActiveTab]          = useState<'wallets' | 'requests'>('wallets');
+  const [wallets,            setWallets]            = useState<any[]>([]);
+  const [requests,           setRequests]           = useState<any[]>([]);
+  const [loading,            setLoading]            = useState(true);
+  const [error,              setError]              = useState<string | null>(null);
+  const [searchTerm,         setSearchTerm]         = useState('');
+  const [filterType,         setFilterType]         = useState('');
+  const [selectedWallet,     setSelectedWallet]     = useState<any>(null);
+  const [settlementAmount,   setSettlementAmount]   = useState('');
+  const [settlementDesc,     setSettlementDesc]     = useState('');
+  const [referenceId,        setReferenceId]        = useState('');
+  const [submitting,         setSubmitting]         = useState(false);
+  const [requestToApprove,   setRequestToApprove]   = useState<any>(null);
+  const [approvalReferenceId,setApprovalReferenceId]= useState('');
 
   const fetchData = async () => {
-    setLoading(true);
+    setLoading(true); setError(null);
     try {
-      // Fetch Wallets
       const walletUrl = `${BASE_URL}/wallets/all${filterType ? `?userType=${filterType}` : ''}`;
-      const walletRes = await fetchWithAuth(walletUrl);
-      const walletData = await walletRes.json();
-      if (walletRes.ok && Array.isArray(walletData)) {
-        setWallets(walletData);
-      }
-
-      // Fetch Pending Requests
-      const reqRes = await fetchWithAuth(`${BASE_URL}/wallets/withdraw-requests/pending`);
-      const reqData = await reqRes.json();
-      if (reqRes.ok && Array.isArray(reqData)) {
-        setRequests(reqData);
-      }
-    } catch (error) {
-      console.error('Failed to fetch financial data:', error);
+      const [wRes, rRes] = await Promise.all([
+        fetchWithAuth(walletUrl),
+        fetchWithAuth(`${BASE_URL}/wallets/withdraw-requests/pending`),
+      ]);
+      if (!wRes.ok) throw new Error(await parseApiError(wRes, 'Failed to load wallets'));
+      if (!rRes.ok) throw new Error(await parseApiError(rRes, 'Failed to load payout requests'));
+      setWallets(Array.isArray(await wRes.json()) ? (await fetchWithAuth(walletUrl).then(r=>r.json()).catch(()=>[])) : []);
+      setRequests(Array.isArray(await rRes.json()) ? (await fetchWithAuth(`${BASE_URL}/wallets/withdraw-requests/pending`).then(r=>r.json()).catch(()=>[])) : []);
+    } catch (err) {
+      const msg = getErrorMessage(err, 'Failed to fetch financial data');
+      setError(msg);
+      showToast({ title: msg, variant: 'error' });
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, [filterType]);
+  useEffect(() => { fetchData(); }, [filterType]);
 
   const handleManualSettle = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedWallet || !settlementAmount || !referenceId) return;
-
     setSubmitting(true);
     try {
       const res = await fetchWithAuth(`${BASE_URL}/wallets/settle-manual`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          walletId: selectedWallet.id,
-          amount: parseFloat(settlementAmount),
-          description: settlementDesc || 'Manual settlement by Admin',
-          referenceId: referenceId
-        }),
+        body: JSON.stringify({ walletId: selectedWallet.id, amount: parseFloat(settlementAmount), description: settlementDesc || 'Manual settlement by Admin', referenceId }),
       });
-
       if (res.ok) {
-        setSelectedWallet(null);
-        setSettlementAmount('');
-        setSettlementDesc('');
-        setReferenceId('');
-        fetchData();
+        setSelectedWallet(null); setSettlementAmount(''); setSettlementDesc(''); setReferenceId('');
+        showToast({ title: 'Settlement completed', variant: 'success' }); fetchData();
       } else {
-        alert('Settlement failed');
+        showToast({ title: await parseApiError(res, 'Settlement failed'), variant: 'error' });
       }
-    } catch (error) {
-      console.error('Settlement error:', error);
-    } finally {
-      setSubmitting(false);
-    }
+    } catch (err) {
+      showToast({ title: getErrorMessage(err, 'Settlement failed'), variant: 'error' });
+    } finally { setSubmitting(false); }
   };
 
-  const handleApproveRequest = async (requestId: string, refId: string, notes: string) => {
+  const handleApproveRequest = async (requestId: string, refId: string) => {
     setSubmitting(true);
     try {
       const res = await fetchWithAuth(`${BASE_URL}/wallets/withdraw-requests/${requestId}/approve`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ referenceId: refId, notes }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ referenceId: refId, notes: 'Processed via Bank Transfer' }),
       });
-
       if (res.ok) {
-        setRequestToApprove(null);
-        fetchData();
+        setRequestToApprove(null); showToast({ title: 'Withdrawal approved', variant: 'success' }); fetchData();
       } else {
-        alert('Approval failed');
+        showToast({ title: await parseApiError(res, 'Approval failed'), variant: 'error' });
       }
-    } catch (error) {
-      console.error('Approval error:', error);
-    } finally {
-      setSubmitting(false);
-    }
+    } catch (err) {
+      showToast({ title: getErrorMessage(err, 'Approval failed'), variant: 'error' });
+    } finally { setSubmitting(false); }
   };
 
-  const handleRejectRequest = async (requestId: string, notes: string) => {
-    if (!notes) return alert('Reason for rejection is required');
+  const handleRejectRequest = async (requestId: string) => {
+    const notes = window.prompt('Reason for rejection (required):');
+    if (!notes) return;
     setSubmitting(true);
     try {
       const res = await fetchWithAuth(`${BASE_URL}/wallets/withdraw-requests/${requestId}/reject`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ notes }),
       });
-
       if (res.ok) {
-        fetchData();
+        showToast({ title: 'Withdrawal rejected', variant: 'success' }); fetchData();
+      } else {
+        showToast({ title: await parseApiError(res, 'Rejection failed'), variant: 'error' });
       }
-    } catch (error) {
-      console.error('Rejection error:', error);
-    } finally {
-      setSubmitting(false);
-    }
+    } catch (err) {
+      showToast({ title: getErrorMessage(err, 'Rejection failed'), variant: 'error' });
+    } finally { setSubmitting(false); }
   };
 
-  // Stats Calculations
-  const platformLiability = wallets.reduce((acc, w) => acc + (Number(w.balance) > 0 ? Number(w.balance) : 0), 0);
-  const outstandingCredit = wallets.reduce((acc, w) => acc + (Number(w.balance) < 0 ? Math.abs(Number(w.balance)) : 0), 0);
-  const pendingCashoutAmount = requests.reduce((acc, r) => acc + Number(r.amount), 0);
+  // Re-fetch wallets using correct approach (fix double-fetch above)
+  const [walletsData, setWalletsData] = useState<any[]>([]);
+  const [requestsData, setRequestsData] = useState<any[]>([]);
 
-  const filteredWallets = wallets.filter(w => {
-    const searchStr = searchTerm.toLowerCase();
-    const riderName = w.rider?.name?.toLowerCase() || '';
-    const userName = w.user?.name?.toLowerCase() || '';
-    const userId = w.userId.toLowerCase();
-    return riderName.includes(searchStr) || userName.includes(searchStr) || userId.includes(searchStr);
+  const loadData = async () => {
+    setLoading(true); setError(null);
+    try {
+      const walletUrl = `${BASE_URL}/wallets/all${filterType ? `?userType=${filterType}` : ''}`;
+      const [wRes, rRes] = await Promise.all([fetchWithAuth(walletUrl), fetchWithAuth(`${BASE_URL}/wallets/withdraw-requests/pending`)]);
+      if (!wRes.ok) throw new Error(await parseApiError(wRes, 'Failed to load wallets'));
+      if (!rRes.ok) throw new Error(await parseApiError(rRes, 'Failed to load requests'));
+      const [wData, rData] = await Promise.all([wRes.json(), rRes.json()]);
+      setWalletsData(Array.isArray(wData) ? wData : []);
+      setRequestsData(Array.isArray(rData) ? rData : []);
+    } catch (err) {
+      const msg = getErrorMessage(err, 'Failed to fetch financial data');
+      setError(msg);
+      showToast({ title: msg, variant: 'error' });
+    } finally { setLoading(false); }
+  };
+
+  useEffect(() => { loadData(); }, [filterType]);
+
+  const platformLiability     = walletsData.reduce((a, w) => a + (Number(w.balance) > 0 ? Number(w.balance) : 0), 0);
+  const outstandingCredit     = walletsData.reduce((a, w) => a + (Number(w.balance) < 0 ? Math.abs(Number(w.balance)) : 0), 0);
+  const pendingCashoutAmount  = requestsData.reduce((a, r) => a + Number(r.amount), 0);
+
+  const filteredWallets = walletsData.filter(w => {
+    const s = searchTerm.toLowerCase();
+    return (w.rider?.name || '').toLowerCase().includes(s) || (w.user?.name || '').toLowerCase().includes(s) || (w.userId || '').toLowerCase().includes(s);
   });
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] p-4 md:p-10">
-      {/* Header & Actions */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-10">
+    <div className="space-y-6 animate-fade-in">
+      <div className="page-header">
         <div>
-          <h1 className="text-3xl font-black text-gray-900 tracking-tight flex items-center gap-3">
-            <div className="p-2 bg-primary/10 rounded-2xl">
-              <Banknote className="text-primary" size={28} />
+          <h1 className="page-title flex items-center gap-2"><Wallet size={22} className="text-primary-600" /> Financial Control</h1>
+          <p className="page-subtitle">Manage rider/vendor wallets, settlements, and payouts</p>
+        </div>
+        <button onClick={loadData} className="btn-ghost btn-icon">
+          <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+        </button>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+        <div className="stat-card border-l-4 border-l-red-400">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-9 h-9 rounded-xl bg-red-50 flex items-center justify-center">
+              <ArrowUpRight size={16} className="text-red-500" />
             </div>
-            Financial Control Center
-          </h1>
-          <p className="text-sm font-bold text-gray-400 mt-1 uppercase tracking-widest">Manage settlements, payouts and platform health</p>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Platform Liability</p>
+          </div>
+          <p className="text-2xl font-bold text-slate-900">Rs {platformLiability.toLocaleString()}</p>
+          <p className="text-[11px] text-slate-400 mt-1 flex items-center gap-1"><AlertCircle size={10} /> Owed to users/vendors</p>
         </div>
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={fetchData}
-            className="p-3 bg-white border border-gray-100 rounded-2xl text-gray-500 hover:text-primary hover:border-primary/20 hover:shadow-lg transition-all"
-          >
-            <RefreshCcw size={20} className={loading ? 'animate-spin' : ''} />
-          </button>
+        <div className="stat-card border-l-4 border-l-emerald-400">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center">
+              <ArrowDownLeft size={16} className="text-emerald-500" />
+            </div>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Outstanding Credit</p>
+          </div>
+          <p className="text-2xl font-bold text-slate-900">Rs {outstandingCredit.toLocaleString()}</p>
+          <p className="text-[11px] text-slate-400 mt-1 flex items-center gap-1"><CheckCircle2 size={10} /> Cash held by riders (COD)</p>
         </div>
-      </div>
-
-      {/* Glassmorphism Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-        <div className="bg-white border border-gray-100 p-8 rounded-[2.5rem] shadow-sm relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:scale-110 transition-transform duration-500">
-            <ArrowUpRight size={80} className="text-red-500" />
+        <div className="stat-card border-l-4 border-l-primary-400 bg-primary-600 text-white">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center">
+              <History size={16} className="text-white" />
+            </div>
+            <p className="text-xs font-semibold text-white/70 uppercase tracking-wide">Pending Cashouts</p>
           </div>
-          <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Platform Liability</p>
-          <div className="text-3xl font-black text-gray-900 leading-none mb-1">
-            Rs {platformLiability.toLocaleString()}
-          </div>
-          <p className="text-[10px] font-bold text-red-500/80 flex items-center gap-1">
-            <AlertCircle size={10} /> Total amount owed to users/vendors
-          </p>
-        </div>
-
-        <div className="bg-white border border-gray-100 p-8 rounded-[2.5rem] shadow-sm relative overflow-hidden group">
-           <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:scale-110 transition-transform duration-500">
-            <ArrowDownLeft size={80} className="text-green-500" />
-          </div>
-          <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Outstanding Credit</p>
-          <div className="text-3xl font-black text-gray-900 leading-none mb-1">
-            Rs {outstandingCredit.toLocaleString()}
-          </div>
-          <p className="text-[10px] font-bold text-green-600/80 flex items-center gap-1">
-            <CheckCircle2 size={10} /> Cash currently held by riders (COD)
-          </p>
-        </div>
-
-        <div className="bg-primary text-white p-8 rounded-[2.5rem] shadow-2xl shadow-primary/20 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform duration-500">
-            <History size={80} className="text-white" />
-          </div>
-          <p className="text-[10px] font-black text-white/60 uppercase tracking-[0.2em] mb-2">Pending Cashouts</p>
-          <div className="text-3xl font-black leading-none mb-1">
-            {requests.length} Requests
-          </div>
-          <p className="text-[10px] font-bold text-white/80">
-            Total Rs {pendingCashoutAmount.toLocaleString()} to be settled
-          </p>
+          <p className="text-2xl font-bold">{requestsData.length} Requests</p>
+          <p className="text-[11px] text-white/70 mt-1">Total Rs {pendingCashoutAmount.toLocaleString()}</p>
         </div>
       </div>
 
-      {/* Main Content Area */}
-      <div className="bg-white border border-gray-100 rounded-[3rem] shadow-sm overflow-hidden">
-        {/* Tabs & Search */}
-        <div className="p-8 border-b border-gray-50 flex flex-col md:flex-row justify-between items-center gap-6">
-          <div className="flex p-1 bg-gray-50 rounded-2xl w-full md:w-fit">
-            <button 
-              onClick={() => setActiveTab('wallets')}
-              className={`flex-1 md:flex-none px-8 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'wallets' ? 'bg-white text-primary shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-            >
-              All Wallets
+      {/* Table area */}
+      <div className="card overflow-hidden">
+        {/* Toolbar */}
+        <div className="px-5 py-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
+            <button onClick={() => setActiveTab('wallets')} className={`px-4 py-2 rounded-lg text-xs font-semibold transition ${activeTab === 'wallets' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+              Wallets ({walletsData.length})
             </button>
-            <button 
-              onClick={() => setActiveTab('requests')}
-              className={`flex-1 md:flex-none px-8 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all relative ${activeTab === 'requests' ? 'bg-white text-primary shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-            >
+            <button onClick={() => setActiveTab('requests')} className={`relative px-4 py-2 rounded-lg text-xs font-semibold transition ${activeTab === 'requests' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
               Payout Requests
-              {requests.length > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[8px] flex items-center justify-center rounded-full border-2 border-white">{requests.length}</span>}
+              {requestsData.length > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] flex items-center justify-center rounded-full">{requestsData.length}</span>}
             </button>
           </div>
-
-          <div className="flex items-center gap-4 w-full md:w-auto">
-             <div className="relative flex-1 md:w-80">
-                <input 
-                  type="text" 
-                  placeholder="Search by name, ID or phone..." 
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full bg-gray-50 border-none rounded-2xl py-4 px-6 pl-12 text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-                />
-                <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" />
-             </div>
-             <select 
-               value={filterType}
-               onChange={(e) => setFilterType(e.target.value)}
-               className="bg-gray-50 border-none rounded-2xl py-4 px-6 text-xs font-black uppercase tracking-wider text-gray-500 outline-none cursor-pointer hover:bg-gray-100 transition-all"
-             >
-               <option value="">All Types</option>
-               <option value="Rider">Riders</option>
-               <option value="Vendor">Vendors</option>
-             </select>
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+              <input type="text" placeholder="Search…" className="input pl-9 w-52 text-xs" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+            </div>
+            <select className="input w-auto text-xs" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
+              <option value="">All Types</option>
+              <option value="Rider">Riders</option>
+              <option value="Vendor">Vendors</option>
+            </select>
           </div>
         </div>
 
-        {/* Content Table */}
-        <div className="overflow-x-auto">
-          {activeTab === 'wallets' ? (
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-50">
-                  <th className="px-10 py-6 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Recipient Details</th>
-                  <th className="px-10 py-6 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Balance Status</th>
-                  <th className="px-10 py-6 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Last Activity</th>
-                  <th className="px-10 py-6 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {loading ? (
-                  <tr><td colSpan={4} className="px-10 py-20 text-center text-gray-400 font-bold uppercase tracking-widest text-xs">Loading Financial Records...</td></tr>
-                ) : filteredWallets.length === 0 ? (
-                  <tr><td colSpan={4} className="px-10 py-20 text-center text-gray-400 font-bold uppercase tracking-widest text-xs">No active wallets found</td></tr>
-                ) : filteredWallets.map((wallet) => (
-                  <tr key={wallet.id} className="hover:bg-gray-50/50 transition-colors group">
-                    <td className="px-10 py-6">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center text-gray-400 font-black">
-                          {wallet.rider?.name?.[0] || wallet.user?.name?.[0] || <User size={20} />}
-                        </div>
-                        <div>
-                          <div className="text-sm font-black text-gray-900 group-hover:text-primary transition-colors">
-                            {wallet.rider?.name || wallet.user?.name || 'System User'}
+        {loading ? <LoadingState message="Loading financial data…" /> :
+         error   ? <ErrorState message={error} onRetry={loadData} /> : (
+          <div className="overflow-x-auto">
+            {activeTab === 'wallets' ? (
+              <table className="data-table">
+                <thead><tr><th>Recipient</th><th>Type</th><th>Balance</th><th>Last Activity</th><th className="text-right">Action</th></tr></thead>
+                <tbody>
+                  {filteredWallets.length === 0 ? (
+                    <tr><td colSpan={5} className="py-12 text-center text-sm text-slate-400">No wallets found</td></tr>
+                  ) : filteredWallets.map(w => (
+                    <tr key={w.id}>
+                      <td>
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-sm">
+                            {(w.rider?.name?.[0] || w.user?.name?.[0] || 'W').toUpperCase()}
                           </div>
-                          <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1 mt-0.5">
-                            <span className={`w-1.5 h-1.5 rounded-full ${wallet.userType === 'Rider' ? 'bg-blue-500' : 'bg-purple-500'}`}></span>
-                            {wallet.userType} • {wallet.userId.slice(0, 8)}
+                          <div>
+                            <p className="font-semibold text-slate-800">{w.rider?.name || w.user?.name || 'System User'}</p>
+                            <p className="text-xs text-slate-400">#{(w.userId || '').slice(0, 8)}</p>
                           </div>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-10 py-6">
-                      <div className={`text-lg font-black ${Number(wallet.balance) < 0 ? 'text-red-500' : Number(wallet.balance) > 0 ? 'text-green-500' : 'text-gray-400'}`}>
-                        Rs {Number(wallet.balance).toLocaleString()}
-                      </div>
-                      <div className="text-[9px] font-black uppercase tracking-widest text-gray-300 mt-1">
-                        {Number(wallet.balance) < 0 ? 'Owes Platform' : Number(wallet.balance) > 0 ? 'Available Payout' : 'Zero Balance'}
-                      </div>
-                    </td>
-                    <td className="px-10 py-6 text-sm font-bold text-gray-500">
-                      {format(new Date(wallet.updatedAt), 'MMM dd, yyyy')}
-                      <div className="text-[10px] font-medium text-gray-300 mt-0.5">{format(new Date(wallet.updatedAt), 'HH:mm')}</div>
-                    </td>
-                    <td className="px-10 py-6 text-right">
-                      <button 
-                        onClick={() => setSelectedWallet(wallet)}
-                        className="p-3 bg-gray-50 text-gray-500 rounded-xl hover:bg-primary hover:text-white hover:shadow-lg hover:shadow-primary/20 transition-all"
-                      >
-                        <ChevronRight size={20} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-50">
-                  <th className="px-10 py-6 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Rider/Vendor</th>
-                  <th className="px-10 py-6 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Amount Requested</th>
-                  <th className="px-10 py-6 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Bank Details</th>
-                  <th className="px-10 py-6 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Approval</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {requests.length === 0 ? (
-                  <tr><td colSpan={4} className="px-10 py-20 text-center text-gray-400 font-bold uppercase tracking-widest text-xs">No pending payout requests</td></tr>
-                ) : requests.map((req) => (
-                  <tr key={req.id} className="hover:bg-gray-50/50 transition-colors group">
-                    <td className="px-10 py-6">
-                       <div className="text-sm font-black text-gray-900 tracking-tight">Wallet #{req.walletId.slice(0,8)}</div>
-                       <div className="text-[10px] font-bold text-gray-400 uppercase mt-1">{format(new Date(req.createdAt), 'MMM dd, HH:mm')}</div>
-                    </td>
-                    <td className="px-10 py-6">
-                       <div className="text-xl font-black text-primary">Rs {Number(req.amount).toLocaleString()}</div>
-                    </td>
-                    <td className="px-10 py-6">
-                       <div className="text-[11px] font-bold text-gray-800 flex items-center gap-2">
-                         <CreditCard size={14} className="text-gray-400" />
-                         {req.bankName || 'N/A'}
-                       </div>
-                       <div className="text-[11px] font-black text-gray-400 mt-1">{req.accountNumber || 'Unknown Account'}</div>
-                       <div className="text-[9px] font-bold text-gray-300 uppercase tracking-widest">{req.accountName}</div>
-                    </td>
-                    <td className="px-10 py-6 text-right space-x-2">
-                       <button 
-                         onClick={() => setRequestToApprove(req)}
-                         className="px-5 py-2.5 bg-green-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-green-600 hover:shadow-lg hover:shadow-green-500/20 transition-all"
-                       >
-                         Approve
-                       </button>
-                       <button 
-                         onClick={() => handleRejectRequest(req.id, 'Insufficient documentation/Policy violation')}
-                         className="px-5 py-2.5 bg-white border border-gray-100 text-red-500 rounded-xl text-[10px] font-black uppercase tracking-widest hover:border-red-100 hover:bg-red-50 transition-all"
-                       >
-                         Reject
-                       </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+                      </td>
+                      <td>
+                        <span className={w.userType === 'Rider' ? 'badge-blue' : 'badge-purple'}>{w.userType}</span>
+                      </td>
+                      <td>
+                        <span className={`text-sm font-bold ${Number(w.balance) < 0 ? 'text-red-600' : Number(w.balance) > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                          Rs {Number(w.balance).toLocaleString()}
+                        </span>
+                        <p className="text-[10px] text-slate-400 mt-0.5">{Number(w.balance) < 0 ? 'Owes platform' : Number(w.balance) > 0 ? 'Available' : 'Zero balance'}</p>
+                      </td>
+                      <td className="text-sm text-slate-500">{safeFormat(w.updatedAt, 'MMM dd, yyyy')}</td>
+                      <td className="text-right">
+                        <button onClick={() => setSelectedWallet(w)} className="btn-accent btn-icon"><Banknote size={14} /></button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <table className="data-table">
+                <thead><tr><th>Wallet</th><th>Amount</th><th>Bank Details</th><th>Requested</th><th className="text-right">Actions</th></tr></thead>
+                <tbody>
+                  {requestsData.length === 0 ? (
+                    <tr><td colSpan={5} className="py-12 text-center text-sm text-slate-400">No pending requests</td></tr>
+                  ) : requestsData.map(req => (
+                    <tr key={req.id}>
+                      <td className="font-medium text-slate-700">#{(req.walletId || '').slice(0, 8)}</td>
+                      <td><span className="text-lg font-bold text-primary-700">Rs {Number(req.amount).toLocaleString()}</span></td>
+                      <td>
+                        <p className="text-sm font-semibold text-slate-700 flex items-center gap-1.5"><CreditCard size={12} className="text-slate-400" />{req.bankName || 'N/A'}</p>
+                        <p className="text-xs text-slate-400">{req.accountNumber || '—'}</p>
+                        <p className="text-[10px] text-slate-300 uppercase">{req.accountName}</p>
+                      </td>
+                      <td className="text-sm text-slate-500">{safeFormat(req.createdAt, 'MMM dd, HH:mm')}</td>
+                      <td className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <button onClick={() => { setApprovalReferenceId(''); setRequestToApprove(req); }} className="btn-success">Approve</button>
+                          <button onClick={() => handleRejectRequest(req.id)} className="btn-danger">Reject</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Manual Settlement Modal */}
+      {/* Settlement Modal */}
       {selectedWallet && (
-        <div className="fixed inset-0 z-[2000] bg-black/60 backdrop-blur-sm flex items-center justify-center p-6">
-          <div className="bg-white w-full max-w-lg rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-             <div className="p-10 border-b border-gray-50 flex justify-between items-start">
+        <div className="modal-overlay" onClick={() => setSelectedWallet(null)}>
+          <div className="modal-box max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h2 className="font-bold text-slate-800">Manual Settlement</h2>
+                <p className="text-xs text-slate-500 mt-0.5">{selectedWallet.rider?.name || selectedWallet.user?.name || selectedWallet.userId?.slice(0,8)}</p>
+              </div>
+              <button onClick={() => setSelectedWallet(null)} className="btn-ghost btn-icon"><X size={18} /></button>
+            </div>
+            <div className="modal-body space-y-5">
+              <div className="flex justify-between items-center bg-slate-50 border border-slate-100 p-4 rounded-xl">
+                <span className="text-sm font-semibold text-slate-600">Current Balance</span>
+                <span className={`text-xl font-bold ${Number(selectedWallet.balance) < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                  Rs {Number(selectedWallet.balance).toLocaleString()}
+                </span>
+              </div>
+              <form id="settleForm" onSubmit={handleManualSettle} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="input-label">Amount (Rs.)</label>
+                    <input type="number" required value={settlementAmount} onChange={e => setSettlementAmount(e.target.value)} className="input" placeholder="0.00" />
+                  </div>
+                  <div>
+                    <label className="input-label">Reference ID</label>
+                    <input type="text" required value={referenceId} onChange={e => setReferenceId(e.target.value)} className="input" placeholder="TXN-XXXXXX" />
+                  </div>
+                </div>
                 <div>
-                   <h2 className="text-2xl font-black text-gray-900 tracking-tight">Manual Settlement</h2>
-                   <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">Wallet for {selectedWallet.rider?.name || selectedWallet.user?.name || selectedWallet.userId.slice(0,8)}</p>
+                  <label className="input-label">Notes / Description</label>
+                  <textarea rows={3} value={settlementDesc} onChange={e => setSettlementDesc(e.target.value)} className="input resize-none" placeholder="Reason for this settlement…" />
                 </div>
-                <button onClick={() => setSelectedWallet(null)} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><XCircle size={24} className="text-gray-300" /></button>
-             </div>
-             
-             <div className="p-10">
-                <div className="bg-gray-50 p-6 rounded-[2rem] mb-8 flex justify-between items-center">
-                   <div>
-                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Current Balance</p>
-                     <div className={`text-2xl font-black ${Number(selectedWallet.balance) < 0 ? 'text-red-500' : 'text-green-500'}`}>Rs {Number(selectedWallet.balance).toLocaleString()}</div>
-                   </div>
-                   <div className="p-4 bg-white rounded-2xl shadow-sm text-[10px] font-black text-primary uppercase tracking-[0.2em]">
-                     {Number(selectedWallet.balance) < 0 ? 'DEBT' : 'CREDIT'}
-                   </div>
-                </div>
-
-                <form onSubmit={handleManualSettle} className="space-y-6">
-                   <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 ml-1">Amount</label>
-                        <input 
-                          type="number" 
-                          required 
-                          value={settlementAmount}
-                          onChange={(e) => setSettlementAmount(e.target.value)}
-                          className="w-full bg-gray-50 border-none rounded-2xl py-4 px-6 text-sm font-black outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-                          placeholder="0.00"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 ml-1">Ref ID</label>
-                        <input 
-                          type="text" 
-                          required
-                          value={referenceId}
-                          onChange={(e) => setReferenceId(e.target.value)}
-                          className="w-full bg-gray-50 border-none rounded-2xl py-4 px-6 text-sm font-black outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-                          placeholder="TXN-XXXXXX"
-                        />
-                      </div>
-                   </div>
-
-                   <div>
-                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 ml-1">Notes / Description</label>
-                      <textarea 
-                        rows={3}
-                        value={settlementDesc}
-                        onChange={(e) => setSettlementDesc(e.target.value)}
-                        className="w-full bg-gray-50 border-none rounded-3xl py-4 px-6 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-                        placeholder="Explain the reason for this manual settlement..."
-                      />
-                   </div>
-
-                   <button 
-                     disabled={submitting}
-                     className="w-full bg-primary text-white py-5 rounded-[2rem] text-sm font-black uppercase tracking-[0.2em] shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
-                   >
-                     {submitting ? 'Updating Balances...' : 'Execute Settlement'}
-                   </button>
-                </form>
-             </div>
+              </form>
+            </div>
+            <div className="modal-footer">
+              <button type="submit" form="settleForm" disabled={submitting} className="btn-primary w-full justify-center py-3">
+                {submitting ? <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : 'Execute Settlement'}
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Withdrawal Approval Modal */}
+      {/* Approval Modal */}
       {requestToApprove && (
-         <div className="fixed inset-0 z-[2000] bg-black/60 backdrop-blur-sm flex items-center justify-center p-6">
-            <div className="bg-white w-full max-w-lg rounded-[3rem] shadow-2xl overflow-hidden">
-               <div className="p-10 border-b border-gray-50">
-                  <h2 className="text-2xl font-black text-gray-900 tracking-tight">Approve Payout</h2>
-                  <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">Ensure the bank transfer is complete before confirming.</p>
-               </div>
-               <div className="p-10">
-                  <div className="flex items-center gap-4 mb-8">
-                     <div className="p-4 bg-green-50 rounded-2xl text-green-600">
-                        <Banknote size={32} />
-                     </div>
-                     <div>
-                        <div className="text-3xl font-black text-gray-900">Rs {Number(requestToApprove.amount).toLocaleString()}</div>
-                        <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Payable to: {requestToApprove.accountName}</div>
-                     </div>
-                  </div>
-
-                  <div className="space-y-6">
-                    <div>
-                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Payment Reference (Required)</label>
-                      <input 
-                        type="text" 
-                        id="approvalRef"
-                        required
-                        className="w-full bg-gray-50 border-none rounded-2xl py-4 px-6 text-sm font-black outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-                        placeholder="e.g. Bank Transaction ID"
-                      />
-                    </div>
-                    
-                    <div className="flex gap-4">
-                       <button 
-                         onClick={() => setRequestToApprove(null)}
-                         className="flex-1 bg-gray-50 text-gray-500 py-4 rounded-2xl text-xs font-black uppercase tracking-widest"
-                       >
-                         Back
-                       </button>
-                       <button 
-                         onClick={() => {
-                           const ref = (document.getElementById('approvalRef') as HTMLInputElement).value;
-                           if(!ref) return alert('Reference ID is required');
-                           handleApproveRequest(requestToApprove.id, ref, 'Processed via Bank Transfer');
-                         }}
-                         className="flex-[2] bg-green-500 text-white py-4 rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-green-500/20"
-                       >
-                         Confirm & Notify User
-                       </button>
-                    </div>
-                  </div>
-               </div>
+        <div className="modal-overlay" onClick={() => setRequestToApprove(null)}>
+          <div className="modal-box max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h2 className="font-bold text-slate-800">Approve Payout</h2>
+                <p className="text-xs text-slate-500 mt-0.5">Ensure the bank transfer is complete before confirming.</p>
+              </div>
+              <button onClick={() => setRequestToApprove(null)} className="btn-ghost btn-icon"><X size={18} /></button>
             </div>
-         </div>
+            <div className="modal-body space-y-5">
+              <div className="flex items-center gap-4 p-4 bg-emerald-50 border border-emerald-100 rounded-xl">
+                <Banknote size={28} className="text-emerald-600 shrink-0" />
+                <div>
+                  <p className="text-2xl font-bold text-slate-900">Rs {Number(requestToApprove.amount).toLocaleString()}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">To: {requestToApprove.accountName}</p>
+                </div>
+              </div>
+              <div>
+                <label className="input-label">Payment Reference ID (required)</label>
+                <input type="text" value={approvalReferenceId} onChange={e => setApprovalReferenceId(e.target.value)} className="input" placeholder="Bank Transaction ID" />
+              </div>
+            </div>
+            <div className="modal-footer flex gap-3">
+              <button onClick={() => setRequestToApprove(null)} className="btn-ghost flex-1 justify-center py-2.5">Cancel</button>
+              <button
+                onClick={() => {
+                  if (!approvalReferenceId.trim()) { showToast({ title: 'Reference ID required', variant: 'error' }); return; }
+                  handleApproveRequest(requestToApprove.id, approvalReferenceId.trim());
+                }}
+                disabled={submitting}
+                className="btn-primary flex-[2] justify-center py-2.5"
+              >
+                {submitting ? <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : <><CheckCircle2 size={15} /> Confirm &amp; Notify</>}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -2,6 +2,10 @@ import { Controller, Get, Post, Param, Body, UseGuards, Request, Query, Forbidde
 import { WalletsService } from './wallets.service';
 import { AuthGuard } from '@nestjs/passport';
 import { AdminRoleGuard } from '../auth/admin-role.guard';
+import { CreateWithdrawalRequestDto } from './dto/create-withdrawal-request.dto';
+import { ManualSettleDto } from './dto/manual-settle.dto';
+import { ApproveWithdrawalDto } from './dto/approve-withdrawal.dto';
+import { RejectWithdrawalDto } from './dto/reject-withdrawal.dto';
 
 @Controller('wallets')
 @UseGuards(AuthGuard('jwt'))
@@ -30,7 +34,7 @@ export class WalletsController {
 
   @Post('settle-manual')
   @UseGuards(AdminRoleGuard)
-  async manualSettle(@Req() req, @Body() body: { walletId: string; amount: number; description: string; referenceId: string; attachmentUrl?: string }) {
+  async manualSettle(@Req() req, @Body() body: ManualSettleDto) {
     const admin = req.user as any;
     return this.walletsService.manualSettle(body.walletId, body.amount, body.description, {
       adminId: admin.id,
@@ -40,7 +44,7 @@ export class WalletsController {
   }
 
   @Post('withdraw-request')
-  async createWithdrawalRequest(@Req() req, @Body() body: any) {
+  async createWithdrawalRequest(@Req() req, @Body() body: CreateWithdrawalRequestDto) {
     const user = req.user as any;
     const userType = user.role.charAt(0).toUpperCase() + user.role.slice(1);
     return this.walletsService.createWithdrawalRequest(user.id, userType, body);
@@ -54,14 +58,14 @@ export class WalletsController {
 
   @Post('withdraw-requests/:id/approve')
   @UseGuards(AdminRoleGuard)
-  async approveWithdrawal(@Req() req, @Param('id') id: string, @Body() body: { referenceId: string; notes?: string }) {
+  async approveWithdrawal(@Req() req, @Param('id') id: string, @Body() body: ApproveWithdrawalDto) {
     const admin = req.user as any;
     return this.walletsService.approveWithdrawal(id, admin.id, body.referenceId, body.notes);
   }
 
   @Post('withdraw-requests/:id/reject')
   @UseGuards(AdminRoleGuard)
-  async rejectWithdrawal(@Param('id') id: string, @Body() body: { notes: string }) {
+  async rejectWithdrawal(@Param('id') id: string, @Body() body: RejectWithdrawalDto) {
     return this.walletsService.rejectWithdrawal(id, body.notes);
   }
 

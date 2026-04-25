@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker, Circle } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useNetInfo } from '@react-native-community/netinfo';
-import { socket, ordersApi, ridersApi, settingsApi } from '../api/api';
+import { socket, ordersApi, ridersApi, settingsApi, connectSocket } from '../api/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
@@ -109,9 +109,9 @@ export default function DashboardScreen({ navigation }: any) {
 
   // ── Socket lifecycle ────────────────────────────────────────────────
   useEffect(() => {
-    if (!isOnline || isNetworkOffline) { socket.disconnect(); return; }
+    if (!isOnline || isNetworkOffline) return;
 
-    socket.connect();
+    connectSocket();
     const onConnect = () => {
       if (rider) {
         socket.emit('joinRidersRoom', rider.id);
@@ -149,7 +149,6 @@ export default function DashboardScreen({ navigation }: any) {
       socket.off('orderAccepted', onOrderAccepted);
       socket.off('orderCancelled', onOrderCancelled);
       socket.off('orderUpdated', fetchOrders);
-      socket.disconnect();
     };
   }, [isOnline, rider?.id, isNetworkOffline]);
 

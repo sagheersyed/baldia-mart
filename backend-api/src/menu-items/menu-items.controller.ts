@@ -1,5 +1,9 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards } from '@nestjs/common';
 import { MenuItemsService } from './menu-items.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { AdminRoleGuard } from '../auth/admin-role.guard';
+import { CreateMenuItemDto } from './dto/create-menu-item.dto';
+import { UpdateMenuItemDto } from './dto/update-menu-item.dto';
 
 @Controller('menu-items')
 export class MenuItemsController {
@@ -19,16 +23,19 @@ export class MenuItemsController {
   }
 
   @Post()
-  create(@Body() data: any) {
+  @UseGuards(JwtAuthGuard, AdminRoleGuard)
+  create(@Body() data: CreateMenuItemDto) {
     return this.menuItemsService.create(data);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() data: any) {
+  @UseGuards(JwtAuthGuard, AdminRoleGuard)
+  update(@Param('id') id: string, @Body() data: UpdateMenuItemDto) {
     return this.menuItemsService.update(id, data);
   }
 
   @Delete(':id')
+  @UseGuards(JwtAuthGuard, AdminRoleGuard)
   remove(@Param('id') id: string) {
     return this.menuItemsService.remove(id);
   }

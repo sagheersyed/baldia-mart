@@ -1,9 +1,11 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { Order } from './order.entity';
 import { Product } from '../products/product.entity';
 import { MenuItem } from '../menu-items/menu-item.entity';
 import { SubOrder } from './sub-order.entity';
 
+@Index('IDX_ORDER_ITEMS_ORDER_STATUS', ['orderId', 'status'])
+@Index('IDX_ORDER_ITEMS_SUB_ORDER_ID', ['subOrderId'])
 @Entity('order_items')
 export class OrderItem {
   @PrimaryGeneratedColumn('uuid')

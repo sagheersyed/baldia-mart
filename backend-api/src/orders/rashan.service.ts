@@ -8,20 +8,7 @@ import { User } from '../users/user.entity';
 import { Rider } from '../riders/rider.entity';
 import { Address } from '../addresses/address.entity';
 import { DeliveryZonesService } from '../delivery-zones/delivery-zones.service';
-
-export interface SubmitRashanOrderDto {
-  addressId?: string; // Formal address entity ID
-  bulkListText?: string;
-  bulkListPhotoUrl?: string;
-  bulkMobileNumber: string;
-  bulkStreetAddress: string;
-  bulkCity: string;
-  bulkLandmark?: string;
-  bulkFloor: number;
-  bulkPlacement: 'gate' | 'doorstep' | 'inside';
-  bulkWeightTier: 'light' | 'medium' | 'heavy';
-  bulkAdditionalNotes?: string;
-}
+import { SubmitRashanOrderDto } from './dto/submit-rashan-order.dto';
 
 @Injectable()
 export class RashanService {

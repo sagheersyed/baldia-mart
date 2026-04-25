@@ -2,118 +2,126 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { BASE_URL } from '@/lib/api';
-import { Lock, Mail, ArrowRight } from 'lucide-react';
+import { BASE_URL, parseApiError, setAdminToken } from '@/lib/api';
+import { ShoppingCart, Mail, Lock, ArrowRight, Eye, EyeOff } from 'lucide-react';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
+  const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [showPw,   setShowPw]   = useState(false);
+  const [error,    setError]    = useState('');
+  const [loading,  setLoading]  = useState(false);
   const router = useRouter();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
+    setLoading(true);
     setError('');
-
     try {
       const res = await fetch(`${BASE_URL}/auth/admin/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
-
-      if (!res.ok) {
-        throw new Error('Invalid Admin Credentials');
-      }
-
+      if (!res.ok) throw new Error(await parseApiError(res, 'Invalid credentials'));
       const data = await res.json();
-      localStorage.setItem('adminToken', data.access_token);
       localStorage.setItem('adminEmail', data.user.email);
       localStorage.setItem('adminName', data.user.name);
-
-      // Set cookie for Next.js middleware
-      document.cookie = `adminToken=${data.access_token}; path=/; max-age=86400; SameSite=Strict`;
-
+      setAdminToken(data.access_token);
       router.push('/');
     } catch (err: any) {
-      setError(err.message || 'Login failed');
+      setError(err.message || 'Login failed. Please try again.');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen w-full bg-gray-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 z-0 overflow-hidden pointers-events-none">
-        <div className="absolute -top-40 -right-40 w-96 h-96 bg-primary/20 rounded-full blur-3xl"></div>
-        <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-orange-400/20 rounded-full blur-3xl"></div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+      {/* Background pattern */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-[500px] h-[500px] rounded-full bg-primary-600/20 blur-3xl" />
+        <div className="absolute -bottom-40 -left-40 w-[500px] h-[500px] rounded-full bg-blue-600/15 blur-3xl" />
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmZmZmYiIGZpbGwtb3BhY2l0eT0iMC4wMyI+PHBhdGggZD0iTTM2IDM0djZoNnYtNmgtNnptMCAwdi02aC02djZoNnptNiAwaDZ2LTZoLTZ2NnoiLz48L2c+PC9nPjwvc3ZnPg==')] opacity-40" />
       </div>
 
-      <div className="w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl shadow-gray-200/50 p-10 z-10 border border-gray-100 relative">
-        <div className="mb-10 text-center">
-          <div className="w-16 h-16 bg-gradient-to-br from-primary to-orange-500 rounded-2xl mx-auto flex items-center justify-center shadow-lg shadow-primary/30 mb-6">
-            <Lock className="text-white" size={32} />
+      <div className="relative w-full max-w-md">
+        {/* Card */}
+        <div className="bg-white rounded-3xl shadow-2xl p-8 border border-slate-100">
+          {/* Logo */}
+          <div className="text-center mb-8">
+            <div className="inline-flex w-14 h-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 to-primary-700 shadow-lg mb-4">
+              <ShoppingCart className="text-white" size={26} />
+            </div>
+            <h1 className="text-2xl font-bold text-slate-900">Baldia Mart Admin</h1>
+            <p className="text-sm text-slate-500 mt-1">Sign in to your dashboard</p>
           </div>
-          <h1 className="text-3xl font-black text-gray-900 tracking-tight">Baldia Mart Admin</h1>
-          <p className="text-gray-500 mt-2 font-medium">Secure Delivery Infrastructure</p>
-        </div>
 
-        <form onSubmit={handleLogin} className="space-y-6">
           {error && (
-            <div className="p-4 bg-red-50 text-red-600 rounded-2xl text-sm font-bold border border-red-100">
-              {error}
+            <div className="mb-6 flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl">
+              <div className="w-1.5 h-full min-h-[36px] rounded-full bg-red-500 shrink-0" />
+              <p className="text-sm font-medium text-red-700">{error}</p>
             </div>
           )}
 
-          <div className="space-y-4">
+          <form onSubmit={handleLogin} className="space-y-5">
             <div>
-              <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 ml-1">Admin Email</label>
+              <label className="input-label">Email Address</label>
               <div className="relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                 <input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-gray-900 font-bold focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-all"
+                  className="input pl-10"
                   placeholder="admin@baldiamart.com"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 ml-1">Master Password</label>
+              <label className="input-label">Password</label>
               <div className="relative">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                 <input
-                  type="password"
+                  type={showPw ? 'text' : 'password'}
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-gray-900 font-bold focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-all"
+                  className="input pl-10 pr-10"
                   placeholder="••••••••"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPw((v) => !v)}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition"
+                >
+                  {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
               </div>
             </div>
-          </div>
 
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full bg-primary hover:bg-orange-600 text-white font-black py-4 rounded-2xl flex items-center justify-center space-x-2 transition-all shadow-lg shadow-orange-500/20 active:scale-[0.98] disabled:opacity-70 disabled:active:scale-100"
-          >
-            {isLoading ? (
-              <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-            ) : (
-              <>
-                <span>Access Infrastructure</span>
-                <ArrowRight size={20} />
-              </>
-            )}
-          </button>
-        </form>
+            <button
+              type="submit"
+              disabled={loading}
+              className="btn-primary w-full py-3 text-base mt-2"
+            >
+              {loading ? (
+                <div className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+              ) : (
+                <>
+                  <span>Sign In</span>
+                  <ArrowRight size={18} />
+                </>
+              )}
+            </button>
+          </form>
+
+          <p className="text-center text-xs text-slate-400 mt-6">
+            Baldia Mart · Secure Admin Infrastructure
+          </p>
+        </div>
       </div>
     </div>
   );

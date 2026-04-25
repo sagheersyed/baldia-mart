@@ -3,6 +3,11 @@ import { RashanService } from './rashan.service';
 import { AuthGuard } from '@nestjs/passport';
 import { AdminRoleGuard } from '../auth/admin-role.guard';
 import { Request } from 'express';
+import { SubmitRashanOrderDto } from './dto/submit-rashan-order.dto';
+import { SetRashanQuotationDto } from './dto/set-rashan-quotation.dto';
+import { RejectRashanOrderDto } from './dto/reject-rashan-order.dto';
+import { MarkRashanSourcingDto } from './dto/mark-rashan-sourcing.dto';
+import { RashanFeePreviewDto } from './dto/rashan-fee-preview.dto';
 
 @Controller('orders/rashan')
 @UseGuards(AuthGuard('jwt'))
@@ -13,7 +18,7 @@ export class RashanController {
    * User: Submit a new monthly rashan bulk order.
    */
   @Post()
-  async submitRequest(@Req() req: Request, @Body() body: any) {
+  async submitRequest(@Req() req: Request, @Body() body: SubmitRashanOrderDto) {
     const user = req.user as any;
     return this.rashanService.submitRequest(user.id, body);
   }
@@ -51,10 +56,9 @@ export class RashanController {
   @UseGuards(AdminRoleGuard)
   async setQuotation(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body('productTotal') productTotal: number,
-    @Body('deliveryFeeOverride') deliveryFeeOverride?: number,
+    @Body() body: SetRashanQuotationDto,
   ) {
-    return this.rashanService.setQuotation(id, productTotal, deliveryFeeOverride);
+    return this.rashanService.setQuotation(id, body.productTotal, body.deliveryFeeOverride);
   }
 
   /**
@@ -64,9 +68,9 @@ export class RashanController {
   @UseGuards(AdminRoleGuard)
   async rejectOrder(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body('reason') reason: string,
+    @Body() body: RejectRashanOrderDto,
   ) {
-    return this.rashanService.rejectOrder(id, reason);
+    return this.rashanService.rejectOrder(id, body.reason);
   }
 
   /**
@@ -88,9 +92,9 @@ export class RashanController {
   @UseGuards(AdminRoleGuard)
   async markSourcing(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body('riderId') riderId?: string,
+    @Body() body: MarkRashanSourcingDto,
   ) {
-    return this.rashanService.markSourcing(id, riderId);
+    return this.rashanService.markSourcing(id, body.riderId);
   }
 
   /**
@@ -118,7 +122,7 @@ export class RashanController {
    * Utility: Preview service fee before submitting.
    */
   @Post('fee-preview')
-  async previewFee(@Body() body: { weightTier: string; floor: number; placement: string }) {
+  async previewFee(@Body() body: RashanFeePreviewDto) {
     const fee = await this.rashanService.calculateServiceFee(body.weightTier, body.floor, body.placement);
     return { serviceFee: fee };
   }

@@ -229,8 +229,13 @@ export default function NavigationScreen({ navigation, route }: any) {
             );
           }
         }
-      } catch (e) {
+      } catch (e: any) {
         console.error('NavigationScreen init error:', e);
+        if (e.response?.status === 401 || e.response?.status === 403) {
+          await AsyncStorage.removeItem('activeOrderId');
+          navigation.replace('Main');
+          return;
+        }
         Alert.alert('Error', 'Failed to load navigation data.');
       } finally {
         setLoading(false);
@@ -238,8 +243,11 @@ export default function NavigationScreen({ navigation, route }: any) {
     };
     init();
 
-    socket.connect();
-    socket.emit('joinOrder', orderId);
+    const join = () => {
+      socket.emit('joinOrder', orderId);
+    };
+    if (socket.connected) join();
+    else socket.once('connect', join);
 
     const onStatusUpdate = (data: any) => {
       try {
@@ -286,6 +294,7 @@ export default function NavigationScreen({ navigation, route }: any) {
     socket.on('orderStatusUpdated', onStatusUpdate);
     socket.on('orderUpdated', onUpdated);
     return () => {
+      socket.off('connect', join);
       socket.off('orderStatusUpdated', onStatusUpdate);
       socket.off('orderUpdated', onUpdated);
     };

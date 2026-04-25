@@ -3,75 +3,67 @@
 import { Inter } from 'next/font/google';
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import './globals.css';
 import Sidebar from '@/components/Sidebar';
+import TopBar from '@/components/TopBar';
 import SocketListener from '@/components/SocketListener';
-import { Menu, X } from 'lucide-react';
+import ToastHost from '@/components/ToastHost';
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
-export default function RootLayout({
-  children,
-}: {
-  children: ReactNode;
-}) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const router = useRouter();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-
   const isLoginPage = pathname === '/login';
 
+  const [isSidebarOpen, setIsSidebarOpen]       = useState(false);
+  const [isSidebarCollapsed, setSidebarCollapsed] = useState(false);
+
   useEffect(() => {
-    const savedCollapse = localStorage.getItem('sidebarCollapsed');
-    if (savedCollapse === 'true') setIsSidebarCollapsed(true);
+    const saved = localStorage.getItem('sidebarCollapsed');
+    if (saved === 'true') setSidebarCollapsed(true);
   }, []);
 
-  // Close sidebar on navigation
   useEffect(() => {
     setIsSidebarOpen(false);
   }, [pathname]);
 
   const toggleCollapse = () => {
-    const newState = !isSidebarCollapsed;
-    setIsSidebarCollapsed(newState);
-    localStorage.setItem('sidebarCollapsed', newState.toString());
+    setSidebarCollapsed((prev) => {
+      localStorage.setItem('sidebarCollapsed', (!prev).toString());
+      return !prev;
+    });
   };
 
+  if (isLoginPage) {
+    return (
+      <html lang="en" className={inter.variable}>
+        <title>Baldia Mart Admin</title>
+        <body className={`${inter.className} bg-slate-50`}>{children}</body>
+      </html>
+    );
+  }
+
   return (
-    <html lang="en">
+    <html lang="en" className={inter.variable}>
       <title>Baldia Mart Admin</title>
-      <body className={`${inter.className} flex bg-gray-50 min-h-screen relative`}>
-        {!isLoginPage && (
-          <>
-            {/* Mobile Toggle Button */}
-            <button 
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="lg:hidden fixed top-4 left-4 z-50 p-2 bg-primary text-white rounded-lg shadow-lg hover:bg-primary/90 transition-colors"
-            >
-              {isSidebarOpen ? <X size={24} /> : <Menu size={24} />}
-            </button>
+      <body className={`${inter.className} flex bg-slate-100 min-h-screen`}>
+        <Sidebar
+          isOpen={isSidebarOpen}
+          isCollapsed={isSidebarCollapsed}
+          onToggleCollapse={toggleCollapse}
+        />
 
-            {/* Backdrop for mobile */}
-            {isSidebarOpen && (
-              <div 
-                className="lg:hidden fixed inset-0 bg-black/50 z-40 backdrop-blur-sm animate-in fade-in duration-300"
-                onClick={() => setIsSidebarOpen(false)}
-              />
-            )}
+        {/* Main */}
+        <div className="flex-1 flex flex-col min-h-screen min-w-0 overflow-hidden">
+          <TopBar onMenuToggle={() => setIsSidebarOpen((v) => !v)} />
+          <main className="flex-1 overflow-y-auto p-5 lg:p-7 animate-fade-in">
+            {children}
+          </main>
+        </div>
 
-            <Sidebar 
-              isOpen={isSidebarOpen} 
-              isCollapsed={isSidebarCollapsed}
-              onToggleCollapse={toggleCollapse}
-            />
-          </>
-        )}
-        <main className={`flex-1 overflow-y-auto ${isLoginPage ? 'flex items-center justify-center p-0' : 'pt-16 lg:pt-0'}`}>
-          {children}
-        </main>
-        {!isLoginPage && <SocketListener />}
+        <ToastHost />
+        <SocketListener />
       </body>
     </html>
   );

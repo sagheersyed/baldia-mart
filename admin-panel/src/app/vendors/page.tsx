@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, X, Pencil, MapPin, Store, CheckCircle, XCircle, Package } from 'lucide-react';
-import { fetchWithAuth, BASE_URL } from '@/lib/api';
+import { fetchWithAuth, BASE_URL, getErrorMessage, parseApiError } from '@/lib/api';
+import { showToast } from '@/hooks/useToast';
 
 interface Vendor {
   id: string;
@@ -78,10 +79,12 @@ export default function VendorsPage() {
   const fetchZones = async () => {
     try {
       const res = await fetchWithAuth(`${BASE_URL}/delivery-zones/all`);
+      if (!res.ok) throw new Error(await parseApiError(res, 'Failed to fetch zones'));
       const data = await res.json();
       setZones(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to fetch zones:', err);
+      showToast({ title: getErrorMessage(err, 'Failed to fetch zones'), variant: 'error' });
     }
   };
 
@@ -89,10 +92,12 @@ export default function VendorsPage() {
     setLoading(true);
     try {
       const res = await fetchWithAuth(API_URL);
+      if (!res.ok) throw new Error(await parseApiError(res, 'Failed to fetch vendors'));
       const data = await res.json();
       setVendors(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to fetch vendors:', err);
+      showToast({ title: getErrorMessage(err, 'Failed to fetch vendors'), variant: 'error' });
     } finally {
       setLoading(false);
     }
@@ -101,10 +106,12 @@ export default function VendorsPage() {
   const fetchProducts = async () => {
     try {
       const res = await fetchWithAuth(PRODUCTS_API);
+      if (!res.ok) throw new Error(await parseApiError(res, 'Failed to fetch products'));
       const data = await res.json();
       setProducts(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to fetch products:', err);
+      showToast({ title: getErrorMessage(err, 'Failed to fetch products'), variant: 'error' });
     }
   };
 
@@ -131,9 +138,13 @@ export default function VendorsPage() {
         setEditingVendor(null);
         setVendorForm(emptyVendorForm);
         fetchVendors();
+        showToast({ title: editingVendor ? 'Vendor updated' : 'Vendor created', variant: 'success' });
+      } else {
+        showToast({ title: await parseApiError(res, 'Failed to save vendor'), variant: 'error' });
       }
     } catch (err) {
       console.error('Failed to save vendor:', err);
+      showToast({ title: getErrorMessage(err, 'Failed to save vendor'), variant: 'error' });
     } finally {
       setIsSubmitting(false);
     }
@@ -160,9 +171,13 @@ export default function VendorsPage() {
         setShowVendorProductModal(false);
         setVpForm(emptyVendorProductForm);
         fetchVendors();
+        showToast({ title: 'Product mapped to vendor', variant: 'success' });
+      } else {
+        showToast({ title: await parseApiError(res, 'Failed to map product'), variant: 'error' });
       }
     } catch (err) {
       console.error('Failed to save vendor product:', err);
+      showToast({ title: getErrorMessage(err, 'Failed to map product'), variant: 'error' });
     } finally {
       setIsSubmitting(false);
     }
@@ -170,14 +185,26 @@ export default function VendorsPage() {
 
   const handleDeleteVendorProduct = async (vendorId: string, vpId: string) => {
     if (!confirm('Remove this product from the vendor?')) return;
-    await fetchWithAuth(`${API_URL}/${vendorId}/products/${vpId}`, { method: 'DELETE' });
-    fetchVendors();
+    try {
+      const res = await fetchWithAuth(`${API_URL}/${vendorId}/products/${vpId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(await parseApiError(res, 'Failed to remove vendor product'));
+      fetchVendors();
+      showToast({ title: 'Vendor product removed', variant: 'success' });
+    } catch (err) {
+      showToast({ title: getErrorMessage(err, 'Failed to remove vendor product'), variant: 'error' });
+    }
   };
 
   const handleDeleteVendor = async (id: string) => {
     if (!confirm('Delete this vendor?')) return;
-    await fetchWithAuth(`${API_URL}/${id}`, { method: 'DELETE' });
-    fetchVendors();
+    try {
+      const res = await fetchWithAuth(`${API_URL}/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(await parseApiError(res, 'Failed to delete vendor'));
+      fetchVendors();
+      showToast({ title: 'Vendor deleted', variant: 'success' });
+    } catch (err) {
+      showToast({ title: getErrorMessage(err, 'Failed to delete vendor'), variant: 'error' });
+    }
   };
 
   const openEditVendor = (v: Vendor) => {

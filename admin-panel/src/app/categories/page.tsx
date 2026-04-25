@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, X, RefreshCcw, Package, Pencil } from 'lucide-react';
-import { fetchWithAuth, BASE_URL } from '@/lib/api';
+import { fetchWithAuth, BASE_URL, getErrorMessage, parseApiError } from '@/lib/api';
+import { showToast } from '@/hooks/useToast';
 
 interface Category {
   id: string;
@@ -33,10 +34,12 @@ export default function CategoriesPage() {
     setLoading(true);
     try {
       const res = await fetchWithAuth(API_URL);
+      if (!res.ok) throw new Error(await parseApiError(res, 'Failed to fetch categories'));
       const data = await res.json();
       setCategories(data);
     } catch (error) {
       console.error('Failed to fetch categories:', error);
+      showToast({ title: getErrorMessage(error, 'Failed to fetch categories'), variant: 'error' });
     } finally {
       setLoading(false);
     }
@@ -60,9 +63,13 @@ export default function CategoriesPage() {
         setEditingCategory(null);
         setFormData({ name: '', description: '', imageUrl: '', section: 'mart', openingTime: '', closingTime: '' });
         fetchCategories();
+        showToast({ title: editingCategory ? 'Category updated' : 'Category created', variant: 'success' });
+      } else {
+        showToast({ title: await parseApiError(res, 'Failed to save category'), variant: 'error' });
       }
     } catch (error) {
       console.error('Failed to save category:', error);
+      showToast({ title: getErrorMessage(error, 'Failed to save category'), variant: 'error' });
     } finally {
       setIsSubmitting(false);
     }
@@ -84,10 +91,13 @@ export default function CategoriesPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to archive this category? It will no longer be visible to customers, but existing products will remain.')) return;
     try {
-      await fetchWithAuth(`${API_URL}/${id}`, { method: 'DELETE' });
+      const res = await fetchWithAuth(`${API_URL}/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(await parseApiError(res, 'Failed to archive category'));
       fetchCategories();
+      showToast({ title: 'Category archived', variant: 'success' });
     } catch (error) {
       console.error('Failed to archive category:', error);
+      showToast({ title: getErrorMessage(error, 'Failed to archive category'), variant: 'error' });
     }
   };
 
@@ -101,7 +111,7 @@ export default function CategoriesPage() {
         <div className="flex space-x-3">
           <button 
             onClick={fetchCategories}
-            className="p-3 bg-white text-gray-600 rounded-2xl hover:bg-gray-50 border border-gray-100 transition-all active:scale-95 flex items-center shadow-sm"
+            className="btn-ghost btn-icon"
           >
             <RefreshCcw size={20} className={loading ? 'animate-spin' : ''} />
           </button>
@@ -111,7 +121,7 @@ export default function CategoriesPage() {
               setFormData({ name: '', description: '', imageUrl: '', section: 'mart', openingTime: '', closingTime: '' });
               setShowModal(true);
             }}
-            className="flex items-center space-x-2 bg-gradient-to-br from-primary to-orange-600 text-white px-6 py-3 rounded-2xl font-bold hover:shadow-lg hover:shadow-orange-500/30 transition-all active:scale-95 shadow-md shadow-orange-500/10"
+            className="btn-primary"
           >
             <Plus size={20} />
             <span>New Category</span>
@@ -121,7 +131,7 @@ export default function CategoriesPage() {
 
       {loading && categories.length === 0 ? (
         <div className="flex flex-col items-center justify-center p-20 space-y-4">
-          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+          <div className="w-12 h-12 border-4 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
           <p className="text-gray-400 font-medium">Fetching categories...</p>
         </div>
       ) : (
@@ -156,7 +166,7 @@ export default function CategoriesPage() {
                  </div>
                </div>
                <div className="px-1">
-                 <h3 className="font-extrabold text-xl text-gray-800 mb-1 group-hover:text-primary transition-colors">{cat.name}</h3>
+                 <h3 className="font-extrabold text-xl text-gray-800 mb-1 group-hover:text-primary-600 transition-colors">{cat.name}</h3>
                  <p className="text-sm text-gray-500 line-clamp-2 min-h-[2.5rem] font-medium leading-relaxed">{cat.description || 'No description provided.'}</p>
                  <div className="mt-4 flex items-center justify-between">
                     <span className={`text-xs font-bold px-3 py-1 rounded-full border border-green-100 uppercase tracking-wider ${cat.isActive ? 'bg-green-50 text-green-600' : 'bg-gray-50 text-gray-400 border-gray-100'}`}>
@@ -166,7 +176,7 @@ export default function CategoriesPage() {
                       {cat.section || 'mart'}
                     </span>
                     <div className="h-1 w-12 bg-gray-100 rounded-full overflow-hidden">
-                      <div className={`h-full bg-primary ${cat.isActive ? 'w-full' : 'w-0'}`}></div>
+                      <div className={`h-full bg-primary-600 ${cat.isActive ? 'w-full' : 'w-0'}`}></div>
                     </div>
                  </div>
                </div>
@@ -180,7 +190,7 @@ export default function CategoriesPage() {
                </div>
                <h3 className="text-xl font-bold text-gray-400">No categories found</h3>
                <p className="text-gray-400 mt-1">Start by adding your first product category</p>
-               <button onClick={() => setShowModal(true)} className="mt-6 text-primary font-bold hover:underline">Add Category Now</button>
+               <button onClick={() => setShowModal(true)} className="mt-6 text-primary-600 font-bold hover:underline">Add Category Now</button>
             </div>
           )}
         </div>
@@ -209,7 +219,7 @@ export default function CategoriesPage() {
                     required
                     type="text"
                     placeholder="e.g. Beverages"
-                    className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-medium"
+                    className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:bg-white focus:border-primary-500-500 transition-all font-medium"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   />
@@ -219,7 +229,7 @@ export default function CategoriesPage() {
                   <textarea
                     rows={3}
                     placeholder="Brief description of the category..."
-                    className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-medium"
+                    className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:bg-white focus:border-primary-500-500 transition-all font-medium"
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   />
@@ -229,7 +239,7 @@ export default function CategoriesPage() {
                   <input
                     type="url"
                     placeholder="https://images.unsplash.com/..."
-                    className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-medium"
+                    className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:bg-white focus:border-primary-500-500 transition-all font-medium"
                     value={formData.imageUrl}
                     onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
                   />
@@ -238,7 +248,7 @@ export default function CategoriesPage() {
                 <div>
                   <label className="block text-sm font-bold text-gray-700 mb-2 px-1">App Section</label>
                   <select
-                    className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-bold"
+                    className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:bg-white focus:border-primary-500-500 transition-all font-bold"
                     value={formData.section}
                     onChange={(e) => setFormData({ ...formData, section: e.target.value })}
                   >
@@ -253,7 +263,7 @@ export default function CategoriesPage() {
                     <label className="block text-sm font-bold text-gray-700 mb-2 px-1 text-orange-600">Opening Time (Optional)</label>
                     <input
                       type="time"
-                      className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-medium"
+                      className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:bg-white focus:border-primary-500-500 transition-all font-medium"
                       value={formData.openingTime}
                       onChange={(e) => setFormData({ ...formData, openingTime: e.target.value })}
                     />
@@ -262,7 +272,7 @@ export default function CategoriesPage() {
                     <label className="block text-sm font-bold text-gray-700 mb-2 px-1 text-orange-600">Closing Time (Optional)</label>
                     <input
                       type="time"
-                      className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-white focus:border-primary transition-all font-medium"
+                      className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:bg-white focus:border-primary-500-500 transition-all font-medium"
                       value={formData.closingTime}
                       onChange={(e) => setFormData({ ...formData, closingTime: e.target.value })}
                     />
@@ -273,7 +283,7 @@ export default function CategoriesPage() {
                 <div className="pt-2">
                   <button
                     disabled={isSubmitting}
-                    className="w-full py-5 bg-gradient-to-r from-primary to-orange-600 text-white rounded-2xl font-black text-lg hover:shadow-xl hover:shadow-orange-500/30 transition-all active:scale-[0.98] disabled:opacity-50"
+                    className="w-full py-5 bg-gradient-to-r from-primary-600 to-orange-600 text-white rounded-2xl font-black text-lg hover:shadow-xl hover:shadow-orange-500/30 transition-all active:scale-[0.98] disabled:opacity-50"
                   >
                     {isSubmitting ? 'Syncing...' : (editingCategory ? 'Save Changes' : 'Create Category')}
                   </button>

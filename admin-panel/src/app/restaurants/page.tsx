@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, X, Pencil, MapPin, ChefHat, Clock, UtensilsCrossed } from 'lucide-react';
-import { fetchWithAuth, BASE_URL } from '@/lib/api';
+import { fetchWithAuth, BASE_URL, getErrorMessage, parseApiError } from '@/lib/api';
+import { showToast } from '@/hooks/useToast';
 
 interface Restaurant {
   id: string;
@@ -97,10 +98,12 @@ export default function RestaurantsPage() {
   const fetchZones = async () => {
     try {
       const res = await fetchWithAuth(`${BASE_URL}/delivery-zones/all`);
+      if (!res.ok) throw new Error(await parseApiError(res, 'Failed to fetch zones'));
       const data = await res.json();
       setZones(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to fetch zones:', err);
+      showToast({ title: getErrorMessage(err, 'Failed to fetch zones'), variant: 'error' });
     }
   };
 
@@ -108,10 +111,12 @@ export default function RestaurantsPage() {
     setLoading(true);
     try {
       const res = await fetchWithAuth(API_URL);
+      if (!res.ok) throw new Error(await parseApiError(res, 'Failed to fetch restaurants'));
       const data = await res.json();
       setRestaurants(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to fetch restaurants:', err);
+      showToast({ title: getErrorMessage(err, 'Failed to fetch restaurants'), variant: 'error' });
     } finally {
       setLoading(false);
     }
@@ -139,9 +144,13 @@ export default function RestaurantsPage() {
         setEditingRestaurant(null);
         setRestaurantForm(emptyRestaurantForm);
         fetchRestaurants();
+        showToast({ title: editingRestaurant ? 'Restaurant updated' : 'Restaurant created', variant: 'success' });
+      } else {
+        showToast({ title: await parseApiError(res, 'Failed to save restaurant'), variant: 'error' });
       }
     } catch (err) {
       console.error('Failed to save restaurant:', err);
+      showToast({ title: getErrorMessage(err, 'Failed to save restaurant'), variant: 'error' });
     } finally {
       setIsSubmitting(false);
     }
@@ -172,9 +181,13 @@ export default function RestaurantsPage() {
         setEditingMenuItem(null);
         setMenuItemForm(emptyMenuItemForm);
         fetchRestaurants();
+        showToast({ title: editingMenuItem ? 'Menu item updated' : 'Menu item created', variant: 'success' });
+      } else {
+        showToast({ title: await parseApiError(res, 'Failed to save menu item'), variant: 'error' });
       }
     } catch (err) {
       console.error('Failed to save menu item:', err);
+      showToast({ title: getErrorMessage(err, 'Failed to save menu item'), variant: 'error' });
     } finally {
       setIsSubmitting(false);
     }
@@ -182,14 +195,26 @@ export default function RestaurantsPage() {
 
   const handleDeleteRestaurant = async (id: string) => {
     if (!confirm('Delete this restaurant?')) return;
-    await fetchWithAuth(`${API_URL}/${id}`, { method: 'DELETE' });
-    fetchRestaurants();
+    try {
+      const res = await fetchWithAuth(`${API_URL}/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(await parseApiError(res, 'Failed to delete restaurant'));
+      fetchRestaurants();
+      showToast({ title: 'Restaurant deleted', variant: 'success' });
+    } catch (err) {
+      showToast({ title: getErrorMessage(err, 'Failed to delete restaurant'), variant: 'error' });
+    }
   };
 
   const handleDeleteMenuItem = async (id: string) => {
     if (!confirm('Delete this menu item?')) return;
-    await fetchWithAuth(`${MENU_API_URL}/${id}`, { method: 'DELETE' });
-    fetchRestaurants();
+    try {
+      const res = await fetchWithAuth(`${MENU_API_URL}/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(await parseApiError(res, 'Failed to delete menu item'));
+      fetchRestaurants();
+      showToast({ title: 'Menu item deleted', variant: 'success' });
+    } catch (err) {
+      showToast({ title: getErrorMessage(err, 'Failed to delete menu item'), variant: 'error' });
+    }
   };
 
   const openEditRestaurant = (r: Restaurant) => {

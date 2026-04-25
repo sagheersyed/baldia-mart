@@ -6,13 +6,37 @@ import {
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { Inject, forwardRef } from '@nestjs/common';
+import { Inject, UnauthorizedException, forwardRef } from '@nestjs/common';
 import { RidersService } from '../riders/riders.service';
 import { OrdersService } from './orders.service';
+import { UsersService } from '../users/users.service';
+import * as jwt from 'jsonwebtoken';
+import { getJwtSecretOrThrow } from '../auth/jwt-secret';
+import { isOriginAllowed } from '../common/cors';
+
+type WsPrincipal = {
+  id: string;
+  role: string;
+};
+
+const resolveSocketToken = (client: Socket): string | null => {
+  const authToken = client.handshake?.auth?.token;
+  const headerToken = client.handshake?.headers?.authorization;
+  const rawToken = typeof authToken === 'string' && authToken
+    ? authToken
+    : (typeof headerToken === 'string' ? headerToken : '');
+
+  if (!rawToken) return null;
+  return rawToken.startsWith('Bearer ') ? rawToken.slice(7) : rawToken;
+};
 
 @WebSocketGateway({
   cors: {
-    origin: '*',
+    origin: (origin, callback) => {
+      if (isOriginAllowed(origin)) return callback(null, true);
+      callback(new Error('WS origin denied'));
+    },
+    credentials: true,
   },
 })
 export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -21,6 +45,7 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private ridersService: RidersService,
     @Inject(forwardRef(() => OrdersService))
     private ordersService: OrdersService,
+    private usersService: UsersService,
   ) {}
 
   @WebSocketServer()
@@ -28,18 +53,67 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   private riderSocketMap = new Map<string, string>(); // riderId -> socketId
 
+  private async authenticateClient(client: Socket): Promise<WsPrincipal> {
+    const token = resolveSocketToken(client);
+    if (!token) throw new UnauthorizedException('Missing socket token');
+
+    const jwtSecret = getJwtSecretOrThrow();
+    const payload = jwt.verify(token, jwtSecret) as any;
+    const role = payload?.role || 'customer';
+    const sub = payload?.sub;
+    if (!sub) throw new UnauthorizedException('Invalid token payload');
+
+    if (role === 'rider') {
+      const rider = await this.ridersService.findById(sub);
+      if (!rider) throw new UnauthorizedException('Rider not found');
+      return { id: rider.id, role: 'rider' };
+    }
+
+    const user = await this.usersService.findById(sub);
+    if (!user) throw new UnauthorizedException('User not found');
+    return { id: user.id, role: user.role || role };
+  }
+
   handleConnection(client: Socket) {
-    console.log(`Client connected: ${client.id}`);
+    this.authenticateClient(client)
+      .then((principal) => {
+        client.data.principal = principal;
+        console.log(`Client connected: ${client.id} (${principal.role}:${principal.id})`);
+      })
+      .catch((error: any) => {
+        client.emit('error', error?.message || 'Unauthorized socket connection');
+        client.disconnect(true);
+      });
   }
 
   handleDisconnect(client: Socket) {
+    for (const [riderId, socketId] of this.riderSocketMap.entries()) {
+      if (socketId === client.id) {
+        this.riderSocketMap.delete(riderId);
+      }
+    }
     console.log(`Client disconnected: ${client.id}`);
   }
 
+  private getPrincipal(client: Socket): WsPrincipal | null {
+    return (client.data?.principal as WsPrincipal) || null;
+  }
+
   @SubscribeMessage('joinOrder')
-  handleJoinOrder(client: Socket, orderId: string) {
-    client.join(`order_${orderId}`);
-    console.log(`Client ${client.id} joined room: order_${orderId}`);
+  async handleJoinOrder(client: Socket, orderId: string) {
+    const principal = this.getPrincipal(client);
+    if (!principal) return;
+    if (!orderId) return;
+
+    try {
+      if (principal.role !== 'admin') {
+        await this.ordersService.getOrderById(orderId, principal.id, principal.role);
+      }
+      client.join(`order_${orderId}`);
+      console.log(`Client ${client.id} joined room: order_${orderId}`);
+    } catch {
+      client.emit('error', 'Access denied for this order room');
+    }
   }
 
   @SubscribeMessage('leaveOrder')
@@ -49,32 +123,37 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('joinUserRoom')
-  handleJoinUserRoom(client: Socket, userId: string) {
-    client.join(`user_${userId}`);
-    console.log(`User ${client.id} joined room: user_${userId}`);
+  handleJoinUserRoom(client: Socket, _userId: string) {
+    const principal = this.getPrincipal(client);
+    if (!principal || principal.role === 'rider') return;
+    client.join(`user_${principal.id}`);
+    console.log(`User ${client.id} joined room: user_${principal.id}`);
   }
   @SubscribeMessage('joinRidersRoom')
-  async handleJoinRidersRoom(client: Socket, riderId: string) {
-    if (!riderId) return;
+  async handleJoinRidersRoom(client: Socket, _riderId: string) {
+    const principal = this.getPrincipal(client);
+    if (!principal || principal.role !== 'rider') return;
     
     // Check if rider is active
-    const rider = await this.ridersService.findById(riderId);
+    const rider = await this.ridersService.findById(principal.id);
     if (!rider || !rider.isActive) {
-      console.log(`Blocked rider ${riderId} attempted to join pool`);
+      console.log(`Blocked rider ${principal.id} attempted to join pool`);
       client.emit('error', 'Account is blocked or inactive');
       return;
     }
 
     client.join('riders_room');
-    this.riderSocketMap.set(riderId, client.id);
-    console.log(`Rider ${riderId} (${client.id}) joined riders_room`);
+    this.riderSocketMap.set(principal.id, client.id);
+    console.log(`Rider ${principal.id} (${client.id}) joined riders_room`);
   }
 
   @SubscribeMessage('joinRiderRoom')
-  handleJoinRiderRoom(client: Socket, riderId: string) {
-    client.join(`rider_${riderId}`);
-    this.riderSocketMap.set(riderId, client.id);
-    console.log(`Rider ${client.id} joined room: rider_${riderId}`);
+  handleJoinRiderRoom(client: Socket, _riderId: string) {
+    const principal = this.getPrincipal(client);
+    if (!principal || principal.role !== 'rider') return;
+    client.join(`rider_${principal.id}`);
+    this.riderSocketMap.set(principal.id, client.id);
+    console.log(`Rider ${client.id} joined room: rider_${principal.id}`);
   }
 
   kickRider(riderId: string) {
@@ -92,19 +171,29 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('joinAdminRoom')
   handleJoinAdminRoom(client: Socket) {
+    const principal = this.getPrincipal(client);
+    if (!principal || principal.role !== 'admin') return;
     client.join('admin_room');
     console.log(`Admin ${client.id} joined admin_room`);
   }
 
   @SubscribeMessage('updateLocation')
   async handleUpdateLocation(client: Socket, payload: { riderId: string, lat: number, lng: number }) {
-    if (!payload.riderId || !payload.lat || !payload.lng) return;
+    const principal = this.getPrincipal(client);
+    if (!principal || principal.role !== 'rider' || !payload.lat || !payload.lng) return;
+
+    const rider = await this.ridersService.findById(principal.id);
+    if (!rider || !rider.isActive) {
+      client.emit('error', 'Account is blocked or inactive');
+      return;
+    }
+
     // Update the rider's location in the DB
-    await this.ridersService.updateLocation(payload.riderId, payload.lat, payload.lng);
+    await this.ridersService.updateLocation(principal.id, payload.lat, payload.lng);
     
     // Broadcast the new location to the admin map
     this.server.to('admin_room').emit('riderLocationUpdated', {
-      riderId: payload.riderId,
+      riderId: principal.id,
       lat: payload.lat,
       lng: payload.lng,
       timestamp: new Date().toISOString()
@@ -160,7 +249,20 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     metadata?: any,
     replyToId?: string
   }) {
-    const { orderId, senderId, senderType, message, imageUrl, type, metadata, replyToId } = payload;
+    const principal = this.getPrincipal(client);
+    if (!principal) return;
+    const { orderId, message, imageUrl, type, metadata, replyToId } = payload;
+    const senderId = principal.id;
+    const senderType = principal.role === 'rider' ? 'rider' : principal.role === 'admin' ? 'admin' : 'user';
+
+    if (principal.role !== 'admin') {
+      try {
+        await this.ordersService.getOrderById(orderId, principal.id, principal.role);
+      } catch {
+        client.emit('error', 'Access denied for this order chat');
+        return;
+      }
+    }
     
     // Save to DB
     const savedMsg = await this.ordersService.saveChatMessage(

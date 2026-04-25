@@ -173,7 +173,21 @@ export class RidersService {
     let dLat = Number(order.address?.latitude) || pLat;
     let dLng = Number(order.address?.longitude) || pLng;
 
-    // 3. Score riders
+    // 3. Preload active orders once (avoid per-rider queries)
+    const activeOrders = await this.ordersRepository.manager.getRepository(Order).find({
+      where: { status: In(['confirmed', 'preparing', 'out_for_delivery']) },
+      relations: ['address'],
+      select: ['id', 'riderId', 'status'],
+    });
+    const activeOrdersByRider = new Map<string, Order[]>();
+    for (const activeOrder of activeOrders) {
+      if (!activeOrder.riderId) continue;
+      const existing = activeOrdersByRider.get(activeOrder.riderId) || [];
+      existing.push(activeOrder);
+      activeOrdersByRider.set(activeOrder.riderId, existing);
+    }
+
+    // 4. Score riders
     // Score = (Distance * 10) + (ActiveOrdersPenalty) - (Rating * 2) - (BatchBonus)
     // Lower score is better
     const scoredRiders = await Promise.all(onlineRiders.map(async (rider) => {
@@ -187,17 +201,13 @@ export class RidersService {
         pLat, pLng, riderLat, riderLng
       );
 
-      // Fetch active orders for this rider
-      const activeOrders = await this.ordersRepository.manager.getRepository(Order).find({
-        where: { riderId: rider.id, status: In(['confirmed', 'preparing', 'out_for_delivery']) },
-        relations: ['address']
-      });
+      const riderActiveOrders = activeOrdersByRider.get(rider.id) || [];
 
-      let activeOrdersPenalty = activeOrders.length * 5;
+      let activeOrdersPenalty = riderActiveOrders.length * 5;
       let batchBonus = 0;
 
       // Check for Batched Order Opportunity
-      for (const activeOrder of activeOrders) {
+      for (const activeOrder of riderActiveOrders) {
         // If the order is already out for delivery, it's too late to batch a new pickup
         if (activeOrder.status === 'out_for_delivery') {
           activeOrdersPenalty += 10; // Extra penalty for disrupting an ongoing delivery
@@ -232,7 +242,7 @@ export class RidersService {
       return { rider, score, dist: distToPickup, isBatchable };
     }));
 
-    // 4. Return top 5 best matches with metadata
+    // 5. Return top 5 best matches with metadata
     return scoredRiders
       .sort((a, b) => a.score - b.score)
       .slice(0, 5)
