@@ -1,32 +1,36 @@
 import React from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity,
-  ScrollView, Linking, Alert, ActivityIndicator
+  View, StyleSheet, Pressable, ScrollView, Linking, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-
-const FAQ = [
-  { q: 'How do I track my order?', a: 'Go to My Orders and tap "Track Order" to see real-time updates.' },
-  { q: 'What is the delivery time?', a: 'We deliver within 30–60 minutes depending on your location within the delivery zone.' },
-  { q: 'Can I cancel my order?', a: 'You can cancel an order while it is in "Pending" status. Go to My Orders and tap Cancel.' },
-  { q: 'Do you deliver to my area?', a: 'We currently deliver within a 50km radius. Enter your address at checkout to verify.' },
-  { q: 'What payment methods do you accept?', a: 'We currently accept Cash on Delivery (COD) and card payments at checkout.' },
-  { q: 'How do I change my delivery address?', a: 'Tap "Saved Addresses" in your profile to add or modify your delivery locations.' },
-];
+import { Ionicons } from '@expo/vector-icons';
 
 import { settingsApi } from '../api/api';
+import { AppText, AppIconButton } from '../components/ui';
+import { theme } from '../theme/theme';
+
+const FAQ = [
+  { q: 'How do I track my order?', a: 'Go to My orders and tap “Track order” to see real-time updates.' },
+  { q: 'What is the delivery time?', a: 'We deliver within 30–60 minutes depending on your location within the delivery zone.' },
+  { q: 'Can I cancel my order?', a: 'You can cancel an order while it is in “Pending” status. Go to My orders and tap Cancel.' },
+  { q: 'Do you deliver to my area?', a: 'We currently deliver within a 50 km radius. Enter your address at checkout to verify.' },
+  { q: 'What payment methods do you accept?', a: 'We currently accept Cash on Delivery (COD) and card payments at checkout.' },
+  { q: 'How do I change my delivery address?', a: 'Tap “Saved addresses” in your profile to add or modify your delivery locations.' },
+];
 
 function FAQItem({ item }: any) {
   const [open, setOpen] = React.useState(false);
   return (
-    <TouchableOpacity style={styles.faqItem} onPress={() => setOpen(!open)} activeOpacity={0.8}>
+    <Pressable
+      style={({ pressed }) => [styles.faqItem, pressed ? { backgroundColor: theme.colors.surfaceMuted } : null]}
+      onPress={() => setOpen(!open)}
+    >
       <View style={styles.faqHeader}>
-        <Text style={styles.faqQ}>{item.q}</Text>
-        <Text style={[styles.faqChevron, open && { transform: [{ rotate: '90deg' }] }]}>›</Text>
+        <AppText variant="bodyStrong" style={{ flex: 1 }}>{item.q}</AppText>
+        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={18} color={theme.colors.textSecondary} />
       </View>
-      {open && <Text style={styles.faqA}>{item.a}</Text>}
-    </TouchableOpacity>
+      {open ? <AppText variant="caption" style={{ marginTop: 8, lineHeight: 20 }}>{item.a}</AppText> : null}
+    </Pressable>
   );
 }
 
@@ -35,133 +39,147 @@ export default function HelpScreen({ navigation }: any) {
   const [isLoading, setIsLoading] = React.useState(true);
 
   React.useEffect(() => {
-    fetchSettings();
+    settingsApi.getPublicSettings()
+      .then(res => setSettings(res.data))
+      .catch(() => {})
+      .finally(() => setIsLoading(false));
   }, []);
-
-  const fetchSettings = async () => {
-    try {
-      const res = await settingsApi.getPublicSettings();
-      setSettings(res.data);
-    } catch (error) {
-      console.error('Failed to fetch settings:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const contactPhone = settings?.contact_phone || '+92 341 2248616';
   const contactEmail = settings?.contact_email || 'support@baldiamart.pk';
 
-  const CONTACT = [
-    { icon: '📞', label: 'Call Support', value: contactPhone, action: () => Linking.openURL(`tel:${contactPhone.replace(/\s/g, '')}`) },
-    { icon: '💬', label: 'WhatsApp', value: contactPhone, action: () => Linking.openURL(`https://wa.me/${contactPhone.replace(/[\s+]/g, '')}`) },
-    { icon: '✉️', label: 'Email Us', value: contactEmail, action: () => Linking.openURL(`mailto:${contactEmail}`) },
+  type Contact = {
+    icon: keyof typeof Ionicons.glyphMap;
+    label: string;
+    value: string;
+    color: string;
+    bg: string;
+    action: () => void;
+  };
+
+  const CONTACT: Contact[] = [
+    {
+      icon: 'call-outline', label: 'Call support', value: contactPhone,
+      color: theme.colors.success, bg: theme.colors.successLight,
+      action: () => Linking.openURL(`tel:${contactPhone.replace(/\s/g, '')}`),
+    },
+    {
+      icon: 'logo-whatsapp', label: 'WhatsApp', value: contactPhone,
+      color: '#25D366', bg: '#E7F8EF',
+      action: () => Linking.openURL(`https://wa.me/${contactPhone.replace(/[\s+]/g, '')}`),
+    },
+    {
+      icon: 'mail-outline', label: 'Email us', value: contactEmail,
+      color: theme.colors.info, bg: theme.colors.infoLight,
+      action: () => Linking.openURL(`mailto:${contactEmail}`),
+    },
   ];
 
-  if (isLoading) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <Text style={styles.backIcon}>←</Text>
-          </TouchableOpacity>
-          <Text style={styles.title}>Help & Support</Text>
-          <View style={{ width: 40 }} />
-        </View>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <ActivityIndicator size="large" color="#FF4500" />
-        </View>
-      </SafeAreaView>
-    );
-  }
-
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backIcon}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>Help & Support</Text>
-        <View style={{ width: 40 }} />
+        <AppIconButton size={36} bg={theme.colors.surfaceMuted} onPress={() => navigation.goBack()}>
+          <Ionicons name="chevron-back" size={20} color={theme.colors.textPrimary} />
+        </AppIconButton>
+        <AppText variant="h2" style={{ flex: 1 }}>Help & support</AppText>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
-        {/* Quick Contact */}
-        <Text style={styles.sectionTitle}>Contact Us</Text>
-        <View style={styles.contactCard}>
-          {CONTACT.map((c, i) => (
-            <TouchableOpacity
-              key={i}
-              style={[styles.contactRow, i < CONTACT.length - 1 && { borderBottomWidth: 1, borderBottomColor: '#F5F5F5' }]}
-              onPress={c.action}
-              activeOpacity={0.7}
-            >
-              <View style={styles.contactIconBox}>
-                <Text style={styles.contactIcon}>{c.icon}</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.contactLabel}>{c.label}</Text>
-                <Text style={styles.contactValue}>{c.value}</Text>
-              </View>
-              <Text style={styles.contactArrow}>›</Text>
-            </TouchableOpacity>
-          ))}
+      {isLoading ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
         </View>
+      ) : (
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: theme.spacing.lg, paddingBottom: theme.spacing.xxl }}>
+          <AppText variant="overline" style={{ marginBottom: theme.spacing.sm }}>Contact us</AppText>
+          <View style={styles.card}>
+            {CONTACT.map((c, i) => (
+              <Pressable
+                key={i}
+                style={({ pressed }) => [
+                  styles.row,
+                  i < CONTACT.length - 1 ? styles.rowBorder : null,
+                  pressed ? { backgroundColor: theme.colors.surfaceMuted } : null,
+                ]}
+                onPress={c.action}
+              >
+                <View style={[styles.iconBox, { backgroundColor: c.bg }]}>
+                  <Ionicons name={c.icon} size={20} color={c.color} />
+                </View>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <AppText variant="bodyStrong">{c.label}</AppText>
+                  <AppText variant="caption">{c.value}</AppText>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />
+              </Pressable>
+            ))}
+          </View>
 
-        {/* FAQ */}
-        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Frequently Asked Questions</Text>
-        <View style={styles.faqCard}>
-          {FAQ.map((item, i) => <FAQItem key={i} item={item} />)}
-        </View>
+          <AppText variant="overline" style={{ marginTop: theme.spacing.xl, marginBottom: theme.spacing.sm }}>
+            Frequently asked questions
+          </AppText>
+          <View style={styles.card}>
+            {FAQ.map((item, i) => (
+              <View key={i} style={i < FAQ.length - 1 ? styles.rowBorder : null}>
+                <FAQItem item={item} />
+              </View>
+            ))}
+          </View>
 
-        {/* App Info */}
-        <View style={styles.appInfoCard}>
-          <Text style={styles.appInfoTitle}>🛒 Baldia Mart</Text>
-          <Text style={styles.appInfoSub}>Hyperlocal delivery made easy</Text>
-          <Text style={styles.appInfoVersion}>Version 1.0.0 · Karachi, Pakistan</Text>
-        </View>
-      </ScrollView>
+          <View style={styles.appInfoCard}>
+            <View style={styles.logoCircle}>
+              <Ionicons name="basket" size={28} color={theme.colors.primary} />
+            </View>
+            <AppText variant="h2" style={{ marginTop: 8 }}>BaldiaMart</AppText>
+            <AppText variant="caption">Hyperlocal delivery made easy</AppText>
+            <AppText variant="caption" style={{ marginTop: 6 }}>Version 1.0.0 · Karachi, Pakistan</AppText>
+          </View>
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F6FA' },
+  container: { flex: 1, backgroundColor: theme.colors.background },
+
   header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 14,
-    backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#F0F0F0',
-    elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4,
+    flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.sm,
+    backgroundColor: theme.colors.surface,
+    borderBottomWidth: 1, borderBottomColor: theme.colors.divider,
   },
-  backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 20, backgroundColor: '#F5F5F5' },
-  backIcon: { fontSize: 20, color: '#333' },
-  title: { fontSize: 18, fontWeight: '700', color: '#1A1A1A' },
-  sectionTitle: { fontSize: 12, fontWeight: '700', color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 },
-  contactCard: {
-    backgroundColor: '#fff', borderRadius: 16,
-    elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4,
+
+  card: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.lg,
+    overflow: 'hidden',
+    borderWidth: 1, borderColor: theme.colors.divider,
+    ...theme.shadows.sm,
   },
-  contactRow: { flexDirection: 'row', alignItems: 'center', padding: 16 },
-  contactIconBox: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#FFF5F0', alignItems: 'center', justifyContent: 'center', marginRight: 14 },
-  contactIcon: { fontSize: 20 },
-  contactLabel: { fontSize: 14, fontWeight: '600', color: '#1A1A1A' },
-  contactValue: { fontSize: 12, color: '#888', marginTop: 2 },
-  contactArrow: { fontSize: 22, color: '#CCC' },
-  faqCard: {
-    backgroundColor: '#fff', borderRadius: 16, overflow: 'hidden',
-    elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4,
+  row: {
+    flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md,
+    paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.md,
   },
-  faqItem: { padding: 16, borderBottomWidth: 1, borderBottomColor: '#F5F5F5' },
-  faqHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  faqQ: { flex: 1, fontSize: 14, fontWeight: '600', color: '#1A1A1A', lineHeight: 20, marginRight: 8 },
-  faqChevron: { fontSize: 22, color: '#CCC', fontWeight: '300' },
-  faqA: { fontSize: 13, color: '#666', lineHeight: 20, marginTop: 10 },
+  rowBorder: { borderBottomWidth: 1, borderBottomColor: theme.colors.divider },
+  iconBox: {
+    width: 40, height: 40, borderRadius: 12,
+    alignItems: 'center', justifyContent: 'center',
+  },
+
+  faqItem: { paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.md },
+  faqHeader: { flexDirection: 'row', alignItems: 'center' },
+
   appInfoCard: {
-    backgroundColor: '#fff', borderRadius: 16, padding: 20, marginTop: 24,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing.xl,
+    marginTop: theme.spacing.xl,
     alignItems: 'center',
-    elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4,
+    borderWidth: 1, borderColor: theme.colors.divider,
   },
-  appInfoTitle: { fontSize: 18, fontWeight: '800', color: '#1A1A1A' },
-  appInfoSub: { fontSize: 13, color: '#888', marginTop: 4 },
-  appInfoVersion: { fontSize: 12, color: '#CCC', marginTop: 8 },
+  logoCircle: {
+    width: 64, height: 64, borderRadius: 20,
+    backgroundColor: theme.colors.primaryLight,
+    justifyContent: 'center', alignItems: 'center',
+  },
 });

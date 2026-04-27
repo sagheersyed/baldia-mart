@@ -1,41 +1,41 @@
 import React, { useState, useRef } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, Alert, ActivityIndicator
+  View, StyleSheet, TextInput, KeyboardAvoidingView, Platform,
+  Alert, Pressable, ScrollView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import * as AuthSession from 'expo-auth-session';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+
 import { auth } from '../firebaseConfig';
 import { GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
 import { authApi } from '../api/api';
 import { useAuth } from '../context/AuthContext';
 
+import { AppText, AppButton, AppIconButton } from '../components/ui';
+import { theme } from '../theme/theme';
+
 WebBrowser.maybeCompleteAuthSession();
+
+const MPIN_LENGTH = 4;
 
 export default function MpinLoginScreen({ navigation, route }: any) {
   const { signIn } = useAuth();
   const { phoneNumber } = route.params || {};
-  const [mpin, setMpin] = useState(['', '', '', '']);
+  const [mpin, setMpin] = useState<string[]>(Array(MPIN_LENGTH).fill(''));
   const [loading, setLoading] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
   const [config, setConfig] = useState<any>(null);
-  const inputRefs = useRef<any>([]);
+  const inputRefs = useRef<Array<TextInput | null>>([]);
 
   React.useEffect(() => {
-    fetchConfig();
+    authApi.getConfig().then(res => setConfig(res.data)).catch(() => {});
   }, []);
 
-  const fetchConfig = async () => {
-    try {
-      const res = await authApi.getConfig();
-      setConfig(res.data);
-    } catch (e) {
-      console.log('Failed to fetch config', e);
-    }
-  };
-
-  const [request, response, promptAsync] = Google.useAuthRequest({
+  const [, response, promptAsync] = Google.useAuthRequest({
     androidClientId: '293399332795-tqfg57qr3qsu4l2a3gl97stssbic9k76.apps.googleusercontent.com',
     iosClientId: '293399332795-tqfg57qr3qsu4l2a3gl97stssbic9k76.apps.googleusercontent.com',
     webClientId: '293399332795-tqfg57qr3qsu4l2a3gl97stssbic9k76.apps.googleusercontent.com',
@@ -49,8 +49,7 @@ export default function MpinLoginScreen({ navigation, route }: any) {
 
   React.useEffect(() => {
     if (response?.type === 'success') {
-      const { id_token } = response.params;
-      handleGoogleAuthSuccess(id_token);
+      handleGoogleAuthSuccess(response.params.id_token);
     }
   }, [response]);
 
@@ -62,17 +61,15 @@ export default function MpinLoginScreen({ navigation, route }: any) {
       const firebaseToken = await userCredential.user.getIdToken();
       const res = await authApi.login(firebaseToken);
       if (res.data.access_token) {
-        // Successful Google login resets mpinAttempts in backend.
-        // We navigate to MpinSetup if it was a lock-reset flow, or just login.
         if (isLocked) {
-          Alert.alert('Success', 'Identity verified! Please set a new MPIN.', [
-            { text: 'OK', onPress: () => navigation.navigate('MpinSetup', { phoneNumber }) }
+          Alert.alert('Verified', 'Identity verified! Please set a new MPIN.', [
+            { text: 'OK', onPress: () => navigation.navigate('MpinSetup', { phoneNumber }) },
           ]);
         } else {
           await signIn(res.data.access_token, res.data.user);
         }
       }
-    } catch (error) {
+    } catch {
       Alert.alert('Error', 'Google authentication failed.');
     } finally {
       setLoading(false);
@@ -80,28 +77,27 @@ export default function MpinLoginScreen({ navigation, route }: any) {
   };
 
   const handleMpinChange = (value: string, index: number) => {
-    const newMpin = [...mpin];
-    newMpin[index] = value;
-    setMpin(newMpin);
-
-    if (value && index < 3) {
-      inputRefs.current[index + 1].focus();
+    const sanitized = value.replace(/\D/g, '');
+    const arr = [...mpin];
+    arr[index] = sanitized.slice(-1);
+    setMpin(arr);
+    if (sanitized && index < MPIN_LENGTH - 1) {
+      inputRefs.current[index + 1]?.focus();
     }
   };
 
   const handleKeyPress = (e: any, index: number) => {
     if (e.nativeEvent.key === 'Backspace' && !mpin[index] && index > 0) {
-      inputRefs.current[index - 1].focus();
+      inputRefs.current[index - 1]?.focus();
     }
   };
 
   const handleLogin = async () => {
     const mpinCode = mpin.join('');
-    if (mpinCode.length < 4) {
-      Alert.alert('Error', 'Please enter your 4-digit MPIN');
+    if (mpinCode.length < MPIN_LENGTH) {
+      Alert.alert('Invalid MPIN', 'Please enter your 4-digit MPIN.');
       return;
     }
-
     setLoading(true);
     try {
       const res = await authApi.loginMpin(phoneNumber, mpinCode);
@@ -111,13 +107,14 @@ export default function MpinLoginScreen({ navigation, route }: any) {
     } catch (error: any) {
       const status = error.response?.status;
       const msg = error.response?.data?.message || 'Invalid MPIN';
-      
       if (status === 403 && msg.toLowerCase().includes('lock')) {
         setIsLocked(true);
-        Alert.alert('Account Locked', 'You have exceeded the maximum number of MPIN attempts. Please use Google Login to verify your identity and reset your MPIN.');
+        Alert.alert('Account locked', 'Too many failed MPIN attempts. Please verify with Google to reset your MPIN.');
       } else {
-        Alert.alert('Login Failed', msg);
+        Alert.alert('Login failed', msg);
       }
+      setMpin(Array(MPIN_LENGTH).fill(''));
+      inputRefs.current[0]?.focus();
     } finally {
       setLoading(false);
     }
@@ -134,136 +131,179 @@ export default function MpinLoginScreen({ navigation, route }: any) {
       }
       await authApi.sendOtp(phoneNumber);
       navigation.navigate('Otp', { phoneNumber });
-    } catch (error) {
+    } catch {
       Alert.alert('Error', 'Could not send OTP. Please try again later.');
     } finally {
       setLoading(false);
     }
   };
 
+  const showGoogle = isLocked || config?.auth_customer_google_enabled;
+
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <TouchableOpacity 
-        style={styles.backButton} 
-        onPress={() => navigation.goBack()}
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <Text style={styles.backText}>← Back</Text>
-      </TouchableOpacity>
-
-      <View style={styles.content}>
-        <Text style={styles.title}>Enter MPIN</Text>
-        <Text style={styles.subtitle}>
-          Welcome back! Please enter your 4-digit MPIN to login safely.
-        </Text>
-
-        <View style={styles.mpinContainer}>
-          {mpin.map((digit, i) => (
-            <TextInput
-              key={i}
-              ref={el => { inputRefs.current[i] = el; }}
-              style={styles.mpinInput}
-              value={digit}
-              onChangeText={val => handleMpinChange(val, i)}
-              onKeyPress={e => handleKeyPress(e, i)}
-              keyboardType="number-pad"
-              maxLength={1}
-              secureTextEntry
-              selectTextOnFocus
-              editable={!loading}
-            />
-          ))}
-        </View>
-
-        <TouchableOpacity 
-          style={[styles.button, loading && styles.disabledBtn]} 
-          onPress={handleLogin}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>Login</Text>
-          )}
-        </TouchableOpacity>
-
-        <View style={styles.forgotContainer}>
-          <TouchableOpacity onPress={handleForgotMpin} disabled={loading}>
-            <Text style={styles.forgotText}>Forgot MPIN? Login via OTP</Text>
-          </TouchableOpacity>
-        </View>
-
-        {(isLocked || (config?.auth_customer_google_enabled)) && (
-          <View style={styles.googleRecoveryContainer}>
-            <View style={styles.divider}>
-              <View style={styles.line} />
-              <Text style={styles.orText}>OR</Text>
-              <View style={styles.line} />
+        <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <LinearGradient
+            colors={[theme.colors.primary, theme.colors.primaryDark]}
+            style={styles.hero}
+          >
+            <View style={styles.headerRow}>
+              <AppIconButton size={36} bg="rgba(255,255,255,0.2)" onPress={() => navigation.goBack()}>
+                <Ionicons name="chevron-back" size={20} color="#fff" />
+              </AppIconButton>
+              <View style={{ flex: 1 }} />
             </View>
-            <TouchableOpacity 
-              style={[styles.button, styles.googleButton, loading && styles.disabledBtn]} 
-              onPress={() => promptAsync()}
-              disabled={loading}
-            >
-              <Text style={styles.googleText}>
-                {isLocked ? 'Verify with Google to Reset' : 'Login with Google'}
-              </Text>
-            </TouchableOpacity>
-            {isLocked && (
-              <Text style={styles.lockNotice}>
-                Your account is locked. verifying with Google will allow you to set a new MPIN.
-              </Text>
-            )}
+            <View style={styles.lockBox}>
+              <Ionicons name={isLocked ? 'lock-closed' : 'lock-closed-outline'} size={28} color="#fff" />
+            </View>
+            <AppText variant="h1" color="#fff" style={{ marginTop: theme.spacing.md }}>Enter your MPIN</AppText>
+            <AppText variant="caption" color="rgba(255,255,255,0.9)" align="center" style={{ marginTop: 4 }}>
+              Welcome back! {phoneNumber ? `(${phoneNumber})` : ''}
+            </AppText>
+          </LinearGradient>
+
+          <View style={styles.formCard}>
+            <View style={styles.mpinContainer}>
+              {mpin.map((digit, i) => (
+                <TextInput
+                  key={i}
+                  ref={el => { inputRefs.current[i] = el; }}
+                  style={[styles.mpinInput, digit ? styles.mpinInputFilled : null]}
+                  value={digit}
+                  onChangeText={val => handleMpinChange(val, i)}
+                  onKeyPress={e => handleKeyPress(e, i)}
+                  keyboardType="number-pad"
+                  maxLength={1}
+                  secureTextEntry
+                  selectTextOnFocus
+                  editable={!loading && !isLocked}
+                />
+              ))}
+            </View>
+
+            <AppButton
+              label={loading ? 'Verifying…' : 'Login'}
+              variant="primary"
+              size="lg"
+              fullWidth
+              onPress={handleLogin}
+              disabled={loading || isLocked}
+              loading={loading}
+              style={{ marginTop: theme.spacing.md }}
+              trailingIcon={!loading ? <Ionicons name="arrow-forward" size={18} color="#fff" /> : undefined}
+            />
+
+            {!isLocked ? (
+              <Pressable onPress={handleForgotMpin} disabled={loading} style={styles.forgotRow}>
+                <AppText variant="bodyStrong" color={theme.colors.primary}>Forgot MPIN? Login via OTP</AppText>
+              </Pressable>
+            ) : null}
+
+            {showGoogle ? (
+              <>
+                <View style={styles.divider}>
+                  <View style={styles.line} />
+                  <AppText variant="caption">or</AppText>
+                  <View style={styles.line} />
+                </View>
+
+                <AppButton
+                  label={isLocked ? 'Verify with Google to reset' : 'Login with Google'}
+                  variant="secondary"
+                  size="lg"
+                  fullWidth
+                  onPress={() => promptAsync()}
+                  disabled={loading}
+                  leadingIcon={<Ionicons name="logo-google" size={18} color={theme.colors.textPrimary} />}
+                  textColor={theme.colors.textPrimary}
+                />
+
+                {isLocked ? (
+                  <View style={styles.lockNotice}>
+                    <Ionicons name="information-circle-outline" size={14} color={theme.colors.warning} />
+                    <AppText variant="caption" color={theme.colors.warning} style={{ flex: 1 }}>
+                      Your account is locked. Verifying with Google will allow you to set a new MPIN.
+                    </AppText>
+                  </View>
+                ) : null}
+              </>
+            ) : null}
           </View>
-        )}
-      </View>
-    </KeyboardAvoidingView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  backButton: { marginTop: 50, marginLeft: 20, padding: 10 },
-  backText: { fontSize: 16, color: '#FF4500', fontWeight: 'bold' },
-  content: { flex: 1, paddingHorizontal: 30, paddingTop: 40 },
-  title: { fontSize: 28, fontWeight: 'bold', color: '#1E1E1E' },
-  subtitle: { fontSize: 16, color: '#666', marginTop: 10, lineHeight: 24 },
+  container: { flex: 1, backgroundColor: theme.colors.surface },
+
+  hero: {
+    paddingTop: theme.spacing.md,
+    paddingBottom: theme.spacing.xxl + 16,
+    paddingHorizontal: theme.spacing.lg,
+    alignItems: 'center',
+    borderBottomLeftRadius: theme.radius.xl,
+    borderBottomRightRadius: theme.radius.xl,
+  },
+  headerRow: { width: '100%', flexDirection: 'row', alignItems: 'center' },
+  lockBox: {
+    width: 64, height: 64, borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    justifyContent: 'center', alignItems: 'center',
+    marginTop: theme.spacing.md,
+    borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)',
+  },
+
+  formCard: {
+    backgroundColor: theme.colors.surface,
+    marginTop: -theme.spacing.lg,
+    marginHorizontal: theme.spacing.lg,
+    borderRadius: theme.radius.xl,
+    padding: theme.spacing.lg,
+    ...theme.shadows.md,
+  },
+
   mpinContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 15,
-    marginVertical: 40,
+    gap: theme.spacing.md,
+    paddingVertical: theme.spacing.md,
   },
   mpinInput: {
-    width: 60,
-    height: 70,
-    borderWidth: 2,
-    borderColor: '#eee',
-    borderRadius: 12,
+    width: 56,
+    height: 64,
+    borderWidth: 1.5,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surfaceMuted,
+    borderRadius: theme.radius.md,
     textAlign: 'center',
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#FF4500',
-    backgroundColor: '#fff',
+    fontSize: 28,
+    fontWeight: '800',
+    color: theme.colors.primary,
   },
-  button: {
-    height: 55,
-    backgroundColor: '#FF4500',
-    borderRadius: 15,
-    justifyContent: 'center',
-    alignItems: 'center',
+  mpinInputFilled: {
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.primaryLight,
   },
-  buttonText: { fontSize: 18, fontWeight: 'bold', color: '#fff' },
-  disabledBtn: { opacity: 0.6 },
-  forgotContainer: { marginTop: 25, alignItems: 'center' },
-  forgotText: { color: '#FF4500', fontWeight: 'bold', fontSize: 16 },
-  googleRecoveryContainer: { marginTop: 10 },
-  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 20 },
-  line: { flex: 1, height: 1, backgroundColor: '#eee' },
-  orText: { marginHorizontal: 15, color: '#999', fontSize: 14 },
-  googleButton: { backgroundColor: '#f5f5f5', borderWidth: 1, borderColor: '#ddd' },
-  googleText: { fontSize: 16, fontWeight: 'bold', color: '#333' },
-  lockNotice: { color: '#666', fontSize: 12, textAlign: 'center', marginTop: 10, fontStyle: 'italic' },
+
+  forgotRow: { marginTop: theme.spacing.md, alignItems: 'center' },
+
+  divider: {
+    flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md,
+    marginVertical: theme.spacing.lg,
+  },
+  line: { flex: 1, height: 1, backgroundColor: theme.colors.border },
+
+  lockNotice: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    marginTop: theme.spacing.md,
+    backgroundColor: theme.colors.warningLight,
+    borderRadius: theme.radius.md,
+    padding: theme.spacing.sm,
+  },
 });

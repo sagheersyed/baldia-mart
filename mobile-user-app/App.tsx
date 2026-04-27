@@ -1,13 +1,11 @@
 import 'react-native-gesture-handler';
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { Text, ActivityIndicator, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-
 
 import { useCart } from './src/context/CartContext';
 import { useAuth } from './src/context/AuthContext';
@@ -15,7 +13,6 @@ import { useSettings } from './src/context/SettingsContext';
 import { useCartStore } from './src/store/cartStore';
 import { useAuthStore } from './src/store/authStore';
 import { useSettingsStore } from './src/store/settingsStore';
-import { categoriesApi, productsApi, addressesApi, settingsApi } from './src/api/api';
 
 import LoginScreen from './src/screens/LoginScreen';
 import HomeScreen from './src/screens/HomeScreen';
@@ -43,55 +40,29 @@ import AboutScreen from './src/screens/AboutScreen';
 import OrderChatScreen from './src/screens/OrderChatScreen';
 import RashanOrderScreen from './src/screens/RashanOrderScreen';
 import PaymentWebViewScreen from './src/screens/PaymentWebViewScreen';
+import ProductListingScreen from './src/screens/ProductListingScreen';
+
+import FloatingTabBar from './src/components/FloatingTabBar';
+import AppLoader from './src/components/AppLoader';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
-import { Ionicons } from '@expo/vector-icons';
-
 function MainTabs() {
   const { settings, loading } = useSettings();
   const { setActiveMode, currentCount, activeOrdersCount } = useCart();
-  
+
   const showMart = settings?.feature_show_mart === true;
   const showFood = settings?.feature_show_restaurants === true;
   const showBrands = settings?.feature_show_brands === true;
 
-  if (loading) return null;
+  if (loading) return <AppLoader label="Loading store…" />;
 
   return (
     <Tab.Navigator
       backBehavior="history"
-      screenOptions={({ route }) => ({
-        headerShown: false,
-        tabBarActiveTintColor: '#FF4500',
-        tabBarInactiveTintColor: '#8E8E93',
-        tabBarStyle: {
-          height: 64,
-          paddingBottom: 10,
-          paddingTop: 8,
-          borderTopLeftRadius: 24,
-          borderTopRightRadius: 24,
-          position: 'absolute',
-          backgroundColor: '#fff',
-          borderTopWidth: 0,
-          elevation: 20,
-          shadowColor: '#000',
-          shadowOpacity: 0.1,
-          shadowRadius: 10
-        },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '700' },
-        tabBarIcon: ({ color, focused }) => {
-          let iconName: any;
-          if (route.name === 'Home') iconName = focused ? 'home' : 'home-outline';
-          else if (route.name === 'Food') iconName = focused ? 'restaurant' : 'restaurant-outline';
-          else if (route.name === 'Brands') iconName = focused ? 'grid' : 'grid-outline';
-          else if (route.name === 'Cart') iconName = focused ? 'cart' : 'cart-outline';
-          else if (route.name === 'Orders') iconName = focused ? 'receipt' : 'receipt-outline';
-          else if (route.name === 'Profile') iconName = focused ? 'person' : 'person-outline';
-          return <Ionicons name={iconName} size={24} color={color} />;
-        },
-      })}
+      tabBar={(props) => <FloatingTabBar {...props} />}
+      screenOptions={{ headerShown: false }}
     >
       {showMart && (
         <Tab.Screen
@@ -121,18 +92,18 @@ function MainTabs() {
         component={CartScreen}
         options={{
           tabBarLabel: 'Cart',
-          tabBarBadge: currentCount > 0 ? currentCount : undefined
+          tabBarBadge: currentCount > 0 ? currentCount : undefined,
         }}
       />
-      <Tab.Screen 
-        name="Orders" 
-        component={MyOrdersScreen} 
-        options={{ 
+      <Tab.Screen
+        name="Orders"
+        component={MyOrdersScreen}
+        options={{
           tabBarLabel: 'Orders',
-          tabBarBadge: activeOrdersCount > 0 ? activeOrdersCount : undefined
-        }} 
+          tabBarBadge: activeOrdersCount > 0 ? activeOrdersCount : undefined,
+        }}
       />
-      <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: 'Profile' }} />
+      <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: 'Account' }} />
     </Tab.Navigator>
   );
 }
@@ -141,11 +112,7 @@ function Navigation() {
   const { userToken, isLoading, userData } = useAuth();
 
   if (isLoading) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
-        <ActivityIndicator size="large" color="#FF4500" />
-      </View>
-    );
+    return <AppLoader label="Signing you in…" />;
   }
 
   const isProfileComplete =
@@ -156,11 +123,7 @@ function Navigation() {
     userData.phoneNumber;
 
   if (userToken && !userData) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
-        <ActivityIndicator size="large" color="#FF4500" />
-      </View>
-    );
+    return <AppLoader label="Loading your profile…" />;
   }
 
   return (
@@ -192,15 +155,21 @@ function Navigation() {
             <Stack.Screen name="Help" component={HelpScreen} />
             <Stack.Screen name="Favourites" component={FavouritesScreen} />
             <Stack.Screen name="About" component={AboutScreen} />
-            <Stack.Screen name="OrderChat" component={OrderChatScreen} options={{ headerShown: true, headerStyle: { backgroundColor: '#fff' }, headerTintColor: '#1A1A1A' }} />
+            <Stack.Screen
+              name="OrderChat"
+              component={OrderChatScreen}
+              options={{ headerShown: false }}
+            />
             <Stack.Screen name="RashanOrder" component={RashanOrderScreen} />
             <Stack.Screen name="PaymentWebView" component={PaymentWebViewScreen} />
+            <Stack.Screen name="ProductListing" component={ProductListingScreen} />
           </>
         )}
       </Stack.Navigator>
     </NavigationContainer>
   );
 }
+
 export default function App() {
   useEffect(() => {
     useAuthStore.getState().loadStorageData();

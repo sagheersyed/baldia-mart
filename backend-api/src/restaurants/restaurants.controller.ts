@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query } from '@nestjs/common';
 import { RestaurantsService } from './restaurants.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AdminRoleGuard } from '../auth/admin-role.guard';
@@ -12,6 +12,21 @@ export class RestaurantsController {
   @Get()
   findAll() {
     return this.restaurantsService.findAll();
+  }
+
+  /**
+   * GET /restaurants/search?q=&page=&limit=
+   * Powers the global search screen on mobile.
+   */
+  @Get('search')
+  search(
+    @Query('q') q: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const p = page ? parseInt(page, 10) : 1;
+    const l = limit ? parseInt(limit, 10) : 20;
+    return this.restaurantsService.search(q || '', isNaN(p) ? 1 : p, isNaN(l) ? 20 : l);
   }
 
   @Get(':id')

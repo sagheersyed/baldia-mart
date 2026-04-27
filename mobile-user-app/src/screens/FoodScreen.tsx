@@ -1,161 +1,209 @@
-import React, { useState, useEffect, useCallback, memo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity,
-  ScrollView, ActivityIndicator, RefreshControl, Dimensions, FlatList
+  View, StyleSheet, FlatList, RefreshControl, Pressable, Animated, ListRenderItem,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { categoriesApi, addressesApi, bannersApi, restaurantsApi, settingsApi, deliveryZonesApi, normalizeUrl, socket, connectSocket } from '../api/api';
-import { ENV } from '../config/env';
 import { useFocusEffect } from '@react-navigation/native';
-import BannerCarousel from '../components/BannerCarousel';
-import SkeletonLoader from '../components/SkeletonLoader';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+
+import {
+  addressesApi, bannersApi, restaurantsApi, deliveryZonesApi,
+  normalizeUrl, socket, connectSocket,
+} from '../api/api';
 import { useCart } from '../context/CartContext';
 import { formatRatingCount, getDistanceKm, isBusinessOpen } from '../utils/helpers';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+import HomeHeader from '../components/home/HomeHeader';
+import HomeSearchBar from '../components/home/HomeSearchBar';
+import PromoCarousel from '../components/home/PromoCarousel';
+import HomeSkeleton from '../components/home/HomeSkeleton';
+import {
+  AppText, AppBadge, EmptyState, ErrorState, SectionHeader,
+} from '../components/ui';
+import { theme } from '../theme/theme';
 
-// Standardized Business Hours Logic moved to helpers.ts
-
-// ─── Restaurant Card ─────────────────────────────────────────
-const MenuItemCard = memo(({ prod, cartQty, onAdd }: any) => {
-  const isClosed = !isBusinessOpen(prod.openingTime, prod.closingTime);
-  return (
-    <View style={styles.menuCard}>
-      <View style={styles.menuImgWrap}>
-        {prod.imageUrl
-          ? <Image source={{ uri: normalizeUrl(prod.imageUrl) }} style={styles.fillImg} resizeMode="cover" />
-          : <Image
-            source={{ uri: 'https://cdn-icons-png.flaticon.com/512/3081/3081840.png' }}
-            style={{ width: 40, height: 40, opacity: 0.4 }}
-          />}
-        {isClosed && (
-          <View style={styles.oosOverlay}><Text style={styles.oosText}>Closed</Text></View>
-        )}
-      </View>
-      <View style={styles.menuInfo}>
-        <Text style={styles.menuName} numberOfLines={1}>{prod.name}</Text>
-        {prod.description && <Text style={styles.menuDesc} numberOfLines={1}>{prod.description}</Text>}
-        <View style={styles.menuBottom}>
-          <Text style={styles.menuPrice}>Rs {Number(prod.price).toFixed(0)}</Text>
-          <TouchableOpacity
-            style={[styles.menuAddBtn, isClosed && styles.menuAddBtnDisabled]}
-            onPress={() => onAdd(prod)}
-            disabled={isClosed}
-          >
-            <Text style={styles.menuAddTxt}>{cartQty > 0 ? `${cartQty} ✓` : '+ Add'}</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </View>
-  );
-});
-
-const RestaurantCard = memo(({ resto, onPress }: any) => {
-  const logoUri = normalizeUrl(resto.logoUrl);
-  const coverFallback = 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=400&q=80';
-  const open = isBusinessOpen(resto.openingTime, resto.closingTime);
-  return (
-    <TouchableOpacity style={[styles.restoCard, !open && styles.restoCardClosed]} onPress={onPress} activeOpacity={0.88}>
-      {/* Cover Image / Placeholder */}
-      <View style={styles.restoCover}>
-        <Image
-          source={{ uri: logoUri || coverFallback }}
-          style={StyleSheet.absoluteFill}
-          resizeMode="cover"
-        />
-        <View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: open ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.55)' }} />
-        {resto.cuisineType && (
-          <View style={styles.restoTag}><Text style={styles.restoTagTxt}>{resto.cuisineType}</Text></View>
-        )}
-        {!open && (
-          <View style={styles.closedPill}>
-            <Text style={styles.closedPillTxt}>Currently Closed</Text>
-          </View>
-        )}
-      </View>
-      <View style={styles.restoInfo}>
-        <View style={styles.restoTopRow}>
-          <Text style={[styles.restoName, !open && { color: '#999' }]} numberOfLines={1}>{resto.name}</Text>
-          {resto.rating > 0 && (
-            <View style={styles.ratingBadge}>
-              <Text style={styles.ratingStar}>⭐</Text>
-              <Text style={styles.ratingValue}>{Number(resto.rating).toFixed(1)}{formatRatingCount(resto.ratingCount)}</Text>
-            </View>
-          )}
-        </View>
-        {resto.cuisineType && <Text style={styles.restoCuisine} numberOfLines={1}>{resto.cuisineType}</Text>}
-        <View style={styles.restoMetaRow}>
-          {resto.openingHours && (
-            <View style={styles.metaChip}>
-              <Text style={styles.metaIcon}>⏱</Text>
-              <Text style={styles.metaTxt}>{resto.openingHours}</Text>
-            </View>
-          )}
-          {(resto.menuItems?.length ?? 0) > 0 && (
-            <View style={styles.metaChip}>
-              <Text style={styles.metaIcon}>🍽️</Text>
-              <Text style={styles.metaTxt}>{resto.menuItems.length} items</Text>
-            </View>
-          )}
-        </View>
-        {/* Location row */}
-        {resto.location && (
-          <View style={styles.locationRow}>
-            <Text style={styles.pinIcon}>📍</Text>
-            <Text style={styles.locationTxt} numberOfLines={1}>{resto.location}</Text>
-          </View>
-        )}
-      </View>
-    </TouchableOpacity>
-  );
-});
-
-// ─── Cuisine Chip ────────────────────────────────────────────
-const CuisineChip = memo(({ label, emoji, isActive, onPress }: any) => (
-  <TouchableOpacity style={[styles.cuisineChip, isActive && styles.cuisineChipActive]} onPress={onPress}>
-    <Text style={styles.cuisineEmoji}>{emoji}</Text>
-    <Text style={[styles.cuisineTxt, isActive && styles.cuisineTxtActive]}>{label}</Text>
-  </TouchableOpacity>
-));
-
-const CUISINES = [
-  { id: 'all', label: 'All', emoji: '🍽️' },
-  { id: 'desi', label: 'Desi', emoji: '🍛' },
-  { id: 'pizza', label: 'Pizza', emoji: '🍕' },
-  { id: 'burgers', label: 'Burgers', emoji: '🍔' },
-  { id: 'chinese', label: 'Chinese', emoji: '🥡' },
-  { id: 'bbq', label: 'BBQ', emoji: '🥩' },
-  { id: 'sweets', label: 'Sweets', emoji: '🍮' },
+// ─── Cuisines ───────────────────────────────────────────────
+const CUISINES: { id: string; label: string; icon: keyof typeof Ionicons.glyphMap; bg: string; fg: string; }[] = [
+  { id: 'all',     label: 'All',      icon: 'restaurant',     bg: '#FEEBEB', fg: theme.colors.food },
+  { id: 'burger',  label: 'Burgers',  icon: 'fast-food',      bg: '#FEF3C7', fg: '#F59E0B' },
+  { id: 'pizza',   label: 'Pizza',    icon: 'pizza',          bg: '#FEE2E2', fg: '#EF4444' },
+  { id: 'biryani', label: 'Biryani',  icon: 'flame',          bg: '#FFF1E6', fg: '#FF4500' },
+  { id: 'desi',    label: 'Desi',     icon: 'cafe',           bg: '#E8F8EE', fg: '#10B981' },
+  { id: 'chinese', label: 'Chinese',  icon: 'reader',         bg: '#EFF6FF', fg: '#3B82F6' },
+  { id: 'bbq',     label: 'BBQ',      icon: 'bonfire',        bg: '#FFF7ED', fg: '#EA580C' },
+  { id: 'sweet',   label: 'Sweets',   icon: 'ice-cream',      bg: '#FDF4FF', fg: '#9333EA' },
+  { id: 'drink',   label: 'Drinks',   icon: 'wine',           bg: '#E3EBFF', fg: '#3B82F6' },
 ];
 
+// ─── Filters ────────────────────────────────────────────────
+const SORT_OPTIONS: { id: string; label: string }[] = [
+  { id: 'recommended', label: 'Recommended' },
+  { id: 'fastest',     label: 'Fastest delivery' },
+  { id: 'rating',      label: 'Top rated' },
+  { id: 'fee',         label: 'Lowest fee' },
+];
+
+const TOGGLES: { id: 'free' | 'open' | 'deals'; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { id: 'free',  label: 'Free delivery', icon: 'bicycle' },
+  { id: 'open',  label: 'Open now',      icon: 'time' },
+  { id: 'deals', label: 'Deals',         icon: 'pricetag' },
+];
+
+// ─── Cuisine chip ────────────────────────────────────────────
+const CuisineChip = React.memo(function CuisineChip({
+  data, isActive, onPress,
+}: { data: typeof CUISINES[number]; isActive: boolean; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.cuisineChip,
+        isActive ? { backgroundColor: data.fg, borderColor: data.fg } : { backgroundColor: data.bg, borderColor: data.bg },
+        pressed ? { opacity: 0.85, transform: [{ scale: 0.97 }] } : null,
+      ]}
+    >
+      <Ionicons name={data.icon} size={16} color={isActive ? '#fff' : data.fg} />
+      <AppText
+        variant="captionStrong"
+        color={isActive ? '#fff' : theme.colors.textPrimary}
+      >
+        {data.label}
+      </AppText>
+    </Pressable>
+  );
+});
+
+// ─── Restaurant card ────────────────────────────────────────
+const RestaurantCard = React.memo(function RestaurantCard({ resto, onPress }: any) {
+  const cover = normalizeUrl(resto.coverUrl || resto.imageUrl);
+  const logo  = normalizeUrl(resto.logoUrl);
+  const open  = isBusinessOpen(resto.openingTime, resto.closingTime);
+  const fee   = resto.deliveryFee != null ? Math.round(Number(resto.deliveryFee)) : null;
+  const eta   = resto.deliveryTime || resto.openingHours || '20-35 min';
+  const sponsored = !!resto.sponsored || !!resto.isAd;
+  const freeDelivery = fee === 0 || !!resto.freeDelivery;
+  const hasDeal = !!resto.discountText;
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.card, pressed ? { opacity: 0.92 } : null]}
+    >
+      <View style={styles.coverWrap}>
+        {cover || logo ? (
+          <Image
+            source={{ uri: cover || logo! }}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            transition={180}
+          />
+        ) : (
+          <View style={[StyleSheet.absoluteFill, styles.placeholder]}>
+            <Ionicons name="restaurant" size={36} color="#fff" />
+          </View>
+        )}
+        {!open && (
+          <LinearGradient
+            colors={['rgba(15,23,42,0)', 'rgba(15,23,42,0.65)']}
+            style={StyleSheet.absoluteFill}
+          />
+        )}
+        {/* Badges row */}
+        <View style={styles.coverBadges}>
+          {hasDeal && <AppBadge label={resto.discountText || 'DEAL'} variant="discount" />}
+          {freeDelivery && <AppBadge label="FREE DELIVERY" variant="free" />}
+          {sponsored && <AppBadge label="Ad" variant="neutral" />}
+        </View>
+        {!open && (
+          <View style={styles.closedPill}>
+            <AppText variant="badge" color="#fff">CURRENTLY CLOSED</AppText>
+          </View>
+        )}
+        {logo ? (
+          <View style={styles.logoCircle}>
+            <Image source={{ uri: logo }} style={styles.logoImg} contentFit="cover" cachePolicy="memory-disk" />
+          </View>
+        ) : null}
+      </View>
+
+      <View style={styles.info}>
+        <View style={styles.titleRow}>
+          <AppText variant="title" numberOfLines={1} style={{ flex: 1 }}>
+            {resto.name}
+          </AppText>
+          {Number(resto.rating) > 0 && (
+            <View style={styles.rating}>
+              <Ionicons name="star" size={12} color="#F59E0B" />
+              <AppText variant="captionStrong" color="#B45309" style={{ marginLeft: 2 }}>
+                {Number(resto.rating).toFixed(1)}
+                <AppText variant="caption">{formatRatingCount(resto.ratingCount)}</AppText>
+              </AppText>
+            </View>
+          )}
+        </View>
+        {resto.cuisineType ? (
+          <AppText variant="caption" numberOfLines={1}>{resto.cuisineType}</AppText>
+        ) : null}
+
+        <View style={styles.metaRow}>
+          <View style={styles.metaItem}>
+            <Ionicons name="time-outline" size={13} color={theme.colors.textSecondary} />
+            <AppText variant="caption">{eta}</AppText>
+          </View>
+          {fee != null && !freeDelivery && (
+            <View style={styles.metaItem}>
+              <Ionicons name="bicycle" size={13} color={theme.colors.textSecondary} />
+              <AppText variant="caption">Rs.{fee}</AppText>
+            </View>
+          )}
+          {resto.proLabel ? (
+            <AppBadge label={resto.proLabel} variant="pro" />
+          ) : null}
+        </View>
+      </View>
+    </Pressable>
+  );
+});
+
 // ════════════════════════════════════════════════════════════
+type ListRow =
+  | { kind: 'banners' }
+  | { kind: 'cuisines' }
+  | { kind: 'toggles' }
+  | { kind: 'sectionHeader'; title: string; subtitle?: string }
+  | { kind: 'restaurant'; resto: any };
+
 export default function FoodScreen({ navigation }: any) {
-  const { foodCart, addToCart, getCartCount, setActiveMode } = useCart();
+  const { setActiveMode, getCartCount } = useCart();
   const [restaurants, setRestaurants] = useState<any[]>([]);
   const [banners, setBanners] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   const [activeCuisine, setActiveCuisine] = useState('all');
+  const [activeSort, setActiveSort] = useState<string>('recommended');
+  const [toggles, setToggles] = useState<{ free: boolean; open: boolean; deals: boolean }>({
+    free: false, open: false, deals: false,
+  });
+
   const [address, setAddress] = useState<any>(null);
   const [activeZones, setActiveZones] = useState<any[]>([]);
 
-  // Set food mode whenever this screen is focused
-  useFocusEffect(useCallback(() => {
-    setActiveMode('food');
-    loadData();
-  }, []));
+  const scrollY = useRef(new Animated.Value(0)).current;
 
-  const loadData = async () => {
+  // ── Loaders ──
+  const loadData = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true);
+    setError(null);
     try {
-      console.log('FoodScreen: Fetching data...');
       const [restRes, addrRes, zonesRes] = await Promise.all([
-        restaurantsApi.getAll().catch(err => {
-          console.error('Restaurants API Error:', err);
-          return { data: [] };
-        }),
-        addressesApi.getAll().catch(err => ({ data: [] })),
-        deliveryZonesApi.getActive().catch(err => ({ data: [] })),
+        restaurantsApi.getAll().catch(() => ({ data: [] })),
+        addressesApi.getAll().catch(() => ({ data: [] })),
+        deliveryZonesApi.getActive().catch(() => ({ data: [] })),
       ]);
 
       const addrs = addrRes.data || [];
@@ -164,414 +212,432 @@ export default function FoodScreen({ navigation }: any) {
 
       let zoneId: string | undefined;
       if (currentAddr?.latitude && currentAddr?.longitude) {
-        const matchingZone = zones.find((z: any) =>
+        const matching = zones.find((z: any) =>
           getDistanceKm(
             Number(currentAddr.latitude), Number(currentAddr.longitude),
-            Number(z.centerLat), Number(z.centerLng)
-          ) <= Number(z.radiusKm)
+            Number(z.centerLat), Number(z.centerLng),
+          ) <= Number(z.radiusKm),
         );
-        zoneId = matchingZone?.id;
+        zoneId = matching?.id;
       }
 
-      const bannerRes = await bannersApi.getBySection('food', zoneId).catch(err => {
-        console.error('Food Banners API Error:', err);
-        return { data: [] };
-      });
+      const bannerRes = await bannersApi.getBySection('food', zoneId).catch(() => ({ data: [] }));
 
-      const allRestos = (restRes.data || []).filter((r: any) => r.isActive !== false);
-      setRestaurants(allRestos);
+      setRestaurants((restRes.data || []).filter((r: any) => r.isActive !== false));
       setBanners(bannerRes.data || []);
       setAddress(currentAddr);
       setActiveZones(zones);
-    } catch (e) {
-      console.error('Failed to load food data:', e);
+    } catch (e: any) {
+      console.warn('[Food] failed to load', e?.message || e);
+      setError(e?.response?.data?.message || e?.message || 'Failed to load food.');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
+
+  useFocusEffect(useCallback(() => {
+    setActiveMode('food');
+    loadData(restaurants.length === 0);
+  }, [loadData, setActiveMode]));
 
   useEffect(() => {
     connectSocket();
-
-    const onConnect = () => console.log('Food: Connected to socket');
     const onBannersUpdated = async () => {
-      console.log('Food: Banners updated remotely, refreshing...');
       try {
         const res = await bannersApi.getBySection('food');
         setBanners(res.data || []);
-      } catch (err) {
-        console.error('Failed to sync food banners', err);
-      }
+      } catch {}
     };
-
-    socket.on('connect', onConnect);
     socket.on('bannersUpdated', onBannersUpdated);
-
-    return () => {
-      socket.off('connect', onConnect);
-      socket.off('bannersUpdated', onBannersUpdated);
-    };
+    return () => { socket.off('bannersUpdated', onBannersUpdated); };
   }, []);
 
-  const onRefresh = useCallback(() => { setRefreshing(true); loadData(); }, []);
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadData(false);
+  }, [loadData]);
 
-  // Sort: open restaurants by rating (desc), then closed by rating (desc)
-  const sortedFilteredRestaurants = [...restaurants]
-    .filter((r: any) => {
-      if (activeCuisine !== 'all' && !r.cuisineType?.toLowerCase().includes(activeCuisine.toLowerCase())) {
-        return false;
-      }
+  // ── Filtering + sorting ──
+  const filteredSorted = useMemo(() => {
+    return [...restaurants]
+      .filter((r: any) => {
+        // Cuisine
+        if (activeCuisine !== 'all'
+          && !(r.cuisineType?.toLowerCase().includes(activeCuisine.toLowerCase()))
+          && !(r.tags || []).some((t: string) => t.toLowerCase().includes(activeCuisine.toLowerCase()))) {
+          return false;
+        }
+        // Toggles
+        if (toggles.open && !isBusinessOpen(r.openingTime, r.closingTime)) return false;
+        if (toggles.free && !(Number(r.deliveryFee) === 0 || r.freeDelivery)) return false;
+        if (toggles.deals && !r.discountText && !r.hasDeal) return false;
 
-      // Zone filter
-      if (activeZones.length > 0 && address?.latitude && address?.longitude) {
-        // Find which zones the user is currently inside
-        const userZones = activeZones.filter(z =>
-          getDistanceKm(Number(address.latitude), Number(address.longitude), Number(z.centerLat), Number(z.centerLng)) <= Number(z.radiusKm)
-        );
+        // Zone filter (preserved)
+        if (activeZones.length > 0 && address?.latitude && address?.longitude) {
+          const userZones = activeZones.filter(z =>
+            getDistanceKm(Number(address.latitude), Number(address.longitude), Number(z.centerLat), Number(z.centerLng)) <= Number(z.radiusKm),
+          );
+          if (userZones.length === 0) return false;
+          if (!r.latitude || !r.longitude) return false;
+          const isRestoInUserZone = userZones.some(z =>
+            getDistanceKm(Number(r.latitude), Number(r.longitude), Number(z.centerLat), Number(z.centerLng)) <= Number(z.radiusKm),
+          );
+          if (!isRestoInUserZone) return false;
+        }
+        return true;
+      })
+      .sort((a: any, b: any) => {
+        const aOpen = isBusinessOpen(a.openingTime, a.closingTime);
+        const bOpen = isBusinessOpen(b.openingTime, b.closingTime);
+        if (aOpen !== bOpen) return aOpen ? -1 : 1;
 
-        // If user is not in ANY zone, they can't see the restaurant
-        if (userZones.length === 0) return false;
+        if (activeSort === 'rating') return Number(b.rating || 0) - Number(a.rating || 0);
+        if (activeSort === 'fastest') {
+          const aMin = Number(a.deliveryEtaMin || 30);
+          const bMin = Number(b.deliveryEtaMin || 30);
+          return aMin - bMin;
+        }
+        if (activeSort === 'fee') {
+          return Number(a.deliveryFee || 0) - Number(b.deliveryFee || 0);
+        }
+        return Number(b.rating || 0) - Number(a.rating || 0);
+      });
+  }, [restaurants, activeCuisine, activeSort, toggles, activeZones, address]);
 
-        // If restaurant has no coords, maybe we assume it's hidden or show it? We will hide it if it lacks coords
-        if (!r.latitude || !r.longitude) return false;
+  // ── List composition ──
+  const dealsRestaurants = useMemo(
+    () => filteredSorted.filter(r => r.discountText || r.hasDeal).slice(0, 6),
+    [filteredSorted],
+  );
 
-        // Restaurant must be in AT LEAST ONE of the zones the user is in
-        const isRestoInUserZone = userZones.some(z =>
-          getDistanceKm(Number(r.latitude), Number(r.longitude), Number(z.centerLat), Number(z.centerLng)) <= Number(z.radiusKm)
-        );
-
-        if (!isRestoInUserZone) return false;
-      }
-      return true;
-    })
-    .sort((a: any, b: any) => {
-      const aOpen = isBusinessOpen(a.openingTime, a.closingTime);
-      const bOpen = isBusinessOpen(b.openingTime, b.closingTime);
-      if (aOpen !== bOpen) return aOpen ? -1 : 1;
-      return Number(b.rating || 0) - Number(a.rating || 0);
+  const data = useMemo<ListRow[]>(() => {
+    const rows: ListRow[] = [
+      { kind: 'banners' },
+      { kind: 'cuisines' },
+      { kind: 'toggles' },
+    ];
+    if (dealsRestaurants.length) {
+      rows.push({ kind: 'sectionHeader', title: 'Deals near you', subtitle: 'Limited-time discounts' });
+      dealsRestaurants.forEach(r => rows.push({ kind: 'restaurant', resto: r }));
+    }
+    rows.push({
+      kind: 'sectionHeader',
+      title: 'All restaurants',
+      subtitle: `${filteredSorted.length} available • Sort: ${SORT_OPTIONS.find(s => s.id === activeSort)?.label}`,
     });
+    filteredSorted.forEach(r => rows.push({ kind: 'restaurant', resto: r }));
+    return rows;
+  }, [filteredSorted, dealsRestaurants, activeSort]);
 
+  // ── Banner navigation ──
+  const handleBannerPress = useCallback((b: any) => {
+    if (!b) return;
+    if (b.linkType === 'restaurant' && b.linkId) {
+      const resto = restaurants.find((r: any) => r.id === b.linkId);
+      navigation.navigate('RestaurantDetail', { restaurantId: b.linkId, restaurantData: resto });
+    } else if (b.linkType === 'category' && b.linkId) {
+      setActiveCuisine(b.linkId);
+    } else if (b.linkType === 'brand' && b.linkId) {
+      navigation.navigate('BrandDetail', { brandId: b.linkId });
+    } else {
+      navigation.navigate('Search', { mode: 'food' });
+    }
+  }, [navigation, restaurants]);
+
+  const cycleSort = useCallback(() => {
+    const idx = SORT_OPTIONS.findIndex(s => s.id === activeSort);
+    setActiveSort(SORT_OPTIONS[(idx + 1) % SORT_OPTIONS.length].id);
+  }, [activeSort]);
+
+  const renderRow: ListRenderItem<ListRow> = useCallback(({ item }) => {
+    switch (item.kind) {
+      case 'banners':
+        return <PromoCarousel banners={banners} onPress={handleBannerPress} />;
+      case 'cuisines':
+        return (
+          <FlatList
+            data={CUISINES}
+            keyExtractor={(c) => c.id}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.cuisineRow}
+            renderItem={({ item: c }) => (
+              <CuisineChip
+                data={c}
+                isActive={activeCuisine === c.id}
+                onPress={() => setActiveCuisine(c.id)}
+              />
+            )}
+          />
+        );
+      case 'toggles':
+        return (
+          <View style={styles.togglesWrap}>
+            <Pressable onPress={cycleSort} style={styles.sortBtn}>
+              <Ionicons name="swap-vertical" size={14} color={theme.colors.textPrimary} />
+              <AppText variant="captionStrong" color={theme.colors.textPrimary}>
+                {SORT_OPTIONS.find(s => s.id === activeSort)?.label}
+              </AppText>
+            </Pressable>
+            {TOGGLES.map(t => {
+              const active = toggles[t.id];
+              return (
+                <Pressable
+                  key={t.id}
+                  onPress={() => setToggles(s => ({ ...s, [t.id]: !s[t.id] }))}
+                  style={[
+                    styles.togglePill,
+                    active ? { backgroundColor: theme.colors.food, borderColor: theme.colors.food } : null,
+                  ]}
+                >
+                  <Ionicons name={t.icon} size={14} color={active ? '#fff' : theme.colors.textSecondary} />
+                  <AppText
+                    variant="captionStrong"
+                    color={active ? '#fff' : theme.colors.textPrimary}
+                  >
+                    {t.label}
+                  </AppText>
+                </Pressable>
+              );
+            })}
+          </View>
+        );
+      case 'sectionHeader':
+        return <SectionHeader title={item.title} subtitle={item.subtitle} />;
+      case 'restaurant':
+        return (
+          <RestaurantCard
+            resto={item.resto}
+            onPress={() =>
+              navigation.navigate('RestaurantDetail', {
+                restaurantId: item.resto.id,
+                restaurantData: item.resto,
+              })
+            }
+          />
+        );
+    }
+  }, [banners, activeCuisine, activeSort, toggles, cycleSort, handleBannerPress, navigation]);
+
+  const keyExtractor = useCallback((item: ListRow, index: number) => {
+    if (item.kind === 'restaurant') return `r-${item.resto.id}`;
+    if (item.kind === 'sectionHeader') return `h-${item.title}-${index}`;
+    return `${item.kind}-${index}`;
+  }, []);
+
+  // ── Header & search ──
   const cartCount = getCartCount('food');
+  const locationLabel = address
+    ? (address.label || (address.streetAddress || '').slice(0, 28) || 'Set delivery address')
+    : 'Set delivery address';
 
-  if (loading) {
+  if (loading && !restaurants.length) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.header}>
-          <View style={styles.headerTop}>
-            <View style={styles.headerLeft}>
-               <SkeletonLoader width={140} height={24} style={{ marginBottom: 4 }} />
-               <SkeletonLoader width={180} height={14} />
-            </View>
-            <SkeletonLoader width={40} height={40} borderRadius={20} />
-          </View>
-        </View>
-
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 30 }}>
-          {/* Banner Skeleton */}
-          <View style={{ margin: 16 }}>
-             <SkeletonLoader width="100%" height={120} borderRadius={20} />
-          </View>
-
-          {/* Cuisine Skeleton */}
-          <SkeletonLoader width={100} height={20} style={{ marginHorizontal: 16, marginBottom: 12 }} />
-          <View style={{ flexDirection: 'row', paddingHorizontal: 16, marginBottom: 16 }}>
-             {[...Array(4)].map((_, i) => (
-               <SkeletonLoader key={i} width={80} height={40} borderRadius={20} style={{ marginRight: 10 }} />
-             ))}
-          </View>
-
-          {/* Restaurants Skeleton */}
-          <View style={styles.sectionHeader}>
-             <SkeletonLoader width={160} height={20} />
-          </View>
-
-          {[...Array(3)].map((_, i) => (
-             <View key={i} style={[styles.restoCard, { paddingBottom: 14 }]}>
-                <SkeletonLoader width="100%" height={100} borderRadius={0} />
-                <View style={{ padding: 14 }}>
-                   <SkeletonLoader width={150} height={20} style={{ marginBottom: 6 }} />
-                   <SkeletonLoader width={80} height={14} style={{ marginBottom: 10 }} />
-                   <View style={{ flexDirection: 'row', gap: 10 }}>
-                      <SkeletonLoader width={70} height={24} borderRadius={12} />
-                      <SkeletonLoader width={70} height={24} borderRadius={12} />
-                   </View>
-                </View>
-             </View>
-          ))}
-        </ScrollView>
+        <HomeHeader
+          locationLabel={locationLabel}
+          cartCount={cartCount}
+          variant="food"
+          greeting="What are you craving today?"
+          onLocationPress={() => navigation.navigate('SavedAddresses')}
+          onNotificationsPress={() => navigation.navigate('Notifications')}
+          onCartPress={() => navigation.navigate('Cart')}
+          onFavouritesPress={() => navigation.navigate('Favourites')}
+        />
+        <HomeSearchBar
+          variant="food"
+          onPress={() => navigation.navigate('Search', { mode: 'food' })}
+          onFilter={() => {}}
+        />
+        <HomeSkeleton />
       </SafeAreaView>
     );
   }
 
-  // ── Main Food Screen ──────────────────────────────────────
+  if (error && !restaurants.length) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <HomeHeader
+          locationLabel={locationLabel}
+          cartCount={cartCount}
+          variant="food"
+          onLocationPress={() => navigation.navigate('SavedAddresses')}
+          onNotificationsPress={() => navigation.navigate('Notifications')}
+          onCartPress={() => navigation.navigate('Cart')}
+          onFavouritesPress={() => navigation.navigate('Favourites')}
+        />
+        <ErrorState message={error} onRetry={() => loadData(true)} />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <View style={styles.headerLeft}>
-            <Text style={styles.headerTitle}>Food Delivery</Text>
-            <Text style={styles.headerSub}>Order from best restaurants</Text>
-          </View>
-          <TouchableOpacity style={styles.cartBtn} onPress={() => navigation.navigate('Cart')}>
-            <Text style={styles.cartIcon}>🛒</Text>
-            {cartCount > 0 && <View style={styles.cartBadge}><Text style={styles.cartBadgeTxt}>{cartCount}</Text></View>}
-          </TouchableOpacity>
-        </View>
+      <HomeHeader
+        locationLabel={locationLabel}
+        cartCount={cartCount}
+        variant="food"
+        greeting="What are you craving today?"
+        onLocationPress={() => navigation.navigate('SavedAddresses')}
+        onNotificationsPress={() => navigation.navigate('Notifications')}
+        onCartPress={() => navigation.navigate('Cart')}
+        onFavouritesPress={() => navigation.navigate('Favourites')}
+        scrollY={scrollY}
+      />
+      <HomeSearchBar
+        variant="food"
+        onPress={() => navigation.navigate('Search', { mode: 'food' })}
+        onFilter={cycleSort}
+      />
 
-        {/* Mart / Food Toggle */}
-      </View>
-
-      <ScrollView
+      <Animated.FlatList
+        data={data}
+        keyExtractor={keyExtractor}
+        renderItem={renderRow as any}
+        contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FF4500" colors={['#FF4500']} />}
-        contentContainerStyle={{ paddingBottom: 30 }}
-      >
-        {/* Food Banner Carousel */}
-        <BannerCarousel
-          banners={banners}
-          autoScrollInterval={5000}
-          fallbackBanner={{
-            id: 'food-fallback',
-            title: "Hungry? We've got you!",
-            subtitle: '30 min delivery • Free on Rs 500+',
-            tagLabel: '🔥 Flash Deals',
-            backgroundColor: '#1A1A1A',
-            textColor: '#fff',
-          }}
-          onPress={(b: any) => {
-            if (b.linkType === 'restaurant' && b.linkId) {
-              const resto = restaurants.find((r: any) => r.id === b.linkId);
-              navigation.navigate('RestaurantDetail', {
-                restaurantId: b.linkId,
-                restaurantData: resto
-              });
-            } else if (b.linkType === 'product' && b.linkId) {
-              // Food mode product usually belongs to a restaurant, 
-              // but for now we'll just navigate to the search if detail isn't clear
-              navigation.navigate('Search', { mode: 'food', query: b.linkId });
-            } else if (b.linkType === 'category' && b.linkId) {
-              setActiveCuisine(b.linkId);
-            } else if (b.linkType === 'brand' && b.linkId) {
-              navigation.navigate('BrandDetail', { brandId: b.linkId });
-            }
-          }}
-        />
-
-
-        {/* Cuisine Filter */}
-        <Text style={styles.sectionTitle}>Cuisines</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cuisineRow}>
-          {CUISINES.map(c => (
-            <CuisineChip
-              key={c.id}
-              label={c.label}
-              emoji={c.emoji}
-              isActive={activeCuisine === c.id}
-              onPress={() => setActiveCuisine(c.id)}
-            />
-          ))}
-        </ScrollView>
-
-        {/* Restaurants */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Nearby Restaurants</Text>
-          <Text style={styles.restoCount}>{sortedFilteredRestaurants.length} available</Text>
-        </View>
-
-        {sortedFilteredRestaurants.length === 0 ? (
-          <View style={styles.emptyMenu}>
-            <Text style={styles.emptyMenuTxt}>
-              {restaurants.length === 0
-                ? "No restaurants added yet.\nCheck back soon!"
-                : activeCuisine !== 'all'
-                  ? "No restaurants found for this category."
-                  : `Your address is outside of active delivery zones for nearby restaurants.\nPlease select a different address.`}
-            </Text>
-          </View>
-        ) : (
-          sortedFilteredRestaurants.map((resto: any) => (
-            <RestaurantCard
-              key={resto.id}
-              resto={resto}
-              onPress={() => navigation.navigate('RestaurantDetail', { restaurantData: resto })}
-            />
-          ))
+        initialNumToRender={5}
+        maxToRenderPerBatch={6}
+        windowSize={9}
+        removeClippedSubviews
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true },
         )}
-      </ScrollView>
+        scrollEventThrottle={16}
+        ListEmptyComponent={
+          <EmptyState
+            icon="restaurant-outline"
+            title="No restaurants found"
+            subtitle="Try a different cuisine or address."
+          />
+        }
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.colors.food}
+            colors={[theme.colors.food]}
+          />
+        }
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F7F8FA', paddingBottom: 35 },
-  loader: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' },
-  loaderTxt: { marginTop: 12, color: '#888', fontSize: 14, fontWeight: '600' },
-  fillImg: { width: '100%', height: '100%' },
+  container: { flex: 1, backgroundColor: theme.colors.background },
+  listContent: { paddingBottom: 110 },
 
-  // Header
-  header: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
+  // Cuisine chips
+  cuisineRow: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.sm,
+    gap: theme.spacing.sm,
   },
-  headerTop: {
+  cuisineChip: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    gap: 6,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.radius.pill,
+    borderWidth: 1.5,
+    marginRight: theme.spacing.sm,
   },
-  headerLeft: { flex: 1 },
-  headerTitle: { fontSize: 20, fontWeight: '900', color: '#1A1A1A' },
-  headerSub: { fontSize: 12, color: '#999', marginTop: 2 },
-  backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F5F5F5', justifyContent: 'center', alignItems: 'center' },
-  backArrow: { fontSize: 22, color: '#333' },
-  cartBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#FFF5F0', justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: '#FFD8C4' },
-  cartIcon: { fontSize: 18 },
-  cartBadge: { position: 'absolute', top: -4, right: -4, backgroundColor: '#FF4500', borderRadius: 9, minWidth: 18, height: 18, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 3, borderWidth: 1.5, borderColor: '#fff' },
-  cartBadgeTxt: { color: '#fff', fontSize: 10, fontWeight: '900' },
 
-  // Toggle
-  toggleWrap: {
+  // Filter / toggles
+  togglesWrap: {
     flexDirection: 'row',
-    backgroundColor: '#F0F2F5',
-    borderRadius: 14,
-    padding: 4,
+    flexWrap: 'wrap',
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.sm,
+    gap: theme.spacing.sm,
   },
-  toggleSegment: {
-    flex: 1,
+  sortBtn: {
     flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 8,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  togglePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 8,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+
+  // Restaurant card
+  card: {
+    marginHorizontal: theme.spacing.lg,
+    marginBottom: theme.spacing.md,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.lg,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: theme.colors.divider,
+    ...theme.shadows.sm,
+  },
+  coverWrap: {
+    height: 140,
+    backgroundColor: theme.colors.surfaceMuted,
+    overflow: 'hidden',
+  },
+  placeholder: {
+    backgroundColor: theme.colors.food,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: 11,
+  },
+  coverBadges: {
+    position: 'absolute',
+    top: 10, left: 10,
+    flexDirection: 'row',
     gap: 6,
   },
-  toggleSegmentActive: {
-    backgroundColor: '#FF4500',
-    elevation: 3,
-    shadowColor: '#FF4500',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
+  closedPill: {
+    position: 'absolute',
+    alignSelf: 'center',
+    top: '40%',
+    backgroundColor: 'rgba(15,23,42,0.85)',
+    paddingHorizontal: 14, paddingVertical: 6,
+    borderRadius: theme.radius.pill,
   },
-  toggleSegmentIcon: { fontSize: 16 },
-  toggleSegmentLabel: { fontSize: 14, fontWeight: '700', color: '#888' },
-  toggleSegmentLabelActive: { color: '#fff' },
-
-  // Banner
-  banner: {
-    margin: 16, borderRadius: 20, backgroundColor: '#1A1A1A',
-    flexDirection: 'row', padding: 20, alignItems: 'center',
-    elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.2, shadowRadius: 12,
+  logoCircle: {
+    position: 'absolute',
+    bottom: 10, right: 10,
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: '#fff',
+    alignItems: 'center', justifyContent: 'center',
+    overflow: 'hidden',
+    ...theme.shadows.sm,
   },
-  bannerTag: { fontSize: 11, color: '#FF8C69', fontWeight: '700', marginBottom: 6, textTransform: 'uppercase' },
-  bannerTitle: { fontSize: 20, fontWeight: '900', color: '#fff', lineHeight: 26, marginBottom: 8 },
-  bannerSub: { fontSize: 11, color: '#888' },
-  bannerText: { flex: 1 },
-  bannerEmoji: { fontSize: 60, marginLeft: 10 },
+  logoImg: { width: 40, height: 40, borderRadius: 20 },
 
-  // Section
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 8 },
-  sectionTitle: { marginHorizontal: 16, marginTop: 8, marginBottom: 12, fontSize: 17, fontWeight: '800', color: '#1A1A1A' },
-  restoCount: { fontSize: 12, color: '#888', fontWeight: '700' },
-
-  // Cuisines
-  cuisineRow: { paddingLeft: 16, paddingRight: 8, paddingBottom: 8 },
-  cuisineChip: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 14, paddingVertical: 10, borderRadius: 25, marginRight: 10,
-    backgroundColor: '#F0F2F5', borderWidth: 1.5, borderColor: 'transparent',
+  info: { padding: theme.spacing.md },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, marginBottom: 2 },
+  rating: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.warningLight,
+    paddingHorizontal: 6, paddingVertical: 2,
+    borderRadius: theme.radius.pill,
   },
-  cuisineChipActive: { backgroundColor: '#FFF5F0', borderColor: '#FF4500' },
-  cuisineEmoji: { fontSize: 16, marginRight: 6 },
-  cuisineTxt: { fontSize: 13, fontWeight: '700', color: '#666' },
-  cuisineTxtActive: { color: '#FF4500' },
-
-  // Restaurant Card
-  restoCard: {
-    marginHorizontal: 16, marginBottom: 14, borderRadius: 20,
-    backgroundColor: '#fff', overflow: 'hidden',
-    elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 8,
-    borderWidth: 1, borderColor: '#F0F0F0',
+  metaRow: {
+    marginTop: theme.spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.md,
   },
-  restoCover: {
-    height: 100, backgroundColor: '#1A1A1A',
-    justifyContent: 'center', alignItems: 'center',
-  },
-  restoCoverEmoji: { fontSize: 50 },
-  restoTag: { position: 'absolute', top: 10, left: 12, backgroundColor: '#FF4500', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
-  restoTagTxt: { color: '#fff', fontSize: 11, fontWeight: '800' },
-  closedPill: { position: 'absolute', backgroundColor: 'rgba(255,255,255,0.95)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, elevation: 4 },
-  closedPillTxt: { color: '#FF4500', fontSize: 13, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.5 },
-  restoInfo: { padding: 14 },
-  restoTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  restoName: { fontSize: 16, fontWeight: '800', color: '#1A1A1A', flex: 1 },
-  ratingBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF8E1', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
-  ratingStar: { fontSize: 12, marginRight: 3 },
-  ratingValue: { fontSize: 13, fontWeight: '800', color: '#F59E0B' },
-  restoCuisine: { fontSize: 12, color: '#888', marginBottom: 10 },
-  restoMetaRow: { flexDirection: 'row', gap: 10, marginBottom: 10 },
-  metaChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5F6FA', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
-  metaIcon: { fontSize: 12, marginRight: 4 },
-  metaTxt: { fontSize: 12, fontWeight: '600', color: '#555' },
-  locationRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0F7FF', padding: 8, borderRadius: 10 },
-  pinIcon: { fontSize: 14, marginRight: 6 },
-  locationTxt: { fontSize: 12, color: '#2563EB', fontWeight: '600', flex: 1 },
-
-  // Restaurant Detail
-  restoDetailBanner: {
-    backgroundColor: '#1A1A1A', padding: 24, alignItems: 'center',
-    margin: 16, borderRadius: 20,
-  },
-  restoDetailEmoji: { fontSize: 64, marginBottom: 12 },
-  restoDetailName: { fontSize: 22, fontWeight: '900', color: '#fff', textAlign: 'center', marginBottom: 4 },
-  restoDetailCuisine: { fontSize: 13, color: '#888', textAlign: 'center', marginBottom: 12 },
-  restoDetailMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
-  restoDetailRating: { fontSize: 13, color: '#F59E0B', fontWeight: '700' },
-  restoDetailTime: { fontSize: 13, color: '#aaa', fontWeight: '700' },
-  restoDetailFee: { fontSize: 13, color: '#aaa', fontWeight: '700' },
-  restoDetailDot: { color: '#555' },
-  restoLocationCard: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 14, padding: 12, gap: 10, width: '100%',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
-  },
-  restoLocationIcon: { fontSize: 20 },
-  restoLocationLabel: { fontSize: 11, color: '#888', fontWeight: '600', marginBottom: 2 },
-  restoLocationAddr: { fontSize: 13, color: '#fff', fontWeight: '700' },
-
-  // Menu
-  menuSectionTitle: { marginHorizontal: 16, marginVertical: 14, fontSize: 17, fontWeight: '800', color: '#1A1A1A' },
-  menuCard: {
-    flexDirection: 'row', marginHorizontal: 16, marginBottom: 12,
-    backgroundColor: '#fff', borderRadius: 18, padding: 12,
-    elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 6,
-    borderWidth: 1, borderColor: '#F5F5F5',
-  },
-  menuImgWrap: { width: 80, height: 80, borderRadius: 14, backgroundColor: '#F7F8FA', marginRight: 14, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
-  menuEmoji: { fontSize: 32 },
-  menuInfo: { flex: 1, justifyContent: 'space-between' },
-  menuName: { fontSize: 15, fontWeight: '700', color: '#1A1A1A' },
-  menuDesc: { fontSize: 12, color: '#999', marginVertical: 4 },
-  menuBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  menuPrice: { fontSize: 15, fontWeight: '900', color: '#FF4500' },
-  menuAddBtn: { backgroundColor: '#FF4500', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20 },
-  menuAddBtnDisabled: { backgroundColor: '#CCC' },
-  menuAddTxt: { color: '#fff', fontSize: 12, fontWeight: '700' },
-
-  oosOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end', alignItems: 'center', paddingBottom: 6 },
-  oosText: { color: '#fff', fontSize: 10, fontWeight: '700' },
-
-  emptyMenu: { padding: 40, alignItems: 'center' },
-  emptyMenuTxt: { color: '#999', fontSize: 14 },
-  restoCardClosed: { opacity: 0.65 },
+  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
 });

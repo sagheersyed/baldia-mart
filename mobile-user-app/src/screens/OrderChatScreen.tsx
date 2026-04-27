@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, TextInput,
-  TouchableOpacity, KeyboardAvoidingView, Platform,
-  ActivityIndicator, Alert, Modal, Pressable, Vibration
+  View, StyleSheet, FlatList, TextInput,
+  Pressable, KeyboardAvoidingView, Platform,
+  ActivityIndicator, Alert, Modal, Vibration,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { connectSocket, ordersApi, socket } from '../api/api';
@@ -12,6 +12,9 @@ import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
+
+import { AppText, AppButton, AppIconButton, EmptyState } from '../components/ui';
+import { theme } from '../theme/theme';
 
 export default function OrderChatScreen() {
   const route = useRoute();
@@ -31,25 +34,18 @@ export default function OrderChatScreen() {
   const flatListRef = useRef<FlatList>(null);
 
   useEffect(() => {
-    navigation.setOptions({ headerTitle: riderName || 'Chat with Rider' });
+    navigation.setOptions({ headerShown: false });
     loadHistory();
     connectSocket();
 
-    const onConnect = () => {
-      socket.emit('joinOrder', orderId);
-    };
+    const onConnect = () => { socket.emit('joinOrder', orderId); };
     const onReceiveMessage = (msg: any) => {
       setMessages(prev => {
         const filtered = prev.filter(m => !m.sending || m.message !== msg.message || m.type !== msg.type);
         if (filtered.some(m => m.id === msg.id)) return filtered;
         return [...filtered, msg];
       });
-
-      // Haptic feedback for incoming messages from Rider
-      if (msg.senderType === 'rider') {
-        Vibration.vibrate(100);
-      }
-
+      if (msg.senderType === 'rider') Vibration.vibrate(100);
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     };
 
@@ -62,14 +58,15 @@ export default function OrderChatScreen() {
       socket.off('connect', onConnect);
       socket.off('receiveMessage', onReceiveMessage);
     };
-  }, [navigation, orderId, riderName]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderId]);
 
   const loadHistory = async () => {
     try {
       const res = await ordersApi.getChatHistory(orderId);
       setMessages(res.data);
-    } catch (err) {
-      console.error('Failed to load chat history', err);
+    } catch {
+      // noop
     } finally {
       setLoading(false);
     }
@@ -88,7 +85,7 @@ export default function OrderChatScreen() {
       replyToId: replyingTo?.id,
       replyTo: replyingTo,
       createdAt: new Date().toISOString(),
-      sending: true
+      sending: true,
     };
 
     setMessages(prev => [...prev, optimisticMsg]);
@@ -100,15 +97,15 @@ export default function OrderChatScreen() {
       senderType: 'user',
       message: inputText.trim(),
       type: 'text',
-      replyToId: replyingTo?.id
+      replyToId: replyingTo?.id,
     });
-    
+
     if (replyingTo && !chatEnabledReplies) {
-       Alert.alert('Replies Disabled', 'Message replies are currently disabled by admin.');
-       setReplyingTo(null);
-       return;
+      Alert.alert('Replies disabled', 'Message replies are currently disabled by admin.');
+      setReplyingTo(null);
+      return;
     }
-    
+
     setInputText('');
     setReplyingTo(null);
   };
@@ -120,18 +117,17 @@ export default function OrderChatScreen() {
       senderType: 'user',
       message: `I have ${decision} the replacement suggestion.`,
       type: 'text',
-      metadata: { decision, originalMsgId: msgId }
+      metadata: { decision, originalMsgId: msgId },
     });
-    
-    // Optimistically update the UI if we want to hide buttons
     setMessages(prev => prev.map(m => m.id === msgId ? { ...m, decisionMade: decision } : m));
   };
+
   const getFullImageUrl = (path: string) => {
     if (!path) return null;
     if (path.startsWith('http')) return path;
     return `${ENV.SOCKET_URL}${path.startsWith('/') ? '' : '/'}${path}`;
   };
- 
+
   const scrollToMessage = (msgId: string) => {
     if (!msgId) return;
     const index = messages.findIndex(m => m.id === msgId);
@@ -142,260 +138,339 @@ export default function OrderChatScreen() {
     }
   };
 
-  const renderMessage = ({ item }: { item: any }) => {
+  const formatTime = (dateStr: string) =>
+    new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  const renderMessage = ({ item, index }: { item: any; index: number }) => {
     const isMe = item.senderType === 'user';
     const isReplacement = item.type === 'replacement_suggestion';
     const fullImageUrl = getFullImageUrl(item.imageUrl);
     const replyToMsg = item.replyTo;
 
+    const prev = messages[index - 1];
+    const sameSenderAsPrev = prev && prev.senderType === item.senderType;
+    const showSenderTag = !isMe && !sameSenderAsPrev;
+    const senderLabel = item.senderType === 'rider'
+      ? (riderName || 'Rider')
+      : item.senderType === 'admin' ? 'Support' : 'You';
+
     return (
       <View style={[styles.msgWrapper, isMe ? styles.myMsgWrapper : styles.theirMsgWrapper]}>
-        <TouchableOpacity 
-          activeOpacity={0.9}
-          onLongPress={() => {
-            if (chatEnabledReplies) setReplyingTo(item);
-          }}
-          style={[styles.msgBubble, isMe ? styles.myMsgBubble : styles.theirMsgBubble]}
-        >
-          {replyToMsg && (
-            <TouchableOpacity 
-              activeOpacity={0.7}
-              onPress={() => scrollToMessage(replyToMsg.id)}
-              style={[styles.replyQuote, isMe ? styles.myReplyQuote : styles.theirReplyQuote]}
-            >
-              <Text style={styles.replyQuoteTitle}>{replyToMsg.senderType === 'user' ? 'You' : riderName || 'Rider'}</Text>
-              <Text style={styles.replyQuoteText} numberOfLines={2}>{replyToMsg.message || (replyToMsg.imageUrl ? 'Photo' : '')}</Text>
-            </TouchableOpacity>
-          )}
-
-          {fullImageUrl && (
-            <TouchableOpacity onPress={() => setSelectedImage(fullImageUrl)}>
-              <Image source={{ uri: fullImageUrl }} style={styles.msgImage} contentFit="cover" />
-            </TouchableOpacity>
-          )}
-          {item.message && (
-            <Text style={[styles.msgText, isMe ? styles.myMsgText : styles.theirMsgText]}>
-              {item.message}
-            </Text>
-          )}
-
-          {isReplacement && !isMe && !item.decisionMade && (
-            <View style={styles.actionRow}>
-              <TouchableOpacity 
-                style={[styles.actionBtn, styles.approveBtn]} 
-                onPress={() => handleDecision(item.id, 'approved')}
+        <View style={{ maxWidth: '82%' }}>
+          {showSenderTag ? (
+            <AppText variant="overline" color={theme.colors.textSecondary} style={{ marginLeft: theme.spacing.sm, marginBottom: 4 }}>
+              {senderLabel}
+            </AppText>
+          ) : null}
+          <Pressable
+            onLongPress={() => { if (chatEnabledReplies) setReplyingTo(item); }}
+            style={[
+              styles.bubble,
+              isMe ? styles.myBubble : styles.theirBubble,
+            ]}
+          >
+            {replyToMsg ? (
+              <Pressable
+                onPress={() => scrollToMessage(replyToMsg.id)}
+                style={[styles.replyQuote, isMe ? styles.myReplyQuote : styles.theirReplyQuote]}
               >
-                <Text style={styles.actionBtnText}>Approve</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.actionBtn, styles.rejectBtn]} 
-                onPress={() => handleDecision(item.id, 'rejected')}
+                <AppText variant="badge" color={isMe ? '#fff' : theme.colors.primary}>
+                  {replyToMsg.senderType === 'user' ? 'You' : (riderName || 'Rider')}
+                </AppText>
+                <AppText
+                  variant="caption"
+                  color={isMe ? 'rgba(255,255,255,0.8)' : theme.colors.textSecondary}
+                  numberOfLines={2}
+                >
+                  {replyToMsg.message || (replyToMsg.imageUrl ? 'Photo' : '')}
+                </AppText>
+              </Pressable>
+            ) : null}
+
+            {fullImageUrl ? (
+              <Pressable onPress={() => setSelectedImage(fullImageUrl)}>
+                <Image source={{ uri: fullImageUrl }} style={styles.msgImage} contentFit="cover" />
+              </Pressable>
+            ) : null}
+
+            {item.message ? (
+              <AppText
+                variant="body"
+                color={isMe ? '#fff' : theme.colors.textPrimary}
               >
-                <Text style={styles.actionBtnText}>Reject</Text>
-              </TouchableOpacity>
+                {item.message}
+              </AppText>
+            ) : null}
+
+            {isReplacement && !isMe && !item.decisionMade ? (
+              <View style={styles.actionRow}>
+                <AppButton
+                  label="Approve"
+                  variant="primary"
+                  tint={theme.colors.success}
+                  size="sm"
+                  fullWidth
+                  onPress={() => handleDecision(item.id, 'approved')}
+                  style={{ flex: 1 }}
+                />
+                <AppButton
+                  label="Reject"
+                  variant="primary"
+                  tint={theme.colors.danger}
+                  size="sm"
+                  fullWidth
+                  onPress={() => handleDecision(item.id, 'rejected')}
+                  style={{ flex: 1 }}
+                />
+              </View>
+            ) : null}
+
+            <View style={styles.timeRow}>
+              <AppText
+                variant="badge"
+                color={isMe ? 'rgba(255,255,255,0.7)' : theme.colors.textMuted}
+              >
+                {formatTime(item.createdAt)}
+              </AppText>
+              {item.sending ? (
+                <Ionicons name="time-outline" size={11} color={isMe ? 'rgba(255,255,255,0.7)' : theme.colors.textMuted} />
+              ) : isMe ? (
+                <Ionicons name="checkmark-done" size={11} color="rgba(255,255,255,0.85)" />
+              ) : null}
             </View>
-          )}
-          {item.sending && (
-            <Text style={styles.sendingText}>Sending...</Text>
-          )}
-
-          <Text style={[styles.msgTime, isMe && styles.myMsgTime]}>
-            {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </Text>
-        </TouchableOpacity>
+          </Pressable>
+        </View>
       </View>
     );
   };
 
   if (settings?.feature_chat_enabled === false) {
     return (
-      <View style={styles.center}>
-        <Text style={{ color: '#888', fontSize: 16 }}>Order Chat has been disabled by Admin.</Text>
-        <TouchableOpacity 
-          style={{ marginTop: 20, backgroundColor: '#FF4500', padding: 12, borderRadius: 10 }}
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={{ color: '#fff' }}>Back to Order</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color="#FF4500" />
-      </View>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <AppIconButton size={36} bg={theme.colors.surfaceMuted} onPress={() => navigation.goBack()}>
+            <Ionicons name="chevron-back" size={20} color={theme.colors.textPrimary} />
+          </AppIconButton>
+          <AppText variant="h2">Chat</AppText>
+        </View>
+        <EmptyState
+          icon="chatbubbles-outline"
+          title="Chat unavailable"
+          subtitle="Order chat has been disabled by the admin."
+          actionLabel="Back to order"
+          onAction={() => navigation.goBack()}
+        />
+      </SafeAreaView>
     );
   }
 
   return (
-    <KeyboardAvoidingView 
-      style={{ flex: 1, backgroundColor: '#121212' }} 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 80}
-    >
-      <SafeAreaView style={{ flex: 1 }} edges={['bottom']}>
-        <FlatList
-          ref={flatListRef}
-          data={messages}
-          renderItem={renderMessage}
-          keyExtractor={item => item.id || Math.random().toString()}
-          contentContainerStyle={styles.listContent}
-          onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
-        />
-
-        {replyingTo && (
-          <View style={styles.replyPreviewHeader}>
-            <View style={styles.replyPreviewBar} />
-            <View style={styles.replyPreviewContent}>
-              <Text style={styles.replyPreviewTitle}>Replying to {replyingTo.senderType === 'user' ? 'yourself' : riderName || 'Rider'}</Text>
-              <Text style={styles.replyPreviewText} numberOfLines={1}>{replyingTo.message || (replyingTo.imageUrl ? 'Photo' : '')}</Text>
-            </View>
-            <TouchableOpacity onPress={() => setReplyingTo(null)}>
-              <Ionicons name="close-circle" size={24} color="#888" />
-            </TouchableOpacity>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Header */}
+      <View style={styles.header}>
+        <AppIconButton size={36} bg={theme.colors.surfaceMuted} onPress={() => navigation.goBack()}>
+          <Ionicons name="chevron-back" size={20} color={theme.colors.textPrimary} />
+        </AppIconButton>
+        <View style={[styles.avatar, { backgroundColor: theme.colors.primaryLight }]}>
+          <AppText variant="bodyStrong" color={theme.colors.primary}>
+            {(riderName || 'R')[0].toUpperCase()}
+          </AppText>
+        </View>
+        <View style={{ flex: 1 }}>
+          <AppText variant="h3">{riderName || 'Order chat'}</AppText>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <View style={styles.onlineDot} />
+            <AppText variant="caption">Order #{String(orderId).slice(0, 6).toUpperCase()}</AppText>
           </View>
+        </View>
+      </View>
+
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      >
+        {loading ? (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <ActivityIndicator color={theme.colors.primary} />
+          </View>
+        ) : messages.length === 0 ? (
+          <EmptyState
+            icon="chatbubble-ellipses-outline"
+            title="No messages yet"
+            subtitle="Send a message to your rider for delivery instructions."
+          />
+        ) : (
+          <FlatList
+            ref={flatListRef}
+            data={messages}
+            renderItem={renderMessage}
+            keyExtractor={item => item.id || Math.random().toString()}
+            contentContainerStyle={styles.listContent}
+            onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
+            showsVerticalScrollIndicator={false}
+          />
         )}
 
+        {replyingTo ? (
+          <View style={styles.replyPreviewBar}>
+            <View style={styles.replyAccent} />
+            <View style={{ flex: 1 }}>
+              <AppText variant="captionStrong" color={theme.colors.primary}>
+                Replying to {replyingTo.senderType === 'user' ? 'yourself' : (riderName || 'Rider')}
+              </AppText>
+              <AppText variant="caption" numberOfLines={1}>
+                {replyingTo.message || (replyingTo.imageUrl ? 'Photo' : '')}
+              </AppText>
+            </View>
+            <Pressable onPress={() => setReplyingTo(null)} hitSlop={8}>
+              <Ionicons name="close-circle" size={22} color={theme.colors.textSecondary} />
+            </Pressable>
+          </View>
+        ) : null}
+
         <View style={styles.inputArea}>
-          {chatEnabledImages && (
-            <TouchableOpacity style={styles.attachBtn} onPress={() => Alert.alert('Pick Image', 'Image picker to be implemented')}>
-               <Ionicons name="image-outline" size={24} color="#666" />
-            </TouchableOpacity>
-          )}
+          {chatEnabledImages ? (
+            <AppIconButton
+              size={40}
+              bg={theme.colors.surfaceMuted}
+              onPress={() => Alert.alert('Pick image', 'Image picker to be implemented')}
+            >
+              <Ionicons name="image-outline" size={20} color={theme.colors.textSecondary} />
+            </AppIconButton>
+          ) : null}
           <TextInput
             style={styles.input}
-            placeholder="Type a message..."
-            placeholderTextColor="#666"
+            placeholder="Type a message…"
+            placeholderTextColor={theme.colors.textMuted}
             value={inputText}
             onChangeText={setInputText}
             multiline
           />
-          <TouchableOpacity 
-            style={[styles.sendBtn, !inputText.trim() && styles.sendBtnDisabled]} 
+          <AppIconButton
+            size={44}
+            bg={inputText.trim() ? theme.colors.primary : theme.colors.surfaceMuted}
             onPress={handleSend}
             disabled={!inputText.trim()}
           >
-            <Ionicons name="send" size={20} color="#fff" />
-          </TouchableOpacity>
+            <Ionicons
+              name="send"
+              size={18}
+              color={inputText.trim() ? '#fff' : theme.colors.textMuted}
+              style={{ marginLeft: -2 }}
+            />
+          </AppIconButton>
         </View>
-      </SafeAreaView>
+      </KeyboardAvoidingView>
+
       <Modal visible={!!selectedImage} transparent animationType="fade">
-        <View style={styles.modalBg}>
-          <Pressable style={styles.modalCloseArea} onPress={() => setSelectedImage(null)} />
-          <Image source={selectedImage || ''} style={styles.fullImage} contentFit="contain" />
-          <TouchableOpacity style={styles.fullCloseBtn} onPress={() => setSelectedImage(null)}>
-            <Ionicons name="close" size={30} color="#fff" />
-          </TouchableOpacity>
+        <View style={styles.imageOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setSelectedImage(null)} />
+          {selectedImage ? (
+            <Image source={{ uri: selectedImage }} style={styles.fullImage} contentFit="contain" />
+          ) : null}
+          <AppIconButton
+            size={44}
+            bg="rgba(255,255,255,0.18)"
+            style={styles.imageCloseBtn}
+            onPress={() => setSelectedImage(null)}
+          >
+            <Ionicons name="close" size={22} color="#fff" />
+          </AppIconButton>
         </View>
       </Modal>
-    </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8F9FB' },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  listContent: { padding: 16, paddingBottom: 24 },
-  msgWrapper: { marginBottom: 12, flexDirection: 'row', width: '100%' },
+  container: { flex: 1, backgroundColor: theme.colors.background },
+
+  header: {
+    flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.sm,
+    backgroundColor: theme.colors.surface,
+    borderBottomWidth: 1, borderBottomColor: theme.colors.divider,
+  },
+  avatar: {
+    width: 40, height: 40, borderRadius: 20,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  onlineDot: {
+    width: 8, height: 8, borderRadius: 4,
+    backgroundColor: theme.colors.success,
+  },
+
+  listContent: { padding: theme.spacing.lg, paddingBottom: theme.spacing.lg, gap: 4 },
+  msgWrapper: { flexDirection: 'row', marginBottom: theme.spacing.sm },
   myMsgWrapper: { justifyContent: 'flex-end' },
   theirMsgWrapper: { justifyContent: 'flex-start' },
-  msgBubble: {
-    maxWidth: '80%',
-    padding: 12,
-    borderRadius: 20,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+
+  bubble: {
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.radius.lg,
+    ...theme.shadows.sm,
   },
-  myMsgBubble: {
-    backgroundColor: '#FF4500',
-    borderBottomRightRadius: 4,
+  myBubble: {
+    backgroundColor: theme.colors.primary,
+    borderBottomRightRadius: 6,
   },
-  theirMsgBubble: {
-    backgroundColor: '#fff',
-    borderBottomLeftRadius: 4,
+  theirBubble: {
+    backgroundColor: theme.colors.surface,
+    borderBottomLeftRadius: 6,
   },
-  msgText: { fontSize: 15, lineHeight: 20 },
-  myMsgText: { color: '#fff' },
-  theirMsgText: { color: '#1A1A1A' },
-  msgImage: { width: 220, height: 160, borderRadius: 12, marginBottom: 8 },
-  msgTime: { fontSize: 10, color: 'rgba(0,0,0,0.4)', marginTop: 4, textAlign: 'right' },
-  myMsgTime: { color: 'rgba(255,255,255,0.6)' },
+  msgImage: { width: 220, height: 160, borderRadius: theme.radius.md, marginBottom: theme.spacing.sm },
+
+  timeRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4, alignSelf: 'flex-end' },
+
+  replyQuote: {
+    padding: theme.spacing.sm,
+    borderRadius: theme.radius.sm,
+    marginBottom: theme.spacing.sm,
+    borderLeftWidth: 3,
+  },
+  myReplyQuote: {
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderLeftColor: '#fff',
+  },
+  theirReplyQuote: {
+    backgroundColor: theme.colors.primaryLight,
+    borderLeftColor: theme.colors.primary,
+  },
+
+  actionRow: {
+    flexDirection: 'row', gap: theme.spacing.sm, marginTop: theme.spacing.sm,
+    paddingTop: theme.spacing.sm,
+    borderTopWidth: 1, borderTopColor: theme.colors.divider,
+  },
+
   inputArea: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
+    flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm,
+    padding: theme.spacing.md,
+    backgroundColor: theme.colors.surface,
+    borderTopWidth: 1, borderTopColor: theme.colors.divider,
   },
   input: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
-    borderRadius: 25,
-    paddingHorizontal: 20,
+    backgroundColor: theme.colors.surfaceMuted,
+    borderRadius: theme.radius.pill,
+    paddingHorizontal: theme.spacing.md,
     paddingVertical: 10,
-    color: '#1A1A1A',
-    fontSize: 15,
-    maxHeight: 100,
+    color: theme.colors.textPrimary,
+    fontSize: 14,
+    maxHeight: 96,
   },
-  sendBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#FF4500',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 10,
+
+  replyPreviewBar: {
+    flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.sm,
+    backgroundColor: theme.colors.surface,
+    borderTopWidth: 1, borderTopColor: theme.colors.divider,
   },
-  attachBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#F5F5F5',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  sendBtnDisabled: { backgroundColor: '#FFD1C1' },
-  replyPreviewHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 10,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
-  },
-  replyPreviewBar: { width: 4, height: '100%', backgroundColor: '#FF4500', borderRadius: 2, marginRight: 10 },
-  replyPreviewContent: { flex: 1 },
-  replyPreviewTitle: { color: '#FF4500', fontSize: 12, fontWeight: 'bold' },
-  replyPreviewText: { color: '#666', fontSize: 13 },
-  replyQuote: {
-    backgroundColor: 'rgba(0,0,0,0.05)',
-    padding: 8,
-    borderRadius: 8,
-    marginBottom: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: '#FF4500',
-  },
-  myReplyQuote: { borderLeftColor: '#fff', backgroundColor: 'rgba(255,255,255,0.2)' },
-  theirReplyQuote: { borderLeftColor: '#FF4500' },
-  replyQuoteTitle: { fontSize: 12, fontWeight: 'bold', color: '#FF4500' },
-  replyQuoteText: { fontSize: 13, color: '#666' },
-  modalBg: { flex: 1, backgroundColor: 'black', justifyContent: 'center', alignItems: 'center' },
-  modalCloseArea: { ...StyleSheet.absoluteFillObject },
-  fullImage: { width: '100%', height: '80%' },
-  fullCloseBtn: { position: 'absolute', top: 50, right: 20, zIndex: 10, padding: 10 },
-  actionRow: { flexDirection: 'row', gap: 10, marginTop: 12, borderTopWidth: 1, borderTopColor: '#F0F0F0', paddingTop: 12 },
-  actionBtn: { flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: 'center' },
-  approveBtn: { backgroundColor: '#22C55E' },
-  rejectBtn: { backgroundColor: '#EF4444' },
-  actionBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
-  decisionBadge: { marginTop: 8, alignSelf: 'center', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20, backgroundColor: '#F0F0F0' },
-  decisionText: { fontSize: 12, fontWeight: 'bold', color: '#666' },
-  sendingText: { fontSize: 10, color: 'rgba(0,0,0,0.4)', fontStyle: 'italic', marginTop: 2, textAlign: 'right', marginRight: 4 },
+  replyAccent: { width: 3, height: 32, borderRadius: 2, backgroundColor: theme.colors.primary },
+
+  imageOverlay: { flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' },
+  fullImage: { width: '100%', height: '85%' },
+  imageCloseBtn: { position: 'absolute', top: 50, right: 20 },
 });

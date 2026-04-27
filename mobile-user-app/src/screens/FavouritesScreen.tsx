@@ -1,34 +1,43 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Image, FlatList, Alert
+  View, StyleSheet, FlatList, Alert, Pressable, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
+
 import { useFavourites } from '../hooks/useFavourites';
-import { normalizeUrl, restaurantsApi, productsApi } from '../api/api';
+import { restaurantsApi, productsApi } from '../api/api';
 import { useCart } from '../context/CartContext';
 import { useSettings } from '../context/SettingsContext';
-import { formatRatingCount, isBusinessOpen } from '../utils/helpers';
+import { isBusinessOpen } from '../utils/helpers';
+
+import {
+  AppText, AppIconButton, EmptyState,
+} from '../components/ui';
+import StoreCard from '../components/home/StoreCard';
+import ProductCard from '../components/home/ProductCard';
+import { theme } from '../theme/theme';
 
 const TABS = ['Restaurants', 'Products'] as const;
+type TabKey = typeof TABS[number];
 
 export default function FavouritesScreen({ navigation }: any) {
   const { settings } = useSettings();
   const showMart = settings?.feature_show_mart !== false;
   const showFood = settings?.feature_show_restaurants !== false;
 
-  const [activeTab, setActiveTab] = useState<'Restaurants' | 'Products'>(showFood ? 'Restaurants' : 'Products');
+  const initialTab: TabKey = showFood ? 'Restaurants' : 'Products';
+  const [activeTab, setActiveTab] = useState<TabKey>(initialTab);
   const [syncing, setSyncing] = useState(false);
   const { restaurants, products, toggleFavourite, reload, syncFromApi } = useFavourites();
-  const { foodCart, martCart, addToCart } = useCart();
+  const { foodCart, martCart, addToCart, updateQuantity } = useCart();
 
-  // Reload when screen comes into focus
   useFocusEffect(useCallback(() => {
     let active = true;
     const sync = async () => {
       setSyncing(true);
-      await reload(); // Initial local load
+      await reload();
       try {
         const [rRes, pRes] = await Promise.allSettled([
           restaurantsApi.getAll(),
@@ -38,8 +47,8 @@ export default function FavouritesScreen({ navigation }: any) {
         const liveR = rRes.status === 'fulfilled' ? rRes.value.data : [];
         const liveP = pRes.status === 'fulfilled' ? pRes.value.data : [];
         await syncFromApi(liveR, liveP);
-      } catch (e) {
-        console.error('Failed to sync favourites with API', e);
+      } catch {
+        // noop
       } finally {
         if (active) setSyncing(false);
       }
@@ -50,147 +59,123 @@ export default function FavouritesScreen({ navigation }: any) {
 
   const isEmpty = activeTab === 'Restaurants' ? restaurants.length === 0 : products.length === 0;
 
+  const visibleTabs = useMemo(() =>
+    TABS.filter(t => (t === 'Restaurants' && showFood) || (t === 'Products' && showMart))
+  , [showFood, showMart]);
+
+  const headerSubtitle = activeTab === 'Restaurants'
+    ? `${restaurants.length} ${restaurants.length === 1 ? 'restaurant' : 'restaurants'} saved`
+    : `${products.length} ${products.length === 1 ? 'product' : 'products'} saved`;
+
+  const renderRestaurantItem = ({ item }: any) => (
+    <View style={{ marginBottom: theme.spacing.md }}>
+      <StoreCard
+        store={item}
+        variant="list"
+        onPress={() => navigation.navigate('RestaurantDetail', { restaurantId: item.id })}
+        onToggleFavourite={() => toggleFavourite(item, 'restaurants')}
+        isFavourite
+      />
+    </View>
+  );
+
+  const renderProductItem = ({ item }: any) => {
+    const cartItem = martCart.find((c: any) => c.id === item.id) || foodCart.find((c: any) => c.id === item.id);
+    const cartQty = cartItem?.quantity || 0;
+
+    const isProductOpen = isBusinessOpen(item.openingTime, item.closingTime);
+    const isBrandOpen = item.brand ? isBusinessOpen(item.brand.openingTime, item.brand.closingTime) : true;
+    const isCatOpen = item.category ? isBusinessOpen(item.category.openingTime, item.category.closingTime) : true;
+    const isEffectiveOpen = isProductOpen && isBrandOpen && isCatOpen;
+
+    const handleAdd = () => {
+      if (!isEffectiveOpen) return;
+      if (item.maxQuantityPerOrder > 0 && cartQty >= item.maxQuantityPerOrder) {
+        Alert.alert('Limit reached', `Maximum allowed per order is ${item.maxQuantityPerOrder} for ${item.name}.`);
+        return;
+      }
+      addToCart(item, 'mart');
+    };
+
+    return (
+      <View style={{ flex: 1, padding: 6 }}>
+        <ProductCard
+          product={item}
+          cartQty={cartQty}
+          variant="grid"
+          isFavourite
+          onPress={() => navigation.navigate('Search', { initialQuery: item.name })}
+          onAdd={handleAdd}
+          onIncrement={() => addToCart(item, 'mart')}
+          onDecrement={() => updateQuantity(item.id, Math.max(0, cartQty - 1), 'mart')}
+          onToggleFavourite={() => toggleFavourite(item, 'products')}
+        />
+      </View>
+    );
+  };
+
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backArrow}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>My Favourites</Text>
-        <View style={{ width: 40 }} />
+        <AppIconButton size={36} bg={theme.colors.surfaceMuted} onPress={() => navigation.goBack()}>
+          <Ionicons name="chevron-back" size={20} color={theme.colors.textPrimary} />
+        </AppIconButton>
+        <View style={{ flex: 1 }}>
+          <AppText variant="h2">My favourites</AppText>
+          <AppText variant="caption">{headerSubtitle}</AppText>
+        </View>
+        {syncing ? <ActivityIndicator size="small" color={theme.colors.primary} /> : null}
       </View>
 
-      {/* Tabs */}
-      <View style={styles.tabs}>
-        {TABS.map((tab) => {
-          if (tab === 'Restaurants' && !showFood) return null;
-          if (tab === 'Products' && !showMart) return null;
-
-          return (
-            <TouchableOpacity
-              key={tab}
-              style={[styles.tab, activeTab === tab && styles.tabActive]}
-              onPress={() => setActiveTab(tab)}
-            >
-              <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
-                {tab === 'Restaurants' ? '🍽️' : '🛒'} {tab}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+      {visibleTabs.length > 1 ? (
+        <View style={styles.tabs}>
+          {visibleTabs.map((tab) => {
+            const active = activeTab === tab;
+            const icon: keyof typeof Ionicons.glyphMap =
+              tab === 'Restaurants' ? 'restaurant-outline' : 'basket-outline';
+            return (
+              <Pressable
+                key={tab}
+                style={[styles.tab, active ? styles.tabActive : null]}
+                onPress={() => setActiveTab(tab)}
+              >
+                <Ionicons name={icon} size={16} color={active ? theme.colors.primary : theme.colors.textSecondary} />
+                <AppText variant={active ? 'bodyStrong' : 'body'} color={active ? theme.colors.primary : theme.colors.textSecondary}>
+                  {tab === 'Restaurants' ? 'Restaurants & shops' : 'Products'}
+                </AppText>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
 
       {isEmpty ? (
-        <View style={styles.empty}>
-          <Text style={styles.emptyIcon}>{activeTab === 'Restaurants' ? '🍽️' : '🛒'}</Text>
-          <Text style={styles.emptyTitle}>No favourites yet</Text>
-          <Text style={styles.emptySub}>
-            {activeTab === 'Restaurants'
-              ? 'Tap the ❤️ on any restaurant to save it here'
-              : 'Tap the ❤️ on any product to save it here'}
-          </Text>
-        </View>
+        <EmptyState
+          icon={activeTab === 'Restaurants' ? 'restaurant-outline' : 'basket-outline'}
+          title="No favourites yet"
+          subtitle={activeTab === 'Restaurants'
+            ? 'Tap the heart on any restaurant or shop to save it here.'
+            : 'Tap the heart on any product to save it here.'}
+          actionLabel="Explore"
+          onAction={() => navigation.navigate(activeTab === 'Restaurants' ? 'Food' : 'Home')}
+        />
+      ) : activeTab === 'Restaurants' ? (
+        <FlatList
+          key="restaurants-list"
+          data={restaurants}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ padding: theme.spacing.lg, paddingBottom: theme.spacing.xxl }}
+          renderItem={renderRestaurantItem}
+        />
       ) : (
         <FlatList
-          data={activeTab === 'Restaurants' ? restaurants : products}
+          key="products-grid"
+          data={products}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.list}
-          renderItem={({ item }) => {
-            const imgUri = normalizeUrl(item.logoUrl || item.imageUrl);
-            const cartItem = activeTab === 'Products' ? (martCart.find((c: any) => c.id === item.id) || foodCart.find((c: any) => c.id === item.id)) : null;
-            const cartQty = cartItem?.quantity || 0;
-
-                  const isProductOpen = isBusinessOpen(item.openingTime, item.closingTime);
-                  const isBrandOpen = item.brand ? isBusinessOpen(item.brand.openingTime, item.brand.closingTime) : true;
-                  const isCatOpen = item.category ? isBusinessOpen(item.category.openingTime, item.category.closingTime) : true;
-                  const isEffectiveOpen = isProductOpen && isBrandOpen && isCatOpen;
-
-                  const finalPrice = Number(item.price || 0) - Number(item.discount || 0);
-
-                  return (
-                    <TouchableOpacity
-                      style={styles.card}
-                      activeOpacity={0.85}
-                      onPress={() => {
-                        if (activeTab === 'Restaurants') {
-                          navigation.navigate('RestaurantDetail', { restaurantId: item.id });
-                        } else {
-                          // Navigate to product detail or search if needed
-                        }
-                      }}
-                    >
-                      <View style={styles.cardImgWrap}>
-                        {imgUri ? (
-                          <Image source={{ uri: imgUri }} style={styles.cardImg} resizeMode="cover" />
-                        ) : (
-                          <View style={styles.cardImgPlaceholder}>
-                            <Text style={{ fontSize: 28 }}>{activeTab === 'Restaurants' ? '🍽️' : '📦'}</Text>
-                          </View>
-                        )}
-                        {activeTab === 'Products' && !isEffectiveOpen && (
-                          <View style={styles.oosOverlay}>
-                            <Text style={styles.oosText}>Closed</Text>
-                          </View>
-                        )}
-                      </View>
-                      <View style={styles.cardInfo}>
-                        <View style={styles.cardHeaderRow}>
-                          <Text style={styles.cardName} numberOfLines={1}>{item.name}</Text>
-                          <TouchableOpacity
-                            onPress={(e) => { e.stopPropagation(); toggleFavourite(item, activeTab === 'Restaurants' ? 'restaurants' : 'products'); }}
-                            style={styles.heartBtnSm}
-                          >
-                            <Text style={styles.heartIconSm}>❤️</Text>
-                          </TouchableOpacity>
-                        </View>
-                        {item.category && (
-                          <Text style={styles.cardSub} numberOfLines={1}>{item.category.name}</Text>
-                        )}
-                        {item.rating != null && item.rating > 0 && (
-                          <Text style={styles.cardRating}>⭐ {Number(item.rating).toFixed(1)}{formatRatingCount(item.ratingCount)}</Text>
-                        )}
-                        
-                        <View style={styles.cardActionRow}>
-                          {item.price != null && (
-                            <View>
-                              <Text style={styles.cardPrice}>Rs {finalPrice.toFixed(0)}</Text>
-                              {Number(item.discount) > 0 && (
-                                <Text style={styles.cardOldPrice}>Rs {Number(item.price).toFixed(0)}</Text>
-                              )}
-                            </View>
-                          )}
-                          {activeTab === 'Products' && (
-                            <TouchableOpacity
-                              style={[
-                                styles.addBtn, 
-                                (cartQty > 0 || !isEffectiveOpen) && { opacity: 0.7 },
-                                !isEffectiveOpen && { backgroundColor: '#999' }
-                              ]}
-                              onPress={(e) => { 
-                                if (!isEffectiveOpen) return;
-                                e.stopPropagation();
-                                
-                                // Check Limit
-                                if (item.maxQuantityPerOrder > 0 && cartQty >= item.maxQuantityPerOrder) {
-                                  Alert.alert('Limit Reached ✋', `Maximum allowed per order is ${item.maxQuantityPerOrder} units for ${item.name}.`);
-                                  return;
-                                }
-                                
-                                addToCart(item, 'mart'); 
-                              }}
-                              disabled={!isEffectiveOpen}
-                            >
-                              <Text style={styles.addBtnTxt}>
-                                {!isEffectiveOpen ? 'Closed' : (cartQty > 0 ? `${cartQty} ✓` : '+ Add')}
-                              </Text>
-                            </TouchableOpacity>
-                          )}
-                        </View>
-                      </View>
-                    </TouchableOpacity>
-                  );
-          }}
+          numColumns={2}
+          contentContainerStyle={{ paddingHorizontal: theme.spacing.md, paddingTop: theme.spacing.md, paddingBottom: theme.spacing.xxl }}
+          columnWrapperStyle={{ justifyContent: 'space-between' }}
+          renderItem={renderProductItem}
         />
       )}
     </SafeAreaView>
@@ -198,53 +183,29 @@ export default function FavouritesScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F7F8FA' },
+  container: { flex: 1, backgroundColor: theme.colors.background },
+
   header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    padding: 16, backgroundColor: '#fff',
-    borderBottomWidth: 1, borderBottomColor: '#F0F0F0',
-    elevation: 3,
+    flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.sm,
+    backgroundColor: theme.colors.surface,
+    borderBottomWidth: 1, borderBottomColor: theme.colors.divider,
   },
-  backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F5F5F5', justifyContent: 'center', alignItems: 'center' },
-  backArrow: { fontSize: 22, color: '#333' },
-  headerTitle: { fontSize: 20, fontWeight: '800', color: '#1A1A1A' },
 
-  tabs: { flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
+  tabs: {
+    flexDirection: 'row',
+    backgroundColor: theme.colors.surface,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.sm,
+    gap: theme.spacing.sm,
+    borderBottomWidth: 1, borderBottomColor: theme.colors.divider,
+  },
   tab: {
-    flex: 1, paddingVertical: 14, alignItems: 'center',
-    borderBottomWidth: 3, borderBottomColor: 'transparent',
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.surfaceMuted,
   },
-  tabActive: { borderBottomColor: '#FF4500' },
-  tabText: { fontSize: 14, fontWeight: '700', color: '#999' },
-  tabTextActive: { color: '#FF4500' },
-
-  list: { padding: 16, paddingBottom: 40 },
-  card: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#fff', borderRadius: 20, marginBottom: 14,
-    padding: 14, elevation: 2,
-    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8,
-  },
-  cardImgWrap: { width: 70, height: 70, borderRadius: 16, overflow: 'hidden', backgroundColor: '#F5F5F5', marginRight: 14 },
-  cardImg: { width: '100%', height: '100%' },
-  cardImgPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  cardInfo: { flex: 1, justifyContent: 'center' },
-  cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  cardName: { fontSize: 16, fontWeight: '800', color: '#1A1A1A', marginBottom: 3, flex: 1 },
-  heartBtnSm: { padding: 4, marginLeft: 6 },
-  heartIconSm: { fontSize: 16 },
-  cardSub: { fontSize: 13, color: '#888', marginBottom: 3 },
-  cardRating: { fontSize: 12, color: '#888', marginTop: 2, marginBottom: 4 },
-  cardActionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 },
-  cardPrice: { fontSize: 15, fontWeight: '800', color: '#FF4500' },
-  cardOldPrice: { fontSize: 11, color: '#CCC', textDecorationLine: 'line-through', marginTop: 1 },
-  oosOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' },
-  oosText: { color: '#fff', fontSize: 10, fontWeight: '900', textTransform: 'uppercase' },
-  addBtn: { backgroundColor: '#FF4500', paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20 },
-  addBtnTxt: { color: '#fff', fontSize: 12, fontWeight: '800' },
-
-  empty: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
-  emptyIcon: { fontSize: 64, marginBottom: 16, opacity: 0.4 },
-  emptyTitle: { fontSize: 22, fontWeight: '800', color: '#1A1A1A', marginBottom: 8 },
-  emptySub: { fontSize: 14, color: '#999', textAlign: 'center', lineHeight: 22 },
+  tabActive: { backgroundColor: theme.colors.primaryLight, borderWidth: 1, borderColor: theme.colors.primaryBorder },
 });

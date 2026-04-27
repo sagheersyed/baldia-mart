@@ -1,20 +1,50 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, ScrollView } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View, StyleSheet, Alert, ActivityIndicator, ScrollView, Pressable,
+  TextInput, KeyboardAvoidingView, Platform,
+} from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+
 import { useCart } from '../context/CartContext';
 import { ordersApi, addressesApi } from '../api/api';
 import AddressPickerModal from '../components/AddressPickerModal';
+import {
+  AppText, AppButton, AppIconButton, AppBadge,
+} from '../components/ui';
+import { theme } from '../theme/theme';
+
+type Mode = 'mart' | 'food';
+type PaymentMethod = 'cod' | 'jazzcash' | 'easypaisa';
+
+const PAYMENT_OPTIONS: {
+  id: PaymentMethod;
+  title: string;
+  desc: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  color: string;
+  badge?: string;
+}[] = [
+  { id: 'cod', title: 'Cash on Delivery', desc: 'Pay when your order arrives', icon: 'cash-outline', color: theme.colors.success },
+  { id: 'jazzcash', title: 'JazzCash', desc: 'Pay via JazzCash mobile wallet', icon: 'phone-portrait-outline', color: '#E31837', badge: 'JazzCash' },
+  { id: 'easypaisa', title: 'EasyPaisa', desc: 'Pay via EasyPaisa mobile wallet', icon: 'wallet-outline', color: '#4CAF50', badge: 'EasyPaisa' },
+];
 
 export default function CheckoutScreen({ navigation, route }: any) {
-  const mode = route.params?.mode || 'mart';
+  const mode: Mode = route.params?.mode || 'mart';
   const { martCart, foodCart, getCartTotal, clearCart } = useCart();
   const cart = mode === 'mart' ? martCart : foodCart;
-  
-  const [selectedPayment, setSelectedPayment] = useState('cod');
+
+  const accent = mode === 'food' ? theme.colors.food : theme.colors.primary;
+
+  const [selectedPayment, setSelectedPayment] = useState<PaymentMethod>('cod');
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [addresses, setAddresses] = useState<any[]>([]);
   const [selectedAddress, setSelectedAddress] = useState<any>(null);
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(true);
+  const [deliveryNotes, setDeliveryNotes] = useState('');
+  const [voucherCode, setVoucherCode] = useState('');
 
   // Modals state
   const [showAddressListModal, setShowAddressListModal] = useState(false);
@@ -25,54 +55,56 @@ export default function CheckoutScreen({ navigation, route }: any) {
   const [deliveryFee, setDeliveryFee] = useState(0);
   const [isLoadingFee, setIsLoadingFee] = useState(false);
   const [isAddressValid, setIsAddressValid] = useState(true);
+  const [zoneMessage, setZoneMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchAddresses();
-  }, []);
-
-  const fetchAddresses = async () => {
+  const fetchAddresses = useCallback(async () => {
     try {
       const res = await addressesApi.getAll();
       setAddresses(res.data);
       if (res.data.length > 0) {
         const currentId = selectedAddress?.id;
-        const found = res.data.find((a: any) => a.id === currentId) || res.data.find((a: any) => a.isDefault) || res.data[0];
+        const found = res.data.find((a: any) => a.id === currentId)
+          || res.data.find((a: any) => a.isDefault) || res.data[0];
         setSelectedAddress(found);
       }
-    } catch (error) {
-      console.error('Failed to fetch addresses:', error);
+    } catch (e) {
+      // noop
     } finally {
       setIsLoadingAddresses(false);
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => { fetchAddresses(); }, [fetchAddresses]);
+
+  const fetchDeliveryFee = useCallback(async (addressId: string, restaurantId?: string) => {
+    setIsLoadingFee(true);
+    try {
+      const res = await ordersApi.getDeliveryFee(addressId, restaurantId);
+      if (res.data.isValid === true) {
+        setDeliveryFee(Number(res.data.deliveryFee) || 0);
+        setIsAddressValid(true);
+        setZoneMessage(null);
+      } else {
+        setDeliveryFee(0);
+        setIsAddressValid(false);
+        setZoneMessage(res.data.message || 'We do not deliver to this location yet.');
+      }
+    } catch {
+      setDeliveryFee(0);
+      setIsAddressValid(true);
+      setZoneMessage(null);
+    } finally {
+      setIsLoadingFee(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (selectedAddress?.id) {
       const restaurantId = mode === 'food' ? cart[0]?.restaurantId : undefined;
       fetchDeliveryFee(selectedAddress.id, restaurantId);
     }
-  }, [selectedAddress, cart, mode]);
-
-  const fetchDeliveryFee = async (addressId: string, restaurantId?: string) => {
-    setIsLoadingFee(true);
-    try {
-      const res = await ordersApi.getDeliveryFee(addressId, restaurantId);
-      if (res.data.isValid === true) {
-        setDeliveryFee(res.data.deliveryFee);
-        setIsAddressValid(true);
-      } else {
-        setDeliveryFee(0);
-        setIsAddressValid(false);
-        Alert.alert('Out of Service Area', res.data.message || 'We do not deliver to this location yet.');
-      }
-    } catch (error) {
-      console.error('Failed to fetch delivery fee:', error);
-      setDeliveryFee(0);
-      setIsAddressValid(true);
-    } finally {
-      setIsLoadingFee(false);
-    }
-  };
+  }, [selectedAddress, cart, mode, fetchDeliveryFee]);
 
   const handleUpdateAddress = async (addrData: any) => {
     try {
@@ -83,7 +115,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
       }
       await fetchAddresses();
       setShowAddressPickerModal(false);
-    } catch (error) {
+    } catch {
       Alert.alert('Error', 'Failed to save address');
     }
   };
@@ -91,9 +123,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
   const handleOpenEdit = (addr?: any) => {
     setEditingAddressData(addr || null);
     setShowAddressListModal(false);
-    setTimeout(() => {
-      setShowAddressPickerModal(true);
-    }, 300);
+    setTimeout(() => setShowAddressPickerModal(true), 250);
   };
 
   const handleSelectAddress = (addr: any) => {
@@ -102,32 +132,29 @@ export default function CheckoutScreen({ navigation, route }: any) {
   };
 
   const subtotal = getCartTotal(mode);
-  
-  // Calculate multi-stop surcharge for food orders
-  const uniqueRestaurants = mode === 'food' 
-    ? [...new Set(cart.map((item: any) => item.restaurantId).filter(Boolean))] 
+
+  const uniqueRestaurants = mode === 'food'
+    ? Array.from(new Set(cart.map((item: any) => item.restaurantId).filter(Boolean)))
     : [];
   const multiStopCount = uniqueRestaurants.length > 1 ? uniqueRestaurants.length - 1 : 0;
   const multiStopSurcharge = multiStopCount * 50;
-  
+
   const total = subtotal + deliveryFee + multiStopSurcharge;
+  const totalItems = cart.reduce((sum: number, item: any) => sum + item.quantity, 0);
 
   const handlePlaceOrder = () => {
     if (cart.length === 0) {
-      Alert.alert('Error', 'Your cart is empty');
+      Alert.alert('Cart empty', 'Your cart is empty');
       return;
     }
-
     if (!selectedAddress) {
-      Alert.alert('Error', 'Please select a delivery address');
+      Alert.alert('No address', 'Please select a delivery address');
       return;
     }
-
     if (!isAddressValid) {
-      Alert.alert('Error', 'Your address is outside our delivery zone. Please choose another address.');
+      Alert.alert('Out of zone', 'Your address is outside our delivery zone. Please choose another address.');
       return;
     }
-
     setShowConfirmModal(true);
   };
 
@@ -136,25 +163,21 @@ export default function CheckoutScreen({ navigation, route }: any) {
     setIsPlacingOrder(true);
     try {
       const restaurantId = mode === 'food' ? cart[0]?.restaurantId : undefined;
-      
       const orderData = {
         addressId: selectedAddress.id,
         paymentMethod: selectedPayment,
         orderType: mode,
         restaurantId,
-        notes: '',
+        notes: deliveryNotes,
+        promoCode: voucherCode || undefined,
         items: cart.map(item => ({
           [mode === 'food' ? 'menuItemId' : 'productId']: item.id,
-          quantity: item.quantity
-        }))
+          quantity: item.quantity,
+        })),
       };
-
       const res = await ordersApi.checkout(orderData);
-
       if (res.data && res.data.id) {
         clearCart(mode);
-
-        // For digital payments, redirect to the payment WebView
         if (selectedPayment === 'jazzcash' || selectedPayment === 'easypaisa') {
           navigation.replace('PaymentWebView', {
             orderId: res.data.id,
@@ -162,12 +185,10 @@ export default function CheckoutScreen({ navigation, route }: any) {
             amount: total,
           });
         } else {
-          // COD — go straight to order tracking
           navigation.replace('OrderTracking', { orderId: res.data.id });
         }
       }
     } catch (error: any) {
-      console.error('Checkout failed:', error);
       const msg = error.response?.data?.message || 'Failed to place order. Please try again.';
       Alert.alert('Error', msg);
     } finally {
@@ -176,292 +197,502 @@ export default function CheckoutScreen({ navigation, route }: any) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backCircle}>
-          <Text style={styles.backBtn}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>Review & Pay</Text>
-        <View style={{ width: 40 }} />
-      </View>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <AppIconButton size={36} bg={theme.colors.surfaceMuted} onPress={() => navigation.goBack()}>
+            <Ionicons name="chevron-back" size={20} color={theme.colors.textPrimary} />
+          </AppIconButton>
+          <View style={{ flex: 1 }}>
+            <AppText variant="h2">Checkout</AppText>
+            <AppText variant="caption">{totalItems} item{totalItems === 1 ? '' : 's'} • {mode === 'mart' ? 'Mart' : 'Food'}</AppText>
+          </View>
+        </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionTitle}>Delivery Details</Text>
-        {isLoadingAddresses ? (
-          <ActivityIndicator color="#FF4500" style={{ marginVertical: 20 }} />
-        ) : selectedAddress ? (
-          <TouchableOpacity style={styles.addressBox} onPress={() => setShowAddressListModal(true)}>
-            <View style={styles.addressIcon}>
-              <Text style={{ fontSize: 20 }}>🏠</Text>
+        <ScrollView
+          contentContainerStyle={{ padding: theme.spacing.lg, paddingBottom: 140 }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Delivery address card */}
+          <AppText variant="overline" style={styles.sectionLabel}>Deliver to</AppText>
+          {isLoadingAddresses ? (
+            <ActivityIndicator color={accent} style={{ marginVertical: 20 }} />
+          ) : selectedAddress ? (
+            <Pressable style={styles.addressCard} onPress={() => setShowAddressListModal(true)}>
+              <View style={[styles.iconCircle, { backgroundColor: theme.colors.primaryLight }]}>
+                <Ionicons name="location" size={20} color={theme.colors.primary} />
+              </View>
+              <View style={{ flex: 1, gap: 2 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <AppText variant="bodyStrong">{selectedAddress.label || 'Address'}</AppText>
+                  {selectedAddress.isDefault ? <AppBadge label="Default" variant="primary" /> : null}
+                </View>
+                <AppText variant="caption" numberOfLines={2}>{selectedAddress.streetAddress}</AppText>
+              </View>
+              <View style={styles.changeBtn}>
+                <AppText variant="captionStrong" color={theme.colors.primary}>Change</AppText>
+              </View>
+            </Pressable>
+          ) : (
+            <Pressable style={styles.addressCard} onPress={() => handleOpenEdit()}>
+              <View style={[styles.iconCircle, { backgroundColor: theme.colors.surfaceMuted }]}>
+                <Ionicons name="add-circle-outline" size={22} color={theme.colors.textSecondary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <AppText variant="bodyStrong">Add a delivery address</AppText>
+                <AppText variant="caption">We'll use this to confirm your zone</AppText>
+              </View>
+              <View style={styles.changeBtn}>
+                <AppText variant="captionStrong" color={theme.colors.primary}>Add</AppText>
+              </View>
+            </Pressable>
+          )}
+
+          {/* Delivery instructions */}
+          <AppText variant="overline" style={styles.sectionLabel}>Delivery instructions</AppText>
+          <View style={styles.notesBox}>
+            <Ionicons name="document-text-outline" size={18} color={theme.colors.textSecondary} />
+            <TextInput
+              value={deliveryNotes}
+              onChangeText={setDeliveryNotes}
+              placeholder="e.g. Leave at door, call on arrival…"
+              placeholderTextColor={theme.colors.textMuted}
+              style={styles.notesInput}
+              multiline
+              maxLength={200}
+            />
+          </View>
+
+          {/* Payment */}
+          <AppText variant="overline" style={styles.sectionLabel}>Payment method</AppText>
+          {PAYMENT_OPTIONS.map(opt => {
+            const active = selectedPayment === opt.id;
+            return (
+              <Pressable
+                key={opt.id}
+                onPress={() => setSelectedPayment(opt.id)}
+                style={[
+                  styles.paymentCard,
+                  active ? { borderColor: opt.color, backgroundColor: opt.color + '10' } : null,
+                ]}
+              >
+                <View style={[styles.iconCircle, { backgroundColor: opt.color + '18' }]}>
+                  <Ionicons name={opt.icon} size={20} color={opt.color} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <AppText variant="bodyStrong">{opt.title}</AppText>
+                  <AppText variant="caption">{opt.desc}</AppText>
+                </View>
+                {opt.badge ? (
+                  <View style={[styles.providerPill, { backgroundColor: opt.color }]}>
+                    <AppText variant="badge" color="#fff">{opt.badge}</AppText>
+                  </View>
+                ) : null}
+                <View style={[styles.radio, active ? { borderColor: opt.color, borderWidth: 6 } : null]} />
+              </Pressable>
+            );
+          })}
+
+          {/* Voucher / promo */}
+          <AppText variant="overline" style={styles.sectionLabel}>Voucher</AppText>
+          <View style={styles.voucherBox}>
+            <Ionicons name="pricetag-outline" size={18} color={theme.colors.textSecondary} />
+            <TextInput
+              value={voucherCode}
+              onChangeText={setVoucherCode}
+              placeholder="Enter promo code (optional)"
+              placeholderTextColor={theme.colors.textMuted}
+              style={styles.voucherInput}
+              autoCapitalize="characters"
+            />
+            {voucherCode ? (
+              <Pressable onPress={() => setVoucherCode('')} hitSlop={8}>
+                <Ionicons name="close-circle" size={18} color={theme.colors.textMuted} />
+              </Pressable>
+            ) : null}
+          </View>
+
+          {/* Order summary */}
+          <AppText variant="overline" style={styles.sectionLabel}>Order summary</AppText>
+          <View style={styles.summary}>
+            {/* Items preview (collapsed list) */}
+            {cart.slice(0, 3).map((it: any) => (
+              <View key={it.id} style={styles.itemPreview}>
+                <View style={styles.itemPreviewImg}>
+                  {it.imageUrl ? (
+                    <Image source={{ uri: it.imageUrl }} style={styles.fill} contentFit="cover" cachePolicy="memory-disk" />
+                  ) : (
+                    <View style={[styles.fill, { alignItems: 'center', justifyContent: 'center' }]}>
+                      <Ionicons name="image-outline" size={18} color={theme.colors.textMuted} />
+                    </View>
+                  )}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <AppText variant="bodyStrong" numberOfLines={1}>{it.name}</AppText>
+                  <AppText variant="caption">x{it.quantity} • Rs. {Math.round(Number(it.price) || 0)}</AppText>
+                </View>
+                <AppText variant="bodyStrong">
+                  Rs. {Math.round((Number(it.price) || 0) * it.quantity)}
+                </AppText>
+              </View>
+            ))}
+            {cart.length > 3 ? (
+              <AppText variant="caption" color={theme.colors.textSecondary}>
+                +{cart.length - 3} more item{cart.length - 3 === 1 ? '' : 's'}
+              </AppText>
+            ) : null}
+
+            <View style={styles.summaryDivider} />
+
+            <View style={styles.sumRow}>
+              <AppText variant="body" color={theme.colors.textSecondary}>Subtotal</AppText>
+              <AppText variant="bodyStrong">Rs. {Math.round(subtotal)}</AppText>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.addressLabel}>{selectedAddress.label || 'Home'}</Text>
-              <Text style={styles.addressText}>{selectedAddress.streetAddress}</Text>
+            <View style={styles.sumRow}>
+              <AppText variant="body" color={theme.colors.textSecondary}>Delivery fee</AppText>
+              {isLoadingFee ? (
+                <ActivityIndicator size="small" color={accent} />
+              ) : !isAddressValid ? (
+                <AppText variant="bodyStrong" color={theme.colors.danger}>Unavailable</AppText>
+              ) : (
+                <AppText variant="bodyStrong">Rs. {Math.round(deliveryFee)}</AppText>
+              )}
             </View>
-            <Text style={styles.changeBtn}>Change</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            style={styles.addressBox}
-            onPress={() => handleOpenEdit()}
-          >
-            <View style={[styles.addressIcon, { backgroundColor: '#f0f0f0' }]}>
-              <Text style={{ fontSize: 20 }}>📍</Text>
+            {multiStopSurcharge > 0 ? (
+              <View style={styles.sumRow}>
+                <AppText variant="body" color={theme.colors.warning}>
+                  Batch routing ({multiStopCount} extra stop{multiStopCount > 1 ? 's' : ''})
+                </AppText>
+                <AppText variant="bodyStrong" color={theme.colors.warning}>
+                  Rs. {multiStopSurcharge}
+                </AppText>
+              </View>
+            ) : null}
+            <View style={styles.summaryDivider} />
+            <View style={styles.sumRow}>
+              <AppText variant="title">Grand total</AppText>
+              <AppText variant="h3" color={accent}>
+                {!isAddressValid ? 'N/A' : `Rs. ${Math.round(total)}`}
+              </AppText>
             </View>
-            <Text style={{ color: '#1a1a1a', fontWeight: 'bold', flex: 1 }}>No address found. Add one now.</Text>
-            <Text style={styles.changeBtn}>Add</Text>
-          </TouchableOpacity>
+
+            {!isAddressValid && zoneMessage ? (
+              <View style={styles.warnRow}>
+                <Ionicons name="alert-circle" size={16} color={theme.colors.danger} />
+                <AppText variant="caption" color={theme.colors.danger}>{zoneMessage}</AppText>
+              </View>
+            ) : null}
+          </View>
+        </ScrollView>
+
+        <View style={styles.footer}>
+          <AppButton
+            label={isPlacingOrder
+              ? 'Placing order…'
+              : !isAddressValid
+                ? 'Out of service area'
+                : `Place order • Rs. ${Math.round(total)}`}
+            variant="primary"
+            tint={accent}
+            size="lg"
+            fullWidth
+            loading={isPlacingOrder}
+            disabled={isPlacingOrder || !isAddressValid || isLoadingFee || cart.length === 0}
+            onPress={handlePlaceOrder}
+            trailingIcon={!isPlacingOrder ? <Ionicons name="arrow-forward" size={18} color="#fff" /> : null}
+          />
+        </View>
+
+        {/* Address Selection Modal */}
+        {showAddressListModal && (
+          <View style={styles.modalOverlay}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowAddressListModal(false)} />
+            <View style={styles.bottomSheet}>
+              <View style={styles.sheetHandle} />
+              <View style={styles.sheetHeader}>
+                <AppText variant="h2">Saved addresses</AppText>
+                <AppIconButton size={32} bg={theme.colors.surfaceMuted} onPress={() => setShowAddressListModal(false)}>
+                  <Ionicons name="close" size={18} color={theme.colors.textPrimary} />
+                </AppIconButton>
+              </View>
+              <ScrollView style={{ maxHeight: 400 }} showsVerticalScrollIndicator={false}>
+                {addresses.map((addr) => {
+                  const sel = selectedAddress?.id === addr.id;
+                  return (
+                    <View key={addr.id} style={[styles.addrRow, sel ? { borderColor: theme.colors.primary, backgroundColor: theme.colors.primaryLight } : null]}>
+                      <Pressable style={styles.addrRowMain} onPress={() => handleSelectAddress(addr)}>
+                        <View style={[styles.iconCircle, { backgroundColor: theme.colors.surface, ...theme.shadows.sm }]}>
+                          <Ionicons
+                            name={addr.label === 'Work' ? 'business' : 'home'}
+                            size={18}
+                            color={theme.colors.primary}
+                          />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <AppText variant="bodyStrong">{addr.label || 'Address'}</AppText>
+                            {addr.isDefault ? <AppBadge label="Default" variant="primary" /> : null}
+                          </View>
+                          <AppText variant="caption" numberOfLines={2}>{addr.streetAddress}</AppText>
+                        </View>
+                        {sel ? (
+                          <View style={[styles.tickCircle, { backgroundColor: theme.colors.primary }]}>
+                            <Ionicons name="checkmark" size={14} color="#fff" />
+                          </View>
+                        ) : null}
+                      </Pressable>
+                      <Pressable style={styles.editBtn} onPress={() => handleOpenEdit(addr)}>
+                        <AppText variant="captionStrong" color={theme.colors.primary}>Edit</AppText>
+                      </Pressable>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+              <AppButton
+                label="+ Add new address"
+                variant="outline"
+                fullWidth
+                style={{ marginTop: theme.spacing.md }}
+                onPress={() => handleOpenEdit()}
+              />
+            </View>
+          </View>
         )}
 
-        <Text style={styles.sectionTitle}>Payment Method</Text>
-        <TouchableOpacity
-          style={[styles.paymentBox, selectedPayment === 'cod' && styles.paymentSelected]}
-          onPress={() => setSelectedPayment('cod')}
-        >
-          <View style={styles.paymentRow}>
-            <View style={[styles.radio, selectedPayment === 'cod' && styles.radioActive]} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.paymentText}>💵 Cash on Delivery</Text>
-              <Text style={styles.paymentDesc}>Pay when your order arrives</Text>
+        {/* Confirmation Modal */}
+        {showConfirmModal && (
+          <View style={styles.modalOverlay}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowConfirmModal(false)} />
+            <View style={styles.confirmSheet}>
+              <View style={[styles.iconCircle, styles.confirmIcon, { backgroundColor: accent + '18' }]}>
+                <Ionicons name="location" size={28} color={accent} />
+              </View>
+              <AppText variant="h2" align="center">Confirm your location</AppText>
+              <AppText variant="caption" align="center" style={{ marginTop: 6, marginBottom: theme.spacing.lg }}>
+                Please ensure your delivery address is correct to avoid delivery delays.
+              </AppText>
+              <View style={styles.confirmAddrPreview}>
+                <AppText variant="bodyStrong">{selectedAddress?.label || 'Delivery address'}</AppText>
+                <AppText variant="caption" numberOfLines={3}>{selectedAddress?.streetAddress}</AppText>
+              </View>
+              <View style={{ flexDirection: 'row', gap: theme.spacing.md, marginTop: theme.spacing.lg }}>
+                <AppButton
+                  label="Change address"
+                  variant="secondary"
+                  fullWidth
+                  onPress={() => setShowConfirmModal(false)}
+                  style={{ flex: 1 }}
+                />
+                <AppButton
+                  label="Confirm & place"
+                  variant="primary"
+                  tint={accent}
+                  fullWidth
+                  onPress={proceedToCheckout}
+                  style={{ flex: 1.4 }}
+                />
+              </View>
             </View>
           </View>
-        </TouchableOpacity>
+        )}
 
-        <TouchableOpacity
-          style={[styles.paymentBox, selectedPayment === 'jazzcash' && styles.paymentSelected,
-            selectedPayment === 'jazzcash' && { borderColor: '#E31837' }]}
-          onPress={() => setSelectedPayment('jazzcash')}
-        >
-          <View style={styles.paymentRow}>
-            <View style={[styles.radio, selectedPayment === 'jazzcash' && [styles.radioActive, { borderColor: '#E31837' }]]} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.paymentText}>📱 JazzCash</Text>
-              <Text style={styles.paymentDesc}>Pay via JazzCash mobile wallet</Text>
-            </View>
-            <View style={[styles.providerBadge, { backgroundColor: '#E31837' }]}>
-              <Text style={styles.providerBadgeText}>JazzCash</Text>
-            </View>
-          </View>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.paymentBox, selectedPayment === 'easypaisa' && styles.paymentSelected,
-            selectedPayment === 'easypaisa' && { borderColor: '#4CAF50' }]}
-          onPress={() => setSelectedPayment('easypaisa')}
-        >
-          <View style={styles.paymentRow}>
-            <View style={[styles.radio, selectedPayment === 'easypaisa' && [styles.radioActive, { borderColor: '#4CAF50' }]]} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.paymentText}>📱 EasyPaisa</Text>
-              <Text style={styles.paymentDesc}>Pay via EasyPaisa mobile wallet</Text>
-            </View>
-            <View style={[styles.providerBadge, { backgroundColor: '#4CAF50' }]}>
-              <Text style={styles.providerBadgeText}>EasyPaisa</Text>
-            </View>
-          </View>
-        </TouchableOpacity>
-
-        <View style={styles.summaryContainer}>
-          <Text style={styles.sectionTitle}>Order Summary</Text>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Subtotal</Text>
-            <Text style={styles.summaryVal}>Rs. {(Number(subtotal) || 0).toFixed(0)}</Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Delivery Fee</Text>
-            {isLoadingFee ? (
-              <ActivityIndicator size="small" color="#FF4500" />
-            ) : !isAddressValid ? (
-              <Text style={[styles.summaryVal, { color: '#ff0000' }]}>Unavailable</Text>
-            ) : (
-              <Text style={styles.summaryVal}>Rs. {(Number(deliveryFee) || 0).toFixed(0)}</Text>
-            )}
-          </View>
-          {multiStopSurcharge > 0 && (
-            <View style={styles.summaryRow}>
-              <Text style={[styles.summaryLabel, { color: '#FF4500' }]}>Batch Routing ({multiStopCount} extra stop{multiStopCount > 1 ? 's' : ''})</Text>
-              <Text style={[styles.summaryVal, { color: '#FF4500' }]}>Rs. {multiStopSurcharge}</Text>
-            </View>
-          )}
-          <View style={[styles.summaryRow, styles.totalPadding]}>
-            <Text style={styles.totalLabel}>Grand Total</Text>
-            <Text style={styles.totalVal}>Rs. {(Number(total) || 0).toFixed(0)}</Text>
-          </View>
-        </View>
-      </ScrollView>
-
-      <View style={styles.footer}>
-        <TouchableOpacity
-          style={[
-            styles.placeOrderBtn,
-            (isPlacingOrder || !isAddressValid || isLoadingFee) && styles.disabledBtn
-          ]}
-          onPress={handlePlaceOrder}
-          disabled={isPlacingOrder || !isAddressValid || isLoadingFee}
-        >
-          {isPlacingOrder ? (
-            <ActivityIndicator color="#fff" />
-          ) : !isAddressValid ? (
-            <Text style={styles.placeOrderText}>Out of Service Area</Text>
-          ) : (
-            <Text style={styles.placeOrderText}>Confirm Order - Rs. {(Number(total) || 0).toFixed(0)}</Text>
-          )}
-        </TouchableOpacity>
-      </View>
-
-      {/* Address Selection Modal */}
-      {showAddressListModal && (
-        <View style={styles.modalOverlay}>
-          <View style={styles.addressListContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Saved Addresses</Text>
-              <TouchableOpacity onPress={() => setShowAddressListModal(false)} style={styles.closeBtn}>
-                <Text style={styles.closeBtnText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.addressListScroll} showsVerticalScrollIndicator={false}>
-              {addresses.map((addr) => (
-                <View key={addr.id} style={[styles.addressItem, selectedAddress?.id === addr.id && styles.addressItemSelected]}>
-                  <TouchableOpacity style={styles.addressItemInfo} onPress={() => handleSelectAddress(addr)}>
-                    <View style={styles.addressIconItem}>
-                      <Text style={{ fontSize: 16 }}>{addr.label === 'Work' ? '🏢' : '🏠'}</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.addressItemLabel}>{addr.label || 'Other'}</Text>
-                      <Text style={styles.addressItemText} numberOfLines={2}>{addr.streetAddress}</Text>
-                    </View>
-                    {selectedAddress?.id === addr.id && (
-                      <View style={styles.selectedCircle}>
-                        <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>✓</Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.editAddressBtn} onPress={() => handleOpenEdit(addr)}>
-                    <Text style={styles.editAddressBtnText}>Edit</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </ScrollView>
-
-            <TouchableOpacity style={styles.addNewAddressBtn} onPress={() => handleOpenEdit()}>
-              <Text style={styles.addNewAddressText}>+ Add New Address</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-
-      {/* Location Confirmation Modal */}
-      {showConfirmModal && (
-        <View style={styles.modalOverlay}>
-          <View style={styles.confirmationContainer}>
-            <View style={styles.confirmIconBox}>
-              <Text style={{ fontSize: 32 }}>📍</Text>
-            </View>
-            <Text style={styles.confirmTitle}>Confirm Your Location</Text>
-            <Text style={styles.confirmSubtitle}>Please ensure your delivery address is correct to avoid delivery delays.</Text>
-            
-            <View style={styles.confirmAddressPreview}>
-              <Text style={styles.confirmAddressLabel}>{selectedAddress?.label || 'Delivery Address'}</Text>
-              <Text style={styles.confirmAddressText}>{selectedAddress?.streetAddress}</Text>
-            </View>
-
-            <View style={styles.confirmActions}>
-              <TouchableOpacity 
-                style={styles.cancelActionBtn} 
-                onPress={() => setShowConfirmModal(false)}
-              >
-                <Text style={styles.cancelActionText}>Change Address</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={styles.proceedActionBtn} 
-                onPress={proceedToCheckout}
-              >
-                <Text style={styles.proceedActionText}>Confirm & Place Order</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      )}
-
-      {/* Actual Address Map/Form Modal */}
-      <AddressPickerModal
-        visible={showAddressPickerModal}
-        onClose={() => setShowAddressPickerModal(false)}
-        onSave={handleUpdateAddress}
-        initialData={editingAddressData}
-        title={editingAddressData ? "Edit Address" : "Add New Address"}
-      />
+        {/* Address Picker Modal */}
+        <AddressPickerModal
+          visible={showAddressPickerModal}
+          onClose={() => setShowAddressPickerModal(false)}
+          onSave={handleUpdateAddress}
+          initialData={editingAddressData}
+          title={editingAddressData ? 'Edit address' : 'Add new address'}
+        />
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f9f9f9' },
-  header: { padding: 20, backgroundColor: '#fff', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
-  backCircle: { width: 40, height: 40, backgroundColor: '#f5f5f5', borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
-  backBtn: { fontSize: 24, fontWeight: 'bold', color: '#333' },
-  title: { fontSize: 20, fontWeight: 'bold', color: '#1a1a1a' },
-  content: { flex: 1, padding: 20 },
-  sectionTitle: { fontSize: 16, fontWeight: '900', marginBottom: 15, color: '#333', letterSpacing: 0.5 },
-  addressBox: { backgroundColor: '#fff', padding: 18, borderRadius: 20, flexDirection: 'row', alignItems: 'center', marginBottom: 30, elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5 },
-  addressIcon: { width: 45, height: 45, backgroundColor: '#FFF5F0', borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 15 },
-  addressLabel: { fontWeight: 'bold', fontSize: 15, color: '#1a1a1a', marginBottom: 2 },
-  addressText: { color: '#888', fontSize: 13 },
-  changeBtn: { color: '#FF4500', fontWeight: 'bold', borderLeftWidth: 1, borderLeftColor: '#eee', paddingLeft: 15 },
-  paymentBox: { backgroundColor: '#fff', padding: 20, borderRadius: 20, marginBottom: 15, borderWidth: 1, borderColor: '#eee' },
-  paymentSelected: { borderColor: '#FF4500', backgroundColor: '#FFF9F7' },
-  paymentRow: { flexDirection: 'row', alignItems: 'center' },
-  radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: '#ddd', marginRight: 15 },
-  radioActive: { borderColor: '#FF4500', borderWidth: 6 },
-  paymentText: { fontWeight: '700', fontSize: 15, color: '#333' },
-  paymentDesc: { fontSize: 12, color: '#999', marginTop: 2 },
-  providerBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
-  providerBadgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
-  summaryContainer: { marginTop: 10, backgroundColor: '#fff', padding: 20, borderRadius: 25, marginBottom: 30 },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-  summaryLabel: { color: '#888', fontWeight: '500' },
-  summaryVal: { fontWeight: '700', color: '#1a1a1a' },
-  totalPadding: { borderTopWidth: 1, borderTopColor: '#f1f1f1', marginTop: 10, paddingTop: 15 },
-  totalLabel: { fontSize: 18, fontWeight: 'bold', color: '#1a1a1a' },
-  totalVal: { fontSize: 22, fontWeight: '900', color: '#FF4500' },
-  footer: { padding: 20, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#f0f0f0', paddingBottom: 30 },
-  placeOrderBtn: { backgroundColor: '#FF4500', height: 60, borderRadius: 20, justifyContent: 'center', alignItems: 'center', elevation: 8, shadowColor: '#FF4500', shadowOpacity: 0.3, shadowRadius: 10 },
-  disabledBtn: { opacity: 0.7 },
-  placeOrderText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+  container: { flex: 1, backgroundColor: theme.colors.background },
+  fill: { width: '100%', height: '100%' },
 
-  // Modal Styles
-  modalOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end', zIndex: 100 },
-  addressListContainer: { backgroundColor: '#fff', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, maxHeight: '80%', paddingBottom: 40 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  modalTitle: { fontSize: 20, fontWeight: '900', color: '#1a1a1a' },
-  closeBtn: { width: 36, height: 36, backgroundColor: '#f0f0f0', borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
-  closeBtnText: { fontSize: 16, fontWeight: 'bold', color: '#666' },
-  addressListScroll: { maxHeight: 400 },
-  addressItem: { flexDirection: 'row', flexWrap: 'nowrap', backgroundColor: '#f9f9f9', borderRadius: 20, marginBottom: 15, paddingRight: 15, borderBottomWidth: 0, borderWidth: 1, borderColor: '#f0f0f0' },
-  addressItemSelected: { borderColor: '#FF4500', backgroundColor: '#FFF5F0' },
-  addressItemInfo: { flex: 1, flexDirection: 'row', alignItems: 'center', padding: 15 },
-  addressIconItem: { width: 36, height: 36, backgroundColor: '#fff', borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: 15, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, elevation: 1 },
-  addressItemLabel: { fontWeight: 'bold', fontSize: 15, color: '#1a1a1a', marginBottom: 2 },
-  addressItemText: { color: '#888', fontSize: 12, paddingRight: 10 },
-  selectedCircle: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#FF4500', justifyContent: 'center', alignItems: 'center' },
-  editAddressBtn: { paddingVertical: 15, paddingLeft: 10, justifyContent: 'center', alignItems: 'center', borderLeftWidth: 1, borderLeftColor: '#f0f0f0' },
-  editAddressBtnText: { color: '#FF4500', fontWeight: 'bold', fontSize: 13 },
-  addNewAddressBtn: { marginTop: 10, backgroundColor: '#fff', borderWidth: 2, borderStyle: 'dashed', borderColor: '#ccc', borderRadius: 20, padding: 18, alignItems: 'center' },
-  addNewAddressText: { color: '#666', fontWeight: 'bold', fontSize: 15 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.sm,
+    backgroundColor: theme.colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.divider,
+    gap: theme.spacing.md,
+  },
 
-  // Confirmation Modal Styles
-  confirmationContainer: { backgroundColor: '#fff', borderTopLeftRadius: 35, borderTopRightRadius: 35, padding: 30, alignItems: 'center', width: '100%' },
-  confirmIconBox: { width: 80, height: 80, backgroundColor: '#FFF5F0', borderRadius: 40, justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
-  confirmTitle: { fontSize: 22, fontWeight: '900', color: '#1a1a1a', marginBottom: 10 },
-  confirmSubtitle: { fontSize: 14, color: '#666', textAlign: 'center', marginBottom: 25, lineHeight: 20 },
-  confirmAddressPreview: { width: '100%', backgroundColor: '#f9f9f9', padding: 20, borderRadius: 20, marginBottom: 30, borderWidth: 1, borderColor: '#f0f0f0' },
-  confirmAddressLabel: { fontWeight: 'bold', fontSize: 16, color: '#1a1a1a', marginBottom: 5 },
-  confirmAddressText: { color: '#555', fontSize: 14, lineHeight: 20 },
-  confirmActions: { width: '100%', gap: 12 },
-  proceedActionBtn: { backgroundColor: '#FF4500', height: 60, borderRadius: 20, justifyContent: 'center', alignItems: 'center', width: '100%' },
-  proceedActionText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  cancelActionBtn: { height: 60, borderRadius: 20, justifyContent: 'center', alignItems: 'center', width: '100%', borderWidth: 1, borderColor: '#eee' },
-  cancelActionText: { color: '#666', fontSize: 16, fontWeight: '700' }
+  sectionLabel: {
+    marginTop: theme.spacing.lg,
+    marginBottom: theme.spacing.sm,
+  },
+
+  iconCircle: {
+    width: 44, height: 44, borderRadius: 22,
+    alignItems: 'center', justifyContent: 'center',
+  },
+
+  // Address card
+  addressCard: {
+    flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md,
+    backgroundColor: theme.colors.surface,
+    padding: theme.spacing.md,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1, borderColor: theme.colors.divider,
+    ...theme.shadows.sm,
+  },
+  changeBtn: {
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 6,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.primaryLight,
+  },
+
+  // Notes
+  notesBox: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: theme.spacing.sm,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1, borderColor: theme.colors.border,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+  },
+  notesInput: {
+    flex: 1, minHeight: 44,
+    color: theme.colors.textPrimary,
+    fontSize: 14,
+    paddingTop: 2,
+  },
+
+  // Payment
+  paymentCard: {
+    flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing.md,
+    borderWidth: 1.5, borderColor: theme.colors.divider,
+    marginBottom: theme.spacing.sm,
+  },
+  providerPill: {
+    paddingHorizontal: 8, paddingVertical: 4,
+    borderRadius: theme.radius.sm,
+  },
+  radio: {
+    width: 22, height: 22, borderRadius: 11,
+    borderWidth: 2, borderColor: theme.colors.border,
+  },
+
+  // Voucher
+  voucherBox: {
+    flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1, borderColor: theme.colors.border,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.spacing.md,
+    height: 48,
+  },
+  voucherInput: {
+    flex: 1,
+    color: theme.colors.textPrimary,
+    fontSize: 14,
+  },
+
+  // Summary
+  summary: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing.lg,
+    borderWidth: 1, borderColor: theme.colors.divider,
+    gap: theme.spacing.sm,
+    ...theme.shadows.sm,
+  },
+  itemPreview: {
+    flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm,
+    paddingVertical: 4,
+  },
+  itemPreviewImg: {
+    width: 40, height: 40,
+    borderRadius: theme.radius.sm,
+    backgroundColor: theme.colors.surfaceMuted,
+    overflow: 'hidden',
+  },
+  summaryDivider: { height: 1, backgroundColor: theme.colors.divider, marginVertical: theme.spacing.sm },
+  sumRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  warnRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: theme.colors.dangerLight,
+    borderRadius: theme.radius.sm,
+    padding: theme.spacing.sm,
+    marginTop: theme.spacing.sm,
+  },
+
+  // Footer
+  footer: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
+    backgroundColor: theme.colors.surface,
+    borderTopWidth: 1, borderTopColor: theme.colors.divider,
+  },
+
+  // Modals
+  modalOverlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(15,23,42,0.55)',
+    justifyContent: 'flex-end',
+    zIndex: 100,
+  },
+  bottomSheet: {
+    backgroundColor: theme.colors.surface,
+    borderTopLeftRadius: theme.radius.xl,
+    borderTopRightRadius: theme.radius.xl,
+    padding: theme.spacing.lg,
+    paddingBottom: theme.spacing.xxl,
+    maxHeight: '85%',
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 40, height: 4, borderRadius: 2,
+    backgroundColor: theme.colors.borderStrong,
+    marginBottom: theme.spacing.md,
+  },
+  sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: theme.spacing.md },
+
+  addrRow: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1.5, borderColor: theme.colors.divider,
+    marginBottom: theme.spacing.sm,
+  },
+  addrRowMain: { flex: 1, flexDirection: 'row', alignItems: 'center', padding: theme.spacing.md, gap: theme.spacing.md },
+  tickCircle: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  editBtn: {
+    paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.lg,
+    borderLeftWidth: 1, borderLeftColor: theme.colors.divider,
+    alignItems: 'center', justifyContent: 'center',
+  },
+
+  confirmSheet: {
+    backgroundColor: theme.colors.surface,
+    borderTopLeftRadius: theme.radius.xl,
+    borderTopRightRadius: theme.radius.xl,
+    padding: theme.spacing.xl,
+    paddingBottom: theme.spacing.xxl,
+    alignItems: 'center',
+  },
+  confirmIcon: { width: 72, height: 72, borderRadius: 36, marginBottom: theme.spacing.md },
+  confirmAddrPreview: {
+    width: '100%',
+    backgroundColor: theme.colors.surfaceMuted,
+    padding: theme.spacing.md,
+    borderRadius: theme.radius.md,
+    gap: 4,
+  },
 });
-

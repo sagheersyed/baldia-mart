@@ -31,6 +31,7 @@ import { ReviewsModule } from './reviews/reviews.module';
 import { VendorsModule } from './vendors/vendors.module';
 import { FavoritesModule } from './favorites/favorites.module';
 import { AppCacheModule } from './cache/cache.module';
+import { HomeModule } from './home/home.module';
 
 // Entities
 import { User } from './users/user.entity';
@@ -122,6 +123,7 @@ import { WithdrawalRequest } from './wallets/withdrawal-request.entity';
     VendorsModule,
     FavoritesModule,
     WalletsModule,
+    HomeModule,
   ],
   controllers: [AppController, HealthController],
   providers: [

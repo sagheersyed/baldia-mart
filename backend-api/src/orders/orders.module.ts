@@ -21,6 +21,7 @@ import { CleanupService } from './cleanup.service';
 import { RashanService } from './rashan.service';
 import { RashanController } from './rashan.controller';
 import { UsersModule } from '../users/users.module';
+import { OrderItemSubscriber } from './order-item.subscriber';
 
 import { WalletsModule } from '../wallets/wallets.module';
 
@@ -37,7 +38,7 @@ import { WalletsModule } from '../wallets/wallets.module';
     VendorsModule,
     WalletsModule,
   ],
-  providers: [OrdersService, OrdersGateway, CleanupService, RashanService],
+  providers: [OrdersService, OrdersGateway, CleanupService, RashanService, OrderItemSubscriber],
   controllers: [OrdersController, RashanController],
   exports: [OrdersService, OrdersGateway],
 })

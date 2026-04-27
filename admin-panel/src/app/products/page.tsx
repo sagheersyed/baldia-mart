@@ -1,25 +1,36 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, X, RefreshCw, Package, Filter, Pencil } from 'lucide-react';
+import { Plus, Trash2, X, RefreshCw, Package, Pencil, Star, Zap, Flame } from 'lucide-react';
 import { fetchWithAuth, BASE_URL, getErrorMessage, parseApiError } from '@/lib/api';
 import { useAsyncData } from '@/hooks/useAsyncData';
 import { LoadingState, ErrorState, EmptyState } from '@/components/PageState';
 import { showToast } from '@/hooks/useToast';
 
 interface Category { id: string; name: string; section?: string }
-interface Brand     { id: string; name: string }
+interface Brand    { id: string; name: string }
 interface Product {
   id: string; name: string; description: string; price: number; discount: number;
   stockQuantity: number; imageUrl: string; categoryId: string; brandId?: string;
   category: { name: string; section?: string }; brand?: { name: string };
   isActive: boolean; maxQuantityPerOrder: number; openingTime?: string; closingTime?: string;
+  isFeatured?: boolean; isBestSeller?: boolean; isDeal?: boolean;
+  discountPercent?: number | null; unit?: string | null; weight?: string | null;
+  tags?: string[] | null; sortOrder?: number;
 }
 
 const API_URL  = `${BASE_URL}/products`;
 const CAT_URL  = `${BASE_URL}/categories`;
 
-const EMPTY_FORM = { name: '', description: '', price: 0, discount: 0, stockQuantity: 0, categoryId: '', brandId: '', imageUrl: '', maxQuantityPerOrder: 0, openingTime: '', closingTime: '' };
+const EMPTY_FORM = {
+  name: '', description: '', price: 0, discount: 0, stockQuantity: 0,
+  categoryId: '', brandId: '', imageUrl: '', maxQuantityPerOrder: 0,
+  openingTime: '', closingTime: '',
+  isFeatured: false, isBestSeller: false, isDeal: false,
+  discountPercent: '' as string | number,
+  unit: '', weight: '', tags: '',
+  sortOrder: 0,
+};
 
 export default function ProductsPage() {
   const [products,  setProducts]  = useState<Product[]>([]);
@@ -43,8 +54,12 @@ export default function ProductsPage() {
       if (!pR.ok) throw new Error(await parseApiError(pR, 'Failed to load products'));
       if (!cR.ok) throw new Error(await parseApiError(cR, 'Failed to load categories'));
       if (!bR.ok) throw new Error(await parseApiError(bR, 'Failed to load brands'));
-      const [p, c, b] = await Promise.all([pR.json(), cR.json(), bR.json()]);
-      setProducts(p); setCategories(c); setBrands(b);
+      const [pRaw, c, b] = await Promise.all([pR.json(), cR.json(), bR.json()]);
+      // /products returns paginated shape { data, total, page, limit, totalPages } now;
+      // fall back to raw array if older shape returned.
+      const p = Array.isArray(pRaw) ? pRaw : (pRaw?.data || []);
+      setProducts(p); setCategories(Array.isArray(c) ? c : (c?.data || []));
+      setBrands(Array.isArray(b) ? b : (b?.data || []));
       return true;
     });
   };
@@ -55,8 +70,19 @@ export default function ProductsPage() {
     try {
       const url    = editingProduct ? `${API_URL}/${editingProduct.id}` : API_URL;
       const method = editingProduct ? 'PUT' : 'POST';
-      const body   = { ...formData, brandId: formData.brandId || null, categoryId: formData.categoryId || null };
-      const res    = await fetchWithAuth(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const tagsArr = String(formData.tags || '')
+        .split(',').map(t => t.trim()).filter(Boolean);
+      const body: any = {
+        ...formData,
+        brandId: formData.brandId || null,
+        categoryId: formData.categoryId || null,
+        discountPercent: formData.discountPercent === '' ? null : Number(formData.discountPercent),
+        unit: formData.unit || null,
+        weight: formData.weight || null,
+        tags: tagsArr.length ? tagsArr : null,
+        sortOrder: Number(formData.sortOrder) || 0,
+      };
+      const res = await fetchWithAuth(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (res.ok) {
         setShowModal(false);
         setEditingProduct(null);
@@ -75,7 +101,27 @@ export default function ProductsPage() {
 
   const handleEdit = (p: Product) => {
     setEditingProduct(p);
-    setFormData({ name: p.name, description: p.description || '', price: Number(p.price), discount: Number(p.discount) || 0, stockQuantity: p.stockQuantity, categoryId: p.categoryId, brandId: p.brandId || '', imageUrl: p.imageUrl || '', maxQuantityPerOrder: p.maxQuantityPerOrder || 0, openingTime: p.openingTime || '', closingTime: p.closingTime || '' });
+    setFormData({
+      name: p.name,
+      description: p.description || '',
+      price: Number(p.price),
+      discount: Number(p.discount) || 0,
+      stockQuantity: p.stockQuantity,
+      categoryId: p.categoryId,
+      brandId: p.brandId || '',
+      imageUrl: p.imageUrl || '',
+      maxQuantityPerOrder: p.maxQuantityPerOrder || 0,
+      openingTime: p.openingTime || '',
+      closingTime: p.closingTime || '',
+      isFeatured: !!p.isFeatured,
+      isBestSeller: !!p.isBestSeller,
+      isDeal: !!p.isDeal,
+      discountPercent: p.discountPercent ?? '',
+      unit: p.unit || '',
+      weight: p.weight || '',
+      tags: Array.isArray(p.tags) ? p.tags.join(', ') : '',
+      sortOrder: p.sortOrder || 0,
+    });
     setShowModal(true);
   };
 
@@ -91,6 +137,27 @@ export default function ProductsPage() {
     }
   };
 
+  // Quick toggle for merchandising flags via dedicated admin endpoint.
+  const toggleFlag = async (
+    p: Product,
+    flag: 'isFeatured' | 'isBestSeller' | 'isDeal',
+  ) => {
+    const next = !p[flag];
+    setProducts(prev => prev.map(x => x.id === p.id ? { ...x, [flag]: next } : x));
+    try {
+      const res = await fetchWithAuth(`${API_URL}/${p.id}/flags`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [flag]: next }),
+      });
+      if (!res.ok) throw new Error(await parseApiError(res, 'Failed to update flag'));
+      showToast({ title: `${flagLabel(flag)} ${next ? 'enabled' : 'disabled'}`, variant: 'success' });
+    } catch (err) {
+      setProducts(prev => prev.map(x => x.id === p.id ? { ...x, [flag]: !next } : x));
+      showToast({ title: getErrorMessage(err, 'Failed to update flag'), variant: 'error' });
+    }
+  };
+
   const openAdd = () => { setEditingProduct(null); setFormData({ ...EMPTY_FORM }); setShowModal(true); };
 
   return (
@@ -98,7 +165,7 @@ export default function ProductsPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Products</h1>
-          <p className="page-subtitle">Manage inventory, pricing and availability · {products.length} items</p>
+          <p className="page-subtitle">Manage inventory, pricing and merchandising · {products.length} items</p>
         </div>
         <div className="flex items-center gap-3">
           <button onClick={fetchData} className="btn-ghost btn-icon">
@@ -120,10 +187,9 @@ export default function ProductsPage() {
                 <tr>
                   <th>Product</th>
                   <th>Category / Brand</th>
-                  <th className="text-right">Base Price</th>
-                  <th className="text-right">Discount</th>
-                  <th className="text-right">Final Price</th>
+                  <th className="text-right">Price</th>
                   <th className="text-center">Stock</th>
+                  <th className="text-center">Merchandising</th>
                   <th className="text-center">Status</th>
                   <th className="text-right">Actions</th>
                 </tr>
@@ -131,13 +197,13 @@ export default function ProductsPage() {
               <tbody>
                 {loading && products.length === 0 ? (
                   <tr>
-                    <td colSpan={8}>
+                    <td colSpan={7}>
                       <LoadingState message="Loading products…" />
                     </td>
                   </tr>
                 ) : products.length === 0 ? (
                   <tr>
-                    <td colSpan={8}>
+                    <td colSpan={7}>
                       <EmptyState title="No products yet" message="Add your first product to get started." icon={<Package size={22} className="text-slate-300" />} />
                     </td>
                   </tr>
@@ -152,8 +218,10 @@ export default function ProductsPage() {
                           }
                         </div>
                         <div className="min-w-0">
-                          <p className="font-semibold text-slate-800 truncate max-w-[180px]">{prod.name}</p>
-                          <p className="text-xs text-slate-400 truncate max-w-[180px]">{prod.description || '—'}</p>
+                          <p className="font-semibold text-slate-800 truncate max-w-[200px]">{prod.name}</p>
+                          <p className="text-xs text-slate-400 truncate max-w-[200px]">
+                            {[prod.weight, prod.unit].filter(Boolean).join(' · ') || prod.description || '—'}
+                          </p>
                         </div>
                       </div>
                     </td>
@@ -163,13 +231,45 @@ export default function ProductsPage() {
                         {prod.brand?.name && <span className="badge-blue">{prod.brand.name}</span>}
                       </div>
                     </td>
-                    <td className="text-right text-sm text-slate-400 line-through">Rs. {Number(prod.price || 0).toFixed(0)}</td>
-                    <td className="text-right text-sm text-amber-600 font-medium">-{Number(prod.discount || 0).toFixed(0)}</td>
-                    <td className="text-right font-bold text-slate-800">Rs. {(Number(prod.price || 0) - Number(prod.discount || 0)).toFixed(0)}</td>
+                    <td className="text-right">
+                      <div className="font-bold text-slate-800">
+                        Rs. {(Number(prod.price || 0) - Number(prod.discount || 0)).toFixed(0)}
+                      </div>
+                      {Number(prod.discount) > 0 && (
+                        <div className="text-xs text-slate-400 line-through">
+                          Rs. {Number(prod.price).toFixed(0)}
+                        </div>
+                      )}
+                    </td>
                     <td className="text-center">
                       <span className={`text-sm font-semibold ${prod.stockQuantity < 10 ? 'text-red-500' : 'text-slate-700'}`}>
                         {prod.stockQuantity}
                       </span>
+                    </td>
+                    <td>
+                      <div className="flex items-center justify-center gap-1.5">
+                        <FlagToggle
+                          icon={<Star size={14} />}
+                          active={!!prod.isFeatured}
+                          activeClass="bg-amber-50 border-amber-200 text-amber-600"
+                          title="Featured"
+                          onClick={() => toggleFlag(prod, 'isFeatured')}
+                        />
+                        <FlagToggle
+                          icon={<Flame size={14} />}
+                          active={!!prod.isBestSeller}
+                          activeClass="bg-rose-50 border-rose-200 text-rose-600"
+                          title="Best Seller"
+                          onClick={() => toggleFlag(prod, 'isBestSeller')}
+                        />
+                        <FlagToggle
+                          icon={<Zap size={14} />}
+                          active={!!prod.isDeal}
+                          activeClass="bg-emerald-50 border-emerald-200 text-emerald-600"
+                          title="Deal"
+                          onClick={() => toggleFlag(prod, 'isDeal')}
+                        />
+                      </div>
                     </td>
                     <td className="text-center">
                       <span className={prod.isActive ? 'badge-green' : 'badge-gray'}>
@@ -196,7 +296,7 @@ export default function ProductsPage() {
 
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal-box max-w-xl" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-box max-w-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div>
                 <h2 className="font-bold text-slate-800 text-lg">{editingProduct ? 'Edit Product' : 'Add New Product'}</h2>
@@ -236,7 +336,7 @@ export default function ProductsPage() {
 
                 <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-3">
                   <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Pricing</p>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-3 gap-4">
                     <div>
                       <label className="input-label">Base Price (Rs.)</label>
                       <input required type="number" step="0.01" className="input" value={formData.price} onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) || 0 })} />
@@ -245,21 +345,81 @@ export default function ProductsPage() {
                       <label className="input-label">Discount (Rs.)</label>
                       <input type="number" step="0.01" className="input" value={formData.discount} onChange={(e) => setFormData({ ...formData, discount: parseFloat(e.target.value) || 0 })} />
                     </div>
+                    <div>
+                      <label className="input-label">Discount %</label>
+                      <input type="number" min={0} max={100} className="input" value={formData.discountPercent} onChange={(e) => setFormData({ ...formData, discountPercent: e.target.value })} placeholder="auto" />
+                    </div>
                   </div>
                   <div className="flex justify-between items-center pt-1 border-t border-slate-200">
                     <span className="text-xs text-slate-500 font-semibold">Final Price</span>
-                    <span className="font-bold text-emerald-700">Rs. {(formData.price - formData.discount).toFixed(2)}</span>
+                    <span className="font-bold text-emerald-700">Rs. {(Number(formData.price) - Number(formData.discount)).toFixed(2)}</span>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="input-label">Stock Qty</label>
-                    <input required type="number" className="input" value={formData.stockQuantity} onChange={(e) => setFormData({ ...formData, stockQuantity: parseInt(e.target.value) || 0 })} />
+                <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-3">
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Inventory & Packaging</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="input-label">Stock Qty</label>
+                      <input required type="number" className="input" value={formData.stockQuantity} onChange={(e) => setFormData({ ...formData, stockQuantity: parseInt(e.target.value) || 0 })} />
+                    </div>
+                    <div>
+                      <label className="input-label">Order Limit (0=none)</label>
+                      <input type="number" className="input" value={formData.maxQuantityPerOrder} onChange={(e) => setFormData({ ...formData, maxQuantityPerOrder: parseInt(e.target.value) || 0 })} />
+                    </div>
                   </div>
-                  <div>
-                    <label className="input-label">Order Limit (0=none)</label>
-                    <input type="number" className="input" value={formData.maxQuantityPerOrder} onChange={(e) => setFormData({ ...formData, maxQuantityPerOrder: parseInt(e.target.value) || 0 })} />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="input-label">Unit</label>
+                      <select className="input" value={formData.unit} onChange={(e) => setFormData({ ...formData, unit: e.target.value })}>
+                        <option value="">— none —</option>
+                        <option value="kg">kg</option>
+                        <option value="g">g</option>
+                        <option value="ml">ml</option>
+                        <option value="L">L</option>
+                        <option value="pcs">pcs</option>
+                        <option value="dozen">dozen</option>
+                        <option value="pack">pack</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="input-label">Weight / Pack Size</label>
+                      <input type="text" className="input" value={formData.weight} onChange={(e) => setFormData({ ...formData, weight: e.target.value })} placeholder="e.g. 500g, 1kg, 12 pcs" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-3">
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Merchandising</p>
+                  <div className="grid grid-cols-3 gap-3">
+                    <FlagSwitch
+                      label="Featured"
+                      icon={<Star size={14} />}
+                      checked={formData.isFeatured}
+                      onChange={(v) => setFormData({ ...formData, isFeatured: v })}
+                    />
+                    <FlagSwitch
+                      label="Best Seller"
+                      icon={<Flame size={14} />}
+                      checked={formData.isBestSeller}
+                      onChange={(v) => setFormData({ ...formData, isBestSeller: v })}
+                    />
+                    <FlagSwitch
+                      label="Deal"
+                      icon={<Zap size={14} />}
+                      checked={formData.isDeal}
+                      onChange={(v) => setFormData({ ...formData, isDeal: v })}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="input-label">Sort Order</label>
+                      <input type="number" className="input" value={formData.sortOrder} onChange={(e) => setFormData({ ...formData, sortOrder: parseInt(e.target.value) || 0 })} />
+                    </div>
+                    <div>
+                      <label className="input-label">Tags (comma separated)</label>
+                      <input type="text" className="input" value={formData.tags} onChange={(e) => setFormData({ ...formData, tags: e.target.value })} placeholder="e.g. organic, fresh, daily" />
+                    </div>
                   </div>
                 </div>
 
@@ -297,5 +457,76 @@ export default function ProductsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+// ── Helpers ──
+function flagLabel(f: 'isFeatured' | 'isBestSeller' | 'isDeal') {
+  return f === 'isFeatured' ? 'Featured' : f === 'isBestSeller' ? 'Best Seller' : 'Deal';
+}
+
+function FlagToggle({
+  icon, active, title, onClick, activeClass,
+}: {
+  icon: React.ReactNode;
+  active: boolean;
+  title: string;
+  onClick: () => void;
+  activeClass: string;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      onClick={onClick}
+      className={
+        'inline-flex items-center justify-center w-8 h-8 rounded-lg border transition-all ' +
+        (active
+          ? activeClass
+          : 'bg-white border-slate-200 text-slate-300 hover:text-slate-500 hover:border-slate-300')
+      }
+    >
+      {icon}
+    </button>
+  );
+}
+
+function FlagSwitch({
+  label, icon, checked, onChange,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      className={
+        'flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl border transition-all ' +
+        (checked
+          ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+          : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300')
+      }
+    >
+      <span className="flex items-center gap-2 text-xs font-semibold">
+        {icon}
+        {label}
+      </span>
+      <span
+        className={
+          'inline-block w-8 h-4 rounded-full relative transition-all ' +
+          (checked ? 'bg-emerald-500' : 'bg-slate-200')
+        }
+      >
+        <span
+          className={
+            'absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ' +
+            (checked ? 'left-4' : 'left-0.5')
+          }
+        />
+      </span>
+    </button>
   );
 }

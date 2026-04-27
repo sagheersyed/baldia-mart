@@ -1,139 +1,197 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, TouchableOpacity,
-  ActivityIndicator, RefreshControl, Alert, ScrollView
+  View, StyleSheet, FlatList, Pressable, ActivityIndicator,
+  RefreshControl, Alert, ListRenderItem,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
+
 import { useCart } from '../context/CartContext';
 import { authApi, connectSocket, ordersApi, socket } from '../api/api';
+import { useSettings } from '../context/SettingsContext';
 import { generateReceiptPDF, printReceipt } from '../utils/receiptGenerator';
-import SkeletonLoader from '../components/SkeletonLoader';
+import {
+  AppText, AppButton, AppIconButton, AppBadge, EmptyState, SkeletonBlock,
+} from '../components/ui';
+import { theme } from '../theme/theme';
 
-const STATUS_CONFIG: Record<string, { color: string; bg: string; label: string; icon: string }> = {
-  pending: { color: '#F59E0B', bg: '#FFFBEB', label: 'Pending', icon: '⏳' },
-  confirmed: { color: '#3B82F6', bg: '#EFF6FF', label: 'Confirmed', icon: '✅' },
-  preparing: { color: '#8B5CF6', bg: '#F5F3FF', label: 'Preparing', icon: '👨‍🍳' },
-  out_for_delivery: { color: '#06B6D4', bg: '#ECFEFF', label: 'Out for Delivery', icon: '🚴' },
-  delivered: { color: '#10B981', bg: '#ECFDF5', label: 'Delivered', icon: '📦' },
-  cancelled: { color: '#EF4444', bg: '#FEF2F2', label: 'Cancelled', icon: '❌' },
+type TabKey = 'active' | 'past' | 'rashan';
+
+const STATUS_CONFIG: Record<string, {
+  color: string; bg: string; label: string; icon: keyof typeof Ionicons.glyphMap;
+}> = {
+  pending:           { color: theme.colors.warning, bg: theme.colors.warningLight, label: 'Pending',          icon: 'time-outline' },
+  confirmed:         { color: theme.colors.info,    bg: theme.colors.infoLight,    label: 'Confirmed',        icon: 'checkmark-circle-outline' },
+  preparing:         { color: '#8B5CF6',            bg: '#F5F3FF',                 label: 'Preparing',        icon: 'restaurant-outline' },
+  out_for_delivery:  { color: '#06B6D4',            bg: '#ECFEFF',                 label: 'Out for delivery', icon: 'bicycle-outline' },
+  delivered:         { color: theme.colors.success, bg: theme.colors.successLight, label: 'Delivered',        icon: 'cube-outline' },
+  cancelled:         { color: theme.colors.danger,  bg: theme.colors.dangerLight,  label: 'Cancelled',        icon: 'close-circle-outline' },
 };
+
+const ACTIVE_STATUSES = new Set(['pending', 'confirmed', 'preparing', 'out_for_delivery']);
+const PAST_STATUSES = new Set(['delivered', 'cancelled']);
 
 function formatDate(dateStr: string) {
   const d = new Date(dateStr);
-  return d.toLocaleDateString('en-PK', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleDateString('en-PK', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
-function OrderCard({ order, onTrack, onCancel }: any) {
+function OrderCard({ order, onTrack, onCancel, onReorder, onChat, onShare, onPrint, chatEnabled }: any) {
   const cfg = STATUS_CONFIG[order.status] || STATUS_CONFIG['pending'];
-  const itemCount = order.items?.length || 0;
-  const firstItem = order.items?.[0]?.product?.name || 'Order';
-
-  // Cancel is only allowed in the first 2 stages: pending & confirmed
-  // Once preparing begins, the mart is already working on the order
+  const items = order.items || [];
+  const visibleItems = items.filter((i: any) => i.status !== 'missing');
+  const missingCount = items.length - visibleItems.length;
   const canCancel = order.status === 'pending' || order.status === 'confirmed';
+  const isRashan = order.orderType === 'rashan';
+  const isFood = order.orderType === 'food';
+  const isDelivered = order.status === 'delivered';
+  const eta = order.estimatedDeliveryTime || (isFood ? '30-45 min' : '15-30 min');
 
   return (
     <View style={[styles.orderCard, order.status === 'cancelled' && styles.cancelledCard]}>
-      <View style={styles.orderHeader}>
-        <View>
-          <Text style={styles.orderId}>#{order.id?.slice(0, 8).toUpperCase()}</Text>
-          <Text style={styles.orderDate}>{formatDate(order.createdAt)}</Text>
+      {/* Top row: ID + status + type */}
+      <View style={styles.cardHead}>
+        <View style={{ flex: 1 }}>
+          <View style={styles.headRow}>
+            <AppText variant="captionStrong" color={theme.colors.textSecondary}>
+              #{order.id?.slice(0, 8).toUpperCase()}
+            </AppText>
+            <View style={[styles.typeChip, {
+              backgroundColor: isRashan ? theme.colors.rashanLight
+                : isFood ? theme.colors.foodLight
+                  : theme.colors.primaryLight,
+            }]}>
+              <Ionicons
+                name={isRashan ? 'cube-outline' : isFood ? 'restaurant-outline' : 'storefront-outline'}
+                size={10}
+                color={isRashan ? theme.colors.rashan : isFood ? theme.colors.food : theme.colors.primary}
+              />
+              <AppText variant="badge" color={isRashan ? theme.colors.rashan : isFood ? theme.colors.food : theme.colors.primary}>
+                {isRashan ? 'RASHAN' : isFood ? 'FOOD' : 'MART'}
+              </AppText>
+            </View>
+          </View>
+          <AppText variant="caption" style={{ marginTop: 2 }}>
+            {formatDate(order.createdAt)}
+          </AppText>
         </View>
         <View style={[styles.statusBadge, { backgroundColor: cfg.bg }]}>
-          <Text style={[styles.statusText, { color: cfg.color }]}>
-            {order.status === 'cancelled' && order.notes?.includes('missing')
-              ? '❌ STOCK OUT'
-              : `${cfg.icon} ${cfg.label}`}
-          </Text>
+          <Ionicons name={cfg.icon} size={12} color={cfg.color} />
+          <AppText variant="badge" color={cfg.color}>{cfg.label}</AppText>
         </View>
       </View>
-      <View style={styles.orderTypeRow}>
-        <View style={[styles.typeBadge, { backgroundColor: order.orderType === 'food' ? '#FFF5F0' : '#F0FFF4' }]}>
-          <Text style={[styles.typeText, { color: order.orderType === 'food' ? '#FF4500' : '#2F855A' }]}>
-            {order.orderType === 'food' ? '🍔 Food Order' : '🛒 Mart Order'}
-          </Text>
-        </View>
-      </View>
-      <View style={styles.orderDivider} />
-      <View style={styles.orderBody}>
-        <View style={{ flex: 1 }}>
-          {order.items.filter((i: any) => i.status !== 'missing').map((item: any, idx: number) => (
-            <Text key={item.id || idx} style={styles.orderItems} numberOfLines={1}>
-              {item.quantity}x {item.product?.name || item.menuItem?.name || 'Item'}
-            </Text>
-          )).slice(0, 2)}
-          {order.items.filter((i: any) => i.status !== 'missing').length > 2 && (
-            <Text style={[styles.orderItems, { fontSize: 11, color: '#999' }]}>
-              + {order.items.filter((i: any) => i.status !== 'missing').length - 2} more items
-            </Text>
-          )}
 
-          {/* Missing Items Indicator */}
-          {order.items.some((i: any) => i.status === 'missing') && (
-            <Text style={{ fontSize: 11, color: '#E53E3E', fontWeight: 'bold', marginTop: 4 }}>
-              ⚠️ Missing items reported
-            </Text>
-          )}
-        </View>
-        <Text style={styles.orderTotal}>Rs. {(Number(order.total) || 0).toFixed(0)}</Text>
-      </View>
-      {order.address && (
-        <Text style={styles.orderAddress} numberOfLines={1}>
-          📍 {order.address.streetAddress}
-        </Text>
-      )}
-      <View style={styles.orderActions}>
-        <TouchableOpacity
-          style={styles.trackBtn}
-          onPress={() => onTrack(order.id)}
-        >
-          <Text style={styles.trackBtnText}>
-            {order.status === 'delivered'
-              ? ((order.isRated && order.isBusinessRated) ? 'Order Details' : 'Rate Order')
-              : 'Track Order'}
-          </Text>
-        </TouchableOpacity>
-        {canCancel && (
-          <TouchableOpacity
-            style={styles.cancelBtn}
-            onPress={() => onCancel(order.id)}
-          >
-            <Text style={styles.cancelBtnText}>Cancel</Text>
-          </TouchableOpacity>
+      {/* ETA + items preview */}
+      <View style={styles.cardBody}>
+        {!isDelivered && order.status !== 'cancelled' ? (
+          <View style={styles.etaRow}>
+            <Ionicons name="time-outline" size={14} color={theme.colors.textSecondary} />
+            <AppText variant="caption" color={theme.colors.textSecondary}>ETA</AppText>
+            <AppText variant="captionStrong" color={theme.colors.textPrimary}>{eta}</AppText>
+          </View>
+        ) : null}
+
+        {!isRashan ? (
+          <View style={{ marginTop: 6 }}>
+            {visibleItems.slice(0, 2).map((item: any, idx: number) => (
+              <AppText key={item.id || idx} variant="body" numberOfLines={1}>
+                {item.quantity}× {item.product?.name || item.menuItem?.name || 'Item'}
+              </AppText>
+            ))}
+            {visibleItems.length > 2 ? (
+              <AppText variant="caption">+{visibleItems.length - 2} more item{visibleItems.length - 2 === 1 ? '' : 's'}</AppText>
+            ) : null}
+            {missingCount > 0 ? (
+              <View style={styles.missingPill}>
+                <Ionicons name="alert-circle" size={12} color={theme.colors.danger} />
+                <AppText variant="badge" color={theme.colors.danger}>
+                  {missingCount} missing item{missingCount === 1 ? '' : 's'}
+                </AppText>
+              </View>
+            ) : null}
+          </View>
+        ) : (
+          <AppText variant="body" numberOfLines={1}>
+            Bulk Rashan ({order.bulkWeightTier?.toUpperCase() || 'CUSTOM'})
+          </AppText>
         )}
-      </View>
-      {order.status === 'delivered' && (
-        <View style={styles.cardReceiptRow}>
-          <TouchableOpacity
-            style={[styles.receiptBtn, { flex: 1, marginRight: 8 }]}
-            onPress={() => generateReceiptPDF(order)}
-          >
-            <Text style={styles.receiptBtnText}>📤 Share</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.receiptBtn, { flex: 1, backgroundColor: '#1A1A1A', borderColor: '#1A1A1A' }]}
-            onPress={() => printReceipt(order)}
-          >
-            <Text style={[styles.receiptBtnText, { color: '#fff' }]}>🖨️ View/Print</Text>
-          </TouchableOpacity>
+
+        <View style={styles.totalRow}>
+          {order.address ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 }}>
+              <Ionicons name="location-outline" size={12} color={theme.colors.textMuted} />
+              <AppText variant="caption" numberOfLines={1} style={{ flex: 1 }}>
+                {order.address.streetAddress}
+              </AppText>
+            </View>
+          ) : <View style={{ flex: 1 }} />}
+          <AppText variant="h3" color={theme.colors.primary}>
+            Rs. {Math.round(Number(order.total) || 0)}
+          </AppText>
         </View>
-      )}
+      </View>
+
+      {/* Actions */}
+      <View style={styles.actions}>
+        <AppButton
+          label={isDelivered
+            ? ((order.isRated && order.isBusinessRated) ? 'Order details' : 'Rate order')
+            : 'Track order'}
+          variant="primary"
+          size="sm"
+          fullWidth
+          onPress={() => onTrack(order.id)}
+          style={{ flex: 1 }}
+          leadingIcon={<Ionicons name={isDelivered ? 'star-outline' : 'navigate-outline'} size={14} color="#fff" />}
+        />
+        {!isDelivered && chatEnabled ? (
+          <AppIconButton size={36} bg={theme.colors.surfaceMuted} onPress={() => onChat(order)}>
+            <Ionicons name="chatbubble-ellipses-outline" size={16} color={theme.colors.textPrimary} />
+          </AppIconButton>
+        ) : null}
+        {isDelivered ? (
+          <>
+            <AppIconButton size={36} bg={theme.colors.surfaceMuted} onPress={() => onShare(order)}>
+              <Ionicons name="share-outline" size={16} color={theme.colors.textPrimary} />
+            </AppIconButton>
+            <AppIconButton size={36} bg={theme.colors.surfaceMuted} onPress={() => onPrint(order)}>
+              <Ionicons name="receipt-outline" size={16} color={theme.colors.textPrimary} />
+            </AppIconButton>
+            <AppIconButton size={36} bg={theme.colors.primaryLight} onPress={() => onReorder(order)}>
+              <Ionicons name="refresh-outline" size={16} color={theme.colors.primary} />
+            </AppIconButton>
+          </>
+        ) : null}
+        {canCancel ? (
+          <AppButton
+            label="Cancel"
+            variant="outline"
+            size="sm"
+            tint={theme.colors.danger}
+            textColor={theme.colors.danger}
+            onPress={() => onCancel(order.id)}
+          />
+        ) : null}
+      </View>
     </View>
   );
 }
 
+const MemoOrderCard = React.memo(OrderCard);
+
 export default function MyOrdersScreen({ navigation }: any) {
   const { setActiveOrdersCount } = useCart();
+  const { settings } = useSettings();
+  const chatEnabled = settings?.feature_chat_enabled === true;
+
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [activeFilter, setActiveFilter] = useState('All');
-
-  const filters = ['All', 'Pending', 'Confirmed', 'Preparing', 'Out for Delivery', 'Delivered', 'Cancelled'];
+  const [activeTab, setActiveTab] = useState<TabKey>('active');
 
   const fetchOrders = useCallback(async (pageNum = 1, shouldAppend = false) => {
     try {
@@ -142,7 +200,9 @@ export default function MyOrdersScreen({ navigation }: any) {
 
       const res = await ordersApi.getHistory(pageNum, 15);
       const resData = res.data || {};
-      const newOrders = Array.isArray(resData) ? resData : (resData.data || resData.orders || resData.items || []);
+      const newOrders = Array.isArray(resData)
+        ? resData
+        : (resData.data || resData.orders || resData.items || []);
 
       setHasMore(newOrders.length === 15);
 
@@ -152,8 +212,8 @@ export default function MyOrdersScreen({ navigation }: any) {
         const uniqueNew = newOrders.filter((o: any) => !existingIds.has(o.id));
         return [...prev, ...uniqueNew];
       });
-    } catch (error) {
-      console.error('Failed to fetch orders:', error);
+    } catch {
+      // noop
     } finally {
       setLoading(false);
       setLoadingMore(false);
@@ -169,42 +229,34 @@ export default function MyOrdersScreen({ navigation }: any) {
   );
 
   useEffect(() => {
-    const activeCount = orders.filter((o: any) =>
-      ['pending', 'confirmed', 'preparing', 'out_for_delivery'].includes(o.status)
-    ).length;
+    const activeCount = orders.filter((o: any) => ACTIVE_STATUSES.has(o.status)).length;
     setActiveOrdersCount(activeCount);
   }, [orders, setActiveOrdersCount]);
 
   useEffect(() => {
     let isMounted = true;
     let joinRoom: (() => void) | null = null;
-    const onStatusUpdate = (data: any) => {
+    const onStatusUpdate = () => {
       if (!isMounted) return;
-      console.log('MyOrders: Received order update:', data);
       setPage(1);
       fetchOrders(1, false);
     };
-
     const setupSocket = async () => {
       try {
         const userRes = await authApi.getMe();
         const user = userRes.data;
         if (!isMounted) return;
-
         connectSocket();
         joinRoom = () => { if (user?.id) socket.emit('joinUserRoom', user.id); };
         if (socket.connected) joinRoom();
         socket.on('connect', joinRoom);
-
         socket.off('orderStatusUpdated', onStatusUpdate);
         socket.on('orderStatusUpdated', onStatusUpdate);
-      } catch (e) {
-        console.error('Socket setup error:', e);
+      } catch {
+        // noop
       }
     };
-
     void setupSocket();
-
     return () => {
       isMounted = false;
       if (joinRoom) socket.off('connect', joinRoom);
@@ -226,140 +278,176 @@ export default function MyOrdersScreen({ navigation }: any) {
     }
   };
 
-  const handleTrack = (orderId: string) => {
-    navigation.navigate('OrderTracking', { orderId });
-  };
+  const handleTrack = (orderId: string) => navigation.navigate('OrderTracking', { orderId });
 
   const handleCancel = (orderId: string) => {
-    Alert.alert(
-      'Cancel Order',
-      'Are you sure you want to cancel this order?',
-      [
-        { text: 'No', style: 'cancel' },
-        {
-          text: 'Yes, Cancel',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setLoading(true);
-              await ordersApi.cancelOrder(orderId);
-              Alert.alert('Success', 'Order cancelled successfully');
-              fetchOrders();
-            } catch (error: any) {
-              console.error('Failed to cancel order:', error);
-              const msg = error.response?.data?.message || 'Failed to cancel order. Please try again.';
-              Alert.alert('Error', msg);
-              setLoading(false);
-            }
+    Alert.alert('Cancel order', 'Are you sure you want to cancel this order?', [
+      { text: 'No', style: 'cancel' },
+      {
+        text: 'Yes, cancel',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            setLoading(true);
+            await ordersApi.cancelOrder(orderId);
+            Alert.alert('Cancelled', 'Order cancelled successfully');
+            fetchOrders(1, false);
+          } catch (err: any) {
+            const msg = err.response?.data?.message || 'Failed to cancel order. Please try again.';
+            Alert.alert('Error', msg);
+            setLoading(false);
           }
-        }
-      ]
-    );
+        },
+      },
+    ]);
   };
 
-  if (loading && !refreshing) {
-    return (
-      <SafeAreaView style={styles.container}>
-        {/* Header Skeleton */}
-        <View style={styles.header}>
-          <SkeletonLoader width={150} height={24} />
-        </View>
+  const handleReorder = useCallback(async (order: any) => {
+    Alert.alert('Reorder', 'Place this order again?', [
+      { text: 'No', style: 'cancel' },
+      {
+        text: 'Yes',
+        onPress: async () => {
+          try {
+            await ordersApi.reorderOrder(order.id);
+            Alert.alert('Added to cart', 'Items added to your cart.');
+            navigation.navigate('Cart');
+          } catch (err: any) {
+            const msg = err.response?.data?.message || 'Could not reorder this order.';
+            Alert.alert('Error', msg);
+          }
+        },
+      },
+    ]);
+  }, [navigation]);
 
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 16 }}>
-          <View style={{ paddingHorizontal: 16, marginBottom: 12 }}>
-            <SkeletonLoader width={100} height={16} />
-          </View>
-          {[...Array(3)].map((_, i) => (
-            <View key={i} style={[styles.orderCard, { marginHorizontal: 16, marginBottom: 16 }]}>
-              <View style={styles.orderHeader}>
-                <SkeletonLoader width={80} height={20} />
-                <SkeletonLoader width={80} height={24} borderRadius={12} />
-              </View>
-              <SkeletonLoader width={120} height={14} style={{ marginVertical: 8 }} />
-              <View style={styles.orderDivider} />
-              <View style={styles.orderBody}>
-                <View style={{ flex: 1 }}>
-                  <SkeletonLoader width="70%" height={16} style={{ marginBottom: 6 }} />
-                  <SkeletonLoader width="50%" height={16} />
-                </View>
-                <SkeletonLoader width={60} height={20} />
-              </View>
-              <View style={styles.orderActions}>
-                <SkeletonLoader width="100%" height={40} borderRadius={10} />
-              </View>
-            </View>
-          ))}
-        </ScrollView>
-      </SafeAreaView>
-    );
-  }
+  const handleChat = useCallback((order: any) => {
+    navigation.navigate('OrderChat', { orderId: order.id, riderName: order.rider?.name });
+  }, [navigation]);
 
-
-  const filteredOrders = activeFilter === 'All'
-    ? orders
-    : orders.filter(o => {
-      const mappedStatus = activeFilter.toLowerCase().replace(/ /g, '_');
-      return o.status === mappedStatus;
+  const filteredOrders = useMemo(() => {
+    return orders.filter(o => {
+      if (activeTab === 'active') return ACTIVE_STATUSES.has(o.status) && o.orderType !== 'rashan';
+      if (activeTab === 'past') return PAST_STATUSES.has(o.status) && o.orderType !== 'rashan';
+      return o.orderType === 'rashan';
     });
+  }, [orders, activeTab]);
+
+  const counts = useMemo(() => ({
+    active: orders.filter(o => ACTIVE_STATUSES.has(o.status) && o.orderType !== 'rashan').length,
+    past: orders.filter(o => PAST_STATUSES.has(o.status) && o.orderType !== 'rashan').length,
+    rashan: orders.filter(o => o.orderType === 'rashan').length,
+  }), [orders]);
+
+  const tabs: { key: TabKey; label: string; count: number; icon: keyof typeof Ionicons.glyphMap }[] = [
+    { key: 'active', label: 'Active', count: counts.active, icon: 'navigate-outline' },
+    { key: 'past', label: 'Past', count: counts.past, icon: 'time-outline' },
+    { key: 'rashan', label: 'Rashan', count: counts.rashan, icon: 'cube-outline' },
+  ];
+
+  const renderItem: ListRenderItem<any> = useCallback(({ item }) => (
+    <MemoOrderCard
+      order={item}
+      onTrack={handleTrack}
+      onCancel={handleCancel}
+      onReorder={handleReorder}
+      onChat={handleChat}
+      onShare={generateReceiptPDF}
+      onPrint={printReceipt}
+      chatEnabled={chatEnabled}
+    />
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [handleReorder, handleChat, chatEnabled]);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backIcon}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>My Orders</Text>
-        <View style={{ width: 40 }} />
-      </View>
-
-      <View style={styles.filterWrap}>
-        <FlatList
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          data={filters}
-          keyExtractor={(item) => item}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12, gap: 10 }}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={[styles.filterChip, activeFilter === item && styles.filterChipActive]}
-              onPress={() => setActiveFilter(item)}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.filterTxt, activeFilter === item && styles.filterTxtActive]}>
-                {item}
-              </Text>
-            </TouchableOpacity>
-          )}
-        />
-      </View>
-
-      {filteredOrders.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyIcon}>📦</Text>
-          <Text style={styles.emptyTitle}>No orders found</Text>
-          <Text style={styles.emptySubtitle}>Try changing your filter or place a new order.</Text>
-          <TouchableOpacity style={styles.shopBtn} onPress={() => navigation.navigate('Main')}>
-            <Text style={styles.shopBtnText}>Start Shopping</Text>
-          </TouchableOpacity>
+        <AppIconButton size={36} bg={theme.colors.surfaceMuted} onPress={() => navigation.goBack()}>
+          <Ionicons name="chevron-back" size={20} color={theme.colors.textPrimary} />
+        </AppIconButton>
+        <View style={{ flex: 1 }}>
+          <AppText variant="h2">My orders</AppText>
+          <AppText variant="caption">Track and manage every order</AppText>
         </View>
+      </View>
+
+      {/* Tabs */}
+      <View style={styles.tabsRow}>
+        {tabs.map(t => {
+          const active = activeTab === t.key;
+          return (
+            <Pressable
+              key={t.key}
+              onPress={() => setActiveTab(t.key)}
+              style={[styles.tabBtn, active ? styles.tabBtnActive : null]}
+            >
+              <Ionicons
+                name={t.icon}
+                size={14}
+                color={active ? theme.colors.primary : theme.colors.textSecondary}
+              />
+              <AppText
+                variant="captionStrong"
+                color={active ? theme.colors.primary : theme.colors.textSecondary}
+              >
+                {t.label}
+              </AppText>
+              {t.count > 0 ? (
+                <View style={[styles.tabCount, active ? { backgroundColor: theme.colors.primary } : { backgroundColor: theme.colors.surfaceMuted }]}>
+                  <AppText variant="badge" color={active ? '#fff' : theme.colors.textSecondary}>
+                    {t.count}
+                  </AppText>
+                </View>
+              ) : null}
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {loading && !refreshing ? (
+        <View style={{ padding: theme.spacing.lg, gap: theme.spacing.md }}>
+          {[0, 1, 2].map((i) => (
+            <View key={i} style={[styles.orderCard, { padding: theme.spacing.md, gap: 8 }]}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <SkeletonBlock width={120} height={16} />
+                <SkeletonBlock width={90} height={20} radius={10} />
+              </View>
+              <SkeletonBlock width={'70%'} height={14} />
+              <SkeletonBlock width={'50%'} height={14} />
+              <SkeletonBlock width={'100%'} height={36} radius={12} />
+            </View>
+          ))}
+        </View>
+      ) : filteredOrders.length === 0 ? (
+        <EmptyState
+          icon={activeTab === 'rashan' ? 'cube-outline' : activeTab === 'active' ? 'bicycle-outline' : 'archive-outline'}
+          title={activeTab === 'active' ? 'No active orders' : activeTab === 'past' ? 'No past orders yet' : 'No rashan requests'}
+          subtitle={activeTab === 'active'
+            ? 'You\'ll see live order tracking here.'
+            : activeTab === 'past'
+              ? 'Once you place an order, it will appear here.'
+              : 'Place a bulk rashan request to see it here.'}
+          actionLabel={activeTab === 'rashan' ? 'Start Rashan' : 'Start shopping'}
+          onAction={() => navigation.navigate(activeTab === 'rashan' ? 'RashanOrder' : 'Main')}
+        />
       ) : (
         <FlatList
           data={filteredOrders}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ padding: 16 }}
+          contentContainerStyle={{ padding: theme.spacing.lg, paddingBottom: theme.spacing.xxxl }}
           showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FF4500" />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} colors={[theme.colors.primary]} />}
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.5}
-          ListFooterComponent={loadingMore ? <ActivityIndicator size="small" color="#FF4500" style={{ margin: 10 }} /> : null}
-          renderItem={({ item }) => (
-            <OrderCard
-              order={item}
-              onTrack={handleTrack}
-              onCancel={handleCancel}
-            />
-          )}
-          ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+          ListFooterComponent={loadingMore
+            ? <ActivityIndicator size="small" color={theme.colors.primary} style={{ margin: 12 }} />
+            : null}
+          renderItem={renderItem}
+          ItemSeparatorComponent={() => <View style={{ height: theme.spacing.md }} />}
+          initialNumToRender={6}
+          maxToRenderPerBatch={6}
+          windowSize={9}
         />
       )}
     </SafeAreaView>
@@ -367,73 +455,82 @@ export default function MyOrdersScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F6FA', paddingBottom: 35 },
-  loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 14,
-    backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#F0F0F0',
-    elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4,
-  },
-  backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 20, backgroundColor: '#F5F5F5' },
-  backIcon: { fontSize: 20, color: '#333' },
-  title: { fontSize: 18, fontWeight: '700', color: '#1A1A1A' },
+  container: { flex: 1, backgroundColor: theme.colors.background },
 
-  filterWrap: { backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
-  filterChip: { paddingHorizontal: 18, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F5F5F5', borderWidth: 1, borderColor: '#E5E5E5' },
-  filterChipActive: { backgroundColor: '#FF4500', borderColor: '#FF4500' },
-  filterTxt: { fontSize: 13, fontWeight: '700', color: '#555' },
-  filterTxtActive: { color: '#fff' },
+  header: {
+    flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.sm,
+    backgroundColor: theme.colors.surface,
+    borderBottomWidth: 1, borderBottomColor: theme.colors.divider,
+  },
+
+  tabsRow: {
+    flexDirection: 'row', gap: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.md,
+    backgroundColor: theme.colors.surface,
+    borderBottomWidth: 1, borderBottomColor: theme.colors.divider,
+  },
+  tabBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    paddingVertical: 10, borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.surfaceMuted,
+    borderWidth: 1.5, borderColor: 'transparent',
+  },
+  tabBtnActive: {
+    backgroundColor: theme.colors.primaryLight,
+    borderColor: theme.colors.primaryBorder,
+  },
+  tabCount: {
+    minWidth: 18, paddingHorizontal: 6, height: 18,
+    borderRadius: 9, alignItems: 'center', justifyContent: 'center',
+  },
 
   orderCard: {
-    backgroundColor: '#fff', borderRadius: 16, padding: 16,
-    elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing.md,
+    borderWidth: 1, borderColor: theme.colors.divider,
+    ...theme.shadows.sm,
+    gap: theme.spacing.sm,
   },
   cancelledCard: {
-    backgroundColor: '#FFF8F8',
-    borderWidth: 1.5,
-    borderColor: '#FED7D7',
+    backgroundColor: theme.colors.dangerLight,
+    borderColor: theme.colors.dangerBorder,
   },
-  orderHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  orderId: { fontSize: 15, fontWeight: '700', color: '#1A1A1A' },
-  orderDate: { fontSize: 12, color: '#999', marginTop: 2 },
-  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
-  statusText: { fontSize: 12, fontWeight: '700' },
-  orderDivider: { height: 1, backgroundColor: '#F5F5F5', marginVertical: 12 },
-  orderBody: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  orderItems: { flex: 1, fontSize: 14, color: '#555', marginRight: 8 },
-  orderTotal: { fontSize: 16, fontWeight: '800', color: '#FF4500' },
-  orderTypeRow: { marginTop: 8, flexDirection: 'row' },
-  typeBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  typeText: { fontSize: 11, fontWeight: 'bold', textTransform: 'uppercase' },
-  orderAddress: { fontSize: 12, color: '#999', marginTop: 10 },
-  orderActions: { flexDirection: 'row', gap: 10, marginTop: 14 },
-  trackBtn: {
-    flex: 1, backgroundColor: '#FF4500', paddingVertical: 10,
-    borderRadius: 10, alignItems: 'center',
+
+  cardHead: { flexDirection: 'row', alignItems: 'flex-start', gap: theme.spacing.sm },
+  headRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  typeChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 8, paddingVertical: 3,
+    borderRadius: theme.radius.sm,
   },
-  trackBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
-  cancelBtn: {
-    paddingHorizontal: 16, paddingVertical: 10,
-    borderRadius: 10, borderWidth: 1.5, borderColor: '#EF4444', alignItems: 'center',
+  statusBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: theme.radius.pill,
   },
-  cancelBtnText: { color: '#EF4444', fontWeight: '700', fontSize: 13 },
-  emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
-  emptyIcon: { fontSize: 64, marginBottom: 16 },
-  emptyTitle: { fontSize: 20, fontWeight: '700', color: '#1A1A1A', marginBottom: 8 },
-  emptySubtitle: { fontSize: 14, color: '#888', textAlign: 'center', lineHeight: 20 },
-  shopBtn: { marginTop: 24, backgroundColor: '#FF4500', paddingHorizontal: 32, paddingVertical: 14, borderRadius: 14 },
-  shopBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  receiptBtn: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: '#FF4500',
-    alignItems: 'center',
-    justifyContent: 'center',
+
+  cardBody: { gap: 4 },
+  etaRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingVertical: 6, paddingHorizontal: 10,
+    backgroundColor: theme.colors.infoLight,
+    borderRadius: theme.radius.sm,
+    alignSelf: 'flex-start',
   },
-  receiptBtnText: { color: '#FF4500', fontWeight: 'bold', fontSize: 13 },
-  cardReceiptRow: { flexDirection: 'row', marginTop: 12 },
+  missingPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 8, paddingVertical: 4,
+    backgroundColor: theme.colors.dangerLight,
+    borderRadius: theme.radius.sm,
+    alignSelf: 'flex-start',
+    marginTop: 4,
+  },
+  totalRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    marginTop: theme.spacing.xs,
+  },
+
+  actions: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, marginTop: 4 },
 });

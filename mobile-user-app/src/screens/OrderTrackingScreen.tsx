@@ -1,1029 +1,973 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator, Modal, TextInput, FlatList } from 'react-native';
+import React, { useState, useMemo } from 'react';
+import {
+  View, StyleSheet, Pressable, ScrollView, Alert, ActivityIndicator,
+  Modal, TextInput, FlatList, Linking,
+} from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import MapView, { Marker, Polyline } from 'react-native-maps';
+import { Ionicons } from '@expo/vector-icons';
+
 import { isBusinessOpen } from '../utils/helpers';
 import { useOrderTracking } from '../hooks/useOrderTracking';
 import { useSettings } from '../context/SettingsContext';
 import { generateReceiptPDF, printReceipt } from '../utils/receiptGenerator';
+import {
+  AppText, AppButton, AppIconButton, EmptyState, AppBadge,
+} from '../components/ui';
+import { theme } from '../theme/theme';
+
+const STEP_ICON_MAP: Record<string, keyof typeof Ionicons.glyphMap> = {
+  pending: 'document-text-outline',
+  confirmed: 'checkmark-circle-outline',
+  preparing: 'restaurant-outline',
+  out_for_delivery: 'bicycle-outline',
+  delivered: 'gift-outline',
+  pending_review: 'document-text-outline',
+  quoted: 'cash-outline',
+  approved: 'checkmark-circle-outline',
+  sourcing: 'cube-outline',
+};
 
 export default function OrderTrackingScreen({ route, navigation }: any) {
   const { orderId } = route.params;
   const { settings } = useSettings();
+  const chatEnabled = settings?.feature_chat_enabled === true;
 
   const {
-    order, status, loading, rider, riderLocation, localItems, timeline,
+    order, status, loading, rider, localItems, timeline,
     showRating, ratingStep, businessesToRate, currentBusinessIndex,
     rating, setRating, comment, setComment,
     businessRating, setBusinessRating, businessComment, setBusinessComment,
     submittingReview,
     showAddProduct, setShowAddProduct, filteredProducts, searchQuery, setSearchQuery, addingProductId,
     steps, currentStepIndex,
-    fetchOrderDetails, hasChanges,
-    handleReorder: _handleReorder, handleUpdateQuantityLocal, handleConfirmBatchUpdates, handleRemoveItem,
+    fetchOrderDetails: _fetchOrderDetails, hasChanges,
+    handleReorder: _handleReorder, handleUpdateQuantityLocal, handleConfirmBatchUpdates, handleRemoveItem: _handleRemoveItem,
     handleAddNewProductToOrder, handleDismissRating, handleSubmitReview, handleApproveQuotation,
     handleCancelRashanRequest,
   } = useOrderTracking(orderId, navigation);
 
-  const [selectedImageUrl, setSelectedImageUrl] = React.useState<string | null>(null);
+  const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
+  const [itemsCollapsed, setItemsCollapsed] = useState(false);
+
+  const isRashan = order?.orderType === 'rashan';
+  const isFood = order?.orderType === 'food';
+  const isDelivered = status === 'delivered';
+  const isCancelled = status === 'cancelled';
+
+  const accent = isFood ? theme.colors.food : theme.colors.primary;
+  const accentLight = isFood ? theme.colors.foodLight : theme.colors.primaryLight;
+
+  const eta = order?.estimatedDeliveryTime || (isFood ? '30-45 min' : '15-30 min');
+  const progressPct = useMemo(
+    () => Math.max(5, ((currentStepIndex + 1) / Math.max(1, steps.length)) * 100),
+    [currentStepIndex, steps.length]
+  );
 
   const handleReorder = () => {
-    Alert.alert(
-      'Reorder',
-      'Would you like to place the same order again?',
-      [
-        { text: 'No', style: 'cancel' },
-        { text: 'Yes, Reorder', onPress: _handleReorder },
-      ]
-    );
+    Alert.alert('Reorder', 'Would you like to place the same order again?', [
+      { text: 'No', style: 'cancel' },
+      { text: 'Yes, reorder', onPress: _handleReorder },
+    ]);
   };
-
-  const handleRemoveItemWithConfirm = (itemId: string, itemName: string) => {
-    Alert.alert(
-      'Remove Item',
-      `Are you sure you want to remove ${itemName} from your order?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Remove', style: 'destructive', onPress: () => handleRemoveItem(itemId) },
-      ]
-    );
-  };
-
-  const handleConfirmUpdatesWithAlert = async () => {
-    try {
-      await handleConfirmBatchUpdates();
-      Alert.alert('Success', 'Order updated successfully!');
-    } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.message || 'Failed to update order.');
-    }
-  };
-
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.navigate('Main')} style={styles.backButton}>
-            <Text style={styles.backIcon}>←</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Track Order</Text>
+          <AppIconButton size={36} bg={theme.colors.surfaceMuted} onPress={() => navigation.navigate('Main')}>
+            <Ionicons name="chevron-back" size={20} color={theme.colors.textPrimary} />
+          </AppIconButton>
+          <AppText variant="h2">Track order</AppText>
         </View>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <ActivityIndicator size="large" color="#FF4500" />
-          <Text style={{ marginTop: 12, color: '#999', fontSize: 14 }}>Loading order status...</Text>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator size="large" color={accent} />
+          <AppText variant="caption" style={{ marginTop: 12 }}>Loading order…</AppText>
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.navigate('Main')} style={styles.backButton}>
-          <Text style={styles.backIcon}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Track Order</Text>
+        <AppIconButton size={36} bg={theme.colors.surfaceMuted} onPress={() => navigation.navigate('Main')}>
+          <Ionicons name="chevron-back" size={20} color={theme.colors.textPrimary} />
+        </AppIconButton>
+        <View style={{ flex: 1 }}>
+          <AppText variant="h2">Track order</AppText>
+          <AppText variant="caption">#{String(orderId).slice(0, 8).toUpperCase()}</AppText>
+        </View>
+        {!isCancelled && !isDelivered && chatEnabled && rider ? (
+          <AppIconButton
+            size={36}
+            bg={accentLight}
+            onPress={() => navigation.navigate('OrderChat', { orderId, riderName: rider.name })}
+          >
+            <Ionicons name="chatbubble-ellipses-outline" size={18} color={accent} />
+          </AppIconButton>
+        ) : null}
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {status === 'cancelled' ? (
+      <ScrollView
+        contentContainerStyle={{ padding: theme.spacing.lg, paddingBottom: 100 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {isCancelled ? (
           <View style={styles.cancelledBanner}>
-            <Text style={styles.cancelledIcon}>🛑</Text>
-            <Text style={styles.cancelledTitle}>Order Cancelled</Text>
-            <Text style={styles.cancelledSubtitle}>
-              {order?.notes || 'This order was cancelled. Please try reordering or contact support.'}
-            </Text>
-            {!order?.notes?.includes('missing') && (
-              <TouchableOpacity style={styles.reorderBtn} onPress={handleReorder}>
-                <Text style={styles.reorderBtnText}>🔄 Reorder Now</Text>
-              </TouchableOpacity>
-            )}
+            <View style={[styles.iconCircle, { backgroundColor: theme.colors.dangerLight, marginBottom: theme.spacing.md }]}>
+              <Ionicons name="close-circle" size={36} color={theme.colors.danger} />
+            </View>
+            <AppText variant="h2" align="center" color={theme.colors.danger}>Order cancelled</AppText>
+            <AppText variant="caption" align="center" style={{ marginTop: 6 }}>
+              {order?.notes || 'This order was cancelled. You can try reordering or contact support.'}
+            </AppText>
+            {!order?.notes?.includes('missing') ? (
+              <AppButton
+                label="Reorder now"
+                variant="primary"
+                tint={accent}
+                onPress={handleReorder}
+                style={{ marginTop: theme.spacing.lg }}
+                leadingIcon={<Ionicons name="refresh" size={16} color="#fff" />}
+              />
+            ) : null}
           </View>
         ) : (
-          <View style={styles.premiumStatusCard}>
-            <View style={styles.topRow}>
-              <View style={styles.idBadge}>
-                <Text style={styles.idBadgeLabel}>ORDER ID</Text>
-                <Text style={styles.idBadgeValue}>#{orderId.slice(0, 8).toUpperCase()}</Text>
+          /* Status hero card */
+          <View style={[styles.statusCard, { borderColor: accentLight }]}>
+            <View style={styles.statusHeadRow}>
+              <View style={[styles.typeBadge, { backgroundColor: accentLight }]}>
+                <Ionicons
+                  name={isRashan ? 'cube-outline' : isFood ? 'restaurant-outline' : 'storefront-outline'}
+                  size={12}
+                  color={accent}
+                />
+                <AppText variant="badge" color={accent}>
+                  {isRashan ? 'RASHAN BULK' : isFood ? 'FOOD' : 'MART'}
+                </AppText>
               </View>
-              <View style={styles.typeTag}>
-                <Text style={styles.typeTagText}>
-                  {order?.orderType === 'food' ? '🍽️ FOOD' : order?.orderType === 'rashan' ? '📦 RASHAN BULK' : '🛒 MART'}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.mainStatusContent}>
-              <Text style={styles.statusHighlight}>
-                {steps[currentStepIndex]?.label || 'Processing...'}
-              </Text>
-              <Text style={styles.statusSubtext}>
-                {steps[currentStepIndex]?.description}
-              </Text>
-              {status === 'delivered' && (
-                <View style={styles.receiptActionRow}>
-                  <TouchableOpacity 
-                    style={[styles.receiptDownloadBtn, { flex: 1, marginRight: 8, backgroundColor: '#FF450015' }]} 
-                    onPress={() => generateReceiptPDF(order)}
-                  >
-                    <Text style={[styles.receiptDownloadText, { color: '#FF4500' }]}>📤 Share</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={[styles.receiptDownloadBtn, { flex: 1, backgroundColor: '#1A1A1A', borderColor: '#1A1A1A' }]} 
-                    onPress={() => printReceipt(order)}
-                  >
-                    <Text style={[styles.receiptDownloadText, { color: '#fff' }]}>🖨️ View / Print</Text>
-                  </TouchableOpacity>
+              {!isDelivered ? (
+                <View style={styles.etaPill}>
+                  <Ionicons name="time-outline" size={12} color={theme.colors.info} />
+                  <AppText variant="badge" color={theme.colors.info}>ETA {eta}</AppText>
                 </View>
-              )}
+              ) : null}
             </View>
 
-            <View style={styles.progressBarBg}>
-              <View style={[styles.progressBarFill, { width: `${Math.max(5, ((currentStepIndex + 1) / steps.length) * 100)}%` }]} />
+            <AppText variant="h1" style={{ marginTop: theme.spacing.md }}>
+              {steps[currentStepIndex]?.label || 'Processing…'}
+            </AppText>
+            <AppText variant="caption" style={{ marginTop: 4 }}>
+              {steps[currentStepIndex]?.description}
+            </AppText>
+
+            {/* Progress bar */}
+            <View style={styles.progressBg}>
+              <View style={[styles.progressFill, { width: `${progressPct}%`, backgroundColor: accent }]} />
             </View>
 
-            {order?.orderType === 'rashan' && order.rashanStatus === 'quoted' && (
-              <View style={styles.quotationBlock}>
-                <Text style={styles.quoteTitle}>Quotation Received</Text>
-                <View style={styles.quoteBreakdown}>
-                  <View style={styles.quoteRow}>
-                    <Text style={styles.quoteLabel}>Products (Wholesale):</Text>
-                    <Text style={styles.quoteAmount}>Rs. {Number(order.subtotal || 0).toLocaleString()}</Text>
+            {isDelivered ? (
+              <View style={{ flexDirection: 'row', gap: theme.spacing.sm, marginTop: theme.spacing.md }}>
+                <AppButton
+                  label="Share receipt"
+                  variant="outline"
+                  tint={accent}
+                  textColor={accent}
+                  size="sm"
+                  fullWidth
+                  onPress={() => generateReceiptPDF(order)}
+                  leadingIcon={<Ionicons name="share-outline" size={14} color={accent} />}
+                  style={{ flex: 1 }}
+                />
+                <AppButton
+                  label="View / print"
+                  variant="primary"
+                  size="sm"
+                  fullWidth
+                  onPress={() => printReceipt(order)}
+                  leadingIcon={<Ionicons name="receipt-outline" size={14} color="#fff" />}
+                  style={{ flex: 1 }}
+                />
+              </View>
+            ) : null}
+
+            {isRashan && order.rashanStatus === 'quoted' ? (
+              <View style={[styles.quotationBox, { backgroundColor: theme.colors.infoLight, borderColor: theme.colors.infoBorder }]}>
+                <AppText variant="bodyStrong" color={theme.colors.info}>Quotation received</AppText>
+                <View style={{ marginVertical: theme.spacing.sm, gap: 6 }}>
+                  <View style={styles.sumRow}>
+                    <AppText variant="caption">Products (wholesale)</AppText>
+                    <AppText variant="captionStrong">Rs. {Number(order.subtotal || 0).toLocaleString()}</AppText>
                   </View>
-                  <View style={styles.quoteRow}>
-                    <Text style={styles.quoteLabel}>Sourcing & Logistics:</Text>
-                    <Text style={styles.quoteAmount}>Rs. {Number(order.deliveryFee || 0).toLocaleString()}</Text>
+                  <View style={styles.sumRow}>
+                    <AppText variant="caption">Sourcing & logistics</AppText>
+                    <AppText variant="captionStrong">Rs. {Number(order.deliveryFee || 0).toLocaleString()}</AppText>
                   </View>
-                  <View style={styles.quoteTotalRow}>
-                    <Text style={styles.quoteTotalLabel}>Final Quotation:</Text>
-                    <Text style={styles.quoteTotalAmount}>Rs. {Number(order.total).toLocaleString()}</Text>
+                  <View style={[styles.sumRow, { borderTopWidth: 1, borderTopColor: theme.colors.infoBorder, paddingTop: 6 }]}>
+                    <AppText variant="bodyStrong" color={theme.colors.info}>Final quotation</AppText>
+                    <AppText variant="h3" color={theme.colors.textHeader}>
+                      Rs. {Number(order.total).toLocaleString()}
+                    </AppText>
                   </View>
                 </View>
-                <TouchableOpacity style={styles.approveBtn} onPress={handleApproveQuotation}>
-                  <Text style={styles.approveBtnText}>✅ Approve & Start Sourcing</Text>
-                </TouchableOpacity>
+                <AppButton
+                  label="Approve & start sourcing"
+                  variant="primary"
+                  tint={theme.colors.success}
+                  fullWidth
+                  onPress={handleApproveQuotation}
+                  leadingIcon={<Ionicons name="checkmark-circle" size={16} color="#fff" />}
+                />
               </View>
-            )}
+            ) : null}
 
-            {order?.orderType === 'rashan' && ['pending_review', 'quoted', 'approved'].includes(order.rashanStatus) && (
-              <TouchableOpacity 
-                style={styles.cancelOrderBtn} 
+            {isRashan && ['pending_review', 'quoted', 'approved'].includes(order.rashanStatus) ? (
+              <AppButton
+                label="Cancel request"
+                variant="outline"
+                tint={theme.colors.danger}
+                textColor={theme.colors.danger}
+                fullWidth
                 onPress={handleCancelRashanRequest}
-              >
-                <Text style={styles.cancelOrderBtnText}>🛑 Cancel Request</Text>
-              </TouchableOpacity>
-            )}
+                style={{ marginTop: theme.spacing.md }}
+                leadingIcon={<Ionicons name="close-circle-outline" size={16} color={theme.colors.danger} />}
+              />
+            ) : null}
 
-            {order?.orderType === 'rashan' && order.rashanStatus === 'rejected' && (
-              <View style={[styles.quotationBlock, { backgroundColor: '#FFF5F5', borderColor: '#FED7D7' }]}>
-                <Text style={[styles.quoteTitle, { color: '#C53030' }]}>Request Rejected</Text>
-                <Text style={styles.quoteReason}>{order.adminRejectionReason || 'No reason provided.'}</Text>
+            {isRashan && order.rashanStatus === 'rejected' ? (
+              <View style={[styles.quotationBox, { backgroundColor: theme.colors.dangerLight, borderColor: theme.colors.dangerBorder }]}>
+                <AppText variant="bodyStrong" color={theme.colors.danger}>Request rejected</AppText>
+                <AppText variant="caption" color={theme.colors.danger} style={{ marginTop: 4 }}>
+                  {order.adminRejectionReason || 'No reason provided.'}
+                </AppText>
               </View>
-            )}
+            ) : null}
           </View>
         )}
 
-        {order?.subOrders && order.subOrders.length > 1 && order.orderType === 'food' && (
-          <View style={styles.subOrderCard}>
-            <View style={styles.subOrderHeader}>
-              <Text style={styles.subOrderTitle}>
-                {order.orderType === 'food' ? 'Batch Order' : 'Multi-Vendor Route'}
-              </Text>
-              <Text style={styles.subOrderCount}>
-                {order.subOrders.length} {order.orderType === 'food' ? 'Restaurants' : 'Shops'}
-              </Text>
+        {/* Multi-vendor sub-orders */}
+        {order?.subOrders && order.subOrders.length > 1 && isFood ? (
+          <View style={styles.card}>
+            <View style={styles.cardHead}>
+              <View style={{ flex: 1 }}>
+                <AppText variant="title">Batch order</AppText>
+                <AppText variant="caption">{order.subOrders.length} restaurants</AppText>
+              </View>
+              <Ionicons name="git-branch-outline" size={18} color={theme.colors.textSecondary} />
             </View>
-            <View style={styles.subOrderList}>
+            <View style={{ gap: theme.spacing.sm }}>
               {order.subOrders.map((sub: any, idx: number) => {
-                const isMart = order.orderType === 'mart';
-                const statusColors: any = {
-                  pending: { bg: '#F7FAFC', text: '#718096' },
-                  confirmed: { bg: '#EBF8FF', text: '#3182CE' },
-                  preparing: { bg: '#FFF5F5', text: '#E53E3E' },
-                  ready: { bg: '#F0FFF4', text: '#38A169' },
+                const map: any = {
+                  pending: { bg: theme.colors.surfaceMuted, text: theme.colors.textSecondary },
+                  confirmed: { bg: theme.colors.infoLight, text: theme.colors.info },
+                  preparing: { bg: '#FFF5F5', text: theme.colors.danger },
+                  ready: { bg: theme.colors.successLight, text: theme.colors.success },
                   picked_up: { bg: '#FAF5FF', text: '#805AD5' },
-                  delivered: { bg: '#C6F6D5', text: '#22543D' },
+                  delivered: { bg: theme.colors.successLight, text: theme.colors.success },
                 };
-                const colors = statusColors[sub.status] || statusColors.pending;
-
+                const c = map[sub.status] || map.pending;
                 return (
-                  <View key={sub.id || idx} style={styles.subOrderItem}>
-                    <View style={[styles.subOrderBadge, { backgroundColor: isMart ? '#FF450015' : '#3182CE15' }]}>
-                      <Text style={{ fontSize: 16 }}>{isMart ? '🛍️' : '👨‍🍳'}</Text>
+                  <View key={sub.id || idx} style={styles.subRow}>
+                    <View style={[styles.iconCircle, { backgroundColor: accentLight, width: 36, height: 36, borderRadius: 18 }]}>
+                      <Ionicons name="restaurant-outline" size={16} color={accent} />
                     </View>
-                    <View style={styles.subOrderInfo}>
-                      <View style={styles.subOrderNameRow}>
-                        <Text style={styles.subOrderName} numberOfLines={1}>
-                          {sub.restaurant?.name || sub.vendor?.name || (isMart ? 'Shop' : 'Restaurant')}
-                        </Text>
-                        <View style={[styles.statusTag, { backgroundColor: colors.bg }]}>
-                          <Text style={[styles.statusTagText, { color: colors.text }]}>
-                            {sub.status.toUpperCase()}
-                          </Text>
-                        </View>
-                      </View>
-                      <Text style={styles.subOrderLoc} numberOfLines={1}>
-                        {sub.restaurant?.location || sub.vendor?.location || sub.vendor?.address || 'Baldia Town Center'}
-                      </Text>
+                    <View style={{ flex: 1 }}>
+                      <AppText variant="bodyStrong" numberOfLines={1}>
+                        {sub.restaurant?.name || sub.vendor?.name || 'Restaurant'}
+                      </AppText>
+                      <AppText variant="caption" numberOfLines={1}>
+                        {sub.restaurant?.location || sub.vendor?.location || 'Baldia'}
+                      </AppText>
+                    </View>
+                    <View style={[styles.subStatus, { backgroundColor: c.bg }]}>
+                      <AppText variant="badge" color={c.text}>
+                        {String(sub.status).toUpperCase()}
+                      </AppText>
                     </View>
                   </View>
                 );
               })}
             </View>
           </View>
-        )}
+        ) : null}
 
-        {rider && (
-          <View style={styles.riderCard}>
-            <View style={styles.riderInfo}>
-              <View style={styles.riderAvatar}>
-                <Text style={styles.riderAvatarText}>{rider.name?.[0] || 'R'}</Text>
+        {/* Rider card */}
+        {rider ? (
+          <View style={styles.card}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+              <View style={[styles.iconCircle, { backgroundColor: accentLight }]}>
+                {rider.avatar ? (
+                  <Image source={{ uri: rider.avatar }} style={{ width: 44, height: 44, borderRadius: 22 }} />
+                ) : (
+                  <AppText variant="h3" color={accent}>{rider.name?.[0] || 'R'}</AppText>
+                )}
               </View>
-              <View style={{ flex: 1, marginLeft: 15 }}>
-                <Text style={styles.riderName}>{rider.name || 'Your Rider'}</Text>
-                <Text style={styles.riderStatus}>Assign to your delivery</Text>
+              <View style={{ flex: 1 }}>
+                <AppText variant="bodyStrong">{rider.name || 'Your rider'}</AppText>
+                <AppText variant="caption">Assigned to your delivery</AppText>
               </View>
-              {settings?.feature_chat_enabled === true && (
-                <TouchableOpacity
-                  style={[styles.callBtn, { marginRight: 10, backgroundColor: '#FF450015' }]}
+              {chatEnabled ? (
+                <AppIconButton
+                  size={40}
+                  bg={accentLight}
                   onPress={() => navigation.navigate('OrderChat', { orderId, riderName: rider.name })}
                 >
-                  <Text style={{ fontSize: 18 }}>💬</Text>
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                style={styles.callBtn}
-                onPress={() => {
-                  const { Linking } = require('react-native');
-                  Linking.openURL(`tel:${rider.phoneNumber}`);
-                }}
-              >
-                <Text style={styles.callIcon}>📞</Text>
-              </TouchableOpacity>
+                  <Ionicons name="chatbubble-ellipses-outline" size={18} color={accent} />
+                </AppIconButton>
+              ) : null}
+              {rider.phoneNumber ? (
+                <AppIconButton
+                  size={40}
+                  bg={theme.colors.successLight}
+                  onPress={() => Linking.openURL(`tel:${rider.phoneNumber}`)}
+                >
+                  <Ionicons name="call" size={18} color={theme.colors.success} />
+                </AppIconButton>
+              ) : null}
             </View>
           </View>
-        )}
+        ) : null}
 
-        {order && order.orderType === 'rashan' && (
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryTitle}>Bulk Rashan Details</Text>
-            
-            {order.bulkListPhotoUrl && (
-              <View style={{ marginBottom: 15 }}>
-                <Text style={styles.detailLabel}>Grocery List Photo:</Text>
-                <TouchableOpacity activeOpacity={0.9} onPress={() => setSelectedImageUrl(order.bulkListPhotoUrl)}>
-                  <Image 
-                    source={{ uri: order.bulkListPhotoUrl }} 
-                    style={{ width: '100%', height: 220, borderRadius: 16, marginTop: 10, borderWidth: 1, borderColor: '#eee' }} 
-                    contentFit="cover"
-                  />
+        {/* Rashan-specific details */}
+        {order && isRashan ? (
+          <View style={styles.card}>
+            <AppText variant="title" style={{ marginBottom: theme.spacing.md }}>Bulk rashan details</AppText>
+
+            {order.bulkListPhotoUrl ? (
+              <View style={{ marginBottom: theme.spacing.md }}>
+                <AppText variant="overline" style={{ marginBottom: 6 }}>Grocery list photo</AppText>
+                <Pressable onPress={() => setSelectedImageUrl(order.bulkListPhotoUrl)} style={styles.photoWrap}>
+                  <Image source={{ uri: order.bulkListPhotoUrl }} style={styles.photo} contentFit="cover" />
                   <View style={styles.expandHint}>
-                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>🔍 Tap to Expand</Text>
+                    <Ionicons name="expand-outline" size={12} color="#fff" />
+                    <AppText variant="badge" color="#fff">Tap to expand</AppText>
                   </View>
-                </TouchableOpacity>
+                </Pressable>
               </View>
-            )}
+            ) : null}
 
-            {order.bulkListText && (
-              <View style={{ marginBottom: 15 }}>
-                <Text style={styles.detailLabel}>Grocery List Item(s):</Text>
+            {order.bulkListText ? (
+              <View style={{ marginBottom: theme.spacing.md }}>
+                <AppText variant="overline" style={{ marginBottom: 6 }}>Items</AppText>
                 <View style={styles.textListPanel}>
-                  <Text style={styles.textListContent}>{order.bulkListText}</Text>
+                  <AppText variant="body">{order.bulkListText}</AppText>
                 </View>
               </View>
-            )}
+            ) : null}
 
-            <View style={styles.logisticsGrid}>
-              <View style={styles.logisticsItem}>
-                <Text style={styles.logisticsLabel}>Weight</Text>
-                <Text style={styles.logisticsValue}>{order.bulkWeightTier?.toUpperCase()}</Text>
+            <View style={styles.metaGrid}>
+              <View style={styles.metaItem}>
+                <AppText variant="caption">Weight</AppText>
+                <AppText variant="bodyStrong">{order.bulkWeightTier?.toUpperCase() || '—'}</AppText>
               </View>
-              <View style={styles.logisticsItem}>
-                <Text style={styles.logisticsLabel}>Floor</Text>
-                <Text style={styles.logisticsValue}>{order.bulkFloor}</Text>
+              <View style={styles.metaItem}>
+                <AppText variant="caption">Floor</AppText>
+                <AppText variant="bodyStrong">{order.bulkFloor || '—'}</AppText>
               </View>
-              <View style={styles.logisticsItem}>
-                <Text style={styles.logisticsLabel}>Placement</Text>
-                <Text style={styles.logisticsValue}>{order.bulkPlacement?.toUpperCase()}</Text>
+              <View style={styles.metaItem}>
+                <AppText variant="caption">Placement</AppText>
+                <AppText variant="bodyStrong">{order.bulkPlacement?.toUpperCase() || '—'}</AppText>
               </View>
             </View>
 
-            <View style={styles.summaryDivider} />
-            <Text style={styles.detailLabel}>Delivery Address:</Text>
-            <Text style={styles.addressLine}>{order.bulkStreetAddress}, {order.bulkCity}</Text>
-            {order.bulkLandmark && <Text style={styles.landmarkLine}>Near {order.bulkLandmark}</Text>}
-            <Text style={styles.phoneLine}>📞 {order.bulkMobileNumber}</Text>
-            
-            {order.total > 0 && (
+            <View style={styles.divider} />
+            <AppText variant="overline">Delivery address</AppText>
+            <AppText variant="bodyStrong" style={{ marginTop: 4 }}>{order.bulkStreetAddress}, {order.bulkCity}</AppText>
+            {order.bulkLandmark ? <AppText variant="caption">Near {order.bulkLandmark}</AppText> : null}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 }}>
+              <Ionicons name="call-outline" size={14} color={theme.colors.primary} />
+              <AppText variant="captionStrong" color={theme.colors.primary}>{order.bulkMobileNumber}</AppText>
+            </View>
+
+            {order.total > 0 ? (
               <>
-                <View style={styles.summaryDivider} />
-                <View style={styles.rashanFinancials}>
-                   <View style={styles.rashanPriceRow}>
-                      <Text style={styles.rashanPriceLabel}>Market Products Total:</Text>
-                      <Text style={styles.rashanPriceValue}>Rs. {Number(order.subtotal || 0).toLocaleString()}</Text>
-                   </View>
-                   <View style={styles.rashanPriceRow}>
-                      <Text style={styles.rashanPriceLabel}>Sourcing & Delivery Fee:</Text>
-                      <Text style={styles.rashanPriceValue}>Rs. {Number(order.deliveryFee || 0).toLocaleString()}</Text>
-                   </View>
-                   <View style={[styles.rashanPriceRow, { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#f0f0f0' }]}>
-                      <Text style={[styles.rashanPriceLabel, { fontWeight: '800', color: '#1A1A1A' }]}>Grand Total:</Text>
-                      <Text style={[styles.rashanPriceValue, { fontSize: 18, color: '#FF4500' }]}>Rs. {Number(order.total).toLocaleString()}</Text>
-                   </View>
+                <View style={styles.divider} />
+                <View style={styles.sumRow}>
+                  <AppText variant="caption">Products subtotal</AppText>
+                  <AppText variant="captionStrong">Rs. {Number(order.subtotal || 0).toLocaleString()}</AppText>
+                </View>
+                <View style={styles.sumRow}>
+                  <AppText variant="caption">Sourcing & delivery</AppText>
+                  <AppText variant="captionStrong">Rs. {Number(order.deliveryFee || 0).toLocaleString()}</AppText>
+                </View>
+                <View style={[styles.sumRow, { marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: theme.colors.divider }]}>
+                  <AppText variant="title">Grand total</AppText>
+                  <AppText variant="h3" color={accent}>Rs. {Number(order.total).toLocaleString()}</AppText>
                 </View>
               </>
-            )}
+            ) : null}
           </View>
-        )}
+        ) : null}
 
-        {order && order.items && order.items.length > 0 && order.orderType !== 'rashan' && (
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryTitle}>Order Summary</Text>
-            
-            {localItems.filter((i: any) => i.status !== 'missing').map((itemValue: any) => (
-              <View key={itemValue.id} style={styles.itemRow}>
-                <View style={styles.itemInfo}>
-                  <Text style={styles.itemName}>
-                    {itemValue.menuItem?.name || itemValue.product?.name || 'Item'}
-                  </Text>
-                  <Text style={styles.itemPrice}>Rs. {itemValue.priceAtTime} x {itemValue.quantity}</Text>
-                </View>
-                {(status === 'pending' || status === 'confirmed') && order.orderType === 'mart' ? (
-                  <View style={styles.quantityControls}>
-                    <TouchableOpacity
-                      style={styles.qtyBtn}
-                      onPress={() => handleUpdateQuantityLocal(itemValue.id, itemValue.quantity - 1)}
-                    >
-                      <Text style={styles.qtyBtnText}>-</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.qtyText}>{itemValue.quantity}</Text>
-                    <TouchableOpacity
-                      style={styles.qtyBtn}
-                      onPress={() => handleUpdateQuantityLocal(itemValue.id, itemValue.quantity + 1)}
-                    >
-                      <Text style={styles.qtyBtnText}>+</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <Text style={styles.itemName}>{itemValue.quantity}x</Text>
-                )}
+        {/* Order items (collapsible) */}
+        {order && order.items && order.items.length > 0 && !isRashan ? (
+          <View style={styles.card}>
+            <Pressable
+              style={styles.cardHead}
+              onPress={() => setItemsCollapsed(!itemsCollapsed)}
+            >
+              <View style={{ flex: 1 }}>
+                <AppText variant="title">Order summary</AppText>
+                <AppText variant="caption">
+                  {order.items.length} item{order.items.length === 1 ? '' : 's'} • Rs. {Number(order.total).toFixed(0)}
+                </AppText>
               </View>
-            ))}
+              <Ionicons
+                name={itemsCollapsed ? 'chevron-down' : 'chevron-up'}
+                size={18}
+                color={theme.colors.textSecondary}
+              />
+            </Pressable>
 
-            {order.items.filter((i: any) => i.status === 'missing').length > 0 && (
-              <View style={{ marginTop: 20 }}>
-                <Text style={[styles.summaryTitle, { color: '#E53E3E', fontSize: 13 }]}>⚠️ Missing Items (Not Charged)</Text>
-                {order.items.filter((i: any) => i.status === 'missing').map((itemValue: any) => (
-                  <View key={itemValue.id} style={[styles.itemRow, { opacity: 0.6 }]}>
-                    <View style={styles.itemInfo}>
-                      <Text style={[styles.itemName, { textDecorationLine: 'line-through' }]}>
-                        {itemValue.menuItem?.name || itemValue.product?.name || 'Item'}
-                      </Text>
-                      <Text style={styles.itemPrice}>Marked as missing by rider</Text>
+            {!itemsCollapsed ? (
+              <>
+                {localItems.filter((i: any) => i.status !== 'missing').map((it: any) => (
+                  <View key={it.id} style={styles.itemRow}>
+                    <View style={{ flex: 1 }}>
+                      <AppText variant="body" numberOfLines={1}>
+                        {it.menuItem?.name || it.product?.name || 'Item'}
+                      </AppText>
+                      <AppText variant="caption">
+                        Rs. {it.priceAtTime} × {it.quantity}
+                      </AppText>
                     </View>
-                    <Text style={[styles.itemName, { color: '#E53E3E', fontWeight: 'bold' }]}>MISSING</Text>
-                  </View>
-                ))}
-              </View>
-            )}
-
-            {(status === 'pending' || status === 'confirmed') && order?.orderType !== 'food' && (
-              <View style={styles.summaryActionsRow}>
-                {hasChanges() && (
-                  <TouchableOpacity
-                    style={[styles.actionBtn, styles.confirmBtn]}
-                    onPress={handleConfirmBatchUpdates}
-                  >
-                    <Text style={styles.confirmBtnText}>Confirm Changes</Text>
-                  </TouchableOpacity>
-                )}
-                <TouchableOpacity
-                  style={[styles.actionBtn, styles.addBtn, !hasChanges() && { flex: 1 }]}
-                  onPress={() => setShowAddProduct(true)}
-                >
-                  <Text style={styles.addBtnText}>
-                    + Add {order?.orderType === 'food' ? 'Dish' : 'Product'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            <View style={styles.summaryDivider} />
-            <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Total</Text>
-              <Text style={styles.totalText}>Rs. {Number(order.total).toFixed(0)}</Text>
-            </View>
-          </View>
-        )}
-
-        <View style={styles.timelineContainer}>
-          {steps.map((step, index) => {
-            const historyItem = timeline.find(h => h.status === step.key);
-            const isCompleted = !!historyItem;
-            const isCurrent = index === currentStepIndex;
-            const isLast = index === steps.length - 1;
-            const isPassed = isCompleted || isCurrent;
-
-            return (
-              <View key={step.key} style={styles.timelineItem}>
-                <View style={styles.leftColumn}>
-                  <View style={[
-                    styles.indicator,
-                    isPassed && styles.passedIndicator,
-                    isCurrent && styles.currentIndicator
-                  ]}>
-                    <Text style={styles.stepIcon}>{step.icon}</Text>
-                  </View>
-                  {!isLast && <View style={[styles.connector, isCompleted && styles.passedConnector]} />}
-                </View>
-                <View style={styles.rightColumn}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Text style={[
-                      styles.stepLabel,
-                      isPassed && styles.passedStepLabel,
-                      isCurrent && styles.currentStepLabel
-                    ]}>
-                      {step.label}
-                    </Text>
-                    {historyItem && (
-                      <Text style={styles.timeLabel}>
-                        {new Date(historyItem.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </Text>
+                    {(status === 'pending' || status === 'confirmed') && order.orderType === 'mart' ? (
+                      <View style={styles.qtyControls}>
+                        <Pressable style={styles.qtyBtn} onPress={() => handleUpdateQuantityLocal(it.id, it.quantity - 1)}>
+                          <Ionicons name="remove" size={14} color={accent} />
+                        </Pressable>
+                        <AppText variant="bodyStrong" style={{ minWidth: 22, textAlign: 'center' }}>{it.quantity}</AppText>
+                        <Pressable style={styles.qtyBtn} onPress={() => handleUpdateQuantityLocal(it.id, it.quantity + 1)}>
+                          <Ionicons name="add" size={14} color={accent} />
+                        </Pressable>
+                      </View>
+                    ) : (
+                      <AppText variant="bodyStrong">×{it.quantity}</AppText>
                     )}
                   </View>
-                  <Text style={styles.stepDescription}>{step.description}</Text>
-                </View>
-              </View>
-            );
-          })}
-        </View>
+                ))}
 
-        <Modal visible={showRating} transparent animationType="slide">
-          <View style={styles.modalOverlay}>
-            <View style={styles.ratingBox}>
-              {ratingStep === 1 ? (
-                <>
-                  <Text style={styles.ratingTitle}>Rate your Rider</Text>
-                  <Text style={styles.ratingSubtitle}>How was your delivery experience with {rider?.name || 'your rider'}?</Text>
-
-                  <View style={styles.starsRow}>
-                    {[1, 2, 3, 4, 5].map(s => (
-                      <TouchableOpacity key={s} onPress={() => setRating(s)}>
-                        <Text style={[styles.star, rating >= s && styles.activeStar]}>★</Text>
-                      </TouchableOpacity>
+                {order.items.filter((i: any) => i.status === 'missing').length > 0 ? (
+                  <View style={{ marginTop: theme.spacing.md }}>
+                    <View style={[styles.missingHeader, { backgroundColor: theme.colors.dangerLight }]}>
+                      <Ionicons name="alert-circle" size={14} color={theme.colors.danger} />
+                      <AppText variant="captionStrong" color={theme.colors.danger}>
+                        Missing items (not charged)
+                      </AppText>
+                    </View>
+                    {order.items.filter((i: any) => i.status === 'missing').map((it: any) => (
+                      <View key={it.id} style={[styles.itemRow, { opacity: 0.6 }]}>
+                        <View style={{ flex: 1 }}>
+                          <AppText variant="body" style={{ textDecorationLine: 'line-through' }} numberOfLines={1}>
+                            {it.menuItem?.name || it.product?.name || 'Item'}
+                          </AppText>
+                          <AppText variant="caption">Marked as missing by rider</AppText>
+                        </View>
+                        <AppBadge label="MISSING" variant="danger" />
+                      </View>
                     ))}
                   </View>
+                ) : null}
 
-                  <TextInput
-                    style={styles.commentInput}
-                    placeholder="Share your delivery experience..."
-                    placeholderTextColor="#999"
-                    multiline
-                    numberOfLines={3}
-                    value={comment}
-                    onChangeText={setComment}
-                  />
+                {(status === 'pending' || status === 'confirmed') && order?.orderType !== 'food' ? (
+                  <View style={{ flexDirection: 'row', gap: theme.spacing.sm, marginTop: theme.spacing.md }}>
+                    {hasChanges() ? (
+                      <AppButton
+                        label="Confirm changes"
+                        variant="primary"
+                        tint={accent}
+                        size="sm"
+                        fullWidth
+                        onPress={handleConfirmBatchUpdates}
+                        style={{ flex: 1 }}
+                      />
+                    ) : null}
+                    <AppButton
+                      label="+ Add product"
+                      variant="outline"
+                      tint={theme.colors.success}
+                      textColor={theme.colors.success}
+                      size="sm"
+                      fullWidth
+                      onPress={() => setShowAddProduct(true)}
+                      style={{ flex: 1 }}
+                    />
+                  </View>
+                ) : null}
+
+                <View style={styles.divider} />
+                <View style={styles.sumRow}>
+                  <AppText variant="title">Total</AppText>
+                  <AppText variant="h3" color={accent}>Rs. {Number(order.total).toFixed(0)}</AppText>
+                </View>
+              </>
+            ) : null}
+          </View>
+        ) : null}
+
+        {/* Timeline */}
+        <View style={styles.card}>
+          <AppText variant="title" style={{ marginBottom: theme.spacing.md }}>Order journey</AppText>
+          <View>
+            {steps.map((step, index) => {
+              const historyItem = timeline.find(h => h.status === step.key);
+              const isCompleted = !!historyItem;
+              const isCurrent = index === currentStepIndex;
+              const isLast = index === steps.length - 1;
+              const isPassed = isCompleted || isCurrent;
+              return (
+                <View key={step.key} style={styles.timelineItem}>
+                  <View style={styles.timelineLeft}>
+                    <View style={[
+                      styles.timelineDot,
+                      isPassed ? { borderColor: accent, backgroundColor: isCurrent ? accent : theme.colors.surface } : null,
+                    ]}>
+                      <Ionicons
+                        name={STEP_ICON_MAP[step.key] || 'ellipse-outline'}
+                        size={14}
+                        color={isCurrent ? '#fff' : isPassed ? accent : theme.colors.textMuted}
+                      />
+                    </View>
+                    {!isLast ? (
+                      <View style={[styles.timelineConnector, isCompleted ? { backgroundColor: accent } : null]} />
+                    ) : null}
+                  </View>
+                  <View style={styles.timelineRight}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <AppText
+                        variant={isCurrent ? 'bodyStrong' : 'body'}
+                        color={isCurrent ? accent : isPassed ? theme.colors.textPrimary : theme.colors.textMuted}
+                      >
+                        {step.label}
+                      </AppText>
+                      {historyItem ? (
+                        <AppText variant="caption">
+                          {new Date(historyItem.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </AppText>
+                      ) : null}
+                    </View>
+                    <AppText variant="caption">{step.description}</AppText>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* Rating modal */}
+        <Modal visible={showRating} transparent animationType="slide">
+          <View style={styles.modalOverlay}>
+            <View style={styles.ratingSheet}>
+              <View style={styles.sheetHandle} />
+              {ratingStep === 1 ? (
+                <>
+                  <AppText variant="h2" align="center">Rate your rider</AppText>
+                  <AppText variant="caption" align="center" style={{ marginTop: 6 }}>
+                    How was your delivery experience with {rider?.name || 'your rider'}?
+                  </AppText>
                 </>
               ) : (
                 <>
-                  <Text style={styles.ratingTitle}>
-                    Rate {businessesToRate[currentBusinessIndex]?.name || (order?.orderType === 'food' ? 'Restaurant' : 'Products')}
-                  </Text>
-                  <Text style={styles.ratingSubtitle}>
-                    Step {currentBusinessIndex + 1} of {businessesToRate.length}: How was the quality of your {order?.orderType === 'food' ? 'meal' : 'items'}?
-                  </Text>
-
-                  <View style={styles.starsRow}>
-                    {[1, 2, 3, 4, 5].map(s => (
-                      <TouchableOpacity key={s} onPress={() => setBusinessRating(s)}>
-                        <Text style={[styles.star, businessRating >= s && styles.activeStar]}>★</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-
-                  <TextInput
-                    style={styles.commentInput}
-                    placeholder={`Tell us about the ${order?.orderType === 'food' ? 'food' : 'products'}...`}
-                    placeholderTextColor="#999"
-                    multiline
-                    numberOfLines={3}
-                    value={businessComment}
-                    onChangeText={setBusinessComment}
-                  />
+                  <AppText variant="h2" align="center">
+                    Rate {businessesToRate[currentBusinessIndex]?.name || (isFood ? 'restaurant' : 'products')}
+                  </AppText>
+                  <AppText variant="caption" align="center" style={{ marginTop: 6 }}>
+                    Step {currentBusinessIndex + 1} of {businessesToRate.length} • How was the quality?
+                  </AppText>
                 </>
               )}
 
-              <TouchableOpacity
-                style={[styles.submitRatingBtn, submittingReview && { opacity: 0.7 }]}
-                onPress={handleSubmitReview}
-                disabled={submittingReview}
-              >
-                {submittingReview ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.submitRatingText}>
-                    {ratingStep === 1
-                      ? (businessesToRate.length > 0 ? 'Next: Rate Business' : 'Finish')
-                      : (currentBusinessIndex < businessesToRate.length - 1 ? 'Next Business' : 'Submit Feedback')}
-                  </Text>
-                )}
-              </TouchableOpacity>
+              <View style={styles.starsRow}>
+                {[1, 2, 3, 4, 5].map(s => {
+                  const filled = ratingStep === 1 ? rating >= s : businessRating >= s;
+                  return (
+                    <Pressable
+                      key={s}
+                      onPress={() => ratingStep === 1 ? setRating(s) : setBusinessRating(s)}
+                      hitSlop={6}
+                    >
+                      <Ionicons name={filled ? 'star' : 'star-outline'} size={36} color={filled ? '#FFB800' : theme.colors.borderStrong} />
+                    </Pressable>
+                  );
+                })}
+              </View>
 
-              <TouchableOpacity style={styles.closeRatingBtn} onPress={handleDismissRating}>
-                <Text style={styles.closeRatingText}>Maybe later</Text>
-              </TouchableOpacity>
+              <TextInput
+                style={styles.commentInput}
+                placeholder={ratingStep === 1
+                  ? 'Share your delivery experience…'
+                  : `Tell us about the ${isFood ? 'food' : 'products'}…`}
+                placeholderTextColor={theme.colors.textMuted}
+                multiline
+                value={ratingStep === 1 ? comment : businessComment}
+                onChangeText={ratingStep === 1 ? setComment : setBusinessComment}
+              />
+
+              <AppButton
+                label={submittingReview
+                  ? 'Submitting…'
+                  : (ratingStep === 1
+                    ? (businessesToRate.length > 0 ? 'Next: rate business' : 'Finish')
+                    : (currentBusinessIndex < businessesToRate.length - 1 ? 'Next business' : 'Submit feedback'))}
+                variant="primary"
+                tint={accent}
+                fullWidth
+                size="lg"
+                loading={submittingReview}
+                disabled={submittingReview}
+                onPress={handleSubmitReview}
+                style={{ marginTop: theme.spacing.md }}
+              />
+              <AppButton
+                label="Maybe later"
+                variant="ghost"
+                fullWidth
+                size="sm"
+                onPress={handleDismissRating}
+                style={{ marginTop: 4 }}
+              />
             </View>
           </View>
         </Modal>
 
         {/* Add Product Modal */}
         <Modal visible={showAddProduct} transparent animationType="slide">
-          <View style={styles.addProductOverlay}>
-            <SafeAreaView style={styles.addProductCardWrapper}>
-              <View style={styles.addProductCard}>
-                <View style={styles.addProductHeader}>
-                  <Text style={styles.addProductTitle}>Add {order?.orderType === 'food' ? 'Dishes' : 'Items'} to Order</Text>
-                  <TouchableOpacity style={styles.addProductCloseBtn} onPress={() => setShowAddProduct(false)}>
-                    <Text style={styles.addProductCloseText}>✕</Text>
-                  </TouchableOpacity>
-                </View>
+          <View style={styles.modalOverlay}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowAddProduct(false)} />
+            <View style={[styles.bottomSheet, { height: '82%' }]}>
+              <View style={styles.sheetHandle} />
+              <View style={styles.sheetHeader}>
+                <AppText variant="h2">Add {isFood ? 'dishes' : 'items'} to order</AppText>
+                <AppIconButton size={32} bg={theme.colors.surfaceMuted} onPress={() => setShowAddProduct(false)}>
+                  <Ionicons name="close" size={18} color={theme.colors.textPrimary} />
+                </AppIconButton>
+              </View>
 
-                <View style={styles.searchBox}>
-                  <Text style={styles.searchIcon}>🔍</Text>
-                  <TextInput
-                    style={styles.searchInput}
-                    placeholder={order?.orderType === 'food' ? "Search dishes..." : "Search fresh products..."}
-                    placeholderTextColor="#999"
-                    value={searchQuery}
-                    onChangeText={setSearchQuery}
-                  />
-                </View>
-
-                <FlatList
-                  data={filteredProducts}
-                  keyExtractor={item => item.id}
-                  showsVerticalScrollIndicator={false}
-                  contentContainerStyle={{ paddingBottom: 20 }}
-                  ListEmptyComponent={() => (
-                    <Text style={{ textAlign: 'center', marginTop: 30, color: '#999' }}>No products found!</Text>
-                  )}
-                  renderItem={({ item }) => {
-                    const price = Number(item.price) - Number(item.discount || 0);
-                    return (
-                      <View style={styles.addProductRow}>
-                        <View style={styles.addProdPic}>
-                          {item.imageUrl ? (
-                            <Image source={{ uri: item.imageUrl }} style={styles.addProdImg} />
-                          ) : (
-                            <Text>📦</Text>
-                          )}
-                        </View>
-                        <View style={styles.addProdInfo}>
-                          <Text style={styles.addProdName}>{item.name}</Text>
-                          <Text style={styles.addProdPrice}>Rs. {price.toFixed(0)}</Text>
-                        </View>
-                        <TouchableOpacity
-                          style={[
-                            styles.addBtnSmall,
-                            (item.stockQuantity < 1 || !isBusinessOpen(item.openingTime, item.closingTime)) && { opacity: 0.5, backgroundColor: '#999' }
-                          ]}
-                          disabled={item.stockQuantity < 1 || addingProductId === item.id || !isBusinessOpen(item.openingTime, item.closingTime)}
-                          onPress={() => handleAddNewProductToOrder(item.id)}
-                        >
-                          {addingProductId === item.id ? (
-                            <ActivityIndicator size="small" color="#fff" />
-                          ) : (
-                            <Text style={styles.addBtnSmallText}>
-                              {item.stockQuantity < 1 ? 'Out' : (!isBusinessOpen(item.openingTime, item.closingTime) ? 'Closed' : '+ Add')}
-                            </Text>
-                          )}
-                        </TouchableOpacity>
-                      </View>
-                    );
-                  }}
+              <View style={styles.searchBox}>
+                <Ionicons name="search" size={16} color={theme.colors.textSecondary} />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder={isFood ? 'Search dishes…' : 'Search products…'}
+                  placeholderTextColor={theme.colors.textMuted}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
                 />
               </View>
-            </SafeAreaView>
+
+              <FlatList
+                data={filteredProducts}
+                keyExtractor={item => item.id}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: theme.spacing.xl }}
+                ListEmptyComponent={() => (
+                  <EmptyState icon="search-outline" title="No items found" subtitle="Try another search query." />
+                )}
+                renderItem={({ item }) => {
+                  const price = Number(item.price) - Number(item.discount || 0);
+                  const closed = !isBusinessOpen(item.openingTime, item.closingTime);
+                  const out = item.stockQuantity < 1;
+                  return (
+                    <View style={styles.addRow}>
+                      <View style={styles.addImg}>
+                        {item.imageUrl ? (
+                          <Image source={{ uri: item.imageUrl }} style={styles.fill} contentFit="cover" />
+                        ) : (
+                          <Ionicons name="image-outline" size={20} color={theme.colors.textMuted} />
+                        )}
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <AppText variant="bodyStrong" numberOfLines={1}>{item.name}</AppText>
+                        <AppText variant="captionStrong" color={accent}>Rs. {price.toFixed(0)}</AppText>
+                      </View>
+                      <AppButton
+                        label={out ? 'Out' : closed ? 'Closed' : '+ Add'}
+                        variant="primary"
+                        tint={accent}
+                        size="sm"
+                        loading={addingProductId === item.id}
+                        disabled={out || closed || addingProductId === item.id}
+                        onPress={() => handleAddNewProductToOrder(item.id)}
+                      />
+                    </View>
+                  );
+                }}
+              />
+            </View>
           </View>
         </Modal>
-        {/* Full Screen Image Viewer */}
+
+        {/* Full screen image viewer */}
         <Modal visible={!!selectedImageUrl} transparent animationType="fade">
           <View style={styles.fullImageOverlay}>
-            <TouchableOpacity style={styles.fullImageClose} onPress={() => setSelectedImageUrl(null)}>
-              <Text style={styles.fullImageCloseText}>✕ Close</Text>
-            </TouchableOpacity>
-            {selectedImageUrl && (
-              <Image 
-                source={{ uri: selectedImageUrl }} 
-                style={styles.fullImage} 
-                contentFit="contain"
-              />
-            )}
+            <AppIconButton
+              size={40}
+              bg="rgba(255,255,255,0.18)"
+              onPress={() => setSelectedImageUrl(null)}
+              style={styles.fullImageClose}
+            >
+              <Ionicons name="close" size={20} color="#fff" />
+            </AppIconButton>
+            {selectedImageUrl ? (
+              <Image source={{ uri: selectedImageUrl }} style={styles.fullImage} contentFit="contain" />
+            ) : null}
           </View>
         </Modal>
       </ScrollView>
 
-      <TouchableOpacity
-        style={styles.homeBtn}
-        onPress={() => navigation.navigate('Main')}
-      >
-        <Text style={styles.homeBtnText}>Back to Home</Text>
-      </TouchableOpacity>
+      {/* Sticky bottom CTA */}
+      <View style={styles.footer}>
+        {isDelivered && !(order?.isRated && order?.isBusinessRated) ? (
+          <AppButton
+            label="Leave review"
+            variant="primary"
+            tint={accent}
+            fullWidth
+            size="lg"
+            onPress={() => handleSubmitReview && handleDismissRating /* will be reopened by hook */}
+            leadingIcon={<Ionicons name="star" size={16} color="#fff" />}
+          />
+        ) : (
+          <AppButton
+            label="Back to home"
+            variant="secondary"
+            fullWidth
+            size="lg"
+            onPress={() => navigation.navigate('Main')}
+          />
+        )}
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8F9FB' },
+  container: { flex: 1, backgroundColor: theme.colors.background },
+  fill: { width: '100%', height: '100%' },
+
   header: {
-    flexDirection: 'row', alignItems: 'center', padding: 20,
-    backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#F0F0F0',
+    flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.sm,
+    backgroundColor: theme.colors.surface,
+    borderBottomWidth: 1, borderBottomColor: theme.colors.divider,
   },
-  backButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F5F5F5', justifyContent: 'center', alignItems: 'center' },
-  backIcon: { fontSize: 20, color: '#333' },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#1A1A1A', marginLeft: 15 },
-  scrollContent: { padding: 20 },
 
-  cancelledBanner: {
-    backgroundColor: '#FFF5F5', borderRadius: 20, padding: 30,
-    alignItems: 'center', borderWidth: 1, borderColor: '#FED7D7', marginBottom: 20,
+  iconCircle: {
+    width: 48, height: 48, borderRadius: 24,
+    alignItems: 'center', justifyContent: 'center',
   },
-  cancelledIcon: { fontSize: 40, marginBottom: 10 },
-  cancelledTitle: { fontSize: 20, fontWeight: '800', color: '#C53030' },
-  cancelledSubtitle: { fontSize: 14, color: '#9B2C2C', textAlign: 'center', marginTop: 8, lineHeight: 20 },
-  reorderBtn: {
-    marginTop: 20, backgroundColor: '#FF4500', paddingHorizontal: 28, paddingVertical: 12,
-    borderRadius: 14, elevation: 3, shadowColor: '#FF4500', shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3, shadowRadius: 8,
-  },
-  reorderBtnText: { color: '#fff', fontWeight: '800', fontSize: 15 },
 
+  // Status hero
   statusCard: {
-    backgroundColor: '#FF4500', borderRadius: 24, padding: 25,
-    marginBottom: 20, elevation: 8, shadowColor: '#FF4500',
-    shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.xl,
+    padding: theme.spacing.xl,
+    borderWidth: 1, borderColor: theme.colors.divider,
+    ...theme.shadows.sm,
+    marginBottom: theme.spacing.lg,
   },
-  premiumStatusCard: {
-    backgroundColor: '#fff', borderRadius: 28, padding: 25,
-    marginBottom: 25, shadowColor: '#000', shadowOpacity: 0.08,
-    shadowRadius: 15, elevation: 3, borderWidth: 1, borderColor: '#F0F0F0',
+  statusHeadRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, justifyContent: 'space-between' },
+  typeBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: theme.radius.sm,
   },
-  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
-  idBadge: { backgroundColor: '#F7FAFC', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: '#EDF2F7' },
-  idBadgeLabel: { fontSize: 10, fontWeight: '800', color: '#718096', letterSpacing: 1 },
-  idBadgeValue: { fontSize: 14, fontWeight: '800', color: '#1A202C', marginTop: 2 },
-  typeTag: { backgroundColor: '#FF450015', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  typeTagText: { fontSize: 10, fontWeight: '800', color: '#FF4500' },
-  mainStatusContent: { marginBottom: 20 },
-  statusHighlight: { fontSize: 28, fontWeight: '900', color: '#1A202C', letterSpacing: -0.5 },
-  statusSubtext: { fontSize: 14, color: '#718096', marginTop: 6, lineHeight: 20 },
-  progressBarBg: { height: 6, backgroundColor: '#EDF2F7', borderRadius: 3, overflow: 'hidden' },
-  progressBarFill: { height: '100%', backgroundColor: '#FF4500', borderRadius: 3 },
+  etaPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 10, paddingVertical: 5,
+    backgroundColor: theme.colors.infoLight,
+    borderRadius: theme.radius.pill,
+  },
+  progressBg: {
+    height: 8,
+    backgroundColor: theme.colors.surfaceMuted,
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginTop: theme.spacing.md,
+  },
+  progressFill: { height: '100%', borderRadius: 4 },
 
-  orderIdLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: '600', textTransform: 'uppercase' },
-  orderIdValue: { color: '#fff', fontSize: 18, fontWeight: '800', marginTop: 4 },
-  mainStatusContainer: { marginTop: 25 },
-  mainStatusText: { color: '#fff', fontSize: 24, fontWeight: '800' },
-  mainStatusDesc: { color: 'rgba(255,255,255,0.9)', fontSize: 14, marginTop: 4 },
-
-  timelineContainer: { paddingHorizontal: 10 },
-  timelineItem: { flexDirection: 'row', marginBottom: 5 },
-  leftColumn: { alignItems: 'center', width: 50 },
-  indicator: {
-    width: 44, height: 44, borderRadius: 22, backgroundColor: '#fff',
-    borderWidth: 2, borderColor: '#E2E8F0', justifyContent: 'center', alignItems: 'center',
-    zIndex: 2,
-  },
-  passedIndicator: { borderColor: '#FF4500' },
-  currentIndicator: { backgroundColor: '#FF4500', borderColor: '#FF4500', elevation: 4 },
-  stepIcon: { fontSize: 20 },
-  connector: { width: 2, flex: 1, backgroundColor: '#E2E8F0', marginVertical: -10, zIndex: 1 },
-  passedConnector: { backgroundColor: '#FF4500' },
-
-  rightColumn: { flex: 1, paddingLeft: 15, paddingBottom: 35, paddingTop: 6 },
-  stepLabel: { fontSize: 16, fontWeight: '600', color: '#A0AEC0' },
-  passedStepLabel: { color: '#2D3748' },
-  currentStepLabel: { color: '#FF4500', fontWeight: '800' },
-  stepDescription: { fontSize: 13, color: '#718096', marginTop: 4 },
-
-  homeBtn: {
-    margin: 20, backgroundColor: '#1A1A1A', height: 55, borderRadius: 16,
-    justifyContent: 'center', alignItems: 'center',
-  },
-  homeBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-
-  riderCard: {
-    backgroundColor: '#fff', borderRadius: 20, padding: 20,
-    marginBottom: 25, shadowColor: '#000', shadowOpacity: 0.05,
-    shadowRadius: 10, elevation: 2,
-    borderWidth: 1, borderColor: '#F0F0F0',
-  },
-  riderInfo: { flexDirection: 'row', alignItems: 'center' },
-  riderAvatar: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#FF450015', justifyContent: 'center', alignItems: 'center' },
-  riderAvatarText: { color: '#FF4500', fontSize: 20, fontWeight: '800' },
-  riderName: { fontSize: 16, fontWeight: '700', color: '#2D3748' },
-  riderStatus: { fontSize: 13, color: '#A0AEC0', marginTop: 2 },
-  callBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#EDF2F7', justifyContent: 'center', alignItems: 'center' },
-  callIcon: { fontSize: 18 },
-
-  summaryCard: {
-    backgroundColor: '#fff', borderRadius: 20, padding: 20,
-    marginBottom: 25, shadowColor: '#000', shadowOpacity: 0.05,
-    shadowRadius: 10, elevation: 2,
-    borderWidth: 1, borderColor: '#F0F0F0',
-  },
-  summaryTitle: { fontSize: 16, fontWeight: '700', color: '#2D3748', marginBottom: 15 },
-  groupHeader: {
-    fontSize: 14, fontWeight: 'bold', color: '#B45309',
-    backgroundColor: '#FFFBEB', padding: 8, borderRadius: 8,
-    marginBottom: 10, marginTop: 5, borderLeftWidth: 3, borderLeftColor: '#F59E0B'
-  },
-  itemRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  itemInfo: { flex: 1 },
-  itemName: { fontSize: 14, color: '#2D3748', fontWeight: '500' },
-  itemPrice: { fontSize: 12, color: '#718096', marginTop: 2 },
-  removeItemBtn: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#FFF5F5', justifyContent: 'center', alignItems: 'center', marginLeft: 10 },
-  removeIcon: { color: '#E53E3E', fontSize: 10, fontWeight: 'bold' },
-  summaryDivider: { height: 1, backgroundColor: '#F0F0F0', marginVertical: 12 },
-  totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  totalLabel: { fontSize: 14, fontWeight: '600', color: '#718096' },
-  totalText: { fontSize: 18, fontWeight: '800', color: '#1A1A1A' },
-
-  subOrderCard: {
-    backgroundColor: '#fff', borderRadius: 24, padding: 20,
-    marginBottom: 25, shadowColor: '#000', shadowOpacity: 0.04,
-    shadowRadius: 12, elevation: 2,
-    borderWidth: 1, borderColor: '#F0F0F0',
-  },
-  subOrderHeader: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline',
-    marginBottom: 15, borderBottomWidth: 1, borderBottomColor: '#F7FAFC',
-    paddingBottom: 10,
-  },
-  subOrderTitle: { fontSize: 15, fontWeight: '800', color: '#2D3748' },
-  subOrderCount: { fontSize: 12, fontWeight: '700', color: '#A0AEC0' },
-  subOrderList: { gap: 12 },
-  subOrderItem: { flexDirection: 'row', alignItems: 'center', gap: 15 },
-  subOrderBadge: {
-    width: 44, height: 44, borderRadius: 14,
-    justifyContent: 'center', alignItems: 'center',
-  },
-  subOrderInfo: { flex: 1 },
-  subOrderNameRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  subOrderName: { fontSize: 14, fontWeight: '700', color: '#1A202C', maxWidth: '65%' },
-  subOrderLoc: { fontSize: 12, color: '#718096', marginTop: 2 },
-  statusTag: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-  statusTagText: { fontSize: 10, fontWeight: '800' },
-
-  quantityControls: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F7FAFC', borderRadius: 10, padding: 4 },
-  qtyBtn: { width: 32, height: 32, backgroundColor: '#fff', borderRadius: 8, justifyContent: 'center', alignItems: 'center', elevation: 1, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2 },
-  qtyBtnText: { fontSize: 18, fontWeight: 'bold', color: '#FF4500' },
-  qtyText: { marginHorizontal: 12, fontSize: 15, fontWeight: '700', color: '#2D3748' },
-
-  timeLabel: { fontSize: 11, color: '#A0AEC0', fontWeight: '500' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 25 },
-  ratingBox: { backgroundColor: '#fff', borderRadius: 28, padding: 30, alignItems: 'center' },
-  ratingTitle: { fontSize: 22, fontWeight: '800', color: '#1A1A1A' },
-  ratingSubtitle: { fontSize: 14, color: '#718096', textAlign: 'center', marginTop: 8, marginBottom: 25 },
-  starsRow: { flexDirection: 'row', marginBottom: 25 },
-  star: { fontSize: 40, color: '#E2E8F0', marginHorizontal: 6 },
-  activeStar: { color: '#FFD700' },
-  commentInput: { width: '100%', backgroundColor: '#F7FAFC', borderRadius: 16, padding: 15, color: '#2D3748', fontSize: 15, height: 100, textAlignVertical: 'top', marginBottom: 25 },
-  submitRatingBtn: { width: '100%', height: 55, backgroundColor: '#FF4500', borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
-  submitRatingText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  closeRatingBtn: { marginTop: 15, padding: 10 },
-  closeRatingText: { color: '#718096', fontWeight: '600', fontSize: 14 },
-  confirmUpdatesBtn: {
-    marginTop: 15,
-    backgroundColor: '#FF450015',
-    paddingVertical: 12,
-    borderRadius: 12,
+  // Cancelled banner
+  cancelledBanner: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.xl,
+    padding: theme.spacing.xl,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#FF450030',
+    borderWidth: 1, borderColor: theme.colors.dangerBorder,
+    marginBottom: theme.spacing.lg,
   },
-  confirmUpdatesBtnText: { color: '#FF4500', fontWeight: '700', fontSize: 14 },
 
-  summaryActionsRow: { flexDirection: 'row', gap: 10, marginTop: 15 },
-  actionBtn: { flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  confirmBtn: { backgroundColor: '#FF450015', borderWidth: 1, borderColor: '#FF450030' },
-  addBtn: { backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#BBF7D0' },
-  confirmBtnText: { color: '#FF4500', fontWeight: '700', fontSize: 13 },
-  addBtnText: { color: '#16A34A', fontWeight: '700', fontSize: 13 },
+  // Generic card
+  card: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing.lg,
+    borderWidth: 1, borderColor: theme.colors.divider,
+    marginBottom: theme.spacing.md,
+    ...theme.shadows.sm,
+  },
+  cardHead: {
+    flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm,
+    marginBottom: theme.spacing.md,
+  },
+  divider: { height: 1, backgroundColor: theme.colors.divider, marginVertical: theme.spacing.md },
 
-  addProductOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  addProductCardWrapper: { flex: 1, justifyContent: 'flex-end' },
-  addProductCard: { backgroundColor: '#fff', borderTopLeftRadius: 32, borderTopRightRadius: 32, height: '80%', padding: 20 },
-  addProductHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  addProductTitle: { fontSize: 20, fontWeight: '800', color: '#1A1A1A' },
-  addProductCloseBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F5F5F5', justifyContent: 'center', alignItems: 'center' },
-  addProductCloseText: { fontSize: 16, color: '#666', fontWeight: 'bold' },
+  // Sub-orders
+  subRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md },
+  subStatus: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: theme.radius.sm },
 
-  searchBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5F6FA', borderRadius: 16, paddingHorizontal: 15, marginBottom: 20 },
-  expandHint: { position: 'absolute', bottom: 12, right: 12, backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
-  
-  fullImageOverlay: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
-  fullImage: { width: '100%', height: '85%' },
-  fullImageClose: { position: 'absolute', top: 50, right: 20, backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 25, zIndex: 10 },
-  fullImageCloseText: { color: '#fff', fontWeight: 'bold' },
-  searchIcon: { fontSize: 18, marginRight: 10 },
-  searchInput: { flex: 1, height: 50, fontSize: 16, color: '#1A1A1A', fontWeight: '500' },
-
-  addProductRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
-  addProdPic: { width: 50, height: 50, borderRadius: 12, backgroundColor: '#F5F5F5', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
-  addProdImg: { width: '100%', height: '100%' },
-  addProdInfo: { flex: 1, marginLeft: 15 },
-  addProdName: { fontSize: 16, fontWeight: '600', color: '#2D3748', marginBottom: 4 },
-  addProdPrice: { fontSize: 14, fontWeight: '800', color: '#FF4500' },
-  addBtnSmall: { backgroundColor: '#FF4500', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, minWidth: 70, alignItems: 'center' },
-  addBtnSmallText: { color: '#fff', fontWeight: '700', fontSize: 13 },
-
-  // Map Styles
-  mapContainer: {
-    backgroundColor: '#fff', borderRadius: 20, marginBottom: 20,
-    overflow: 'hidden', borderWidth: 1, borderColor: '#F0F0F0',
-    shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 10, elevation: 3,
+  // Items
+  itemRow: {
+    flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    borderBottomWidth: 1, borderBottomColor: theme.colors.divider,
   },
-  mapTitle: {
-    fontSize: 16, fontWeight: '800', color: '#1A202C',
-    paddingHorizontal: 20, paddingTop: 16, paddingBottom: 10,
+  qtyControls: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: theme.colors.surfaceMuted,
+    borderRadius: theme.radius.md,
+    padding: 3,
   },
-  map: { width: '100%', height: 220 },
-  receiptDownloadBtn: {
-    backgroundColor: '#FF450015',
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-    borderRadius: 12,
-    marginTop: 15,
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderColor: '#FF450030',
+  qtyBtn: {
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: theme.colors.surface,
+    alignItems: 'center', justifyContent: 'center',
+    ...theme.shadows.sm,
   },
-  receiptDownloadText: {
-    fontWeight: '700',
-    fontSize: 13,
-  },
-  receiptActionRow: { flexDirection: 'row', marginTop: 10, width: '100%', paddingHorizontal: 0 },
-  
-  // Rashan Styles
-  quotationBlock: {
-    marginTop: 20,
-    padding: 18,
-    backgroundColor: '#F0F9FF',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-  },
-  quoteTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0369A1',
-    marginBottom: 4,
-  },
-  quoteBreakdown: {
-    marginVertical: 12,
-    gap: 8,
-  },
-  quoteRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  quoteLabel: {
-    fontSize: 13,
-    color: '#075985',
-    fontWeight: '600',
-  },
-  quoteAmount: {
-    fontSize: 14,
-    color: '#075985',
-    fontWeight: '700',
-  },
-  quoteTotalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#BAE6FD',
-  },
-  quoteTotalLabel: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#0369A1',
-  },
-  quoteTotalAmount: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: '#1A1A1A',
-  },
-  quoteReason: {
-    fontSize: 14,
-    color: '#C53030',
-    lineHeight: 20,
-  },
-  approveBtn: {
-    backgroundColor: '#22C55E',
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  approveBtnText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 15,
-  },
-  detailLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#94A3B8',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+  missingHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 10, paddingVertical: 6,
+    borderRadius: theme.radius.sm,
     marginBottom: 6,
+    alignSelf: 'flex-start',
+  },
+  sumRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+
+  // Rashan-specific
+  photoWrap: { position: 'relative', borderRadius: theme.radius.md, overflow: 'hidden' },
+  photo: { width: '100%', height: 220 },
+  expandHint: {
+    position: 'absolute', bottom: 8, right: 8,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 8, paddingVertical: 4,
+    borderRadius: theme.radius.pill,
   },
   textListPanel: {
-    backgroundColor: '#F8FAFC',
-    padding: 15,
-    borderRadius: 12,
+    backgroundColor: theme.colors.surfaceMuted,
+    padding: theme.spacing.md,
+    borderRadius: theme.radius.md,
+    borderWidth: 1, borderColor: theme.colors.divider,
+  },
+  metaGrid: { flexDirection: 'row', gap: theme.spacing.sm, marginTop: theme.spacing.sm },
+  metaItem: {
+    flex: 1, alignItems: 'center', gap: 2,
+    backgroundColor: theme.colors.surfaceMuted,
+    padding: theme.spacing.sm,
+    borderRadius: theme.radius.sm,
+  },
+
+  // Quotation
+  quotationBox: {
+    marginTop: theme.spacing.md,
+    padding: theme.spacing.md,
+    borderRadius: theme.radius.md,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
   },
-  textListContent: {
-    fontSize: 15,
-    color: '#334155',
-    lineHeight: 22,
+
+  // Timeline
+  timelineItem: { flexDirection: 'row' },
+  timelineLeft: { alignItems: 'center', width: 40 },
+  timelineDot: {
+    width: 32, height: 32, borderRadius: 16,
+    borderWidth: 2, borderColor: theme.colors.borderStrong,
+    backgroundColor: theme.colors.surface,
+    alignItems: 'center', justifyContent: 'center',
+    zIndex: 2,
   },
-  logisticsGrid: {
-    flexDirection: 'row',
-    marginTop: 20,
-    gap: 10,
+  timelineConnector: {
+    width: 2, flex: 1,
+    backgroundColor: theme.colors.borderStrong,
+    marginVertical: -2,
+    minHeight: 20,
   },
-  logisticsItem: {
+  timelineRight: { flex: 1, paddingLeft: theme.spacing.md, paddingBottom: theme.spacing.lg, paddingTop: 4 },
+
+  // Footer
+  footer: {
+    padding: theme.spacing.md,
+    backgroundColor: theme.colors.surface,
+    borderTopWidth: 1, borderTopColor: theme.colors.divider,
+  },
+
+  // Modals
+  modalOverlay: {
     flex: 1,
-    backgroundColor: '#F1F5F9',
-    padding: 10,
-    borderRadius: 10,
+    backgroundColor: 'rgba(15,23,42,0.55)',
+    justifyContent: 'flex-end',
+  },
+  ratingSheet: {
+    backgroundColor: theme.colors.surface,
+    borderTopLeftRadius: theme.radius.xl,
+    borderTopRightRadius: theme.radius.xl,
+    padding: theme.spacing.xl,
+    paddingBottom: theme.spacing.xxl,
     alignItems: 'center',
   },
-  logisticsLabel: {
-    fontSize: 10,
-    color: '#64748B',
-    fontWeight: '700',
-    marginBottom: 2,
+  bottomSheet: {
+    backgroundColor: theme.colors.surface,
+    borderTopLeftRadius: theme.radius.xl,
+    borderTopRightRadius: theme.radius.xl,
+    padding: theme.spacing.lg,
+    paddingBottom: theme.spacing.xxl,
   },
-  logisticsValue: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#1E293B',
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 40, height: 4, borderRadius: 2,
+    backgroundColor: theme.colors.borderStrong,
+    marginBottom: theme.spacing.md,
   },
-  addressLine: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1E293B',
-    marginTop: 4,
+  sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: theme.spacing.md },
+  starsRow: {
+    flexDirection: 'row', justifyContent: 'center', gap: theme.spacing.xs,
+    marginVertical: theme.spacing.lg,
   },
-  landmarkLine: {
+  commentInput: {
+    width: '100%',
+    backgroundColor: theme.colors.surfaceMuted,
+    borderRadius: theme.radius.md,
+    padding: theme.spacing.md,
+    color: theme.colors.textPrimary,
     fontSize: 14,
-    color: '#64748B',
-    marginTop: 2,
+    height: 96,
+    textAlignVertical: 'top',
   },
-  phoneLine: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#FF4500',
-    marginTop: 8,
+
+  searchBox: {
+    flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm,
+    backgroundColor: theme.colors.surfaceMuted,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.spacing.md,
+    height: 44,
+    marginBottom: theme.spacing.md,
   },
-  rashanFinancials: {
-    gap: 6,
+  searchInput: { flex: 1, fontSize: 14, color: theme.colors.textPrimary },
+
+  addRow: {
+    flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    borderBottomWidth: 1, borderBottomColor: theme.colors.divider,
   },
-  rashanPriceRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  addImg: {
+    width: 48, height: 48,
+    borderRadius: theme.radius.sm,
+    backgroundColor: theme.colors.surfaceMuted,
+    overflow: 'hidden',
+    alignItems: 'center', justifyContent: 'center',
   },
-  rashanPriceLabel: {
-    fontSize: 13,
-    color: '#64748B',
-    fontWeight: '600',
-  },
-  rashanPriceValue: {
-    fontSize: 14,
-    color: '#1E293B',
-    fontWeight: '700',
-  },
-  cancelOrderBtn: {
-    marginTop: 15,
-    backgroundColor: '#FFF5F5',
-    paddingVertical: 15,
-    borderRadius: 16,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#FED7D7',
-  },
-  cancelOrderBtnText: {
-    color: '#C53030',
-    fontWeight: '700',
-    fontSize: 14,
-  },
+
+  fullImageOverlay: { flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' },
+  fullImage: { width: '100%', height: '85%' },
+  fullImageClose: { position: 'absolute', top: 50, right: 20, zIndex: 10 },
 });

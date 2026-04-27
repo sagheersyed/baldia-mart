@@ -14,6 +14,22 @@ export class BrandsController {
     return this.brandsService.findAll(section);
   }
 
+  /**
+   * GET /brands/search?q=&section=&page=&limit=
+   * Powers the global search screen and discovery flows on mobile.
+   */
+  @Get('search')
+  search(
+    @Query('q') q: string,
+    @Query('section') section?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const p = page ? parseInt(page, 10) : 1;
+    const l = limit ? parseInt(limit, 10) : 20;
+    return this.brandsService.search(q || '', section, isNaN(p) ? 1 : p, isNaN(l) ? 20 : l);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.brandsService.findOne(id);

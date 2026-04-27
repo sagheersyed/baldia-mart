@@ -122,9 +122,67 @@ export const categoriesApi = {
 export const brandsApi = {
   getAll: (section?: string) => api.get(`/brands${section ? `?section=${section}` : ''}`),
   getById: (id: string) => api.get(`/brands/${id}`),
+  search: (q: string, section?: string, page = 1, limit = 20) => {
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    if (section) params.set('section', section);
+    params.set('page', String(page));
+    params.set('limit', String(limit));
+    return api.get(`/brands/search?${params.toString()}`);
+  },
+};
+
+export type ProductSort =
+  | 'newest'
+  | 'price_asc'
+  | 'price_desc'
+  | 'popular'
+  | 'discount'
+  | 'rating';
+
+export interface ProductListParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  categoryId?: string;
+  brandId?: string;
+  sort?: ProductSort;
+  minPrice?: number;
+  maxPrice?: number;
+  inStock?: boolean;
+  featured?: boolean;
+  bestSeller?: boolean;
+  deal?: boolean;
+}
+
+export interface PaginatedProducts {
+  data: any[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+const buildProductQuery = (params: ProductListParams = {}): string => {
+  const qs = new URLSearchParams();
+  if (params.page) qs.set('page', String(params.page));
+  if (params.limit) qs.set('limit', String(params.limit));
+  if (params.search) qs.set('search', params.search);
+  if (params.categoryId) qs.set('categoryId', params.categoryId);
+  if (params.brandId) qs.set('brandId', params.brandId);
+  if (params.sort) qs.set('sort', params.sort);
+  if (params.minPrice !== undefined) qs.set('minPrice', String(params.minPrice));
+  if (params.maxPrice !== undefined) qs.set('maxPrice', String(params.maxPrice));
+  if (params.inStock) qs.set('inStock', 'true');
+  if (params.featured) qs.set('featured', 'true');
+  if (params.bestSeller) qs.set('bestSeller', 'true');
+  if (params.deal) qs.set('deal', 'true');
+  const str = qs.toString();
+  return str ? `?${str}` : '';
 };
 
 export const productsApi = {
+  // Backwards-compatible legacy list (returns array OR paginated shape)
   getAll: async (page?: number, limit?: number) => {
     const qs = page && limit ? `?page=${page}&limit=${limit}` : '';
     const res = await api.get(`/products${qs}`);
@@ -143,6 +201,60 @@ export const productsApi = {
     if (res.data && typeof res.data === 'object' && !Array.isArray(res.data) && res.data.data) res.data = res.data.data;
     return res;
   },
+
+  // ── New universal listing (always paginated shape) ──
+  list: (params: ProductListParams = {}) =>
+    api.get<PaginatedProducts>(`/products${buildProductQuery(params)}`),
+
+  search: (q: string, page = 1, limit = 20) =>
+    api.get<PaginatedProducts>(`/products/search?q=${encodeURIComponent(q)}&page=${page}&limit=${limit}`),
+
+  getFeatured: (page = 1, limit = 20) =>
+    api.get<PaginatedProducts>(`/products/featured?page=${page}&limit=${limit}`),
+
+  getBestSellers: (page = 1, limit = 20) =>
+    api.get<PaginatedProducts>(`/products/best-sellers?page=${page}&limit=${limit}`),
+
+  getDeals: (page = 1, limit = 20) =>
+    api.get<PaginatedProducts>(`/products/deals?page=${page}&limit=${limit}`),
+
+  getNewest: (page = 1, limit = 20) =>
+    api.get<PaginatedProducts>(`/products/newest?page=${page}&limit=${limit}`),
+};
+
+// ── Single optimized Home Screen payload ──
+export interface HomeViewAllDescriptor {
+  type: 'deals' | 'flash-sale' | 'best_sellers' | 'featured' | 'newest' | 'budget' | 'category';
+  id?: string;
+  maxPrice?: number;
+}
+
+export interface HomeSectionPayload {
+  id: string;
+  title: string;
+  subtitle?: string;
+  type: HomeViewAllDescriptor['type'];
+  layout: 'horizontal' | 'grid-2' | 'grid-3';
+  viewAll?: HomeViewAllDescriptor;
+  categoryId?: string;
+  products: any[];
+}
+
+export interface HomePayload {
+  section: 'mart' | 'food';
+  zoneId: string | null;
+  generatedAt: string;
+  banners: any[];
+  categories: any[];
+  brands: any[];
+  rashanEnabled: boolean;
+  trending: string[];
+  sections: HomeSectionPayload[];
+}
+
+export const homeApi = {
+  getHome: (section: 'mart' | 'food' = 'mart', zoneId?: string) =>
+    api.get<HomePayload>(`/home?section=${section}${zoneId ? `&zoneId=${zoneId}` : ''}`),
 };
 
 export const ordersApi = {
@@ -202,6 +314,13 @@ export const bannersApi = {
 export const restaurantsApi = {
   getAll: () => api.get('/restaurants'),
   getById: (id: string) => api.get(`/restaurants/${id}`),
+  search: (q: string, page = 1, limit = 20) => {
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    params.set('page', String(page));
+    params.set('limit', String(limit));
+    return api.get(`/restaurants/search?${params.toString()}`);
+  },
 };
 
 export const menuItemsApi = {

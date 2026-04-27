@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Alert, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Alert, Image, FlatList } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,7 +22,7 @@ export default function RashanOrderScreen() {
   const navigation = useNavigation<NavProp>();
 
   const [bulkListText, setBulkListText] = useState('');
-  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [photoUris, setPhotoUris] = useState<string[]>([]);
   const [mobileNumber, setMobileNumber] = useState('');
   
   // Address State
@@ -157,25 +157,44 @@ export default function RashanOrderScreen() {
     return R * c;
   };
 
+  /**
+   * Calculate a local estimate of the logistics fee based on selections.
+   * Falls back to a simple formula if the backend endpoint is unavailable.
+   */
   const calculatePreview = async () => {
+    const baseFee = weightTier === 'light' ? 150 : weightTier === 'medium' ? 300 : 500;
+    const floorFee = floor * 50;
+    const placementFee = placement === 'inside' ? 100 : placement === 'doorstep' ? 50 : 0;
+    const localEstimate = baseFee + floorFee + placementFee;
     try {
       const res = await rashanApi.previewFee({ weightTier, floor, placement });
-      setPreviewFee(res.data.serviceFee);
-    } catch (err) {
-      console.log('Preview fee fetch failed', err);
+      const fee = res.data?.serviceFee ?? res.data?.fee ?? null;
+      setPreviewFee(fee != null ? Number(fee) : localEstimate);
+    } catch {
+      setPreviewFee(localEstimate);
     }
   };
 
-  const pickImage = async () => {
-    let result = await ImagePicker.launchImageLibraryAsync({
+  const pickImages = async () => {
+    if (photoUris.length >= 5) {
+      Alert.alert('Limit reached', 'You can upload up to 5 photos.');
+      return;
+    }
+    const remaining = 5 - photoUris.length;
+    const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
+      allowsMultipleSelection: true,
+      selectionLimit: remaining,
       quality: 0.8,
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
-      setPhotoUri(result.assets[0].uri);
+      setPhotoUris(prev => [...prev, ...result.assets.map(a => a.uri)].slice(0, 5));
     }
+  };
+
+  const removePhoto = (uri: string) => {
+    setPhotoUris(prev => prev.filter(u => u !== uri));
   };
 
   const uploadPhoto = async (uri: string): Promise<string | null> => {
@@ -202,7 +221,7 @@ export default function RashanOrderScreen() {
   };
 
   const handleSubmit = async () => {
-    if (!bulkListText.trim() && !photoUri) {
+    if (!bulkListText.trim() && photoUris.length === 0) {
       Alert.alert('Missing Info', 'Please type your grocery list or upload a photo of it.');
       return;
     }
@@ -216,13 +235,14 @@ export default function RashanOrderScreen() {
     }
 
     setIsLoading(true);
-    let finalPhotoUrl = null;
+    let uploadedUrls: string[] = [];
 
-    if (photoUri) {
-      finalPhotoUrl = await uploadPhoto(photoUri);
-      if (!finalPhotoUrl) {
+    if (photoUris.length > 0) {
+      const results = await Promise.all(photoUris.map(uri => uploadPhoto(uri)));
+      uploadedUrls = results.filter((u): u is string => !!u);
+      if (uploadedUrls.length < photoUris.length) {
         setIsLoading(false);
-        Alert.alert('Upload Failed', 'Failed to upload the image. Please try again.');
+        Alert.alert('Upload Failed', 'One or more images failed to upload. Please try again.');
         return;
       }
     }
@@ -231,7 +251,8 @@ export default function RashanOrderScreen() {
       await rashanApi.submitRequest({
         addressId: selectedAddress?.id,
         bulkListText,
-        bulkListPhotoUrl: finalPhotoUrl,
+        bulkListPhotoUrl: uploadedUrls[0] || null,
+        bulkListPhotoUrls: uploadedUrls,
         bulkMobileNumber: mobileNumber,
         bulkStreetAddress: selectedAddress?.streetAddress || '',
         bulkCity: selectedAddress?.city || 'Baldia Town',
@@ -283,17 +304,29 @@ export default function RashanOrderScreen() {
 
         <Text style={styles.orText}>— OR —</Text>
 
-        <TouchableOpacity style={styles.uploadBtn} onPress={pickImage}>
-          <Ionicons name="camera-outline" size={24} color="#FF4500" />
-          <Text style={styles.uploadBtnText}>Upload Photo of List</Text>
+        <TouchableOpacity
+          style={[styles.uploadBtn, photoUris.length >= 5 && { opacity: 0.5 }]}
+          onPress={pickImages}
+          disabled={photoUris.length >= 5}
+        >
+          <Ionicons name="images-outline" size={24} color="#FF4500" />
+          <Text style={styles.uploadBtnText}>
+            {photoUris.length === 0
+              ? 'Upload Photos of List'
+              : `Add More Photos (${photoUris.length}/5)`}
+          </Text>
         </TouchableOpacity>
 
-        {photoUri && (
-          <View style={styles.photoPreviewContainer}>
-            <Image source={{ uri: photoUri }} style={styles.photoPreview} />
-            <TouchableOpacity style={styles.removePhotoBtn} onPress={() => setPhotoUri(null)}>
-              <Ionicons name="close-circle" size={24} color="#fff" />
-            </TouchableOpacity>
+        {photoUris.length > 0 && (
+          <View style={styles.photosGrid}>
+            {photoUris.map((uri, idx) => (
+              <View key={uri + idx} style={styles.photoThumbWrap}>
+                <Image source={{ uri }} style={styles.photoThumb} />
+                <TouchableOpacity style={styles.removePhotoBtn} onPress={() => removePhoto(uri)}>
+                  <Ionicons name="close-circle" size={22} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            ))}
           </View>
         )}
 
@@ -409,12 +442,25 @@ export default function RashanOrderScreen() {
         />
 
         <View style={styles.previewBox}>
-          <Text style={styles.previewLabel}>Estimated Logistics & Sourcing Fee:</Text>
+          <Text style={styles.previewLabel}>Estimated Logistics & Sourcing Fee</Text>
           <Text style={styles.previewValue}>
-            {previewFee ? `Rs. ${previewFee}` : 'Calculating...'}
+            {previewFee != null ? `Rs. ${previewFee.toLocaleString()}` : 'Tap a selection above to calculate'}
           </Text>
+          <View style={styles.previewBreakRow}>
+            <Text style={styles.previewBreakItem}>
+              Weight tier: Rs. {weightTier === 'light' ? 150 : weightTier === 'medium' ? 300 : 500}
+            </Text>
+            {floor > 0 && (
+              <Text style={styles.previewBreakItem}>Floor: +Rs. {floor * 50}</Text>
+            )}
+            {placement !== 'gate' && (
+              <Text style={styles.previewBreakItem}>
+                {placement === 'doorstep' ? 'Doorstep: +Rs. 50' : 'Inside Pantry: +Rs. 100'}
+              </Text>
+            )}
+          </View>
           <Text style={styles.previewSubtext}>
-            (Product costs will be quoted by Admin based on current market rates)
+            Product costs are quoted separately by Admin based on current wholesale market rates.
           </Text>
         </View>
 
@@ -568,20 +614,29 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 16,
   },
-  photoPreviewContainer: {
-    position: 'relative',
-    marginBottom: 24,
+  photosGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
   },
-  photoPreview: {
+  photoThumbWrap: {
+    width: '31%',
+    aspectRatio: 1,
+    position: 'relative',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  photoThumb: {
     width: '100%',
-    height: 200,
+    height: '100%',
     borderRadius: 12,
   },
   removePhotoBtn: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    top: 4,
+    right: 4,
+    backgroundColor: 'rgba(0,0,0,0.55)',
     borderRadius: 12,
   },
   input: {
@@ -646,27 +701,47 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   previewBox: {
-    backgroundColor: '#F0F8FF',
+    backgroundColor: '#FFF8F0',
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     marginTop: 24,
     marginBottom: 24,
-    borderLeftWidth: 4,
-    borderLeftColor: '#2196F3',
+    borderWidth: 1.5,
+    borderColor: '#FF4500',
   },
   previewLabel: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 12,
+    color: '#888',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
   },
   previewValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    marginVertical: 4,
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#FF4500',
+    marginBottom: 8,
+  },
+  previewBreakRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 8,
+  },
+  previewBreakItem: {
+    fontSize: 12,
+    color: '#444',
+    backgroundColor: '#FFE4D0',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    fontWeight: '600',
   },
   previewSubtext: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#8E8E93',
+    lineHeight: 15,
   },
   submitBtn: {
     backgroundColor: '#FF4500',
