@@ -358,7 +358,7 @@ export default function CartScreen({ navigation }: any) {
             contentContainerStyle={{ paddingVertical: theme.spacing.md, paddingBottom: 160 + insets.bottom }}
           />
 
-          <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, theme.spacing.md) + theme.spacing.sm }]}>
+          <View style={styles.footer}>
             <AppButton
               label={!isValidAddress
                 ? 'Address out of zone'
@@ -379,7 +379,7 @@ export default function CartScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.colors.background },
+  container: { flex: 1, backgroundColor: theme.colors.background , marginBottom:110 },
   fill: { width: '100%', height: '100%' },
 
   header: {
@@ -480,10 +480,10 @@ const styles = StyleSheet.create({
   },
 
   footer: {
-    position: 'absolute', left: 0, right: 0, bottom: 0,
+    // position: 'absolute', left: 0, right: 0, bottom: 0,
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.md,
     // backgroundColor: theme.colors.surface,
-    borderTopWidth: 1, borderTopColor: theme.colors.divider,
+    // borderTopWidth: 1, borderTopColor: theme.colors.divider,
   },
 });

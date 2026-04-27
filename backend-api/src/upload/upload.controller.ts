@@ -12,7 +12,7 @@ export class UploadController {
   @UseInterceptors(FileInterceptor('file'))
   async uploadFile(@UploadedFile() file: any) {
     // If using multer-s3, file.location is the URL. Otherwise we use local host.
-    const host = process.env.BACKEND_URL || 'http://192.168.100.142:3000';
+    const host = process.env.BACKEND_URL || 'http://192.168.1.86:3000';
     const url = file.location || `${host}/uploads/${file.filename}`;
 
     return {

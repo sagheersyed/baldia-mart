@@ -455,7 +455,7 @@ export default function MyOrdersScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.colors.background },
+  container: { flex: 1, backgroundColor: theme.colors.background , marginBottom:110},
 
   header: {
     flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md,

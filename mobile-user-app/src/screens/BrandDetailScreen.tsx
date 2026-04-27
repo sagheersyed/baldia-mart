@@ -324,7 +324,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.background },
   listContent: { paddingBottom: 120 },
 
-  hero: { backgroundColor: theme.colors.surface, marginBottom: theme.spacing.sm },
+  hero: { backgroundColor: theme.colors.surface, marginBottom: theme.spacing.huge },
   heroImg: {
     width: '100%',
     height: 220,

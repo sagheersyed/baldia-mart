@@ -5,7 +5,7 @@ const phone = '+923114106131';
 const data = JSON.stringify({ phoneNumber: phone, role: 'rider' });
 
 const options = {
-  hostname: 'http://192.168.100.142:3000',
+  hostname: 'http://192.168.1.86:3000',
   port: 3000,
   path: '/api/v1/auth/check-status',
   method: 'POST',

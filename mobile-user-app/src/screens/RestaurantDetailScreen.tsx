@@ -579,7 +579,9 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     backgroundColor: theme.colors.food,
     alignItems: 'center', justifyContent: 'center',
-    borderWidth: 2, borderColor: '#fff',
+    // borderWidth: 2, borderColor: '#fff',
+    marginBottom:theme.spacing.lg,
+    marginRight:theme.spacing.lg,
     ...theme.shadows.food,
   },
 

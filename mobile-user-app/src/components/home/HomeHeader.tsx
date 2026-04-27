@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import AppText from '../ui/AppText';
 import AppIconButton from '../ui/AppIconButton';
-import { theme } from '../../theme/theme';
+import { sizes, theme } from '../../theme/theme';
 
 interface HomeHeaderProps {
   locationLabel: string;
@@ -97,7 +97,7 @@ const HomeHeader = memo(function HomeHeader({
       </View>
 
       {greeting ? (
-        <AppText variant="caption" color="rgba(255,255,255,0.9)" style={{ marginTop: theme.spacing.sm }}>
+        <AppText variant="caption" color="rgba(255,255,255,0.9)" style={{ marginTop: theme.spacing.none, marginBottom: theme.spacing.md }}>
           {greeting}
         </AppText>
       ) : null}
@@ -108,10 +108,10 @@ const HomeHeader = memo(function HomeHeader({
 const styles = StyleSheet.create({
   wrap: {
     paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.sm,
+    paddingTop: theme.spacing.xxs,
     paddingBottom: theme.spacing.lg,
   },
-  row: { flexDirection: 'row', alignItems: 'center' },
+  row: { flexDirection: 'row', alignItems: 'center' , minHeight: 75 },
   locationBtn: {
     flex: 1,
     flexDirection: 'row',
