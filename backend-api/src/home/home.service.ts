@@ -5,6 +5,7 @@ import { CacheService } from '../cache/cache.service';
 import { Product } from '../products/product.entity';
 import { Category } from '../categories/category.entity';
 import { Brand } from '../brands/brand.entity';
+import { Restaurant } from '../restaurants/restaurant.entity';
 import { BannersService } from '../banners/banners.service';
 import { SettingsService } from '../settings/settings.service';
 import { HomePayload, HomeSection } from './home.types';
@@ -25,6 +26,7 @@ export class HomeService {
     @InjectRepository(Product) private readonly productsRepo: Repository<Product>,
     @InjectRepository(Category) private readonly categoriesRepo: Repository<Category>,
     @InjectRepository(Brand) private readonly brandsRepo: Repository<Brand>,
+    @InjectRepository(Restaurant) private readonly restaurantsRepo: Repository<Restaurant>,
     private readonly bannersService: BannersService,
     private readonly settingsService: SettingsService,
     private readonly cacheService: CacheService,
@@ -70,6 +72,24 @@ export class HomeService {
     ]);
 
     const sections: HomeSection[] = [];
+
+    if (section === 'food') {
+      // Food mode: don't use mart product sections — build restaurant-aware sections
+      // (categories from restaurant section, brands = restaurants)
+      const trending = await this.collectFoodTrending();
+
+      return {
+        section,
+        zoneId: zoneId || null,
+        generatedAt: new Date().toISOString(),
+        banners,
+        categories,
+        brands,
+        rashanEnabled,
+        trending,
+        sections: [],
+      };
+    }
 
     sections.push(await this.buildDealsSection());
     sections.push(await this.buildBestSellersSection());
@@ -244,5 +264,49 @@ export class HomeService {
       }
     }
     return trending;
+  }
+
+  /**
+   * Collect trending search terms specifically for food mode.
+   * Uses restaurant names and popular cuisine types — NOT mart products.
+   */
+  private async collectFoodTrending(): Promise<string[]> {
+    try {
+      const restaurants = await this.restaurantsRepo.find({
+        where: { isActive: true },
+        order: { rating: 'DESC', ratingCount: 'DESC' },
+        take: 20,
+      });
+
+      const seen = new Set<string>();
+      const trending: string[] = [];
+
+      // Add top cuisine types first
+      for (const r of restaurants) {
+        if (r.cuisineType && !seen.has(r.cuisineType.toLowerCase())) {
+          seen.add(r.cuisineType.toLowerCase());
+          trending.push(r.cuisineType);
+          if (trending.length >= 4) break;
+        }
+      }
+
+      // Add top restaurant names
+      for (const r of restaurants) {
+        const key = r.name.split(' ').slice(0, 2).join(' ');
+        if (key.length < 3 || seen.has(key.toLowerCase())) continue;
+        seen.add(key.toLowerCase());
+        trending.push(key);
+        if (trending.length >= 8) break;
+      }
+
+      // Fallback if empty
+      if (trending.length === 0) {
+        return ['Pizza', 'Biryani', 'Burger', 'Karahi', 'Desserts', 'Drinks'];
+      }
+
+      return trending;
+    } catch {
+      return ['Pizza', 'Biryani', 'Burger', 'Karahi', 'Desserts', 'Drinks'];
+    }
   }
 }

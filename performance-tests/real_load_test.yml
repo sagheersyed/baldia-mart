@@ -1,0 +1,29 @@
+config:
+  target: "http://127.0.0.1:3000/api/v1"
+  phases:
+    - duration: 3
+      arrivalRate: 50
+      name: "Phase 1: 50 RPS"
+    - duration: 3
+      arrivalRate: 100
+      name: "Phase 2: 100 RPS"
+    - duration: 3
+      arrivalRate: 200
+      name: "Phase 3: 200 RPS"
+    - duration: 3
+      arrivalRate: 300
+      name: "Phase 4: 300 RPS"
+    - duration: 3
+      arrivalRate: 500
+      name: "Phase 5: Max Possible"
+  defaults:
+    headers:
+      Content-Type: "application/json"
+
+scenarios:
+  - name: "App Open and Browse"
+    flow:
+      - get:
+          url: "/categories"
+      - get:
+          url: "/products"

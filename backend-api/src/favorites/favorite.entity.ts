@@ -2,10 +2,12 @@ import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateCol
 import { User } from '../users/user.entity';
 import { Product } from '../products/product.entity';
 import { Restaurant } from '../restaurants/restaurant.entity';
+import { Brand } from '../brands/brand.entity';
 
 @Entity('favorites')
 @Unique('UQ_FAVORITE_USER_PRODUCT', ['userId', 'productId'])
 @Unique('UQ_FAVORITE_USER_RESTAURANT', ['userId', 'restaurantId'])
+@Unique('UQ_FAVORITE_USER_BRAND', ['userId', 'brandId'])
 export class Favorite {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -33,6 +35,13 @@ export class Favorite {
   @ManyToOne(() => Restaurant, { nullable: true, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'restaurant_id' })
   restaurant: Restaurant;
+
+  @Column({ name: 'brand_id', nullable: true })
+  brandId: string;
+
+  @ManyToOne(() => Brand, { nullable: true, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'brand_id' })
+  brand: Brand;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

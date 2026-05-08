@@ -552,7 +552,7 @@ export default function NavigationScreen({ navigation, route }: any) {
             </Text>
           </View>
         </View>
-        {settings?.feature_chat_enabled === true && (
+        {settings?.feature_chat_enabled === true && status !== 'delivered' && status !== 'cancelled' && (
           <TouchableOpacity onPress={handleChat} style={styles.navChatBtn}>
             <Ionicons name="chatbubbles-outline" size={24} color="#fff" />
           </TouchableOpacity>
@@ -619,7 +619,7 @@ export default function NavigationScreen({ navigation, route }: any) {
           >
             <Text style={styles.callIcon}>📞</Text>
           </TouchableOpacity>
-          {settings?.feature_chat_enabled === true && (
+          {settings?.feature_chat_enabled === true && status !== 'delivered' && status !== 'cancelled' && (
             <TouchableOpacity
               style={[styles.callBtn, { backgroundColor: '#FF450015', marginLeft: 8 }]}
               onPress={handleChat}

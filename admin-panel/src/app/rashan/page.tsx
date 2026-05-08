@@ -78,6 +78,14 @@ export default function RashanRequestsPage() {
   useEffect(() => {
     fetchOrders();
     fetchRiders();
+
+    const handleRefresh = () => fetchOrders();
+    if (typeof window !== 'undefined') {
+      window.addEventListener('refreshRashan', handleRefresh);
+    }
+    return () => {
+      if (typeof window !== 'undefined') window.removeEventListener('refreshRashan', handleRefresh);
+    };
   }, []);
 
   const fetchOrders = async () => {

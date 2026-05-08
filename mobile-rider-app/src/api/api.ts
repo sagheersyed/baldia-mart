@@ -7,18 +7,28 @@ export const socket = io(ENV.SOCKET_URL, {
   autoConnect: false,
   transports: ['websocket'],
   reconnection: true,
-  reconnectionAttempts: 10,
-  reconnectionDelay: 1000,
+  reconnectionAttempts: Infinity,
+  reconnectionDelay: 2000,
+  reconnectionDelayMax: 10000,
+  timeout: 10000,
   extraHeaders: {
     'ngrok-skip-browser-warning': 'true',
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'
   }
 });
 
+socket.on('connect_error', (err) => {
+  console.warn('[RiderSocket] ❌ connect_error:', err.message);
+});
+socket.on('disconnect', (reason) => {
+  console.warn('[RiderSocket] Disconnected:', reason);
+});
+
 export const connectSocket = () => {
-  const authToken = (socket.auth as any)?.token;
-  if (typeof authToken !== 'string' || !authToken.trim()) return;
-  if (!socket.connected) socket.connect();
+  if (!socket.connected) {
+    console.log('[RiderSocket] Connecting to', ENV.SOCKET_URL);
+    socket.connect();
+  }
 };
 
 export const normalizePhone = (phone: string): string => {
@@ -39,7 +49,10 @@ export const api = axios.create({
   timeout: 15000,
   headers: {
     'ngrok-skip-browser-warning': 'true',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36',
+    'Cache-Control': 'no-cache',
+    'Pragma': 'no-cache',
+    'Expires': '0',
   },
 });
 
@@ -69,6 +82,7 @@ export const setAuthToken = (token: string | null) => {
     socket.auth = {};
     if (socket.connected) socket.disconnect();
     AsyncStorage.removeItem('riderToken');
+    connectSocket(); // Reconnect to continue receiving public events
   }
 };
 
@@ -113,7 +127,7 @@ export const ridersApi = {
 };
 
 export const settingsApi = {
-  getPublicSettings: () => api.get('/settings/public'),
+  getPublicSettings: () => api.get(`/settings/public?_t=${Date.now()}`),
 };
 
 export const walletsApi = {

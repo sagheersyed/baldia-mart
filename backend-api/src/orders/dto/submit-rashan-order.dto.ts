@@ -13,6 +13,9 @@ export class SubmitRashanOrderDto {
   @IsString()
   bulkListPhotoUrl?: string;
 
+  @IsOptional()
+  bulkListPhotoUrls?: string[];
+
   @IsString()
   bulkMobileNumber: string;
 

@@ -68,35 +68,24 @@ export class ProductsService {
   // READ (with Redis cache)
   // ─────────────────────────────────────────────────────────────
   async findAllActive(page?: number, limit?: number): Promise<any> {
-    if (page && limit) {
-      const cacheKey = KEY_PAGE(Number(page), Number(limit));
-      const cached = await this.cacheService.get<any>(cacheKey);
-      if (cached) { this.logger.debug(`Cache HIT: ${cacheKey}`); return cached; }
+    const p = Number(page) || 1;
+    const l = Number(limit) || 20;
+    const cacheKey = KEY_PAGE(p, l);
+    const cached = await this.cacheService.get<any>(cacheKey);
+    if (cached) { this.logger.debug(`Cache HIT: ${cacheKey}`); return cached; }
 
-      const take = Number(limit);
-      const skip = (Number(page) - 1) * take;
-      const [data, total] = await this.productRepository.findAndCount({
-        where: { isActive: true },
-        relations: ['category', 'brand'],
-        order: { createdAt: 'DESC' },
-        take,
-        skip,
-      });
-      const result = { data, total, page: Number(page), limit: take, totalPages: Math.ceil(total / take) };
-      await this.cacheService.set(cacheKey, result, CACHE_TTL);
-      return result;
-    }
-
-    const cached = await this.cacheService.get<Product[]>(KEY_ALL);
-    if (cached) { this.logger.debug(`Cache HIT: ${KEY_ALL}`); return cached; }
-
-    const data = await this.productRepository.find({
+    const take = l;
+    const skip = (p - 1) * take;
+    const [data, total] = await this.productRepository.findAndCount({
       where: { isActive: true },
       relations: ['category', 'brand'],
       order: { createdAt: 'DESC' },
+      take,
+      skip,
     });
-    await this.cacheService.set(KEY_ALL, data, CACHE_TTL);
-    return data;
+    const result = { data, total, page: p, limit: l, totalPages: Math.ceil(total / l) };
+    await this.cacheService.set(cacheKey, result, CACHE_TTL);
+    return result;
   }
 
   async findByCategory(categoryId: string, page?: number, limit?: number): Promise<any> {

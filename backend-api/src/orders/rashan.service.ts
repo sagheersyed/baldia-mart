@@ -64,7 +64,7 @@ export class RashanService {
    * User submits a Rashan order request.
    */
   async submitRequest(userId: string, dto: SubmitRashanOrderDto): Promise<Order> {
-    if (!dto.bulkListText && !dto.bulkListPhotoUrl) {
+    if (!dto.bulkListText && !dto.bulkListPhotoUrl && (!dto.bulkListPhotoUrls || dto.bulkListPhotoUrls.length === 0)) {
       throw new BadRequestException('Please provide either a text list or a photo of your grocery list.');
     }
 

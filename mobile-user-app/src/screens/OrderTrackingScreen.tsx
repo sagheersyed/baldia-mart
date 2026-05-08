@@ -35,7 +35,7 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
 
   const {
     order, status, loading, rider, localItems, timeline,
-    showRating, ratingStep, businessesToRate, currentBusinessIndex,
+    showRating, setShowRating, ratingStep, businessesToRate, currentBusinessIndex,
     rating, setRating, comment, setComment,
     businessRating, setBusinessRating, businessComment, setBusinessComment,
     submittingReview,
@@ -308,7 +308,7 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
                 <AppText variant="bodyStrong">{rider.name || 'Your rider'}</AppText>
                 <AppText variant="caption">Assigned to your delivery</AppText>
               </View>
-              {chatEnabled ? (
+              {!isDelivered && !isCancelled && chatEnabled ? (
                 <AppIconButton
                   size={40}
                   bg={accentLight}
@@ -335,7 +335,22 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
           <View style={styles.card}>
             <AppText variant="title" style={{ marginBottom: theme.spacing.md }}>Bulk rashan details</AppText>
 
-            {order.bulkListPhotoUrl ? (
+            {order.bulkListPhotoUrls && order.bulkListPhotoUrls.length > 0 ? (
+              <View style={{ marginBottom: theme.spacing.md }}>
+                <AppText variant="overline" style={{ marginBottom: 6 }}>Grocery list photos</AppText>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: theme.spacing.sm }}>
+                  {order.bulkListPhotoUrls.map((url: string, index: number) => (
+                    <Pressable key={index} onPress={() => setSelectedImageUrl(url)} style={[styles.photoWrap, { width: 160 }]}>
+                      <Image source={{ uri: url }} style={[styles.photo, { width: 160, height: 160 }]} contentFit="cover" />
+                      <View style={styles.expandHint}>
+                        <Ionicons name="expand-outline" size={12} color="#fff" />
+                        <AppText variant="badge" color="#fff">Expand</AppText>
+                      </View>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            ) : order.bulkListPhotoUrl ? (
               <View style={{ marginBottom: theme.spacing.md }}>
                 <AppText variant="overline" style={{ marginBottom: 6 }}>Grocery list photo</AppText>
                 <Pressable onPress={() => setSelectedImageUrl(order.bulkListPhotoUrl)} style={styles.photoWrap}>
@@ -718,15 +733,40 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
 
       {/* Sticky bottom CTA */}
       <View style={styles.footer}>
-        {isDelivered && !(order?.isRated && order?.isBusinessRated) ? (
+        {isDelivered ? (
+          <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
+            {!(order?.isRated && (businessesToRate.length === 0 || order?.isBusinessRated)) ? (
+              <AppButton
+                label="Leave review"
+                variant="primary"
+                tint={accent}
+                fullWidth
+                size="lg"
+                onPress={() => setShowRating(true)}
+                leadingIcon={<Ionicons name="star" size={16} color="#fff" />}
+                style={{ flex: 1 }}
+              />
+            ) : null}
+            <AppButton
+              label="Reorder"
+              variant="outline"
+              tint={accent}
+              textColor={accent}
+              size="lg"
+              onPress={handleReorder}
+              leadingIcon={<Ionicons name="refresh" size={16} color={accent} />}
+              style={{ flex: 1 }}
+            />
+          </View>
+        ) : (isCancelled) ? (
           <AppButton
-            label="Leave review"
+            label="Reorder"
             variant="primary"
             tint={accent}
             fullWidth
             size="lg"
-            onPress={() => handleSubmitReview && handleDismissRating /* will be reopened by hook */}
-            leadingIcon={<Ionicons name="star" size={16} color="#fff" />}
+            onPress={handleReorder}
+            leadingIcon={<Ionicons name="refresh" size={16} color="#fff" />}
           />
         ) : (
           <AppButton

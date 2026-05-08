@@ -13,13 +13,14 @@ export class FavoritesService {
   async getFavoritesByUserId(userId: string): Promise<Favorite[]> {
     return this.favoritesRepository.find({
       where: { userId },
-      relations: ['product', 'restaurant', 'product.category', 'product.brand'],
+      relations: ['product', 'restaurant', 'brand', 'product.category', 'product.brand'],
     });
   }
 
-  async toggleFavorite(userId: string, type: 'product' | 'restaurant', targetId: string): Promise<any> {
-    const where: any = { userId };
+  async toggleFavorite(userId: string, type: 'product' | 'restaurant' | 'brand', targetId: string): Promise<any> {
+    const where: any = { userId, type };
     if (type === 'product') where.productId = targetId;
+    else if (type === 'brand') where.brandId = targetId;
     else where.restaurantId = targetId;
 
     const existing = await this.favoritesRepository.findOne({ where });
@@ -33,6 +34,7 @@ export class FavoritesService {
         type,
         productId: type === 'product' ? targetId : undefined,
         restaurantId: type === 'restaurant' ? targetId : undefined,
+        brandId: type === 'brand' ? targetId : undefined,
       });
       await this.favoritesRepository.save(favorite);
       return { status: 'added' };
@@ -40,11 +42,12 @@ export class FavoritesService {
   }
 
   // Bulk sync for migration from local storage
-  async syncFavorites(userId: string, items: { type: 'product' | 'restaurant', targetId: string }[]): Promise<void> {
+  async syncFavorites(userId: string, items: { type: 'product' | 'restaurant' | 'brand', targetId: string }[]): Promise<void> {
     await this.favoritesRepository.manager.transaction(async (manager) => {
       for (const item of items) {
-        const where: any = { userId };
+        const where: any = { userId, type: item.type };
         if (item.type === 'product') where.productId = item.targetId;
+        else if (item.type === 'brand') where.brandId = item.targetId;
         else where.restaurantId = item.targetId;
 
         const existing = await manager.findOne(Favorite, { where });
@@ -54,6 +57,7 @@ export class FavoritesService {
             type: item.type,
             productId: item.type === 'product' ? item.targetId : undefined,
             restaurantId: item.type === 'restaurant' ? item.targetId : undefined,
+            brandId: item.type === 'brand' ? item.targetId : undefined,
           });
           await manager.save(Favorite, favorite).catch(e => {
               // Ignore unique constraint violations during bulk sync

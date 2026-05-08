@@ -87,4 +87,34 @@ export class CacheService implements OnModuleInit, OnModuleDestroy {
   getClient(): Redis {
     return this.client;
   }
+
+  // --- GEO METHODS FOR HYPERLOCAL ---
+
+  async updateLocation(riderId: string, lat: number, lng: number): Promise<void> {
+    try {
+      await this.client.geoadd('rider_locations', lng, lat, riderId);
+    } catch (err) {
+      this.logger.warn(`GEOADD failed for rider ${riderId}: ${err.message}`);
+    }
+  }
+
+  async getNearbyRiders(lat: number, lng: number, radiusKm: number): Promise<string[]> {
+    try {
+      // Using ioredis georadius (search by radius)
+      return await this.client.georadius('rider_locations', lng, lat, radiusKm, 'km') as string[];
+    } catch (err) {
+      this.logger.warn(`GEORADIUS failed: ${err.message}`);
+      return [];
+    }
+  }
+
+  async getRiderLocation(riderId: string): Promise<{ lat: number, lng: number } | null> {
+    try {
+      const pos = await this.client.geopos('rider_locations', riderId);
+      if (!pos || !pos[0]) return null;
+      return { lng: parseFloat(pos[0][0]), lat: parseFloat(pos[0][1]) };
+    } catch {
+      return null;
+    }
+  }
 }

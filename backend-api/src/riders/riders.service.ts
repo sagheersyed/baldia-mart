@@ -1,9 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { Rider } from './rider.entity';
 import { RiderReview } from './rider-review.entity';
 import { Order } from '../orders/order.entity';
+import { CacheService } from '../cache/cache.service';
 
 import { OrdersGateway } from '../orders/orders.gateway';
 import { Inject, forwardRef } from '@nestjs/common';
@@ -11,6 +13,7 @@ import { DeliveryZonesService } from '../delivery-zones/delivery-zones.service';
 
 @Injectable()
 export class RidersService {
+  private readonly logger = new Logger(RidersService.name);
   constructor(
     @InjectRepository(Rider)
     private ridersRepository: Repository<Rider>,
@@ -19,6 +22,7 @@ export class RidersService {
     @Inject(forwardRef(() => OrdersGateway))
     private ordersGateway: OrdersGateway,
     private deliveryZonesService: DeliveryZonesService,
+    private cacheService: CacheService,
   ) {}
 
   async findByPhone(phoneNumber: string): Promise<Rider | null> {
@@ -26,7 +30,21 @@ export class RidersService {
   }
 
   async findById(id: string): Promise<Rider | null> {
-    return this.ridersRepository.findOne({ where: { id } });
+    const cacheKey = `rider:${id}`;
+    const cached = await this.cacheService.get<any>(cacheKey);
+    
+    if (cached === 'NOT_FOUND') return null;
+    if (cached) return cached;
+
+    const rider = await this.ridersRepository.findOne({ where: { id } });
+    if (rider) {
+      await this.cacheService.set(cacheKey, rider, 3600);
+    } else {
+      // Cache the absence of the rider for 5 minutes (negative caching)
+      // to protect the DB from connection floods using invalid IDs.
+      await this.cacheService.set(cacheKey, 'NOT_FOUND', 300);
+    }
+    return rider;
   }
 
   async findAll(): Promise<any[]> {
@@ -63,6 +81,33 @@ export class RidersService {
     }
 
     return this.ridersRepository.findOne({ where: { id } });
+  }
+
+  @Cron(CronExpression.EVERY_MINUTE)
+  async syncLocations() {
+    this.logger.log('🔄 Syncing rider locations from Redis to PostgreSQL...');
+    
+    // 1. Get all online riders
+    const onlineRiders = await this.ridersRepository.find({
+      where: { isOnline: true },
+      select: ['id']
+    });
+
+    if (onlineRiders.length === 0) return;
+
+    // 2. Fetch locations from Redis in parallel
+    const syncPromises = onlineRiders.map(async (rider) => {
+      const loc = await this.cacheService.getRiderLocation(rider.id);
+      if (loc) {
+        return this.ridersRepository.update(rider.id, {
+          currentLat: loc.lat,
+          currentLng: loc.lng
+        });
+      }
+    });
+
+    await Promise.all(syncPromises);
+    this.logger.log(`✅ Synced ${onlineRiders.length} rider locations.`);
   }
 
   async updateLocation(id: string, lat: number, lng: number): Promise<void> {
@@ -141,13 +186,6 @@ export class RidersService {
   }
 
   async findBestRidersForOrder(order: any): Promise<any[]> {
-    // 1. Get all online and active riders
-    const onlineRiders = await this.ridersRepository.find({
-      where: { isOnline: true, isActive: true },
-    });
-
-    if (onlineRiders.length === 0) return [];
-
     // 2. Pickup coordinates for the NEW order
     let pLat = 24.91522600; 
     let pLng = 66.96431980;
@@ -168,6 +206,17 @@ export class RidersService {
         pLng = Number(firstStop.vendor.lng) || pLng;
       }
     }
+
+    // 1. Get nearby riders from Redis (Fast GEORADIUS)
+    const nearbyRiderIds = await this.cacheService.getNearbyRiders(pLat, pLng, 10); // 10km radius
+    if (nearbyRiderIds.length === 0) return [];
+
+    // 2. Get rider details from DB for those IDs
+    const onlineRiders = await this.ridersRepository.find({
+      where: { id: In(nearbyRiderIds), isActive: true, isOnline: true },
+    });
+
+    if (onlineRiders.length === 0) return [];
 
     // New order Drop-off coordinates
     let dLat = Number(order.address?.latitude) || pLat;

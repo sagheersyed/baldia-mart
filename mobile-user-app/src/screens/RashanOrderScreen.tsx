@@ -11,6 +11,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import axios from 'axios';
 import AddressPickerModal from '../components/AddressPickerModal';
+import { useSettings } from '../context/SettingsContext';
 
 type RootStackParamList = {
   Home: undefined;
@@ -20,6 +21,7 @@ type NavProp = StackNavigationProp<RootStackParamList>;
 
 export default function RashanOrderScreen() {
   const navigation = useNavigation<NavProp>();
+  const { settings } = useSettings();
 
   const [bulkListText, setBulkListText] = useState('');
   const [photoUris, setPhotoUris] = useState<string[]>([]);
@@ -162,10 +164,22 @@ export default function RashanOrderScreen() {
    * Falls back to a simple formula if the backend endpoint is unavailable.
    */
   const calculatePreview = async () => {
-    const baseFee = weightTier === 'light' ? 150 : weightTier === 'medium' ? 300 : 500;
-    const floorFee = floor * 50;
-    const placementFee = placement === 'inside' ? 100 : placement === 'doorstep' ? 50 : 0;
-    const localEstimate = baseFee + floorFee + placementFee;
+    // Use live settings from admin if available, else safe defaults
+    const baseFee = settings?.rashan_base_fee ?? 750;
+    const surchargeM = settings?.rashan_surcharge_medium ?? 200;
+    const surchargeH = settings?.rashan_surcharge_heavy ?? 450;
+    const floorLow = settings?.rashan_floor_surcharge_low ?? 150;
+    const floorHigh = settings?.rashan_floor_surcharge_high ?? 300;
+    const placeFee = settings?.rashan_placement_fee ?? 150;
+
+    // Local estimate using live settings values
+    let localEstimate = baseFee;
+    if (weightTier === 'medium') localEstimate += surchargeM;
+    if (weightTier === 'heavy') localEstimate += surchargeH;
+    if (floor >= 1 && floor <= 2) localEstimate += floorLow;
+    if (floor >= 3) localEstimate += floorHigh;
+    if (placement === 'inside') localEstimate += placeFee;
+
     try {
       const res = await rashanApi.previewFee({ weightTier, floor, placement });
       const fee = res.data?.serviceFee ?? res.data?.fee ?? null;
@@ -448,14 +462,24 @@ export default function RashanOrderScreen() {
           </Text>
           <View style={styles.previewBreakRow}>
             <Text style={styles.previewBreakItem}>
-              Weight tier: Rs. {weightTier === 'light' ? 150 : weightTier === 'medium' ? 300 : 500}
+              Weight tier: Rs. {
+                weightTier === 'light'
+                  ? (settings?.rashan_base_fee ?? 750)
+                  : weightTier === 'medium'
+                    ? (settings?.rashan_base_fee ?? 750) + (settings?.rashan_surcharge_medium ?? 200)
+                    : (settings?.rashan_base_fee ?? 750) + (settings?.rashan_surcharge_heavy ?? 450)
+              }
             </Text>
             {floor > 0 && (
-              <Text style={styles.previewBreakItem}>Floor: +Rs. {floor * 50}</Text>
+              <Text style={styles.previewBreakItem}>
+                Floor: +Rs. {floor >= 3 ? (settings?.rashan_floor_surcharge_high ?? 300) : (settings?.rashan_floor_surcharge_low ?? 150)}
+              </Text>
             )}
             {placement !== 'gate' && (
               <Text style={styles.previewBreakItem}>
-                {placement === 'doorstep' ? 'Doorstep: +Rs. 50' : 'Inside Pantry: +Rs. 100'}
+                {placement === 'doorstep'
+                  ? `Doorstep: +Rs. 0`
+                  : `Inside Pantry: +Rs. ${settings?.rashan_placement_fee ?? 150}`}
               </Text>
             )}
           </View>

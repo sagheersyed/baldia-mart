@@ -1,0 +1,235 @@
+IMPORTANT EXECUTION RULES
+
+Follow these rules strictly:
+
+Do actual execution/testing whenever possible.
+Do NOT provide theoretical suggestions unless execution is impossible.
+Before changing any production code:
+create backup
+track every file modified
+If any temporary testing files/scripts/configs are created:
+delete them after testing
+If any temporary code changes are made only for testing:
+revert them after testing
+Only keep permanent fixes if:
+bug is real
+performance issue is confirmed
+At the end provide:
+modified files list
+reverted files list
+permanent fixes list
+BUSINESS TRAFFIC GOAL
+
+We currently target:
+
+10,000 daily active users
+
+Assume:
+
+70% browsing traffic
+20% cart traffic
+10% checkout traffic
+
+Peak traffic assumptions:
+
+300–500 concurrent users
+100–300 RPS normal peak
+500–1000 RPS flash sale spike
+
+Test according to this business scale.
+
+PHASE 1 — API Load Testing
+
+Test these APIs:
+
+login
+signup
+product listing
+product search
+category listing
+add to cart
+remove from cart
+checkout
+order tracking
+rider tracking
+
+Measure:
+
+avg latency
+p95 latency
+p99 latency
+error rate
+throughput
+failed requests
+PHASE 2 — Concurrency Testing
+
+Simulate:
+
+100 concurrent users
+300 concurrent users
+500 concurrent users
+1000 concurrent users
+
+Measure:
+
+backend stability
+queue delays
+request timeout
+websocket stability
+CPU spikes
+memory spikes
+PHASE 3 — RPS Testing
+
+Run:
+
+100 RPS
+200 RPS
+300 RPS
+500 RPS
+1000 RPS burst test
+
+Find:
+
+safe RPS
+breaking point
+failure point
+PHASE 4 — Database Testing
+
+Test:
+
+PostgreSQL
+
+Check:
+
+connection exhaustion
+slow queries
+deadlocks
+transaction locks
+WAL growth
+read/write bottlenecks
+index usage
+full table scans
+
+Use:
+
+EXPLAIN ANALYZE
+
+Check:
+
+pg_stat_activity
+
+Check:
+
+pg_stat_statements
+PHASE 5 — Redis Testing
+
+Test:
+
+Redis
+
+Measure:
+
+cache hit ratio
+cache miss ratio
+memory growth
+eviction issues
+geo query performance
+PHASE 6 — Checkout Race Testing
+
+Simulate:
+
+100 users buying same product with stock = 1
+
+Verify:
+
+no overselling
+no duplicate orders
+no negative stock
+PHASE 7 — Rider System Testing
+
+Simulate:
+
+100 riders
+500 riders
+GPS updates every 3 seconds
+
+Test:
+
+Redis geo performance
+websocket performance
+rider assignment delays
+duplicate rider assignment issues
+PHASE 8 — Endurance Testing
+
+Run:
+
+1 hour test
+
+Pattern:
+
+100 RPS → 20 mins
+200 RPS → 20 mins
+300 RPS → 20 mins
+
+Check:
+
+memory leaks
+CPU degradation
+DB degradation
+Redis degradation
+PHASE 9 — Security Testing
+
+Verify:
+
+rate limiting
+auth bypass attempts
+duplicate payment attempts
+API abuse
+PHASE 10 — Failure Recovery
+
+Test:
+
+Redis restart
+DB restart
+queue failure
+websocket restart
+
+Verify:
+
+recovery behavior
+data consistency
+FINAL REPORT FORMAT
+
+Provide:
+
+System Safe Capacity
+max safe concurrent users
+max safe RPS
+DB safe limit
+Bottlenecks Found
+backend bottlenecks
+DB bottlenecks
+Redis bottlenecks
+websocket bottlenecks
+Permanent Fixes Applied
+Temporary Files Created
+Temporary Files Deleted
+Temporary Code Changes Reverted
+Recommended Production Infrastructure for:
+10,000 daily users
+50,000 daily users
+100,000 daily users
+IMPORTANT
+
+After all testing completes:
+
+Remove all temporary test scripts
+Remove temporary seed data
+Remove temporary debug logs
+Remove temporary load-testing configs
+Revert testing-only code changes
+Keep only real bug fixes/performance improvements
+
+Finally confirm:
+
+"Application restored to clean usable state after testing."

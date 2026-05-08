@@ -29,8 +29,7 @@ export class ProductsGateway implements OnGatewayConnection {
     try {
       client.data.principal = authenticateSocket(client);
     } catch (e: any) {
-      client.emit('error', e?.message || 'Unauthorized socket connection');
-      client.disconnect(true);
+      // Do not disconnect, allow public events
     }
   }
 

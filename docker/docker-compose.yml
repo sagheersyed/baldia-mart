@@ -21,6 +21,7 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - NODE_ENV=development
+      - NODE_OPTIONS=--max-old-space-size=4096
     depends_on:
       - redis
     networks:
@@ -36,7 +37,8 @@ services:
     ports:
       - "3001:3000" # Maps Next.js to 3001
     environment:
-      - NEXT_PUBLIC_API_URL=http://192.168.1.86:3000/api/v1
+      - NEXT_PUBLIC_API_URL=http://192.168.100.142:3000/api/v1
+      - NEXT_PUBLIC_SOCKET_URL=http://192.168.100.142:3000
     depends_on:
       - backend-api
     networks:

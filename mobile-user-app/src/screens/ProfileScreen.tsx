@@ -268,9 +268,9 @@ export default function ProfileScreen({ navigation }: any) {
         {renderMenuGroup('Support', supportItems)}
 
         {/* Logout */}
-        <View style={{ paddingHorizontal: theme.spacing.lg, paddingTop: theme.spacing.md }}>
+        <View style={{ paddingHorizontal: theme.spacing.lg, paddingTop: theme.spacing.md, marginBottom: 60 }}>
           <AppButton
-            label="Log out"
+            label="Log Out"
             variant="outline"
             tint={theme.colors.danger}
             textColor={theme.colors.danger}

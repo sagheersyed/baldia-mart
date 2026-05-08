@@ -1,4 +1,5 @@
 import { Module, forwardRef } from '@nestjs/common';
+import { BullModule } from '@nestjs/bullmq';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Order } from './order.entity';
 import { OrderItem } from './order-item.entity';
@@ -22,6 +23,7 @@ import { RashanService } from './rashan.service';
 import { RashanController } from './rashan.controller';
 import { UsersModule } from '../users/users.module';
 import { OrderItemSubscriber } from './order-item.subscriber';
+import { OrdersProcessor } from './orders.processor';
 
 import { WalletsModule } from '../wallets/wallets.module';
 
@@ -37,8 +39,11 @@ import { WalletsModule } from '../wallets/wallets.module';
     UsersModule,
     VendorsModule,
     WalletsModule,
+    BullModule.registerQueue({
+      name: 'orders',
+    }),
   ],
-  providers: [OrdersService, OrdersGateway, CleanupService, RashanService, OrderItemSubscriber],
+  providers: [OrdersService, OrdersGateway, CleanupService, RashanService, OrderItemSubscriber, OrdersProcessor],
   controllers: [OrdersController, RashanController],
   exports: [OrdersService, OrdersGateway],
 })

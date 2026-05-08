@@ -2,7 +2,7 @@ import { IsString, IsNumber, IsIn, Min } from 'class-validator';
 
 export class RashanFeePreviewDto {
   @IsString()
-  @IsIn(['Tier 1 (0-50kg)', 'Tier 2 (51-100kg)', 'Tier 3 (101-200kg)', 'Tier 4 (201kg+)'])
+  @IsIn(['light', 'medium', 'heavy'])
   weightTier: string;
 
   @IsNumber()
@@ -10,6 +10,6 @@ export class RashanFeePreviewDto {
   floor: number;
 
   @IsString()
-  @IsIn(['Ground', 'First', 'Second', 'Third', 'Fourth+'])
+  @IsIn(['gate', 'doorstep', 'inside'])
   placement: string;
 }

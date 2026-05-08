@@ -67,7 +67,14 @@ export default function OrdersPage() {
   useEffect(() => { void fetchOrders(page); }, [page]);
   useEffect(() => {
     const t = setInterval(() => void fetchOrders(page), 30000);
-    return () => clearInterval(t);
+    const handleRefresh = () => void fetchOrders(page);
+    if (typeof window !== 'undefined') {
+      window.addEventListener('refreshOrders', handleRefresh);
+    }
+    return () => {
+      clearInterval(t);
+      if (typeof window !== 'undefined') window.removeEventListener('refreshOrders', handleRefresh);
+    };
   }, [page]);
 
   const fetchZones = async () => {

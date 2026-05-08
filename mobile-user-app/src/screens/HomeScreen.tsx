@@ -36,8 +36,7 @@ type HeaderItem =
 type ListItem = HeaderItem | { kind: 'section'; section: HomeSectionPayload };
 
 export default function HomeScreen({ navigation }: any) {
-  const settingsStore = useSettings();
-  const settings = (settingsStore as any).settings || (settingsStore as any);
+  const { settings } = useSettings();
   const showRashan = settings?.feature_rashan_enabled === true;
 
   const { martCart, addToCart, updateQuantity, getCartCount, setActiveMode } = useCart();

@@ -244,7 +244,11 @@ export function useOrderTracking(orderId: string, navigation: any) {
       if (ratingStep === 1) {
         if (rider) await ridersApi.postReview(rider.id, { rating, comment, orderId });
         if (businessesToRate.length > 0) { setRatingStep(2); setCurrentBusinessIndex(0); }
-        else { await AsyncStorage.setItem(`ratingDismissed_${orderId}`, 'true'); setShowRating(false); }
+        else {
+          await AsyncStorage.setItem(`ratingDismissed_${orderId}`, 'true');
+          setShowRating(false);
+          await fetchOrderDetails(); // Refresh isRated flags
+        }
       } else {
         const currentBiz = businessesToRate[currentBusinessIndex];
         if (currentBiz) {
@@ -257,6 +261,7 @@ export function useOrderTracking(orderId: string, navigation: any) {
         } else {
           await AsyncStorage.setItem(`ratingDismissed_${orderId}`, 'true');
           setShowRating(false);
+          await fetchOrderDetails(); // Refresh isBusinessRated flags
         }
       }
     } finally {
@@ -307,7 +312,7 @@ export function useOrderTracking(orderId: string, navigation: any) {
     // State
     order, status, loading, rider, riderLocation, localItems, timeline,
     // Rating
-    showRating, ratingStep, businessesToRate, currentBusinessIndex,
+    showRating, setShowRating, ratingStep, businessesToRate, currentBusinessIndex,
     rating, setRating, comment, setComment,
     businessRating, setBusinessRating, businessComment, setBusinessComment,
     submittingReview,

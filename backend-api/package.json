@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1009.0",
+    "@nestjs/bullmq": "^11.0.4",
     "@nestjs/common": "^10.0.0",
     "@nestjs/core": "^10.0.0",
     "@nestjs/jwt": "^10.1.0",
@@ -32,6 +33,7 @@
     "@types/bcryptjs": "^2.4.6",
     "@types/passport-http-bearer": "^1.0.42",
     "bcryptjs": "^3.0.3",
+    "bullmq": "^5.76.5",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
     "dotenv": "^16.3.1",

@@ -2,12 +2,14 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './user.entity';
+import { CacheService } from '../cache/cache.service';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
+    private cacheService: CacheService,
   ) {}
 
   async findByFirebaseUid(firebaseUid: string): Promise<User | null> {
@@ -29,8 +31,19 @@ export class UsersService {
   }
 
   async findById(id: string): Promise<User> {
+    const cacheKey = `user:${id}`;
+    const cached = await this.cacheService.get<any>(cacheKey);
+    
+    if (cached === 'NOT_FOUND') throw new NotFoundException('User not found');
+    if (cached) return cached;
+
     const user = await this.usersRepository.findOne({ where: { id } });
-    if (!user) throw new NotFoundException('User not found');
+    if (!user) {
+      await this.cacheService.set(cacheKey, 'NOT_FOUND', 300);
+      throw new NotFoundException('User not found');
+    }
+    
+    await this.cacheService.set(cacheKey, user, 3600);
     return user;
   }
 

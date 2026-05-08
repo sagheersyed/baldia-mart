@@ -216,10 +216,10 @@ export default function SearchScreen({ navigation, route }: any) {
       store={item}
       variant="list"
       onPress={() => navigation.navigate('BrandDetail', { brandId: item.id })}
-      isFavourite={isFavourite(item.id, 'restaurants')}
+      isFavourite={isFavourite(item.id, 'brands')}
       onToggleFavourite={() => toggleFavourite({
         id: item.id, name: item.name, imageUrl: item.imageUrl || item.logoUrl,
-      }, 'restaurants')}
+      }, 'brands')}
     />
   ), [navigation, isFavourite, toggleFavourite]);
 

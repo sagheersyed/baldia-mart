@@ -58,8 +58,12 @@ function MainTabs() {
 
   if (loading) return <AppLoader label="Loading store…" />;
 
+  // Key forces navigator remount when feature flags change so tabs appear/disappear
+  const navKey = `tabs-${showMart ? 1 : 0}${showFood ? 1 : 0}${showBrands ? 1 : 0}`;
+
   return (
     <Tab.Navigator
+      key={navKey}
       backBehavior="history"
       tabBar={(props) => <FloatingTabBar {...props} />}
       screenOptions={{ headerShown: false }}

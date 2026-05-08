@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
-import { settingsApi, socket } from '../api/api';
+import { settingsApi, socket, connectSocket } from '../api/api';
 
 interface Settings {
   delivery_base_fee: number;
@@ -26,6 +26,21 @@ interface SettingsContextType {
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
+// ─── Stable handler refs ───────────────────────────────────────────────────
+let _riderRefreshSettings: (() => Promise<void>) | null = null;
+
+async function _onRiderSettingsUpdated() {
+  console.log('[RiderSettings] settings_updated received — refreshing...');
+  if (_riderRefreshSettings) await _riderRefreshSettings();
+}
+
+function _onRiderSocketConnect() {
+  console.log('[RiderSettings] Socket connected — registering settings_updated listener');
+  socket.off('settings_updated', _onRiderSettingsUpdated);
+  socket.on('settings_updated', _onRiderSettingsUpdated);
+}
+// ───────────────────────────────────────────────────────────────────────────
+
 export const SettingsProvider = ({ children }: { children: ReactNode }) => {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
@@ -35,24 +50,34 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
       const res = await settingsApi.getPublicSettings();
       setSettings(res.data);
     } catch (error) {
-      console.error('[SettingsContext] Failed to fetch settings:', error);
+      console.error('[RiderSettings] Failed to fetch settings:', error);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    refreshSettings();
+    // Keep stable reference for the module-level handler
+    _riderRefreshSettings = refreshSettings;
+    return () => { _riderRefreshSettings = null; };
+  }, []);
 
-    // Real-time synchronization
-    const onSettingsUpdated = () => {
-      console.log('[SettingsContext] Received settings_updated, refreshing...');
-      refreshSettings();
-    };
-    socket.on('settings_updated', onSettingsUpdated);
+  useEffect(() => {
+    refreshSettings();
+    connectSocket();
+
+    // Register on connect (fires every time socket reconnects)
+    socket.off('connect', _onRiderSocketConnect);
+    socket.on('connect', _onRiderSocketConnect);
+
+    // Register immediately if already connected
+    if (socket.connected) {
+      _onRiderSocketConnect();
+    }
 
     return () => {
-      socket.off('settings_updated', onSettingsUpdated);
+      socket.off('connect', _onRiderSocketConnect);
+      socket.off('settings_updated', _onRiderSettingsUpdated);
     };
   }, []);
 

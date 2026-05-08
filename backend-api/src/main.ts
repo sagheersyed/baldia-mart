@@ -63,6 +63,9 @@ async function bootstrap() {
   // Swagger will be served at http://localhost:3000/docs
   SwaggerModule.setup('docs', app, document);
 
+  // Enable Graceful Shutdown Hooks
+  app.enableShutdownHooks();
+
   await app.listen(3000, '0.0.0.0');
   console.log(`Application is running on: ${await app.getUrl()}`);
   console.log(`Swagger Docs available at: ${await app.getUrl()}/docs`);

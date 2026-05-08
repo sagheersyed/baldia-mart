@@ -6,12 +6,13 @@ import {
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { Inject, UnauthorizedException, forwardRef } from '@nestjs/common';
+import { Inject, UnauthorizedException, forwardRef, Logger } from '@nestjs/common';
 import { RidersService } from '../riders/riders.service';
 import { OrdersService } from './orders.service';
 import { UsersService } from '../users/users.service';
 import * as jwt from 'jsonwebtoken';
 import { getJwtSecretOrThrow } from '../auth/jwt-secret';
+import { CacheService } from '../cache/cache.service';
 import { isOriginAllowed } from '../common/cors';
 
 type WsPrincipal = {
@@ -40,12 +41,15 @@ const resolveSocketToken = (client: Socket): string | null => {
   },
 })
 export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
+  private readonly logger = new Logger(OrdersGateway.name);
+
   constructor(
     @Inject(forwardRef(() => RidersService))
     private ridersService: RidersService,
     @Inject(forwardRef(() => OrdersService))
     private ordersService: OrdersService,
     private usersService: UsersService,
+    private cacheService: CacheService,
   ) {}
 
   @WebSocketServer()
@@ -55,38 +59,79 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   private async authenticateClient(client: Socket): Promise<WsPrincipal> {
     const token = resolveSocketToken(client);
-    if (!token) throw new UnauthorizedException('Missing socket token');
-
-    const jwtSecret = getJwtSecretOrThrow();
-    const payload = jwt.verify(token, jwtSecret) as any;
-    const role = payload?.role || 'customer';
-    const sub = payload?.sub;
-    if (!sub) throw new UnauthorizedException('Invalid token payload');
-
-    if (role === 'rider') {
-      const rider = await this.ridersService.findById(sub);
-      if (!rider) throw new UnauthorizedException('Rider not found');
-      return { id: rider.id, role: 'rider' };
+    if (!token) {
+      this.logger.warn(`Connection denied: Missing token for socket ${client.id}`);
+      throw new UnauthorizedException('Missing socket token');
     }
 
-    const user = await this.usersService.findById(sub);
-    if (!user) throw new UnauthorizedException('User not found');
-    return { id: user.id, role: user.role || role };
+    try {
+      const jwtSecret = getJwtSecretOrThrow();
+      const payload = jwt.verify(token, jwtSecret) as any;
+      const role = payload?.role || 'customer';
+      const sub = payload?.sub;
+      
+      if (!sub) {
+        this.logger.warn(`Connection denied: Invalid payload (no sub) for socket ${client.id}`);
+        throw new UnauthorizedException('Invalid token payload');
+      }
+
+      if (role === 'rider') {
+        this.logger.debug(`Authenticating Rider: ${sub}`);
+        const rider = await this.ridersService.findById(sub);
+        if (!rider) {
+          this.logger.warn(`Connection denied: Rider ID ${sub} not found in database (Socket: ${client.id})`);
+          throw new UnauthorizedException('Rider not found');
+        }
+        return { id: rider.id, role: 'rider' };
+      }
+
+      const user = await this.usersService.findById(sub);
+      if (!user) {
+        this.logger.warn(`Connection denied: User ID ${sub} not found in database (Socket: ${client.id})`);
+        throw new UnauthorizedException('User not found');
+      }
+      return { id: user.id, role: user.role || role };
+    } catch (err) {
+      const isJwtError = err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError';
+      const logMsg = `❌ Socket Auth Failed [${client.id}]: ${err.message}`;
+      
+      if (isJwtError) {
+        this.logger.warn(`${logMsg} (Token: ${token.substring(0, 15)}...)`);
+      } else {
+        this.logger.error(logMsg, err.stack);
+      }
+      
+      client.emit('auth_error', { 
+        message: err.message, 
+        isExpired: err.name === 'TokenExpiredError',
+        shouldLogout: isJwtError 
+      });
+      
+      throw new UnauthorizedException('Authentication failed');
+    }
   }
 
   handleConnection(client: Socket) {
     this.authenticateClient(client)
-      .then((principal) => {
+      .then(async (principal) => {
         client.data.principal = principal;
         console.log(`Client connected: ${client.id} (${principal.role}:${principal.id})`);
+        
+        if (principal.role === 'rider') {
+          await this.ridersService.update(principal.id, { isOnline: true });
+        }
       })
       .catch((error: any) => {
-        client.emit('error', error?.message || 'Unauthorized socket connection');
-        client.disconnect(true);
+        console.log(`Unauthenticated client connected: ${client.id}`);
       });
   }
 
-  handleDisconnect(client: Socket) {
+  async handleDisconnect(client: Socket) {
+    const principal = this.getPrincipal(client);
+    if (principal && principal.role === 'rider') {
+      await this.ridersService.update(principal.id, { isOnline: false });
+    }
+
     for (const [riderId, socketId] of this.riderSocketMap.entries()) {
       if (socketId === client.id) {
         this.riderSocketMap.delete(riderId);
@@ -188,8 +233,8 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return;
     }
 
-    // Update the rider's location in the DB
-    await this.ridersService.updateLocation(principal.id, payload.lat, payload.lng);
+    // Update the rider's location in Redis (Fast)
+    await this.cacheService.updateLocation(principal.id, payload.lat, payload.lng);
     
     // Broadcast the new location to the admin map
     this.server.to('admin_room').emit('riderLocationUpdated', {

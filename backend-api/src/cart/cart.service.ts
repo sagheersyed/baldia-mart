@@ -23,13 +23,18 @@ export class CartService {
     const product = await this.productsService.findById(productId);
     if (!product) throw new NotFoundException('Product not found');
 
-    let cartItem = await this.cartRepository.findOne({ where: { userId, productId } });
-    if (cartItem) {
-      cartItem.quantity += quantity;
-    } else {
-      cartItem = this.cartRepository.create({ userId, productId, quantity });
-    }
-    return this.cartRepository.save(cartItem);
+    await this.cartRepository
+      .createQueryBuilder()
+      .insert()
+      .into(CartItem)
+      .values({ userId, productId, quantity })
+      .onConflict(`("user_id", "product_id") DO UPDATE SET "quantity" = "cart_items"."quantity" + EXCLUDED.quantity`)
+      .execute();
+
+    return this.cartRepository.findOneOrFail({ 
+      where: { userId, productId },
+      relations: ['product']
+    });
   }
 
   async updateItemQuantity(userId: string, itemId: string, quantity: number): Promise<CartItem> {

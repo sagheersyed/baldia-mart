@@ -29,6 +29,7 @@ export class Product {
   @JoinColumn({ name: 'brand_id' })
   brand: Brand;
 
+  @Index('IDX_PRODUCTS_NAME')
   @Column()
   name: string;
 
@@ -78,6 +79,7 @@ export class Product {
   @Column({ name: 'weight', type: 'varchar', length: 64, nullable: true })
   weight: string | null; // '500g', '1kg', '12 pcs'
 
+  @Index('IDX_PRODUCTS_TAGS')
   @Column({ name: 'tags', type: 'text', array: true, nullable: true })
   tags: string[] | null;
 

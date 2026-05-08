@@ -94,7 +94,7 @@ export class SeedController {
     );
 
     // 3. Create Categories
-    const baseUrl = 'http://192.168.1.86:3000';
+    const baseUrl = 'http://192.168.100.142:3000';
     const categoriesData = [
       { name: 'Vegetables', description: 'Farm fresh local produce', imageUrl: `${baseUrl}/public/cat_veg.png` },
       { name: 'Fruits', description: 'Seasonal and exotic fruits', imageUrl: `${baseUrl}/public/cat_fruit.png` },

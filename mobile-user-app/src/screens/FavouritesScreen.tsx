@@ -30,7 +30,7 @@ export default function FavouritesScreen({ navigation }: any) {
   const initialTab: TabKey = showFood ? 'Restaurants' : 'Products';
   const [activeTab, setActiveTab] = useState<TabKey>(initialTab);
   const [syncing, setSyncing] = useState(false);
-  const { restaurants, products, toggleFavourite, reload, syncFromApi } = useFavourites();
+  const { restaurants, products, brands, toggleFavourite, reload, syncFromApi } = useFavourites();
   const { foodCart, martCart, addToCart, updateQuantity } = useCart();
 
   useFocusEffect(useCallback(() => {
@@ -39,14 +39,16 @@ export default function FavouritesScreen({ navigation }: any) {
       setSyncing(true);
       await reload();
       try {
-        const [rRes, pRes] = await Promise.allSettled([
+        const [rRes, pRes, bRes] = await Promise.allSettled([
           restaurantsApi.getAll(),
           productsApi.getAll(),
+          import('../api/api').then(m => m.brandsApi.getAll()),
         ]);
         if (!active) return;
         const liveR = rRes.status === 'fulfilled' ? rRes.value.data : [];
         const liveP = pRes.status === 'fulfilled' ? pRes.value.data : [];
-        await syncFromApi(liveR, liveP);
+        const liveB = bRes.status === 'fulfilled' ? bRes.value.data : [];
+        await syncFromApi(liveR, liveP, liveB);
       } catch {
         // noop
       } finally {
@@ -57,27 +59,31 @@ export default function FavouritesScreen({ navigation }: any) {
     return () => { active = false; };
   }, [reload, syncFromApi]));
 
-  const isEmpty = activeTab === 'Restaurants' ? restaurants.length === 0 : products.length === 0;
+  const combinedShops = useMemo(() => [...restaurants, ...brands], [restaurants, brands]);
+  const isEmpty = activeTab === 'Restaurants' ? combinedShops.length === 0 : products.length === 0;
 
   const visibleTabs = useMemo(() =>
     TABS.filter(t => (t === 'Restaurants' && showFood) || (t === 'Products' && showMart))
   , [showFood, showMart]);
 
   const headerSubtitle = activeTab === 'Restaurants'
-    ? `${restaurants.length} ${restaurants.length === 1 ? 'restaurant' : 'restaurants'} saved`
+    ? `${combinedShops.length} ${combinedShops.length === 1 ? 'place' : 'places'} saved`
     : `${products.length} ${products.length === 1 ? 'product' : 'products'} saved`;
 
-  const renderRestaurantItem = ({ item }: any) => (
-    <View style={{ marginBottom: theme.spacing.md }}>
-      <StoreCard
-        store={item}
-        variant="list"
-        onPress={() => navigation.navigate('RestaurantDetail', { restaurantId: item.id })}
-        onToggleFavourite={() => toggleFavourite(item, 'restaurants')}
-        isFavourite
-      />
-    </View>
-  );
+  const renderRestaurantItem = ({ item }: any) => {
+    const isBrand = brands.some(b => b.id === item.id);
+    return (
+      <View style={{ marginBottom: theme.spacing.md }}>
+        <StoreCard
+          store={item}
+          variant="list"
+          onPress={() => navigation.navigate(isBrand ? 'BrandDetail' : 'RestaurantDetail', isBrand ? { brandId: item.id } : { restaurantId: item.id })}
+          onToggleFavourite={() => toggleFavourite(item, isBrand ? 'brands' : 'restaurants')}
+          isFavourite
+        />
+      </View>
+    );
+  };
 
   const renderProductItem = ({ item }: any) => {
     const cartItem = martCart.find((c: any) => c.id === item.id) || foodCart.find((c: any) => c.id === item.id);
@@ -162,7 +168,7 @@ export default function FavouritesScreen({ navigation }: any) {
       ) : activeTab === 'Restaurants' ? (
         <FlatList
           key="restaurants-list"
-          data={restaurants}
+          data={combinedShops}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ padding: theme.spacing.lg, paddingBottom: theme.spacing.xxl }}
           renderItem={renderRestaurantItem}

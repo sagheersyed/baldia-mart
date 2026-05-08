@@ -1,6 +1,8 @@
 import { Injectable, BadRequestException, NotFoundException, UnauthorizedException, ForbiddenException, Query, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, Between } from 'typeorm';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { Order } from './order.entity';
 import { OrderItem } from './order-item.entity';
 import { OrderHistory } from './order-history.entity';
@@ -16,6 +18,10 @@ import { Rider } from '../riders/rider.entity';
 import { RidersService } from '../riders/riders.service';
 import { VendorsService } from '../vendors/vendors.service';
 import { WalletsService } from '../wallets/wallets.service';
+import { Product } from '../products/product.entity';
+import { Address } from '../addresses/address.entity';
+import { Vendor } from '../vendors/vendor.entity';
+import { UsersService } from '../users/users.service';
 
 @Injectable()
 export class OrdersService {
@@ -37,6 +43,8 @@ export class OrdersService {
     private ridersService: RidersService,
     private vendorsService: VendorsService,
     private walletsService: WalletsService,
+    private usersService: UsersService,
+    @InjectQueue('orders') private ordersQueue: Queue,
   ) { }
 
   private isBusinessOpen(openingTime: string | null, closingTime: string | null): boolean {
@@ -159,39 +167,60 @@ export class OrdersService {
 
     if (cartItems.length === 0) throw new BadRequestException('Cart is empty');
 
-    // 1.5 Validate Max Quantity & Business Hours (Hierarchical)
-    for (const item of cartItems) {
-      const entity = item.product; 
-      
-      // A. Max Quantity Check
-      if (entity && entity.maxQuantityPerOrder > 0 && item.quantity > entity.maxQuantityPerOrder) {
-        throw new BadRequestException(
-          `Quantity limit exceeded for ${entity.name}. Maximum allowed per order is ${entity.maxQuantityPerOrder}.`
-        );
-      }
+    // Start Transaction for Order Placement & Stock Control
+    const resultOrder = await this.ordersRepository.manager.transaction<Order>(async (transactionalManager) => {
+      // 1.5 Validate Stock, Max Quantity & Business Hours
+      for (const item of cartItems) {
+        const productId = item.productId || item.product?.id;
+        if (!productId) continue;
 
-      // B. Business Hours Check (Hierarchy: Product > Brand > Category)
-      // Note: Vendor (Mart/Restaurant) check happens after martId/dist check
-      if (orderType === 'mart') {
-        const product = entity;
-        const brand = product.brand;
-        const category = product.category;
+        // Fetch product/menu item again to get updated info for subsequent logic
+        let product;
+        if (orderType === 'food') {
+          product = await transactionalManager.getRepository('MenuItem').findOne({
+            where: { id: productId },
+            relations: ['restaurant']
+          }) as any;
+        } else {
+          product = await transactionalManager.getRepository(Product).findOne({
+            where: { id: productId },
+            relations: ['brand', 'category']
+          }) as any;
+        }
 
-        if (category && !this.isBusinessOpen(category.openingTime, category.closingTime)) {
-          throw new BadRequestException(`Category '${category.name}' is currently closed.`);
+        if (!product) {
+          throw new BadRequestException(`Item with ID ${productId} not found.`);
         }
-        if (brand && !this.isBusinessOpen(brand.openingTime, brand.closingTime)) {
-          throw new BadRequestException(`Brand '${brand.name}' is currently closed.`);
+
+        // B. Max Quantity Check
+        if (product.maxQuantityPerOrder > 0 && item.quantity > product.maxQuantityPerOrder) {
+          throw new BadRequestException(
+            `Quantity limit exceeded for ${product.name}. Maximum allowed per order is ${product.maxQuantityPerOrder}.`
+          );
         }
-        if (!this.isBusinessOpen(product.openingTime, product.closingTime)) {
-          throw new BadRequestException(`Product '${product.name}' is currently unavailable.`);
+
+        // C. Business Hours Check (Hierarchy: Product > Brand > Category)
+        if (orderType === 'mart') {
+          const brand = product.brand;
+          const category = product.category;
+
+          if (category && !this.isBusinessOpen(category.openingTime, category.closingTime)) {
+            throw new BadRequestException(`Category '${category.name}' is currently closed.`);
+          }
+          if (brand && !this.isBusinessOpen(brand.openingTime, brand.closingTime)) {
+            throw new BadRequestException(`Brand '${brand.name}' is currently closed.`);
+          }
+          if (!this.isBusinessOpen(product.openingTime, product.closingTime)) {
+            throw new BadRequestException(`Product '${product.name}' is currently unavailable.`);
+          }
         }
+        
+        item.product = product;
       }
-    }
 
     // 2. Validate Address
-    const address = await this.addressesService.findOne(addressId);
-    if (!address || address.userId !== userId) throw new BadRequestException('Invalid address');
+    const address = await transactionalManager.getRepository(Address).findOne({ where: { id: addressId } }) as any;
+    if (!address || address.userId !== userId) throw new BadRequestException('Invalid address or address not found');
 
     // 3. Multi-Restaurant & Pickup Logistics
     let pickupLat = 24.91522600; // Default Baldia Mart
@@ -309,7 +338,7 @@ export class OrdersService {
     
     if (orderType === 'mart' && martId && isUuid(martId)) {
       try {
-        const vendor = await this.orderItemsRepository.manager.getRepository('Vendor').findOne({ where: { id: martId } }) as any;
+        const vendor = await transactionalManager.getRepository(Vendor).findOne({ where: { id: martId } }) as any;
         if (vendor && !this.isBusinessOpen(vendor.openingTime, vendor.closingTime)) {
           throw new BadRequestException(`Fulfillment center '${vendor.name}' is currently closed.`);
         }
@@ -333,7 +362,7 @@ export class OrdersService {
       if (brandItem) orderBrandId = brandItem.product.brandId;
     }
 
-    const order = this.ordersRepository.create({
+    const order = transactionalManager.getRepository(Order).create({
       userId,
       addressId,
       martId: (martId && isUuid(martId)) ? martId : undefined,
@@ -347,7 +376,22 @@ export class OrdersService {
       notes,
       orderType,
     });
-    const savedOrder = await this.ordersRepository.save(order);
+    const savedOrder = await transactionalManager.getRepository(Order).save(order);
+
+    // 5. Atomic Stock Decrement (for Mart products)
+    for (const item of cartItems) {
+      if (item.productId && orderType === 'mart') {
+        const updateResult = await transactionalManager.createQueryBuilder()
+          .update(Product)
+          .set({ stockQuantity: () => `"stock_quantity" - ${item.quantity}` })
+          .where('id = :id AND "stock_quantity" >= :qty', { id: item.productId, qty: item.quantity })
+          .execute();
+
+        if (updateResult.affected === 0) {
+          throw new BadRequestException(`Product ${item.product?.name || 'Unknown'} is out of stock or insufficient quantity.`);
+        }
+      }
+    }
 
     // 6. Create SubOrders and OrderItems
     if (orderType === 'food' && distinctRestaurants.length > 0) {
@@ -358,93 +402,96 @@ export class OrdersService {
           return acc + (price * item.quantity);
         }, 0);
 
-        const subOrder = this.subOrdersRepository.create({
+        const subOrder = transactionalManager.getRepository(SubOrder).create({
           orderId: savedOrder.id,
           restaurantId: resto.id,
           status: 'pending',
           subtotal: restoSubtotal,
           estimatedPrepTimeMinutes: Math.max(...restoItems.map(i => (i.product as any)?.prepTimeMinutes || 0), resto.prepTimeMinutes || 20)
         });
-        const savedSubOrder = await this.subOrdersRepository.save(subOrder);
+        const savedSubOrder = await transactionalManager.getRepository(SubOrder).save(subOrder);
 
-        const orderItemsToSave = restoItems.map(item => this.orderItemsRepository.create({
+        const orderItemsToSave = restoItems.map(item => transactionalManager.getRepository(OrderItem).create({
           orderId: savedOrder.id,
           subOrderId: savedSubOrder.id,
           menuItemId: item.menuItemId,
-          // productId should remain undefined for food orders because item.product is aliased to menuItem
           productId: undefined,
           quantity: item.quantity,
           priceAtTime: Number(item.product.price) - Number(item.product.discount || 0)
         }));
-        await this.orderItemsRepository.save(orderItemsToSave);
+        await transactionalManager.getRepository(OrderItem).save(orderItemsToSave);
       }
     } else {
-      // For Mart orders, just save the items; syncSubOrdersInternal will group them into SubOrders
-      const orderItemsToSave = cartItems.map(item => this.orderItemsRepository.create({
+      const orderItemsToSave = cartItems.map(item => transactionalManager.getRepository(OrderItem).create({
         orderId: savedOrder.id,
         productId: item.productId || (item.product?.id),
         quantity: item.quantity,
         priceAtTime: Number(item.product.price) - Number(item.product.discount || 0)
       }));
-      await this.orderItemsRepository.save(orderItemsToSave);
+      await transactionalManager.getRepository(OrderItem).save(orderItemsToSave);
     }
 
-    // 6. Split into Sub-Orders (Refactored to private method for re-use)
-    await this.syncSubOrdersInternal(this.ordersRepository.manager, savedOrder.id);
+    // 6. Split into Sub-Orders
+    await this.syncSubOrdersInternal(transactionalManager, savedOrder.id);
 
-    // 7. Clear Cart if it was stored in DB
+    // 7. Clear Cart
     if (!items) {
       await this.cartService.clearCart(userId);
     }
 
-    // 8. Record History
-    await this.orderHistoryRepository.save(
-      this.orderHistoryRepository.create({ orderId: savedOrder.id, status: 'pending', notes: 'Order placed' })
-    );
+    // 8. Atomic Stock Decrement (for Mart products)
+    for (const item of cartItems) {
+      if (item.productId) {
+        const updateResult = await transactionalManager.createQueryBuilder()
+          .update(Product)
+          .set({ stockQuantity: () => `"stock_quantity" - ${item.quantity}` })
+          .where('id = :id AND "stock_quantity" >= :qty', { id: item.productId, qty: item.quantity })
+          .execute();
 
-    // 9. Broadcast
-    const orderWithDetails = await this.ordersRepository.findOne({
-      where: { id: savedOrder.id },
-      relations: ['items', 'items.product', 'items.menuItem', 'address', 'user', 'subOrders', 'subOrders.restaurant', 'subOrders.vendor']
-    });
-
-    if (orderWithDetails && orderWithDetails.restaurantId) {
-      (orderWithDetails as any).restaurant = await this.orderItemsRepository.manager.getRepository('Restaurant').findOne({ where: { id: orderWithDetails.restaurantId } });
-    }
-
-    if (orderWithDetails) {
-      // Instantly notify admin of the new order
-      this.ordersGateway.emitNewOrderToAdmin(orderWithDetails);
-
-      if (orderType === 'food' && distinctRestaurants.length > 0) {
-        // Delayed Dispatch Logic
-        let maxPrepTime = 0;
-        for (const r of distinctRestaurants) {
-          const pt = r.prepTimeMinutes || 20;
-          if (pt > maxPrepTime) maxPrepTime = pt;
+        if (updateResult.affected === 0) {
+          throw new BadRequestException(`Insufficient stock for ${item.product?.name || 'Product'}.`);
         }
-
-        const estimatedRiderTravelTime = 10; // Generic 10 mins ETA for a rider to arrive at the restaurant
-        const safetyBuffer = 2; // ping 2 mins earlier than strictly needed
-
-        const delayMinutes = maxPrepTime - estimatedRiderTravelTime - safetyBuffer;
-
-        if (delayMinutes > 0) {
-          console.log(`[Smart Logistics] Delaying rider dispatch for ${delayMinutes} minutes to ensure food is fresh for Order ${savedOrder.id}.`);
-          setTimeout(async () => {
-            this.startSmartDispatch(orderWithDetails);
-          }, delayMinutes * 60 * 1000);
-        } else {
-          // Dispatch immediately
-          this.startSmartDispatch(orderWithDetails);
-        }
-      } else {
-        // Mart Orders dispatch immediately
-        this.startSmartDispatch(orderWithDetails);
       }
     }
 
+    // 9. Record History
+    await transactionalManager.getRepository(OrderHistory).save(transactionalManager.getRepository(OrderHistory).create({ 
+      orderId: savedOrder.id, 
+      status: 'pending', 
+      notes: 'Order placed with atomic stock decrement' 
+    }));
+
     return savedOrder;
+    });
+
+    // 9. Dispatch via Queue (Async)
+    await this.ordersQueue.add('dispatch_order', { orderId: resultOrder.id }, {
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 5000 },
+      removeOnComplete: true,
+    });
+
+    return resultOrder;
+  }
+
+  // Called by BullMQ Worker
+  async processDispatch(orderId: string) {
+    const order = await this.ordersRepository.findOne({
+      where: { id: orderId },
+      relations: ['items', 'items.product', 'items.menuItem', 'address', 'user', 'subOrders', 'subOrders.restaurant', 'subOrders.vendor']
+    }) as any;
+
+    if (!order) return;
+
+    if (order.restaurantId) {
+      order.restaurant = await this.orderItemsRepository.manager.getRepository('Restaurant').findOne({ where: { id: order.restaurantId } });
+    }
+
+    // Notify admin
+    this.ordersGateway.emitNewOrderToAdmin(order);
+
+    // Start smart dispatch
+    await this.startSmartDispatch(order);
   }
 
   private async startSmartDispatch(order: any) {
@@ -902,20 +949,77 @@ export class OrdersService {
   async reorderOrder(id: string, userId: string): Promise<Order> {
     const order = await this.ordersRepository.findOne({
       where: { id, userId },
+      relations: ['items', 'subOrders', 'subOrders.items'],
     });
     if (!order) throw new NotFoundException('Order not found or access denied');
-    if (order.status !== 'cancelled') {
-      throw new BadRequestException('Only cancelled orders can be reordered.');
+    if (order.status !== 'cancelled' && order.status !== 'delivered') {
+      throw new BadRequestException('Only completed or cancelled orders can be reordered.');
     }
 
-    // Restore the same order back to pending
-    order.status = 'pending';
-    const updatedOrder = await this.ordersRepository.save(order);
+    // Create a fresh new order
+    const newOrder = this.ordersRepository.create({
+      userId: order.userId,
+      addressId: order.addressId,
+      orderType: order.orderType,
+      paymentMethod: order.paymentMethod,
+      restaurantId: order.restaurantId,
+      brandId: order.brandId,
+      notes: order.notes,
+      subtotal: order.subtotal,
+      deliveryFee: order.deliveryFee,
+      discountAmount: 0,
+      total: order.total,
+      status: 'pending',
+      paymentStatus: 'pending',
+      riderCommission: order.riderCommission,
+      deliveryDistanceKm: order.deliveryDistanceKm,
+    });
+    const savedOrder = await this.ordersRepository.save(newOrder);
 
-    // Emit real-time update so tracking screen reflects instantly
-    this.ordersGateway.emitOrderStatusUpdate(id, 'pending', userId, order.riderId);
+    // Copy items
+    if (order.items && order.items.length > 0) {
+      const newItems = order.items.map(item => this.orderItemsRepository.create({
+        orderId: savedOrder.id,
+        productId: item.productId,
+        menuItemId: item.menuItemId,
+        quantity: item.quantity,
+        priceAtTime: item.priceAtTime,
+        status: 'active'
+      }));
+      await this.orderItemsRepository.save(newItems);
+    }
 
-    return updatedOrder;
+    // Copy subOrders
+    if (order.subOrders && order.subOrders.length > 0) {
+      for (const sub of order.subOrders) {
+        const newSubOrder = this.subOrdersRepository.create({
+          orderId: savedOrder.id,
+          restaurantId: sub.restaurantId,
+          vendorId: sub.vendorId,
+          status: 'pending',
+          subtotal: sub.subtotal
+        });
+        const savedSubOrder = await this.subOrdersRepository.save(newSubOrder);
+
+        if (sub.items && sub.items.length > 0) {
+          const newSubItems = sub.items.map(item => this.orderItemsRepository.create({
+            orderId: savedOrder.id,
+            subOrderId: savedSubOrder.id,
+            productId: item.productId,
+            menuItemId: item.menuItemId,
+            quantity: item.quantity,
+            priceAtTime: item.priceAtTime,
+            status: 'active'
+          }));
+          await this.orderItemsRepository.save(newSubItems);
+        }
+      }
+    }
+
+    // Emit real-time update
+    this.ordersGateway.emitOrderStatusUpdate(savedOrder.id, 'pending', userId);
+
+    return this.getOrderById(savedOrder.id, userId, 'user');
   }
 
   async removeOrderItem(orderId: string, itemId: string, requesterId: string, requesterRole?: string, reason?: string): Promise<Order> {
@@ -1497,6 +1601,11 @@ export class OrdersService {
   }
 
   async saveChatMessage(orderId: string, senderId: string, senderType: string, message?: string, imageUrl?: string, type: string = 'text', metadata?: any, replyToId?: string): Promise<OrderChatMessage> {
+    const order = await this.ordersRepository.findOne({ where: { id: orderId } });
+    if (order && (order.status === 'delivered' || order.status === 'cancelled')) {
+      throw new BadRequestException('Cannot send messages to a completed order');
+    }
+
     const chatMessage = this.chatMessagesRepository.create({
       orderId,
       senderId,
@@ -1513,6 +1622,29 @@ export class OrdersService {
       relations: ['replyTo']
     });
     if (!result) throw new NotFoundException('Message not found after save');
+
+    // Send push notification to the recipient
+    if (order) {
+      try {
+        const msgTitle = `New message in Order #${order.id.slice(0, 8)}`;
+        const msgBody = type === 'image' ? '📷 Image' : (message || 'New message');
+
+        if (senderType === 'user' && order.riderId) {
+          const rider = await this.ridersRepository.findOne({ where: { id: order.riderId } });
+          if (rider && rider.fcmToken) {
+            await this.notificationsService.sendToRider(rider.id, rider.fcmToken, msgTitle, msgBody, imageUrl);
+          }
+        } else if ((senderType === 'rider' || senderType === 'admin') && order.userId) {
+          const user = await this.usersService.findById(order.userId);
+          if (user && user.fcmToken) {
+            await this.notificationsService.sendToUser(user.id, user.fcmToken, msgTitle, msgBody, imageUrl);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to send chat notification:', err);
+      }
+    }
+
     return result;
   }
 

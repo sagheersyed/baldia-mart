@@ -234,8 +234,8 @@ export default function OrderChatScreen() {
   return (
     <KeyboardAvoidingView 
       style={{ flex: 1 }} 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 100}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 80}
     >
       <FlatList
         ref={flatListRef}

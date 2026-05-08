@@ -96,6 +96,9 @@ export class Order {
   @Column({ name: 'bulk_list_photo_url', nullable: true })
   bulkListPhotoUrl: string;
 
+  @Column('simple-array', { name: 'bulk_list_photo_urls', nullable: true })
+  bulkListPhotoUrls: string[];
+
   @Column({ name: 'bulk_mobile_number', nullable: true })
   bulkMobileNumber: string;
 

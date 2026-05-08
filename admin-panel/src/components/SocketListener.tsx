@@ -1,16 +1,15 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { showToast } from '@/hooks/useToast';
 import { getAdminToken } from '@/lib/api';
 
-// You can configure this via env variables later
 const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3000';
 
 export default function SocketListener() {
   useEffect(() => {
     const token = getAdminToken();
-    if (!token) return; // Only connect if logged in
+    if (!token) return;
 
     const socket: Socket = io(SOCKET_URL, {
       transports: ['websocket'],
@@ -20,27 +19,53 @@ export default function SocketListener() {
     });
 
     socket.on('connect', () => {
-      console.log('Admin Panel connected to Socket.IO');
+      console.log('[Admin] Socket connected to', SOCKET_URL);
       socket.emit('joinAdminRoom');
     });
 
+    socket.on('connect_error', (err) => {
+      console.error('[Admin] Socket connection error:', err.message);
+    });
+
+    // ── New Order ────────────────────────────────────────────────────────────
     socket.on('newOrder', (order: any) => {
-      console.log('New Order received in Admin:', order);
+      console.log('[Admin] newOrder received:', order?.id);
       showToast({
         title: 'New Order! 🎉',
         message: `Order #${order.id?.slice(0, 8)} placed for Rs ${order.total}`,
         variant: 'info',
       });
       playNotificationSound();
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('refreshOrders'));
+        if (order.orderType === 'rashan') {
+          window.dispatchEvent(new CustomEvent('refreshRashan'));
+        }
+      }
     });
 
+    // ── Order Status Updated ─────────────────────────────────────────────────
     socket.on('orderStatusUpdated', (data: any) => {
-      console.log('Order Updated:', data);
+      console.log('[Admin] orderStatusUpdated:', data);
       showToast({
         title: 'Order Status Updated',
-        message: `Order #${data.orderId?.slice(0, 8)} is now ${data.status}`,
+        message: `Order #${data.orderId?.slice(0, 8)} → ${data.status}`,
         variant: 'info',
       });
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('refreshOrders'));
+        window.dispatchEvent(new CustomEvent('refreshRashan'));
+      }
+    });
+
+    // ── Settings Updated — reflect immediately in Admin UI ───────────────────
+    socket.on('settings_updated', () => {
+      console.log('[Admin] settings_updated received');
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('refreshSettings'));
+      }
     });
 
     return () => {
@@ -50,12 +75,9 @@ export default function SocketListener() {
 
   const playNotificationSound = () => {
     try {
-      // Basic browser beep or alert sound if available
-      const audio = new Audio('/notification.mp3'); 
-      audio.play().catch(e => console.log('Audio autoplay blocked', e));
-    } catch (e) {
-      console.log('Audio not supported', e);
-    }
+      const audio = new Audio('/notification.mp3');
+      audio.play().catch(() => {});
+    } catch {}
   };
 
   return null;

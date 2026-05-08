@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { BullModule } from '@nestjs/bullmq';
 import { ScheduleModule } from '@nestjs/schedule';
 import { LoggerModule } from 'nestjs-pino';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -69,10 +70,16 @@ import { WithdrawalRequest } from './wallets/withdrawal-request.entity';
 @Module({
   imports: [
     AppCacheModule,
+    BullModule.forRoot({
+      connection: {
+        host: process.env.REDIS_HOST || 'localhost',
+        port: parseInt(process.env.REDIS_PORT || '6379', 10),
+      },
+    }),
     ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([{
       ttl: 60000,   // 1 minute window
-      limit: 300,   // 300 requests per minute per IP (reasonable for a mobile app)
+      limit: 120,   // Safe for MVP traffic
     }]),
     LoggerModule.forRoot({
       pinoHttp: {
@@ -95,8 +102,11 @@ import { WithdrawalRequest } from './wallets/withdrawal-request.entity';
         Vendor, VendorProduct, Favorite, OrderChatMessage,
         Wallet, WalletTransaction, WalletSettlement, WithdrawalRequest,
       ],
-
+      logging: false,
       synchronize: process.env.NODE_ENV !== 'production',
+      extra: {
+        max: 80,
+      },
     }),
     TerminusModule,
     UsersModule,

@@ -221,10 +221,16 @@ export default function MyOrdersScreen({ navigation }: any) {
     }
   }, [refreshing]);
 
+  const initialLoadDone = React.useRef(false);
+
   useFocusEffect(
     useCallback(() => {
-      setPage(1);
-      fetchOrders(1, false);
+      // Only do a full reload on first mount; subsequent updates come via sockets
+      if (!initialLoadDone.current) {
+        initialLoadDone.current = true;
+        setPage(1);
+        fetchOrders(1, false);
+      }
     }, [fetchOrders])
   );
 
