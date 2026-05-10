@@ -29,8 +29,8 @@ const QuantityStepper = memo(function QuantityStepper({
           backgroundColor: tint,
           borderRadius: h / 2,
           opacity: disabled ? 0.5 : 1,
-          marginBottom:theme.spacing.lg,
-          marginRight:theme.spacing.lg,
+          marginBottom: theme.spacing.lg,
+          // marginRight:theme.spacing.lg,
         },
         style,
       ]}
@@ -63,9 +63,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     overflow: 'hidden',
-    alignSelf: 'flex-start',
-    marginBottom:15,
-    marginRight:10
+    alignSelf: 'flex-end',
   },
   btn: { alignItems: 'center', justifyContent: 'center' },
   count: { minWidth: 10, textAlign: 'center' },

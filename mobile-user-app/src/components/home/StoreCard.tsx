@@ -33,7 +33,7 @@ const StoreCard = memo(function StoreCard({
   meta,
 }: StoreCardProps) {
   const cover = normalizeUrl(store.coverUrl || store.imageUrl);
-  const logo  = normalizeUrl(store.logoUrl || store.imageUrl);
+  const logo = normalizeUrl(store.logoUrl || store.imageUrl);
   const isOpen = isBusinessOpen(store.openingTime, store.closingTime);
 
   const eta = store.deliveryTime || '15-40 min';
@@ -70,14 +70,14 @@ const StoreCard = memo(function StoreCard({
               </AppText>
             </View>
           )}
-          {onToggleFavourite ? (
+          {/* {onToggleFavourite ? (
             <FavouriteButton
               active={isFavourite}
               onPress={onToggleFavourite}
               size={28}
               style={styles.favTopRight}
             />
-          ) : null}
+          ) : null} */}
         </View>
         <View style={styles.wideMeta}>
           <AppText variant="bodyStrong" numberOfLines={1}>{store.name}</AppText>
@@ -116,14 +116,14 @@ const StoreCard = memo(function StoreCard({
             <AppText variant="badge" color="#fff" style={{ fontSize: 9 }}>Ad</AppText>
           </View>
         )}
-        {onToggleFavourite ? (
+        {/* {onToggleFavourite ? (
           <FavouriteButton
             active={isFavourite}
             onPress={onToggleFavourite}
             size={28}
             style={styles.favTopRight}
           />
-        ) : null}
+        ) : null} */}
       </View>
 
       <View style={styles.rowMeta}>

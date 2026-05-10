@@ -40,7 +40,7 @@ const AppButton = memo(function AppButton({
 }: AppButtonProps) {
   const height = size === 'sm' ? theme.sizes.buttonSm
     : size === 'lg' ? theme.sizes.buttonLg
-    : theme.sizes.buttonMd;
+      : theme.sizes.buttonMd;
 
   const accent = tint || theme.colors.primary;
 
@@ -95,20 +95,20 @@ function getStyles(
     variant === 'primary'
       ? { backgroundColor: accent, ...theme.shadows.sm }
       : variant === 'danger'
-      ? { backgroundColor: theme.colors.danger, ...theme.shadows.sm }
-      : variant === 'secondary'
-      ? { backgroundColor: theme.colors.surfaceMuted }
-      : variant === 'outline'
-      ? { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: accent }
-      : variant === 'pill'
-      ? { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border }
-      : { backgroundColor: 'transparent' }; // ghost
+        ? { backgroundColor: theme.colors.danger, ...theme.shadows.sm }
+        : variant === 'secondary'
+          ? { backgroundColor: theme.colors.surfaceMuted }
+          : variant === 'outline'
+            ? { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: accent }
+            : variant === 'pill'
+              ? { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border }
+              : { backgroundColor: 'transparent' }; // ghost
 
   return StyleSheet.create({
     btn: {
       borderRadius: radius,
       paddingHorizontal: padX,
-      alignSelf: fullWidth ? 'stretch' : 'flex-start',
+      alignSelf: fullWidth ? 'stretch' : 'center',
       justifyContent: 'center',
       alignItems: 'center',
       opacity: disabled ? 0.5 : 1,

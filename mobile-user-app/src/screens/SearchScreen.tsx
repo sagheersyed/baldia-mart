@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
-  View, StyleSheet, FlatList, ActivityIndicator, Pressable, Image as RNImage,
+  View, StyleSheet, FlatList, ActivityIndicator, Pressable,
+  ScrollView, TextInput, Keyboard,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -12,41 +13,37 @@ import {
 } from '../api/api';
 import ProductCard from '../components/home/ProductCard';
 import StoreCard from '../components/home/StoreCard';
-import {
-  AppText, AppIconButton, AppSearchBar, EmptyState, SkeletonBlock,
-} from '../components/ui';
+import { AppText, AppIconButton, EmptyState, SkeletonBlock } from '../components/ui';
 import { useCart } from '../context/CartContext';
 import { useFavourites } from '../hooks/useFavourites';
 import { theme } from '../theme/theme';
 
 const RECENT_KEY = '@recent_searches';
 const RECENT_MAX = 10;
-const TRENDING_FALLBACK_MART = ['Milk', 'Eggs', 'Bread', 'Atta', 'Cooking Oil', 'Sugar'];
+const TRENDING_FALLBACK_MART = ['Milk', 'Eggs', 'Bread', 'Atta', 'Cooking Oil', 'Sugar', 'Chicken', 'Rice'];
 const TRENDING_FALLBACK_FOOD = ['Pizza', 'Biryani', 'Burger', 'Karahi', 'Desserts', 'Drinks'];
 
 type Tab = 'all' | 'products' | 'shops' | 'restaurants' | 'categories';
 type Mode = 'mart' | 'food';
 
-const MART_TABS: { id: Tab; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { id: 'all', label: 'All', icon: 'apps' },
-  { id: 'products', label: 'Products', icon: 'pricetag' },
-  { id: 'shops', label: 'Brands', icon: 'storefront' },
-  { id: 'categories', label: 'Categories', icon: 'grid' },
+const MART_TABS: { id: Tab; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'products', label: 'Products' },
+  { id: 'shops', label: 'Brands' },
+  { id: 'categories', label: 'Categories' },
 ];
 
-const FOOD_TABS: { id: Tab; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { id: 'restaurants', label: 'Restaurants', icon: 'restaurant' },
+const FOOD_TABS: { id: Tab; label: string }[] = [
+  { id: 'restaurants', label: 'Restaurants' },
 ];
 
 export default function SearchScreen({ navigation, route }: any) {
   const initialMode: Mode = route?.params?.mode === 'food' ? 'food' : 'mart';
   const [mode, setMode] = useState<Mode>(initialMode);
   const [tab, setTab] = useState<Tab>(initialMode === 'food' ? 'restaurants' : 'all');
-
-  // Active tabs depend on mode — food shows only restaurants, mart shows products/shops/categories
   const TABS = mode === 'food' ? FOOD_TABS : MART_TABS;
-  const [query, setQuery] = useState('');
 
+  const [query, setQuery] = useState('');
   const [products, setProducts] = useState<any[]>([]);
   const [shopsResults, setShopsResults] = useState<any[]>([]);
   const [restaurantsResults, setRestaurantsResults] = useState<any[]>([]);
@@ -54,18 +51,16 @@ export default function SearchScreen({ navigation, route }: any) {
   const [categories, setCategories] = useState<any[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [loadingMeta, setLoadingMeta] = useState(true);
-
   const [recent, setRecent] = useState<string[]>([]);
   const [trending, setTrending] = useState<string[]>(
     initialMode === 'food' ? TRENDING_FALLBACK_FOOD : TRENDING_FALLBACK_MART,
   );
 
+  const inputRef = useRef<TextInput>(null);
   const { martCart, foodCart, addToCart, updateQuantity } = useCart();
   const { isFavourite, toggleFavourite } = useFavourites();
-
   const debounceRef = useRef<any>(null);
 
-  // Cart quantities for whichever mode is active
   const cartQuantities = useMemo(() => {
     const cart = mode === 'mart' ? martCart : foodCart;
     const q: Record<string, number> = {};
@@ -73,18 +68,16 @@ export default function SearchScreen({ navigation, route }: any) {
     return q;
   }, [martCart, foodCart, mode]);
 
-  // ── Load recent + meta (brands/restaurants/categories + trending) ──
   useEffect(() => {
     AsyncStorage.getItem(RECENT_KEY).then(raw => {
       if (raw) try { setRecent(JSON.parse(raw)); } catch {}
     });
+    setTimeout(() => inputRef.current?.focus(), 150);
   }, []);
 
   const loadMeta = useCallback(async () => {
     setLoadingMeta(true);
     try {
-      // Pull lightweight discovery data only — popular shops + categories + trending.
-      // Full lists are no longer loaded up-front; tab-specific results use server search.
       const [brandsRes, catsRes, homeRes] = await Promise.all([
         brandsApi.search('', mode === 'food' ? 'restaurant' : 'mart', 1, 12).catch(() => ({ data: { data: [] } })),
         categoriesApi.getAll(mode === 'food' ? 'food' : 'mart').catch(() => ({ data: [] })),
@@ -104,14 +97,11 @@ export default function SearchScreen({ navigation, route }: any) {
 
   useEffect(() => { loadMeta(); }, [loadMeta]);
 
-  // ── Debounced server-side search across products, shops, restaurants ──
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     const trimmed = query.trim();
     if (trimmed.length < 2) {
-      setProducts([]);
-      setShopsResults([]);
-      setRestaurantsResults([]);
+      setProducts([]); setShopsResults([]); setRestaurantsResults([]);
       setLoadingProducts(false);
       return;
     }
@@ -119,13 +109,11 @@ export default function SearchScreen({ navigation, route }: any) {
       setLoadingProducts(true);
       try {
         if (mode === 'food') {
-          // Food mode: only search restaurants
           const rRes = await restaurantsApi.search(trimmed, 1, 30).catch(() => ({ data: { data: [] } }));
           const rData: any = rRes.data || {};
           setRestaurantsResults(Array.isArray(rData) ? rData : (rData.data || []));
           setProducts([]); setShopsResults([]);
         } else {
-          // Mart mode: search products + brands; no restaurants
           const [pRes, bRes] = await Promise.all([
             productsApi.search(trimmed, 1, 30).catch(() => ({ data: { data: [] } })),
             brandsApi.search(trimmed, 'mart', 1, 20).catch(() => ({ data: { data: [] } })),
@@ -143,9 +131,8 @@ export default function SearchScreen({ navigation, route }: any) {
       }
     }, 350);
     return () => debounceRef.current && clearTimeout(debounceRef.current);
-  }, [query]);
+  }, [query, mode]);
 
-  // ── Recent search persistence ──
   const commitRecent = useCallback(async (term: string) => {
     const t = term.trim();
     if (t.length < 2) return;
@@ -161,7 +148,6 @@ export default function SearchScreen({ navigation, route }: any) {
     await AsyncStorage.removeItem(RECENT_KEY).catch(() => {});
   }, []);
 
-  // ── Cart handlers ──
   const handleAdd = useCallback((p: any) => {
     if ((p.stock ?? p.stockQuantity ?? 1) <= 0) return;
     addToCart(p, mode);
@@ -182,18 +168,14 @@ export default function SearchScreen({ navigation, route }: any) {
     }, 'products');
   }, [toggleFavourite]);
 
-  // ── Local-only filtered data (categories — small list, fine to filter client-side) ──
   const q = query.trim().toLowerCase();
-  const matchString = (s?: string | null) => (s || '').toLowerCase().includes(q);
-  const filteredShops = shopsResults;
-  const filteredRestaurants = restaurantsResults;
   const filteredCategories = useMemo(
-    () => q.length < 2 ? [] : categories.filter((c: any) => matchString(c.name)),
+    () => q.length < 2 ? [] : categories.filter((c: any) => (c.name || '').toLowerCase().includes(q)),
     [categories, q],
   );
 
-  const showSuggestions = q.length < 2;
-  const isSearching = !showSuggestions;
+  const showSuggestions = query.trim().length < 2;
+  const accent = mode === 'food' ? theme.colors.food : theme.colors.primary;
 
   // ── Render helpers ──
   const renderProduct = useCallback(({ item }: { item: any }) => (
@@ -207,9 +189,10 @@ export default function SearchScreen({ navigation, route }: any) {
         onIncrement={() => handleIncrement(item)}
         onDecrement={() => handleDecrement(item)}
         onToggleFavourite={() => handleFav(item)}
+        tint={accent}
       />
     </View>
-  ), [cartQuantities, isFavourite, handleAdd, handleIncrement, handleDecrement, handleFav]);
+  ), [cartQuantities, isFavourite, handleAdd, handleIncrement, handleDecrement, handleFav, accent]);
 
   const renderShop = useCallback(({ item }: { item: any }) => (
     <StoreCard
@@ -217,9 +200,10 @@ export default function SearchScreen({ navigation, route }: any) {
       variant="list"
       onPress={() => navigation.navigate('BrandDetail', { brandId: item.id })}
       isFavourite={isFavourite(item.id, 'brands')}
-      onToggleFavourite={() => toggleFavourite({
-        id: item.id, name: item.name, imageUrl: item.imageUrl || item.logoUrl,
-      }, 'brands')}
+      onToggleFavourite={() => toggleFavourite(
+        { id: item.id, name: item.name, imageUrl: item.imageUrl || item.logoUrl },
+        'brands',
+      )}
     />
   ), [navigation, isFavourite, toggleFavourite]);
 
@@ -229,10 +213,10 @@ export default function SearchScreen({ navigation, route }: any) {
       variant="list"
       onPress={() => navigation.navigate('RestaurantDetail', { restaurantId: item.id })}
       isFavourite={isFavourite(item.id, 'restaurants')}
-      onToggleFavourite={() => toggleFavourite({
-        id: item.id, name: item.name, imageUrl: item.imageUrl,
-        cuisineType: item.cuisineType, rating: item.rating,
-      }, 'restaurants')}
+      onToggleFavourite={() => toggleFavourite(
+        { id: item.id, name: item.name, imageUrl: item.imageUrl, cuisineType: item.cuisineType, rating: item.rating },
+        'restaurants',
+      )}
     />
   ), [navigation, isFavourite, toggleFavourite]);
 
@@ -240,86 +224,106 @@ export default function SearchScreen({ navigation, route }: any) {
     const img = normalizeUrl(item.imageUrl || item.iconUrl);
     return (
       <Pressable
-        onPress={() => navigation.navigate('ProductListing', {
-          mode: 'category', id: item.id, title: item.name,
-        })}
-        style={({ pressed }) => [styles.catRow, pressed ? { opacity: 0.92 } : null]}
+        onPress={() => navigation.navigate('ProductListing', { mode: 'category', id: item.id, title: item.name })}
+        style={({ pressed }) => [styles.catRow, pressed ? { opacity: 0.8 } : null]}
       >
         <View style={styles.catThumb}>
-          {img ? <Image source={{ uri: img }} style={styles.fill} contentFit="cover" cachePolicy="memory-disk" /> :
-            <Ionicons name="grid" size={22} color={theme.colors.textSecondary} />}
+          {img
+            ? <Image source={{ uri: img }} style={styles.fill} contentFit="cover" cachePolicy="memory-disk" />
+            : <Ionicons name="grid" size={22} color={theme.colors.textSecondary} />
+          }
         </View>
-        <View style={{ flex: 1 }}>
-          <AppText variant="title" numberOfLines={1}>{item.name}</AppText>
-          {item.description ? (
-            <AppText variant="caption" numberOfLines={1}>{item.description}</AppText>
-          ) : null}
-        </View>
-        <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
+        <AppText variant="title" style={{ flex: 1 }} numberOfLines={1}>{item.name}</AppText>
+        <Ionicons name="chevron-forward" size={16} color={theme.colors.textSecondary} />
       </Pressable>
     );
   }, [navigation]);
 
   // ── Suggestions view ──
-  const Suggestions = () => (
-    <View style={{ flex: 1 }}>
+  const SuggestionsView = () => (
+    <ScrollView
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{ paddingBottom: 120 }}
+      keyboardShouldPersistTaps="handled"
+    >
+      {/* Recent searches */}
       {recent.length > 0 && (
-        <View style={styles.suggestionBlock}>
-          <View style={styles.suggestionHeader}>
+        <View style={styles.block}>
+          <View style={styles.blockHeader}>
             <AppText variant="title">Recent searches</AppText>
             <Pressable onPress={clearRecent} hitSlop={8}>
-              <AppText variant="captionStrong" color={theme.colors.primary}>Clear</AppText>
+              <AppText variant="captionStrong" color={accent}>Clear all</AppText>
             </Pressable>
           </View>
-          <View style={styles.tagWrap}>
+          <View style={styles.chipWrap}>
             {recent.map(term => (
-              <Pressable key={term} style={styles.tag} onPress={() => setQuery(term)}>
-                <Ionicons name="time-outline" size={14} color={theme.colors.textSecondary} />
-                <AppText variant="captionStrong">{term}</AppText>
+              <Pressable
+                key={term}
+                style={styles.chip}
+                onPress={() => { setQuery(term); inputRef.current?.blur(); }}
+              >
+                <Ionicons name="time-outline" size={13} color={theme.colors.textSecondary} />
+                <AppText variant="caption" style={{ marginLeft: 4 }}>{term}</AppText>
               </Pressable>
             ))}
           </View>
         </View>
       )}
 
-      <View style={styles.suggestionBlock}>
-        <AppText variant="title">Trending</AppText>
-        <View style={styles.tagWrap}>
-          {trending.map(term => (
-            <Pressable key={term} style={[styles.tag, styles.tagTrending]} onPress={() => setQuery(term)}>
-              <Ionicons name="flame" size={14} color={theme.colors.discount} />
-              <AppText variant="captionStrong" color={theme.colors.discount}>{term}</AppText>
-            </Pressable>
-          ))}
+      {/* Trending */}
+      <View style={styles.block}>
+        <View style={styles.blockHeader}>
+          <AppText variant="title">🔥 Trending</AppText>
+        </View>
+        <View style={styles.chipWrap}>
+          {loadingMeta
+            ? [1, 2, 3, 4, 5].map(i => <SkeletonBlock key={i} width={80} height={32} radius={99} />)
+            : trending.map(term => (
+              <Pressable
+                key={term}
+                style={[styles.chip, styles.chipTrending]}
+                onPress={() => { setQuery(term); inputRef.current?.blur(); }}
+              >
+                <AppText variant="captionStrong" color={accent}>{term}</AppText>
+              </Pressable>
+            ))
+          }
         </View>
       </View>
 
-      {/* Quick discovery */}
-      {!loadingMeta && popularShops.length > 0 ? (
-        <View style={styles.suggestionBlock}>
-          <AppText variant="title">Popular Brands</AppText>
+      {/* Popular brands/restaurants */}
+      {!loadingMeta && popularShops.length > 0 && (
+        <View style={styles.block}>
+          <View style={styles.blockHeader}>
+            <AppText variant="title">
+              {mode === 'food' ? '🍽️ Popular Restaurants' : '🏪 Popular Brands'}
+            </AppText>
+          </View>
           <FlatList
             data={popularShops.slice(0, 8)}
             keyExtractor={(b) => b.id}
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingTop: theme.spacing.sm }}
+            contentContainerStyle={{ paddingTop: 8, gap: 12 }}
+            keyboardShouldPersistTaps="handled"
             renderItem={({ item }) => (
               <StoreCard
                 store={item}
                 variant="wide"
-                onPress={() => navigation.navigate('BrandDetail', { brandId: item.id })}
+                onPress={() => {
+                  if (mode === 'food') navigation.navigate('RestaurantDetail', { restaurantId: item.id });
+                  else navigation.navigate('BrandDetail', { brandId: item.id });
+                }}
               />
             )}
           />
         </View>
-      ) : null}
-    </View>
+      )}
+    </ScrollView>
   );
 
-  // ── Active list rendering (mode-aware, stable keys to avoid numColumns crash) ──
-  const renderActiveList = () => {
-    // Food mode: restaurants only
+  // ── Results list ──
+  const ResultsList = () => {
     if (mode === 'food') {
       return (
         <FlatList
@@ -327,53 +331,49 @@ export default function SearchScreen({ navigation, route }: any) {
           data={restaurantsResults}
           keyExtractor={(r) => r.id}
           renderItem={renderRestaurant}
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          keyboardShouldPersistTaps="handled"
+          ItemSeparatorComponent={() => <View style={styles.sep} />}
           contentContainerStyle={styles.listContent}
           ListHeaderComponent={
             loadingProducts ? (
-              <View style={styles.loadingWrap}>
-                <ActivityIndicator color={theme.colors.food} />
-                <AppText variant="caption" color={theme.colors.textSecondary}>Searching restaurants…</AppText>
+              <View style={styles.loadingRow}>
+                <ActivityIndicator size="small" color={accent} />
+                <AppText variant="caption" color={theme.colors.textSecondary}> Searching restaurants…</AppText>
               </View>
             ) : restaurantsResults.length > 0 ? (
-              <AppText variant="title" style={styles.sectionTitle}>
+              <AppText variant="captionStrong" style={styles.resultCount}>
                 {restaurantsResults.length} restaurant{restaurantsResults.length !== 1 ? 's' : ''}
               </AppText>
             ) : null
           }
           ListEmptyComponent={
             !loadingProducts ? (
-              <EmptyState
-                icon="restaurant-outline"
-                title="No restaurants found"
-                subtitle={`No restaurants match "${query}".`}
-              />
+              <EmptyState icon="restaurant-outline" title="No restaurants found" subtitle={`Nothing matched "${query}"`} />
             ) : null
           }
         />
       );
     }
 
-    // Mart mode tabs
     if (tab === 'shops') {
       return (
         <FlatList
           key="mart-shops"
-          data={filteredShops}
+          data={shopsResults}
           keyExtractor={(b) => b.id}
           renderItem={renderShop}
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          keyboardShouldPersistTaps="handled"
+          ItemSeparatorComponent={() => <View style={styles.sep} />}
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={
-            loadingProducts ? (
-              <View style={styles.loadingWrap}>
-                <ActivityIndicator color={theme.colors.primary} />
-              </View>
-            ) : <EmptyState icon="storefront-outline" title="No brands found" subtitle={`No brands match "${query}".`} />
+            loadingProducts
+              ? <View style={styles.loadingRow}><ActivityIndicator size="small" color={accent} /></View>
+              : <EmptyState icon="storefront-outline" title="No brands found" subtitle={`Nothing matched "${query}"`} />
           }
         />
       );
     }
+
     if (tab === 'categories') {
       return (
         <FlatList
@@ -381,14 +381,15 @@ export default function SearchScreen({ navigation, route }: any) {
           data={filteredCategories}
           keyExtractor={(c) => c.id}
           renderItem={renderCategory}
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          keyboardShouldPersistTaps="handled"
+          ItemSeparatorComponent={() => <View style={styles.sep} />}
           contentContainerStyle={styles.listContent}
-          ListEmptyComponent={<EmptyState icon="grid-outline" title="No categories" subtitle={`No categories match "${query}".`} />}
+          ListEmptyComponent={<EmptyState icon="grid-outline" title="No categories" subtitle={`Nothing matched "${query}"`} />}
         />
       );
     }
 
-    // 'all' or 'products' — uses 2-column grid; always keyed to avoid numColumns crash
+    // 'all' or 'products' — 2-col product grid
     const showOthers = tab === 'all';
     return (
       <FlatList
@@ -398,6 +399,7 @@ export default function SearchScreen({ navigation, route }: any) {
         renderItem={renderProduct}
         numColumns={2}
         columnWrapperStyle={styles.gridRow}
+        keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.listContent}
         initialNumToRender={8}
         maxToRenderPerBatch={10}
@@ -405,51 +407,38 @@ export default function SearchScreen({ navigation, route }: any) {
         removeClippedSubviews
         ListHeaderComponent={
           <View>
-            {showOthers && filteredShops.length > 0 ? (
-              <View style={styles.section}>
-                <AppText variant="title" style={styles.sectionTitle}>Brands</AppText>
-                {filteredShops.slice(0, 3).map(item => (
+            {showOthers && shopsResults.length > 0 && (
+              <View style={styles.inlineSection}>
+                <AppText variant="title" style={styles.inlineSectionTitle}>Brands</AppText>
+                {shopsResults.slice(0, 3).map(item => (
                   <View key={item.id}>{renderShop({ item } as any)}</View>
                 ))}
-                {filteredShops.length > 3 ? (
+                {shopsResults.length > 3 && (
                   <Pressable onPress={() => setTab('shops')} style={styles.seeAll}>
-                    <AppText variant="captionStrong" color={theme.colors.primary}>
-                      See all {filteredShops.length} brands →
-                    </AppText>
+                    <AppText variant="captionStrong" color={accent}>See all {shopsResults.length} brands →</AppText>
                   </Pressable>
-                ) : null}
+                )}
               </View>
-            ) : null}
-
-            {showOthers && filteredCategories.length > 0 ? (
-              <View style={styles.section}>
-                <AppText variant="title" style={styles.sectionTitle}>Categories</AppText>
+            )}
+            {showOthers && filteredCategories.length > 0 && (
+              <View style={styles.inlineSection}>
+                <AppText variant="title" style={styles.inlineSectionTitle}>Categories</AppText>
                 {filteredCategories.slice(0, 3).map(item => (
                   <View key={item.id}>{renderCategory({ item } as any)}</View>
                 ))}
               </View>
-            ) : null}
-
+            )}
             {products.length > 0 && (
-              <AppText variant="title" style={styles.sectionTitle}>
-                {products.length} {products.length === 1 ? 'product' : 'products'}
+              <AppText variant="captionStrong" style={styles.resultCount}>
+                {products.length} product{products.length !== 1 ? 's' : ''}
               </AppText>
             )}
           </View>
         }
         ListEmptyComponent={
-          loadingProducts ? (
-            <View style={styles.loadingWrap}>
-              <ActivityIndicator color={theme.colors.primary} />
-              <AppText variant="caption" color={theme.colors.textSecondary}>Searching…</AppText>
-            </View>
-          ) : (
-            <EmptyState
-              icon="search-outline"
-              title="No results found"
-              subtitle={`We couldn't find anything for "${query}".`}
-            />
-          )
+          loadingProducts
+            ? <View style={styles.loadingRow}><ActivityIndicator size="small" color={accent} /><AppText variant="caption" color={theme.colors.textSecondary}> Searching…</AppText></View>
+            : <EmptyState icon="search-outline" title="No results found" subtitle={`Nothing matched "${query}"`} />
         }
       />
     );
@@ -457,27 +446,40 @@ export default function SearchScreen({ navigation, route }: any) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+
+      {/* ── Search bar header ── */}
       <View style={styles.header}>
-        <AppIconButton size={36} onPress={() => navigation.goBack()} bg={theme.colors.surfaceMuted}>
-          <Ionicons name="chevron-back" size={20} color={theme.colors.textPrimary} />
-        </AppIconButton>
-        <View style={{ flex: 1 }}>
-          <AppSearchBar
-            mode="editable"
+        <Pressable onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={8}>
+          <Ionicons name="arrow-back" size={22} color={theme.colors.textPrimary} />
+        </Pressable>
+
+        <View style={[styles.searchBox, { borderColor: accent }]}>
+          <Ionicons name="search" size={18} color={accent} style={{ marginLeft: 12 }} />
+          <TextInput
+            ref={inputRef}
+            style={styles.searchInput}
             placeholder={mode === 'mart' ? 'Search groceries, brands & shops' : 'Search restaurants & dishes'}
+            placeholderTextColor={theme.colors.textSecondary}
             value={query}
             onChangeText={setQuery}
-            onSubmit={(t) => commitRecent(t)}
-            autoFocus
-            trailingFilter={false}
+            onSubmitEditing={() => { commitRecent(query); Keyboard.dismiss(); }}
+            returnKeyType="search"
+            autoCorrect={false}
+            autoCapitalize="none"
           />
+          {query.length > 0 && (
+            <Pressable onPress={() => setQuery('')} hitSlop={8} style={{ marginRight: 10 }}>
+              <Ionicons name="close-circle" size={18} color={theme.colors.textSecondary} />
+            </Pressable>
+          )}
         </View>
       </View>
 
-      {/* Mode switch (Mart / Food) */}
-      <View style={styles.modeRow}>
+      {/* ── Mode switch: Mart / Food ── */}
+      <View style={styles.modeBar}>
         {(['mart', 'food'] as Mode[]).map(m => {
           const active = mode === m;
+          const mAccent = m === 'food' ? theme.colors.food : theme.colors.primary;
           return (
             <Pressable
               key={m}
@@ -486,13 +488,12 @@ export default function SearchScreen({ navigation, route }: any) {
                 setTab(m === 'food' ? 'restaurants' : 'all');
                 setProducts([]); setShopsResults([]); setRestaurantsResults([]);
               }}
-              style={[styles.modePill, active ? { backgroundColor: m === 'food' ? theme.colors.food : theme.colors.primary } : null]}
+              style={[
+                styles.modePill,
+                active ? { backgroundColor: mAccent, borderColor: mAccent } : null,
+              ]}
             >
-              <Ionicons
-                name={m === 'mart' ? 'basket' : 'restaurant'}
-                size={14}
-                color={active ? '#fff' : theme.colors.textSecondary}
-              />
+              <Ionicons name={m === 'mart' ? 'basket-outline' : 'restaurant-outline'} size={14} color={active ? '#fff' : theme.colors.textSecondary} />
               <AppText variant="captionStrong" color={active ? '#fff' : theme.colors.textSecondary}>
                 {m === 'mart' ? 'Groceries' : 'Food'}
               </AppText>
@@ -501,37 +502,30 @@ export default function SearchScreen({ navigation, route }: any) {
         })}
       </View>
 
-      {/* Tabs */}
-      {isSearching ? (
-        <View style={styles.tabsWrap}>
-          <FlatList
-            data={TABS}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            keyExtractor={(t) => t.id}
-            contentContainerStyle={{ paddingHorizontal: theme.spacing.lg, gap: 6 }}
-            renderItem={({ item }) => {
-              const active = tab === item.id;
+      {/* ── Tab chips (shown only when searching) ── */}
+      {!showSuggestions && (
+        <View style={styles.tabBar}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }} keyboardShouldPersistTaps="handled">
+            {TABS.map(t => {
+              const active = tab === t.id;
               return (
                 <Pressable
-                  onPress={() => setTab(item.id)}
-                  style={[styles.tab, active ? styles.tabActive : null]}
+                  key={t.id}
+                  onPress={() => setTab(t.id)}
+                  style={[styles.tabChip, active ? { backgroundColor: accent, borderColor: accent } : null]}
                 >
-                  <Ionicons name={item.icon} size={14} color={active ? theme.colors.primary : theme.colors.textSecondary} />
-                  <AppText
-                    variant="captionStrong"
-                    color={active ? theme.colors.primary : theme.colors.textSecondary}
-                  >
-                    {item.label}
+                  <AppText variant="captionStrong" color={active ? '#fff' : theme.colors.textSecondary}>
+                    {t.label}
                   </AppText>
                 </Pressable>
               );
-            }}
-          />
+            })}
+          </ScrollView>
         </View>
-      ) : null}
+      )}
 
-      {showSuggestions ? <Suggestions /> : renderActiveList()}
+      {/* ── Content ── */}
+      {showSuggestions ? <SuggestionsView /> : <ResultsList />}
     </SafeAreaView>
   );
 }
@@ -540,90 +534,138 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.background },
   fill: { width: '100%', height: '100%' },
 
+  // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     backgroundColor: theme.colors.surface,
+    gap: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.divider,
+  },
+  backBtn: {
+    width: 36, height: 36,
+    borderRadius: 18,
+    backgroundColor: theme.colors.surfaceMuted,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  searchBox: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.surfaceMuted,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    height: 44,
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: theme.colors.textPrimary,
+    paddingVertical: 0,
   },
 
-  modeRow: {
+  // Mode bar
+  modeBar: {
     flexDirection: 'row',
     gap: 8,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     backgroundColor: theme.colors.surface,
     borderBottomWidth: 1,
-    borderColor: theme.colors.divider,
+    borderBottomColor: theme.colors.divider,
   },
   modePill: {
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: 6,
-    borderRadius: theme.radius.pill,
-    backgroundColor: theme.colors.surfaceMuted,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 99,
+    backgroundColor: theme.colors.surfaceMuted,
+    borderWidth: 1.5,
+    borderColor: theme.colors.border,
   },
 
-  tabsWrap: {
-    paddingVertical: theme.spacing.sm,
+  // Tab bar
+  tabBar: {
+    paddingVertical: 8,
     backgroundColor: theme.colors.surface,
     borderBottomWidth: 1,
-    borderColor: theme.colors.divider,
+    borderBottomColor: theme.colors.divider,
   },
-  tab: {
-    paddingHorizontal: theme.spacing.md,
+  tabChip: {
+    paddingHorizontal: 14,
     paddingVertical: 6,
+    borderRadius: 99,
+    backgroundColor: theme.colors.surfaceMuted,
+    borderWidth: 1.5,
+    borderColor: theme.colors.border,
+  },
+
+  // Suggestions
+  block: {
+    paddingHorizontal: 16,
+    paddingTop: 20,
+  },
+  blockHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    borderRadius: theme.radius.pill,
-    backgroundColor: theme.colors.surfaceMuted,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 99,
+    backgroundColor: theme.colors.surface,
     borderWidth: 1,
     borderColor: theme.colors.border,
   },
-  tabActive: {
+  chipTrending: {
     backgroundColor: theme.colors.primaryLight,
-    borderColor: theme.colors.primary,
+    borderColor: theme.colors.primaryBorder,
   },
 
-  loadingWrap: { padding: 36, alignItems: 'center', gap: theme.spacing.sm },
-
-  suggestionBlock: { paddingHorizontal: theme.spacing.lg, paddingTop: theme.spacing.lg },
-  suggestionHeader: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    marginBottom: theme.spacing.sm,
-  },
-  tagWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: theme.spacing.sm },
-  tag: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 12, paddingVertical: 8,
-    borderRadius: theme.radius.pill,
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1, borderColor: theme.colors.border,
-  },
-  tagTrending: { backgroundColor: theme.colors.dangerLight, borderColor: theme.colors.discount },
-
-  listContent: { paddingVertical: theme.spacing.sm, paddingBottom: 120 },
-  gridRow: { paddingHorizontal: theme.spacing.sm },
+  // Results
+  listContent: { paddingVertical: 8, paddingBottom: 120 },
+  gridRow: { paddingHorizontal: 8 },
   gridItem: { flex: 1 },
-
-  section: { marginBottom: theme.spacing.lg },
-  sectionTitle: { paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.sm },
-  separator: { height: 1, backgroundColor: theme.colors.divider, marginHorizontal: theme.spacing.lg },
-  seeAll: { paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.sm },
+  sep: { height: 1, backgroundColor: theme.colors.divider, marginHorizontal: 16 },
+  loadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+  },
+  resultCount: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    color: theme.colors.textSecondary,
+  },
+  inlineSection: { marginBottom: 8 },
+  inlineSectionTitle: { paddingHorizontal: 16, paddingVertical: 10 },
+  seeAll: { paddingHorizontal: 16, paddingVertical: 8 },
 
   catRow: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.sm,
-    backgroundColor: theme.colors.surface, gap: theme.spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: theme.colors.surface,
+    gap: 12,
   },
   catThumb: {
-    width: 48, height: 48, borderRadius: theme.radius.md,
+    width: 48, height: 48,
+    borderRadius: 10,
     backgroundColor: theme.colors.surfaceMuted,
-    overflow: 'hidden', alignItems: 'center', justifyContent: 'center',
+    overflow: 'hidden',
+    alignItems: 'center', justifyContent: 'center',
   },
 });

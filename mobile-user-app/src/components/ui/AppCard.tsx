@@ -25,10 +25,10 @@ const AppCard = memo(function AppCard({
     padded === false || padded === undefined
       ? 0
       : padded === 'sm'
-      ? theme.spacing.md
-      : padded === 'lg'
-      ? theme.spacing.xl
-      : theme.spacing.lg;
+        ? theme.spacing.md
+        : padded === 'lg'
+          ? theme.spacing.xl
+          : theme.spacing.lg;
 
   const baseStyle: ViewStyle = {
     backgroundColor: bg,

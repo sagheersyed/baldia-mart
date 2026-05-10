@@ -22,8 +22,8 @@ const LABEL_BY_ROUTE: Record<string, string> = {
 };
 
 /**
- * Foodpanda-style floating bottom tab bar with active pill highlight,
- * polished badges, and smooth color transitions.
+ * Clean bottom tab bar — active tab changes icon + label color only.
+ * No pill/filled background on active tab.
  */
 export default function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
@@ -43,7 +43,7 @@ export default function FloatingTabBar({ state, descriptors, navigation }: Botto
             if (!focused && !event.defaultPrevented) navigation.navigate(route.name as never);
           };
 
-          // Tab bar accents Food screen with the pink color, otherwise the brand orange
+          // Food uses red accent, everything else uses brand orange
           const tabAccent = route.name === 'Food'
             ? theme.colors.food
             : theme.colors.primary;
@@ -54,19 +54,15 @@ export default function FloatingTabBar({ state, descriptors, navigation }: Botto
             <Pressable
               key={route.key}
               onPress={onPress}
-              style={({ pressed }) => [styles.tab, pressed ? { opacity: 0.7 } : null]}
+              style={({ pressed }) => [styles.tab, pressed ? { opacity: 0.65 } : null]}
               accessibilityRole="button"
               accessibilityState={{ selected: focused }}
             >
-              <View
-                style={[
-                  styles.iconWrap,
-                  focused ? { backgroundColor: tabAccent + '18' } : null,
-                ]}
-              >
+              {/* Icon wrapper — NO background fill, just an icon */}
+              <View style={styles.iconWrap}>
                 <Ionicons
                   name={focused ? iconActive : iconInactive}
-                  size={22}
+                  size={23}
                   color={focused ? tabAccent : theme.colors.textSecondary}
                 />
                 {badge != null ? (
@@ -77,6 +73,8 @@ export default function FloatingTabBar({ state, descriptors, navigation }: Botto
                   </View>
                 ) : null}
               </View>
+
+              {/* Active tab shows colored label, inactive stays grey */}
               <AppText
                 variant="tab"
                 color={focused ? tabAccent : theme.colors.textSecondary}
@@ -113,21 +111,20 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 6,
+    paddingVertical: 5,
     gap: 2,
   },
   iconWrap: {
-    width: 44,
-    height: 30,
+    width: 32,
+    height: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: theme.radius.pill,
-    marginBottom: 2,
+    // NO backgroundColor — just the icon changes color
   },
   badge: {
     position: 'absolute',
-    top: -2,
-    right: 4,
+    top: -3,
+    right: -6,
     minWidth: 16,
     height: 16,
     borderRadius: 8,
