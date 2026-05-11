@@ -14,11 +14,12 @@ const ICON_BY_ROUTE: Record<string, [keyof typeof Ionicons.glyphMap, keyof typeo
   Cart:    ['bag-handle',   'bag-handle-outline'],
   Orders:  ['receipt',      'receipt-outline'],
   Profile: ['person',       'person-outline'],
+  Pharma:  ['medical',      'medical-outline'],
 };
 
 const LABEL_BY_ROUTE: Record<string, string> = {
   Home: 'Mart', Food: 'Food', Brands: 'Brands', Search: 'Search',
-  Cart: 'Cart', Orders: 'Orders', Profile: 'Account',
+  Cart: 'Cart', Orders: 'Orders', Profile: 'Account', Pharma: 'Pharma',
 };
 
 /**
@@ -46,6 +47,8 @@ export default function FloatingTabBar({ state, descriptors, navigation }: Botto
           // Food uses red accent, everything else uses brand orange
           const tabAccent = route.name === 'Food'
             ? theme.colors.food
+            : route.name === 'Pharma'
+            ? theme.colors.pharma
             : theme.colors.primary;
 
           const badge = options.tabBarBadge;

@@ -196,8 +196,12 @@ export default function CategoriesPage() {
                         </div>
                       </td>
                       <td>
-                        <span className={cat.section === 'restaurant' ? 'badge-blue' : 'badge-green'}>
-                          {cat.section === 'restaurant' ? 'Food' : 'Mart'}
+                        <span className={
+                          cat.section === 'restaurant' ? 'badge-blue' : 
+                          cat.section === 'pharma' ? 'badge-purple' : 'badge-green'
+                        }>
+                          {cat.section === 'restaurant' ? 'Food' : 
+                           cat.section === 'pharma' ? 'Pharma' : 'Mart'}
                         </span>
                       </td>
                       <td>
@@ -270,6 +274,7 @@ export default function CategoriesPage() {
                       onChange={(e) => setFormData({ ...formData, section: e.target.value })}>
                       <option value="mart">Quick Mart (Grocery)</option>
                       <option value="restaurant">Restaurant (Food)</option>
+                      <option value="pharma">Pharma (Medicine)</option>
                     </select>
                   </div>
                   <div>

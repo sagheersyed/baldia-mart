@@ -6,14 +6,14 @@ import { Image } from 'expo-image';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
-import { useCart } from '../context/CartContext';
+import { useCartStore } from '../store/cartStore';
 import { settingsApi, addressesApi, ordersApi } from '../api/api';
 import {
   AppText, AppButton, AppIconButton, AppBadge, EmptyState, QuantityStepper,
 } from '../components/ui';
 import { theme } from '../theme/theme';
 
-type Mode = 'mart' | 'food';
+type Mode = 'mart' | 'food' | 'pharma';
 
 type Row =
   | { kind: 'modeSwitch' }
@@ -24,18 +24,18 @@ type Row =
 export default function CartScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const {
-    martCart, foodCart, updateQuantity, removeFromCart, getCartTotal,
-    getCartCount, activeMode: contextMode, setActiveMode,
-  } = useCart();
+    martCart, foodCart, pharmaCart, updateQuantity, removeFromCart, getCartTotal,
+    getCartCount, activeMode: contextMode, setActiveMode, getCurrentTotal, getCurrentCount,
+  } = useCartStore();
 
-  const [mode, setMode] = useState<Mode>(contextMode === 'food' ? 'food' : 'mart');
+  const [mode, setMode] = useState<Mode>(contextMode || 'mart');
 
   useEffect(() => {
     if (contextMode && contextMode !== mode) setMode(contextMode);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contextMode]);
 
-  const cart = mode === 'mart' ? martCart : foodCart;
+  const cart = mode === 'mart' ? martCart : mode === 'food' ? foodCart : pharmaCart;
 
   const [deliveryFee, setDeliveryFee] = useState(0);
   const [isLoadingFee, setIsLoadingFee] = useState(false);
@@ -53,7 +53,7 @@ export default function CartScreen({ navigation }: any) {
       const defaultAddr = addrRes.data.find((a: any) => a.isDefault) || addrRes.data[0];
       if (defaultAddr) {
         const restaurantId = mode === 'food' ? cart[0]?.restaurantId : undefined;
-        const feeRes = await ordersApi.getDeliveryFee(defaultAddr.id, restaurantId);
+        const feeRes = await ordersApi.getDeliveryFee(defaultAddr.id, restaurantId, mode, subtotal);
         if (feeRes.data.isValid) {
           setDeliveryFee(Number(feeRes.data.deliveryFee) || 0);
           setIsValidAddress(true);
@@ -83,6 +83,9 @@ export default function CartScreen({ navigation }: any) {
   const groups = useMemo(() => {
     if (mode === 'mart') {
       return [{ id: 'mart', name: 'BaldiaMart Groceries', maxPrep: 0, items: cart }];
+    }
+    if (mode === 'pharma') {
+      return [{ id: 'pharma', name: 'Baldia Pharma Medicines', maxPrep: 0, items: cart }];
     }
     const map = new Map<string, { id: string; name: string; maxPrep: number; items: any[] }>();
     cart.forEach((item: any) => {
@@ -115,9 +118,11 @@ export default function CartScreen({ navigation }: any) {
   }, [cart, groups]);
 
   const subtotal = getCartTotal(mode);
-  const total = subtotal + (subtotal > 0 ? deliveryFee : 0);
+  const total = subtotal + (isValidAddress ? deliveryFee : 0);
 
-  const otherCount = mode === 'mart' ? getCartCount('food') : getCartCount('mart');
+  const otherCount = mode === 'mart' ? getCartCount('food') + getCartCount('pharma') : 
+                    mode === 'food' ? getCartCount('mart') + getCartCount('pharma') :
+                    getCartCount('mart') + getCartCount('food');
 
   const handleSwitchMode = (next: Mode) => {
     setMode(next);
@@ -131,26 +136,26 @@ export default function CartScreen({ navigation }: any) {
     ]);
   };
 
-  const accent = mode === 'food' ? theme.colors.food : theme.colors.primary;
+  const accent = mode === 'food' ? theme.colors.food : mode === 'pharma' ? theme.colors.pharma : theme.colors.primary;
 
   // ── Renderers ──
   const renderRow = useCallback(({ item }: { item: Row }) => {
     if (item.kind === 'modeSwitch') {
       return (
         <View style={styles.modeSwitch}>
-          {(['mart', 'food'] as Mode[]).map(m => {
+          {(['mart', 'food', 'pharma'] as Mode[]).map(m => {
             const active = mode === m;
-            const c = m === 'mart' ? getCartCount('mart') : getCartCount('food');
+            const c = getCartCount(m);
             return (
               <Pressable
                 key={m}
                 onPress={() => handleSwitchMode(m)}
                 style={[styles.modePill, active ? {
-                  backgroundColor: m === 'food' ? theme.colors.food : theme.colors.primary,
+                  backgroundColor: m === 'food' ? theme.colors.food : m === 'pharma' ? theme.colors.pharma : theme.colors.primary,
                 } : null]}
               >
                 <Ionicons
-                  name={m === 'mart' ? 'basket' : 'restaurant'}
+                  name={m === 'mart' ? 'basket' : m === 'food' ? 'restaurant' : 'medical'}
                   size={14}
                   color={active ? '#fff' : theme.colors.textSecondary}
                 />
@@ -158,7 +163,7 @@ export default function CartScreen({ navigation }: any) {
                   variant="captionStrong"
                   color={active ? '#fff' : theme.colors.textSecondary}
                 >
-                  {m === 'mart' ? 'Mart' : 'Food'}
+                  {m === 'mart' ? 'Mart' : m === 'food' ? 'Food' : 'Pharma'}
                 </AppText>
                 {c > 0 ? (
                   <View style={[styles.countDot, active ? { backgroundColor: 'rgba(255,255,255,0.25)' } : null]}>
@@ -178,13 +183,13 @@ export default function CartScreen({ navigation }: any) {
       return (
         <View style={styles.groupHeader}>
           <Ionicons
-            name={mode === 'food' ? 'restaurant' : 'storefront'}
+            name={mode === 'food' ? 'restaurant' : mode === 'pharma' ? 'medical' : 'storefront'}
             size={16}
             color={accent}
           />
           <AppText variant="title" style={{ flex: 1 }} numberOfLines={1}>{item.name}</AppText>
           {item.maxPrep && item.maxPrep > 0 ? (
-            <AppBadge label={`~${item.maxPrep} min`} variant="primary" />
+            <AppBadge label={`~${item.maxPrep} min`} variant="secondary" tint={accent} />
           ) : null}
         </View>
       );
@@ -192,7 +197,8 @@ export default function CartScreen({ navigation }: any) {
 
     if (item.kind === 'item') {
       const it = item.item;
-      const lineTotal = (Number(it.price) || 0) * it.quantity;
+      const price = mode === 'pharma' ? it.sellingPrice : it.price;
+      const lineTotal = (Number(price) || 0) * it.quantity;
       return (
         <View style={styles.itemCard}>
           <View style={styles.itemImage}>
@@ -205,8 +211,13 @@ export default function CartScreen({ navigation }: any) {
             )}
           </View>
           <View style={styles.itemBody}>
-            <AppText variant="bodyStrong" numberOfLines={2}>{it.name}</AppText>
-            <AppText variant="caption">Rs. {Math.round(Number(it.price) || 0)} each</AppText>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6 }}>
+              <AppText variant="bodyStrong" style={{ flex: 1 }} numberOfLines={2}>{it.name}</AppText>
+              {mode === 'pharma' && it.requiresPrescription && (
+                <AppBadge label="Rx" variant="secondary" tint={accent} />
+              )}
+            </View>
+            <AppText variant="caption">Rs. {(Number(price) || 0).toLocaleString()} each</AppText>
             <View style={styles.itemActions}>
               <QuantityStepper
                 quantity={it.quantity}
@@ -219,7 +230,7 @@ export default function CartScreen({ navigation }: any) {
                 <Ionicons name="trash-outline" size={16} color={theme.colors.danger} />
               </Pressable>
               <AppText variant="bodyStrong" color={accent} style={{ marginLeft: 'auto' }}>
-                Rs. {Math.round(lineTotal)}
+                Rs. {lineTotal.toLocaleString()}
               </AppText>
             </View>
           </View>
@@ -233,7 +244,7 @@ export default function CartScreen({ navigation }: any) {
           <AppText variant="overline">Order summary</AppText>
           <View style={styles.sumRow}>
             <AppText variant="body" color={theme.colors.textSecondary}>Subtotal</AppText>
-            <AppText variant="bodyStrong">Rs. {Math.round(subtotal)}</AppText>
+            <AppText variant="bodyStrong">Rs. {subtotal.toLocaleString()}</AppText>
           </View>
           <View style={styles.sumRow}>
             <AppText variant="body" color={theme.colors.textSecondary}>Delivery fee</AppText>
@@ -242,14 +253,14 @@ export default function CartScreen({ navigation }: any) {
             ) : !isValidAddress ? (
               <AppText variant="bodyStrong" color={theme.colors.danger}>Unavailable</AppText>
             ) : (
-              <AppText variant="bodyStrong">Rs. {Math.round(deliveryFee)}</AppText>
+              <AppText variant="bodyStrong">Rs. {deliveryFee.toLocaleString()}</AppText>
             )}
           </View>
           <View style={styles.sumDivider} />
           <View style={styles.sumRow}>
             <AppText variant="title">Total</AppText>
             <AppText variant="h3" color={accent}>
-              {!isValidAddress ? 'N/A' : `Rs. ${Math.round(total)}`}
+              {!isValidAddress ? 'N/A' : `Rs. ${total.toLocaleString()}`}
             </AppText>
           </View>
           {!isValidAddress ? (
@@ -298,23 +309,23 @@ export default function CartScreen({ navigation }: any) {
       {cart.length === 0 ? (
         <View style={{ flex: 1 }}>
           <View style={styles.modeSwitch}>
-            {(['mart', 'food'] as Mode[]).map(m => {
+            {(['mart', 'food', 'pharma'] as Mode[]).map(m => {
               const active = mode === m;
               return (
                 <Pressable
                   key={m}
                   onPress={() => handleSwitchMode(m)}
                   style={[styles.modePill, active ? {
-                    backgroundColor: m === 'food' ? theme.colors.food : theme.colors.primary,
+                    backgroundColor: m === 'food' ? theme.colors.food : m === 'pharma' ? theme.colors.pharma : theme.colors.primary,
                   } : null]}
                 >
                   <Ionicons
-                    name={m === 'mart' ? 'basket' : 'restaurant'}
+                    name={m === 'mart' ? 'basket' : m === 'food' ? 'restaurant' : 'medical'}
                     size={14}
                     color={active ? '#fff' : theme.colors.textSecondary}
                   />
                   <AppText variant="captionStrong" color={active ? '#fff' : theme.colors.textSecondary}>
-                    {m === 'mart' ? 'Mart' : 'Food'}
+                    {m === 'mart' ? 'Mart' : m === 'food' ? 'Food' : 'Pharma'}
                   </AppText>
                 </Pressable>
               );
@@ -322,27 +333,32 @@ export default function CartScreen({ navigation }: any) {
           </View>
 
           <EmptyState
-            icon={mode === 'mart' ? 'basket-outline' : 'restaurant-outline'}
+            icon={mode === 'mart' ? 'basket-outline' : mode === 'food' ? 'restaurant-outline' : 'medical-outline'}
             title={`Your ${mode} cart is empty`}
             subtitle={mode === 'mart'
               ? 'Browse fresh groceries, brands and daily essentials.'
-              : 'Discover top restaurants near you and treat yourself.'}
-            actionLabel={mode === 'mart' ? 'Browse groceries' : 'Browse restaurants'}
-            onAction={() => navigation.navigate(mode === 'mart' ? 'Home' : 'Food')}
+              : mode === 'food' 
+              ? 'Discover top restaurants near you and treat yourself.'
+              : 'Add medicines and healthcare products to your cart.'}
+            actionLabel={mode === 'mart' ? 'Browse groceries' : mode === 'food' ? 'Browse restaurants' : 'Browse pharmacy'}
+            onAction={() => navigation.navigate(mode === 'mart' ? 'Home' : mode === 'food' ? 'Food' : 'Pharma')}
+            tint={accent}
           />
 
           {otherCount > 0 ? (
             <View style={styles.otherCartTip}>
               <Ionicons
-                name={mode === 'mart' ? 'restaurant' : 'basket'}
+                name={getCartCount('pharma') > 0 && mode !== 'pharma' ? 'medical' : getCartCount('food') > 0 && mode !== 'food' ? 'restaurant' : 'basket'}
                 size={16}
-                color={mode === 'mart' ? theme.colors.food : theme.colors.primary}
+                color={getCartCount('pharma') > 0 && mode !== 'pharma' ? theme.colors.pharma : getCartCount('food') > 0 && mode !== 'food' ? theme.colors.food : theme.colors.primary}
               />
-              <AppText variant="caption" style={{ flex: 1 }}>
-                You have {otherCount} item{otherCount === 1 ? '' : 's'} in your {mode === 'mart' ? 'food' : 'mart'} cart.
-              </AppText>
-              <Pressable onPress={() => handleSwitchMode(mode === 'mart' ? 'food' : 'mart')}>
-                <AppText variant="captionStrong" color={mode === 'mart' ? theme.colors.food : theme.colors.primary}>
+              <View style={{ flex: 1, marginLeft: 8 }}>
+                <AppText variant="caption" color={theme.colors.textSecondary}>
+                  You have items in your {getCartCount('pharma') > 0 && mode !== 'pharma' ? 'Pharmacy' : getCartCount('food') > 0 && mode !== 'food' ? 'Food' : 'Mart'} cart.
+                </AppText>
+              </View>
+              <Pressable onPress={() => handleSwitchMode(getCartCount('pharma') > 0 && mode !== 'pharma' ? 'pharma' : getCartCount('food') > 0 && mode !== 'food' ? 'food' : 'mart')}>
+                <AppText variant="captionStrong" color={getCartCount('pharma') > 0 && mode !== 'pharma' ? theme.colors.pharma : getCartCount('food') > 0 && mode !== 'food' ? theme.colors.food : theme.colors.primary}>
                   Switch
                 </AppText>
               </Pressable>
@@ -360,14 +376,14 @@ export default function CartScreen({ navigation }: any) {
 
           <View style={styles.footer}>
             <AppButton
-              label={!isValidAddress
+              label={!isValidAddress && mode !== 'pharma'
                 ? 'Address out of zone'
                 : `Checkout • Rs. ${Math.round(total)}`}
               variant="primary"
-              tint={mode === 'food' ? theme.colors.food : theme.colors.primary}
+              tint={accent}
               size="lg"
               fullWidth
-              disabled={!isValidAddress || total <= 0}
+              disabled={(!isValidAddress && mode !== 'pharma') || total <= 0}
               onPress={() => navigation.navigate('Checkout', { mode })}
               trailingIcon={<Ionicons name="arrow-forward" size={18} color="#fff" />}
             />

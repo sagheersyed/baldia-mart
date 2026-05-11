@@ -26,6 +26,7 @@ import { OrderItemSubscriber } from './order-item.subscriber';
 import { OrdersProcessor } from './orders.processor';
 
 import { WalletsModule } from '../wallets/wallets.module';
+import { PharmaModule } from '../pharma/pharma.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { WalletsModule } from '../wallets/wallets.module';
     UsersModule,
     VendorsModule,
     WalletsModule,
+    forwardRef(() => PharmaModule),
     BullModule.registerQueue({
       name: 'orders',
     }),

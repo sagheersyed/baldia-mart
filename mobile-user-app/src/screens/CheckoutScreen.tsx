@@ -8,14 +8,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useCart } from '../context/CartContext';
-import { ordersApi, addressesApi } from '../api/api';
+import { ordersApi, addressesApi, pharmaApi, prescriptionsApi } from '../api/api';
 import AddressPickerModal from '../components/AddressPickerModal';
 import {
   AppText, AppButton, AppIconButton, AppBadge,
 } from '../components/ui';
 import { theme } from '../theme/theme';
 
-type Mode = 'mart' | 'food';
+type Mode = 'mart' | 'food' | 'pharma';
 type PaymentMethod = 'cod' | 'jazzcash' | 'easypaisa';
 
 const PAYMENT_OPTIONS: {
@@ -33,10 +33,10 @@ const PAYMENT_OPTIONS: {
 
 export default function CheckoutScreen({ navigation, route }: any) {
   const mode: Mode = route.params?.mode || 'mart';
-  const { martCart, foodCart, getCartTotal, clearCart } = useCart();
-  const cart = mode === 'mart' ? martCart : foodCart;
+  const { martCart, foodCart, pharmaCart, getCartTotal, clearCart, hasPharmaRxItems } = useCart();
+  const cart = mode === 'mart' ? martCart : mode === 'food' ? foodCart : pharmaCart;
 
-  const accent = mode === 'food' ? theme.colors.food : theme.colors.primary;
+  const accent = mode === 'food' ? theme.colors.food : mode === 'pharma' ? theme.colors.pharma : theme.colors.primary;
 
   const [selectedPayment, setSelectedPayment] = useState<PaymentMethod>('cod');
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
@@ -45,6 +45,10 @@ export default function CheckoutScreen({ navigation, route }: any) {
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(true);
   const [deliveryNotes, setDeliveryNotes] = useState('');
   const [voucherCode, setVoucherCode] = useState('');
+  const [approvedPrescriptionId, setApprovedPrescriptionId] = useState<string | null>(null);
+  const [loadingRx, setLoadingRx] = useState(false);
+
+  const requiresRx = mode === 'pharma' && hasPharmaRxItems();
 
   // Modals state
   const [showAddressListModal, setShowAddressListModal] = useState(false);
@@ -75,12 +79,29 @@ export default function CheckoutScreen({ navigation, route }: any) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => { fetchAddresses(); }, [fetchAddresses]);
+  const fetchPrescription = useCallback(async () => {
+    if (!requiresRx) return;
+    setLoadingRx(true);
+    try {
+      const rxRes = await prescriptionsApi.getMyPrescriptions();
+      const approved = rxRes.data?.find((r: any) => r.status === 'approved');
+      if (approved) setApprovedPrescriptionId(approved.id);
+    } catch (err) {
+      console.error('Fetch Rx error:', err);
+    } finally {
+      setLoadingRx(false);
+    }
+  }, [requiresRx]);
 
-  const fetchDeliveryFee = useCallback(async (addressId: string, restaurantId?: string) => {
+  useEffect(() => { 
+    fetchAddresses(); 
+    fetchPrescription();
+  }, [fetchAddresses, fetchPrescription]);
+
+  const fetchDeliveryFee = useCallback(async (addressId: string, restaurantId?: string, orderType?: string) => {
     setIsLoadingFee(true);
     try {
-      const res = await ordersApi.getDeliveryFee(addressId, restaurantId);
+      const res = await ordersApi.getDeliveryFee(addressId, restaurantId, orderType);
       if (res.data.isValid === true) {
         setDeliveryFee(Number(res.data.deliveryFee) || 0);
         setIsAddressValid(true);
@@ -102,7 +123,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
   useEffect(() => {
     if (selectedAddress?.id) {
       const restaurantId = mode === 'food' ? cart[0]?.restaurantId : undefined;
-      fetchDeliveryFee(selectedAddress.id, restaurantId);
+      fetchDeliveryFee(selectedAddress.id, restaurantId, mode);
     }
   }, [selectedAddress, cart, mode, fetchDeliveryFee]);
 
@@ -151,8 +172,19 @@ export default function CheckoutScreen({ navigation, route }: any) {
       Alert.alert('No address', 'Please select a delivery address');
       return;
     }
-    if (!isAddressValid) {
+    if (!isAddressValid && mode !== 'pharma') {
       Alert.alert('Out of zone', 'Your address is outside our delivery zone. Please choose another address.');
+      return;
+    }
+    if (requiresRx && !approvedPrescriptionId) {
+      Alert.alert(
+        'Prescription Required', 
+        'Your cart contains items that require an approved prescription. Please wait for pharmacist approval.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'View Prescriptions', onPress: () => navigation.navigate('PrescriptionUpload') }
+        ]
+      );
       return;
     }
     setShowConfirmModal(true);
@@ -162,6 +194,25 @@ export default function CheckoutScreen({ navigation, route }: any) {
     setShowConfirmModal(false);
     setIsPlacingOrder(true);
     try {
+      if (mode === 'pharma') {
+        const orderData = {
+          addressId: selectedAddress.id,
+          paymentMethod: selectedPayment,
+          prescriptionId: approvedPrescriptionId || undefined,
+          items: cart.map((item: any) => ({
+            medicineId: item.id,
+            quantity: item.quantity,
+          })),
+          notes: deliveryNotes,
+        };
+        const res = await pharmaApi.placeOrder(orderData);
+        if (res.data && res.data.id) {
+          clearCart('pharma');
+          navigation.replace('OrderTracking', { orderId: res.data.id });
+        }
+        return;
+      }
+
       const restaurantId = mode === 'food' ? cart[0]?.restaurantId : undefined;
       const orderData = {
         addressId: selectedAddress.id,
@@ -209,7 +260,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
           </AppIconButton>
           <View style={{ flex: 1 }}>
             <AppText variant="h2">Checkout</AppText>
-            <AppText variant="caption">{totalItems} item{totalItems === 1 ? '' : 's'} • {mode === 'mart' ? 'Mart' : 'Food'}</AppText>
+            <AppText variant="caption">{totalItems} item{totalItems === 1 ? '' : 's'} • {mode === 'mart' ? 'Mart' : mode === 'food' ? 'Food' : 'Pharma'}</AppText>
           </View>
         </View>
 
@@ -224,18 +275,18 @@ export default function CheckoutScreen({ navigation, route }: any) {
             <ActivityIndicator color={accent} style={{ marginVertical: 20 }} />
           ) : selectedAddress ? (
             <Pressable style={styles.addressCard} onPress={() => setShowAddressListModal(true)}>
-              <View style={[styles.iconCircle, { backgroundColor: theme.colors.primaryLight }]}>
-                <Ionicons name="location" size={20} color={theme.colors.primary} />
+              <View style={[styles.iconCircle, { backgroundColor: accent + '18' }]}>
+                <Ionicons name="location" size={20} color={accent} />
               </View>
               <View style={{ flex: 1, gap: 2 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <AppText variant="bodyStrong">{selectedAddress.label || 'Address'}</AppText>
-                  {selectedAddress.isDefault ? <AppBadge label="Default" variant="primary" /> : null}
+                  {selectedAddress.isDefault ? <AppBadge label="Default" variant="secondary" tint={accent} /> : null}
                 </View>
                 <AppText variant="caption" numberOfLines={2}>{selectedAddress.streetAddress}</AppText>
               </View>
               <View style={styles.changeBtn}>
-                <AppText variant="captionStrong" color={theme.colors.primary}>Change</AppText>
+                <AppText variant="captionStrong" color={accent}>Change</AppText>
               </View>
             </Pressable>
           ) : (
@@ -248,7 +299,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
                 <AppText variant="caption">We'll use this to confirm your zone</AppText>
               </View>
               <View style={styles.changeBtn}>
-                <AppText variant="captionStrong" color={theme.colors.primary}>Add</AppText>
+                <AppText variant="captionStrong" color={accent}>Add</AppText>
               </View>
             </Pressable>
           )}
@@ -267,6 +318,40 @@ export default function CheckoutScreen({ navigation, route }: any) {
               maxLength={200}
             />
           </View>
+
+          {/* Prescription Status for Pharma */}
+          {requiresRx && (
+            <>
+              <AppText variant="overline" style={styles.sectionLabel}>Prescription status</AppText>
+              <View style={[styles.statusBox, approvedPrescriptionId ? styles.statusBoxSuccess : styles.statusBoxWarning]}>
+                <Ionicons 
+                  name={approvedPrescriptionId ? 'checkmark-circle' : 'time'} 
+                  size={20} 
+                  color={approvedPrescriptionId ? theme.colors.success : theme.colors.warning} 
+                />
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <AppText variant="bodyStrong">
+                    {approvedPrescriptionId ? 'Verified prescription attached' : 'Verification Pending'}
+                  </AppText>
+                  <AppText variant="caption">
+                    {approvedPrescriptionId 
+                      ? 'Your prescription has been approved by our pharmacist.' 
+                      : 'Waiting for pharmacist approval. You can only place order after approval.'}
+                  </AppText>
+                </View>
+                {!approvedPrescriptionId && (
+                  <AppIconButton 
+                    size={32} 
+                    bg={theme.colors.surface} 
+                    onPress={fetchPrescription}
+                    loading={loadingRx}
+                  >
+                    <Ionicons name="refresh" size={16} color={theme.colors.textPrimary} />
+                  </AppIconButton>
+                )}
+              </View>
+            </>
+          )}
 
           {/* Payment */}
           <AppText variant="overline" style={styles.sectionLabel}>Payment method</AppText>
@@ -334,10 +419,10 @@ export default function CheckoutScreen({ navigation, route }: any) {
                 </View>
                 <View style={{ flex: 1 }}>
                   <AppText variant="bodyStrong" numberOfLines={1}>{it.name}</AppText>
-                  <AppText variant="caption">x{it.quantity} • Rs. {Math.round(Number(it.price) || 0)}</AppText>
+                  <AppText variant="caption">x{it.quantity} • Rs. {Math.round(Number(mode === 'pharma' ? it.sellingPrice : it.price) || 0)}</AppText>
                 </View>
                 <AppText variant="bodyStrong">
-                  Rs. {Math.round((Number(it.price) || 0) * it.quantity)}
+                  Rs. {Math.round((Number(mode === 'pharma' ? it.sellingPrice : it.price) || 0) * it.quantity)}
                 </AppText>
               </View>
             ))}
@@ -377,7 +462,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
             <View style={styles.sumRow}>
               <AppText variant="title">Grand total</AppText>
               <AppText variant="h3" color={accent}>
-                {!isAddressValid ? 'N/A' : `Rs. ${Math.round(total)}`}
+                {!isAddressValid ? 'N/A' : `Rs. ${total.toLocaleString()}`}
               </AppText>
             </View>
 
@@ -393,16 +478,18 @@ export default function CheckoutScreen({ navigation, route }: any) {
         <View style={styles.footer}>
           <AppButton
             label={isPlacingOrder
-              ? 'Placing order…'
-              : !isAddressValid
+              ? 'Processing…'
+              : !isAddressValid && mode !== 'pharma'
                 ? 'Out of service area'
-                : `Place order • Rs. ${Math.round(total)}`}
+                : mode === 'pharma' 
+                ? `Confirm Medicine Order • Rs. ${total.toLocaleString()}`
+                : `Place order • Rs. ${total.toLocaleString()}`}
             variant="primary"
             tint={accent}
             size="lg"
             fullWidth
             loading={isPlacingOrder}
-            disabled={isPlacingOrder || !isAddressValid || isLoadingFee || cart.length === 0}
+            disabled={isPlacingOrder || (!isAddressValid && mode !== 'pharma') || isLoadingFee || cart.length === 0}
             onPress={handlePlaceOrder}
             trailingIcon={!isPlacingOrder ? <Ionicons name="arrow-forward" size={18} color="#fff" /> : null}
           />
@@ -424,30 +511,30 @@ export default function CheckoutScreen({ navigation, route }: any) {
                 {addresses.map((addr) => {
                   const sel = selectedAddress?.id === addr.id;
                   return (
-                    <View key={addr.id} style={[styles.addrRow, sel ? { borderColor: theme.colors.primary, backgroundColor: theme.colors.primaryLight } : null]}>
+                    <View key={addr.id} style={[styles.addrRow, sel ? { borderColor: accent, backgroundColor: accent + '14' } : null]}>
                       <Pressable style={styles.addrRowMain} onPress={() => handleSelectAddress(addr)}>
                         <View style={[styles.iconCircle, { backgroundColor: theme.colors.surface, ...theme.shadows.sm }]}>
                           <Ionicons
                             name={addr.label === 'Work' ? 'business' : 'home'}
                             size={18}
-                            color={theme.colors.primary}
+                            color={accent}
                           />
                         </View>
                         <View style={{ flex: 1 }}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                             <AppText variant="bodyStrong">{addr.label || 'Address'}</AppText>
-                            {addr.isDefault ? <AppBadge label="Default" variant="primary" /> : null}
+                            {addr.isDefault ? <AppBadge label="Default" variant="secondary" tint={accent} /> : null}
                           </View>
                           <AppText variant="caption" numberOfLines={2}>{addr.streetAddress}</AppText>
                         </View>
                         {sel ? (
-                          <View style={[styles.tickCircle, { backgroundColor: theme.colors.primary }]}>
+                          <View style={[styles.tickCircle, { backgroundColor: accent }]}>
                             <Ionicons name="checkmark" size={14} color="#fff" />
                           </View>
                         ) : null}
                       </Pressable>
                       <Pressable style={styles.editBtn} onPress={() => handleOpenEdit(addr)}>
-                        <AppText variant="captionStrong" color={theme.colors.primary}>Edit</AppText>
+                        <AppText variant="captionStrong" color={accent}>Edit</AppText>
                       </Pressable>
                     </View>
                   );
@@ -456,6 +543,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
               <AppButton
                 label="+ Add new address"
                 variant="outline"
+                tint={accent}
                 fullWidth
                 style={{ marginTop: theme.spacing.md }}
                 onPress={() => handleOpenEdit()}
@@ -484,6 +572,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
                 <AppButton
                   label="Change address"
                   variant="secondary"
+                  tint={accent}
                   fullWidth
                   onPress={() => setShowConfirmModal(false)}
                   style={{ flex: 1 }}
@@ -508,6 +597,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
           onSave={handleUpdateAddress}
           initialData={editingAddressData}
           title={editingAddressData ? 'Edit address' : 'Add new address'}
+          tint={accent}
         />
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -694,5 +784,20 @@ const styles = StyleSheet.create({
     padding: theme.spacing.md,
     borderRadius: theme.radius.md,
     gap: 4,
+  },
+  statusBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+  },
+  statusBoxSuccess: {
+    backgroundColor: theme.colors.successLight,
+    borderColor: theme.colors.success,
+  },
+  statusBoxWarning: {
+    backgroundColor: theme.colors.warningLight,
+    borderColor: theme.colors.warning,
   },
 });

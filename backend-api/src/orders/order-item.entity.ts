@@ -3,6 +3,7 @@ import { Order } from './order.entity';
 import { Product } from '../products/product.entity';
 import { MenuItem } from '../menu-items/menu-item.entity';
 import { SubOrder } from './sub-order.entity';
+import { Medicine } from '../pharma/medicines/medicine.entity';
 
 @Index('IDX_ORDER_ITEMS_ORDER_STATUS', ['orderId', 'status'])
 @Index('IDX_ORDER_ITEMS_SUB_ORDER_ID', ['subOrderId'])
@@ -32,12 +33,25 @@ export class OrderItem {
   @JoinColumn({ name: 'menu_item_id' })
   menuItem: MenuItem;
 
+  @Column({ name: 'medicine_id', nullable: true })
+  medicineId: string;
+
+  @ManyToOne(() => Medicine, { nullable: true })
+  @JoinColumn({ name: 'medicine_id' })
+  medicine: Medicine;
+
   @Column({ name: 'sub_order_id', nullable: true })
   subOrderId: string;
 
   @ManyToOne(() => SubOrder, subOrder => subOrder.items, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'sub_order_id' })
   subOrder: SubOrder;
+
+  @Column({ name: 'product_name', nullable: true })
+  productName: string;
+
+  @Column({ name: 'image_url', nullable: true })
+  imageUrl: string;
 
   @Column()
   quantity: number;

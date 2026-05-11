@@ -28,31 +28,36 @@ const QuickServicesGrid = memo(function QuickServicesGrid({
   services,
   variant = 'rail',
 }: Props) {
-  const Item = useMemo(() => ({ item }: { item: QuickService }) => (
-    <Pressable
-      onPress={item.onPress}
-      style={({ pressed }) => [
-        styles.card,
-        { backgroundColor: item.bg },
-        variant === 'grid' ? styles.gridCard : styles.railCard,
-        pressed ? { opacity: 0.85, transform: [{ scale: 0.97 }] } : null,
-      ]}
-    >
-      {item.badge ? (
-        <View style={styles.badgeChip}>
-          <AppText variant="badge" color={theme.colors.danger}>
-            {item.badge}
+  const Item = useMemo(() => {
+    return ({ item }: { item: QuickService }) => {
+      if (!item) return null;
+      return (
+        <Pressable
+          onPress={item.onPress}
+          style={({ pressed }) => [
+            styles.card,
+            { backgroundColor: item.bg },
+            variant === 'grid' ? styles.gridCard : styles.railCard,
+            pressed ? { opacity: 0.85, transform: [{ scale: 0.97 }] } : null,
+          ]}
+        >
+          {item.badge ? (
+            <View style={styles.badgeChip}>
+              <AppText variant="badge" color={theme.colors.danger}>
+                {item.badge}
+              </AppText>
+            </View>
+          ) : null}
+          <View style={[styles.iconCircle, { backgroundColor: 'rgba(255,255,255,0.55)' }]}>
+            <Ionicons name={item.icon} size={26} color={item.fg} />
+          </View>
+          <AppText variant="bodyStrong" color={theme.colors.textHeader} numberOfLines={2} align="center">
+            {item.title}
           </AppText>
-        </View>
-      ) : null}
-      <View style={[styles.iconCircle, { backgroundColor: 'rgba(255,255,255,0.55)' }]}>
-        <Ionicons name={item.icon} size={26} color={item.fg} />
-      </View>
-      <AppText variant="bodyStrong" color={theme.colors.textHeader} numberOfLines={2} align="center">
-        {item.title}
-      </AppText>
-    </Pressable>
-  ), [variant]);
+        </Pressable>
+      );
+    };
+  }, [variant]);
 
   if (variant === 'grid') {
     return (

@@ -288,8 +288,13 @@ export const ordersApi = {
   updateOrderItems: (orderId: string, items: { itemId: string; quantity: number }[]) =>
     api.patch(`/orders/${orderId}/items`, { items }),
   getTimeline: (orderId: string) => api.get(`/orders/${orderId}/timeline`),
-  getDeliveryFee: (addressId: string, restaurantId?: string) =>
-    api.get(`/orders/preview-fee/${addressId}${restaurantId ? `?restaurantId=${restaurantId}` : ''}`),
+  getDeliveryFee: (addressId: string, restaurantId?: string, orderType?: string) => {
+    const params = new URLSearchParams();
+    if (restaurantId) params.set('restaurantId', restaurantId);
+    if (orderType) params.set('orderType', orderType);
+    const qs = params.toString();
+    return api.get(`/orders/preview-fee/${addressId}${qs ? `?${qs}` : ''}`);
+  },
   getChatHistory: (orderId: string) => api.get(`/orders/${orderId}/chat`),
 };
 
@@ -363,4 +368,57 @@ export const favoritesApi = {
   getAll: () => api.get('/favorites'),
   toggle: (type: 'product' | 'restaurant' | 'brand', targetId: string) => api.post('/favorites/toggle', { type, targetId }),
   sync: (items: { type: 'product' | 'restaurant' | 'brand', targetId: string }[]) => api.post('/favorites/sync', { items }),
+};
+
+// ── Pharma Domain ─────────────────────────────────────────────
+export const pharmaApi = {
+  // Medicine browsing
+  searchMedicines: (q: string, page = 1, limit = 20) =>
+    api.get(`/pharma/medicines/search?q=${encodeURIComponent(q)}&page=${page}&limit=${limit}`),
+  getMedicine: (id: string) => api.get(`/pharma/medicines/${id}`),
+  getAvailability: (id: string, lat?: number, lng?: number) =>
+    api.get(`/pharma/medicines/${id}/availability`, { params: { lat, lng } }),
+  getFeatured: (limit = 12) => api.get(`/pharma/medicines/featured?limit=${limit}`),
+  getEmergency: (limit = 20) => api.get(`/pharma/medicines/emergency?limit=${limit}`),
+  getByCategory: (categoryId: string, page = 1, limit = 20) =>
+    api.get(`/pharma/medicines/category/${categoryId}?page=${page}&limit=${limit}`),
+  getCategories: () => api.get('/pharma/medicines/categories'),
+  getBrands: () => api.get('/pharma/medicines/brands'),
+
+  // Pharmacies
+  getNearbyPharmacies: (lat: number, lng: number, radius = 5) =>
+    api.get(`/pharma/pharmacies/nearby?lat=${lat}&lng=${lng}&radius=${radius}`),
+  getPharmacy: (id: string) => api.get(`/pharma/pharmacies/${id}`),
+  getPharmacyInventory: (pharmacyId: string, page = 1, limit = 50) =>
+    api.get(`/pharma/pharmacies/${pharmacyId}/inventory?page=${page}&limit=${limit}`),
+
+  // Substitutions
+  getSubstitutes: (medicineId: string) =>
+    api.get(`/pharma/substitutions/${medicineId}`),
+
+  // Orders
+  placeOrder: (data: {
+    addressId: string;
+    items: { medicineId: string; quantity: number }[];
+    prescriptionId?: string;
+    paymentMethod: string;
+    notes?: string;
+  }) => api.post('/pharma/orders', data),
+  getMyOrders: () => api.get('/pharma/orders/my'),
+  getOrderDetails: (id: string) => api.get(`/pharma/orders/${id}`),
+};
+
+export const prescriptionsApi = {
+  upload: (data: { imageUrl: string; additionalImageUrls?: string[]; doctorName?: string; doctorNotes?: string; patientName?: string }) =>
+    api.post('/pharma/prescriptions/upload', data),
+  getMyPrescriptions: () => api.get('/pharma/prescriptions/my'),
+  getById: (id: string) => api.get(`/pharma/prescriptions/${id}`),
+};
+
+export const recurringOrdersApi = {
+  create: (data: any) => api.post('/pharma/recurring', data),
+  getMy: () => api.get('/pharma/recurring/my'),
+  pause: (id: string, reason?: string) => api.put(`/pharma/recurring/${id}/pause`, { reason }),
+  resume: (id: string) => api.put(`/pharma/recurring/${id}/resume`),
+  cancel: (id: string) => api.put(`/pharma/recurring/${id}/cancel`),
 };

@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, ShoppingBag, Package, LayoutList, Tag, UtensilsCrossed,
   Store, Layers, ClipboardList, Users, Bike, Radar, Wallet, MapPin, Megaphone,
-  Star, Settings, LogOut, ChevronLeft, ShoppingCart,
+  Star, Settings, LogOut, ChevronLeft, ShoppingCart, Activity, Pill, FileText,
 } from 'lucide-react';
 import { clearAdminSession } from '@/lib/api';
 
@@ -20,11 +20,14 @@ const NAV = [
   { name: 'Dashboard',        icon: LayoutDashboard, path: '/' },
   { name: 'Orders',           icon: ClipboardList,   path: '/orders' },
   { name: 'Products',         icon: ShoppingBag,     path: '/products' },
+  { name: 'Medicines',        icon: Pill,            path: '/medicines' },
+  { name: 'Prescriptions',    icon: FileText,        path: '/prescriptions' },
   { name: 'Rashan Requests',  icon: Package,         path: '/rashan' },
   { name: 'Categories',       icon: LayoutList,      path: '/categories' },
   { name: 'Brands',           icon: Tag,             path: '/brands' },
   { name: 'Restaurants',      icon: UtensilsCrossed, path: '/restaurants' },
   { name: 'Vendors',          icon: Store,           path: '/vendors' },
+  { name: 'Pharmacies',       icon: Activity,        path: '/pharmacies' },
   { name: 'Banners',          icon: Layers,          path: '/banners' },
   { name: 'Users',            icon: Users,           path: '/users' },
   { name: 'Riders',           icon: Bike,            path: '/riders' },

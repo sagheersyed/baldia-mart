@@ -89,11 +89,15 @@ function StopPin({ number, emoji }: { number: number; emoji: string }) {
 }
 
 // ─── Status label map ─────────────────────────────────────────────────────────
-const getStatusLabel = (status: string, isFood: boolean, paymentMethod: string) => {
+const getStatusLabel = (status: string, orderType: string, paymentMethod: string) => {
+  const isFood = orderType === 'food';
+  const isPharma = orderType === 'pharma';
+  const isRashan = orderType === 'rashan';
   const isCOD = paymentMethod === 'cod';
+  
   const labels: Record<string, string> = {
-    confirmed: isFood ? 'Swipe — Arrived at Restaurant' : 'Swipe — Arrived at Mart',
-    preparing: isFood ? 'Swipe — Food Ready, Pick Up' : 'Swipe — Order Packed, Pick Up',
+    confirmed: isFood ? 'Swipe — Arrived at Restaurant' : isPharma ? 'Swipe — Arrived at Pharmacy' : 'Swipe — Arrived at Mart',
+    preparing: isFood ? 'Swipe — Food Ready, Pick Up' : isPharma ? 'Swipe — Meds Ready, Pick Up' : 'Swipe — Order Packed, Pick Up',
     out_for_delivery: isCOD ? 'Swipe — Collect Cash & Deliver' : 'Swipe — Mark as Delivered',
     delivered: '✅  Order Delivered',
   };
@@ -156,6 +160,16 @@ export default function NavigationScreen({ navigation, route }: any) {
         coords: { latitude: Number(order.restaurant.latitude || 0), longitude: Number(order.restaurant.longitude || 0) },
         emoji: '🍽️',
       });
+    } else if (order.orderType === 'pharma' && order.pharmacy) {
+      pickupStops.push({
+        id: order.pharmacy.id, stopNum: 1, name: order.pharmacy.name,
+        description: order.pharmacy.address || 'Verified Pharmacy',
+        coords: { 
+          latitude: Number(order.pharmacy.latitude || 0), 
+          longitude: Number(order.pharmacy.longitude || 0) 
+        },
+        emoji: '🏥',
+      });
     } else {
       pickupStops.push({
         id: 'mart', 
@@ -184,7 +198,7 @@ export default function NavigationScreen({ navigation, route }: any) {
   ];
 
   const dropoffStopNum = pickupStops.length + 1;
-  const statusLabel = getStatusLabel(status, isFood, order?.paymentMethod || 'online');
+  const statusLabel = getStatusLabel(status, order?.orderType || 'mart', order?.paymentMethod || 'online');
 
   // ── Init ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -546,9 +560,9 @@ export default function NavigationScreen({ navigation, route }: any) {
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={styles.orderTitle}>Order #{(orderId || '').slice(0, 8).toUpperCase()}</Text>
-          <View style={[styles.typeBadge, order.orderType === 'rashan' && { backgroundColor: '#FF4500' }]}>
-            <Text style={[styles.typeTxt, order.orderType === 'rashan' && { color: '#fff' }]}>
-              {order.orderType === 'food' ? '🍽️ Food Order' : order.orderType === 'rashan' ? '📦 RASHAN BULK' : '🛒 Mart Order'}
+          <View style={[styles.typeBadge, order.orderType === 'rashan' && { backgroundColor: '#FF4500' }, order.orderType === 'pharma' && { backgroundColor: '#E0F2F1' }]}>
+            <Text style={[styles.typeTxt, order.orderType === 'rashan' && { color: '#fff' }, order.orderType === 'pharma' && { color: '#00796B' }]}>
+              {order.orderType === 'food' ? '🍽️ Food Order' : order.orderType === 'rashan' ? '📦 RASHAN BULK' : order.orderType === 'pharma' ? '🏥 PHARMACY' : '🛒 Mart Order'}
             </Text>
           </View>
         </View>
@@ -607,7 +621,10 @@ export default function NavigationScreen({ navigation, route }: any) {
           <View style={{ flex: 1, marginLeft: 14 }}>
             <Text style={styles.stopLabel}>{isPickupPhase ? 'Pick up from' : 'Deliver to'}</Text>
             <Text style={styles.stopName} numberOfLines={1}>{nextStopName}</Text>
-            <Text style={styles.stopAddr} numberOfLines={1}>{nextStopAddr}</Text>
+            <Text style={styles.stopAddr} numberOfLines={1}>
+              {order?.orderType === 'pharma' && isPickupPhase ? '🏥 ' : ''}
+              {nextStopAddr}
+            </Text>
           </View>
           <TouchableOpacity
             style={styles.callBtn}

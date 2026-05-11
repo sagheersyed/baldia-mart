@@ -5,7 +5,7 @@ import { theme } from '../../theme/theme';
 
 export type BadgeVariant =
   | 'primary' | 'success' | 'danger' | 'warning' | 'info' | 'neutral'
-  | 'pro' | 'discount' | 'free' | 'food';
+  | 'pro' | 'discount' | 'free' | 'food' | 'secondary';
 
 interface Props {
   label: string;
@@ -13,6 +13,7 @@ interface Props {
   size?: 'sm' | 'md';
   leadingIcon?: React.ReactNode;
   style?: StyleProp<ViewStyle>;
+  tint?: string;
 }
 
 const VARIANTS: Record<BadgeVariant, { bg: string; fg: string; border?: string }> = {
@@ -26,6 +27,7 @@ const VARIANTS: Record<BadgeVariant, { bg: string; fg: string; border?: string }
   discount: { bg: theme.colors.discount,      fg: theme.colors.textOnPrimary },
   free:     { bg: theme.colors.successLight,  fg: theme.colors.success },
   food:     { bg: theme.colors.foodLight,     fg: theme.colors.food,       border: theme.colors.foodBorder },
+  secondary: { bg: theme.colors.surfaceMuted, fg: theme.colors.textSecondary, border: theme.colors.border },
 };
 
 const AppBadge = memo(function AppBadge({
@@ -34,10 +36,16 @@ const AppBadge = memo(function AppBadge({
   size = 'sm',
   leadingIcon,
   style,
+  tint,
 }: Props) {
-  const v = VARIANTS[variant];
+  const v = VARIANTS[variant] || VARIANTS.neutral;
   const padX = size === 'sm' ? theme.spacing.sm : theme.spacing.md;
   const padY = size === 'sm' ? 3 : 5;
+
+  const backgroundColor = (variant === 'secondary' && tint) ? tint + '14' : v.bg;
+  const textColor = (variant === 'secondary' && tint) ? tint : v.fg;
+  const borderColor = (variant === 'secondary' && tint) ? tint + '30' : v.border;
+
   return (
     <View
       style={[
@@ -49,9 +57,9 @@ const AppBadge = memo(function AppBadge({
           paddingHorizontal: padX,
           paddingVertical: padY,
           borderRadius: theme.radius.pill,
-          backgroundColor: v.bg,
-          borderWidth: v.border ? 1 : 0,
-          borderColor: v.border,
+          backgroundColor,
+          borderWidth: borderColor ? 1 : 0,
+          borderColor,
         },
         style,
       ]}
@@ -59,7 +67,7 @@ const AppBadge = memo(function AppBadge({
       {leadingIcon}
       <AppText
         variant={size === 'sm' ? 'badge' : 'captionStrong'}
-        color={v.fg}
+        color={textColor}
         style={size === 'sm' ? null : { fontSize: 11 }}
       >
         {label}

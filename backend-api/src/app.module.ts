@@ -33,6 +33,7 @@ import { VendorsModule } from './vendors/vendors.module';
 import { FavoritesModule } from './favorites/favorites.module';
 import { AppCacheModule } from './cache/cache.module';
 import { HomeModule } from './home/home.module';
+import { PharmaModule } from './pharma/pharma.module';
 
 // Entities
 import { User } from './users/user.entity';
@@ -66,6 +67,15 @@ import { Wallet } from './wallets/wallet.entity';
 import { WalletTransaction } from './wallets/wallet-transaction.entity';
 import { WalletSettlement } from './wallets/wallet-settlement.entity';
 import { WithdrawalRequest } from './wallets/withdrawal-request.entity';
+
+// Pharma domain entities
+import { Medicine } from './pharma/medicines/medicine.entity';
+import { Pharmacy } from './pharma/pharmacies/pharmacy.entity';
+import { PharmacyInventory } from './pharma/pharmacies/pharmacy-inventory.entity';
+import { Prescription } from './pharma/prescriptions/prescription.entity';
+import { MedicineSubstitution } from './pharma/substitutions/medicine-substitution.entity';
+import { PharmaComplianceLog } from './pharma/compliance/pharma-compliance-log.entity';
+import { PharmaRecurringOrder } from './pharma/recurring/pharma-recurring-order.entity';
 
 @Module({
   imports: [
@@ -101,6 +111,9 @@ import { WithdrawalRequest } from './wallets/withdrawal-request.entity';
         OrderHistory, RiderReview, Setting, Brand, Banner, Restaurant, MenuItem, SubOrder, BusinessReview,
         Vendor, VendorProduct, Favorite, OrderChatMessage,
         Wallet, WalletTransaction, WalletSettlement, WithdrawalRequest,
+        // Pharma domain
+        Medicine, Pharmacy, PharmacyInventory, Prescription,
+        MedicineSubstitution, PharmaComplianceLog, PharmaRecurringOrder,
       ],
       logging: false,
       synchronize: process.env.NODE_ENV !== 'production',
@@ -134,6 +147,7 @@ import { WithdrawalRequest } from './wallets/withdrawal-request.entity';
     FavoritesModule,
     WalletsModule,
     HomeModule,
+    PharmaModule,
   ],
   controllers: [AppController, HealthController],
   providers: [

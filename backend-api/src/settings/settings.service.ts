@@ -21,6 +21,12 @@ export class SettingsService implements OnModuleInit {
     await this.seedDefault('delivery_max_radius_km', '10'); // Max delivery zone
     await this.seedDefault('tax_rate_percentage', '1.00');
     await this.seedDefault('multi_restaurant_max_distance_km', '0.4');
+
+    // Pharma Delivery Configuration
+    await this.seedDefault('pharma_delivery_base_fee', '150');
+    await this.seedDefault('pharma_delivery_threshold_km', '0');
+    await this.seedDefault('pharma_delivery_per_km_fee', '20');
+    await this.seedDefault('pharma_delivery_max_radius_km', '15');
     
     // Feature Visibility
     await this.seedDefault('feature_show_mart', 'true');
@@ -30,6 +36,7 @@ export class SettingsService implements OnModuleInit {
     await this.seedDefault('chat_enable_replies', 'true');
     await this.seedDefault('chat_enable_images', 'true');
     await this.seedDefault('feature_rashan_enabled', 'true');
+    await this.seedDefault('feature_show_pharma', 'true');
 
     // Rashan Service Pricing Configuration
     await this.seedDefault('rashan_base_fee', '750');
@@ -94,12 +101,17 @@ export class SettingsService implements OnModuleInit {
       chat_enable_replies: getVal('chat_enable_replies', 'true') === 'true',
       chat_enable_images: getVal('chat_enable_images', 'true') === 'true',
       feature_rashan_enabled: getVal('feature_rashan_enabled', 'true') === 'true',
+      feature_show_pharma: getVal('feature_show_pharma', 'true') === 'true',
       rashan_base_fee: getNum('rashan_base_fee', 750),
       rashan_surcharge_medium: getNum('rashan_surcharge_medium', 200),
       rashan_surcharge_heavy: getNum('rashan_surcharge_heavy', 450),
       rashan_floor_surcharge_low: getNum('rashan_floor_surcharge_low', 150),
       rashan_floor_surcharge_high: getNum('rashan_floor_surcharge_high', 300),
       rashan_placement_fee: getNum('rashan_placement_fee', 150),
+      pharma_delivery_base_fee: getNum('pharma_delivery_base_fee', 150),
+      pharma_delivery_threshold_km: getNum('pharma_delivery_threshold_km', 0),
+      pharma_delivery_per_km_fee: getNum('pharma_delivery_per_km_fee', 20),
+      pharma_delivery_max_radius_km: getNum('pharma_delivery_max_radius_km', 15),
     };
   }
 

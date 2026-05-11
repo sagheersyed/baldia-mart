@@ -204,6 +204,117 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
+        {/* Pharma Delivery Configuration */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="bg-gray-50 p-6 border-b border-gray-100 flex items-center space-x-3">
+            <Truck className="text-teal-600" size={24} />
+            <h2 className="text-xl font-semibold text-gray-800">Pharmacy Delivery Fee Structure</h2>
+          </div>
+
+          <div className="p-6 space-y-8">
+            <p className="text-sm text-gray-500 bg-teal-50 p-4 rounded-xl border border-teal-100">
+              <strong>Pharma-Specific Rates:</strong> These rates apply exclusively to medicines and pharmacy products.
+            </p>
+
+            <div className="grid md:grid-cols-2 gap-8">
+              {/* Pharma Base Fee */}
+              <div className="space-y-3">
+                <label className="text-sm font-medium text-gray-700">Pharma Base Fee (Rs.)</label>
+                <div className="flex space-x-2">
+                  <div className="relative flex-1">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">Rs.</span>
+                    <input
+                      type="number"
+                      value={settings.pharma_delivery_base_fee || ''}
+                      onChange={(e) => handleSettingChange('pharma_delivery_base_fee', e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600 outline-none transition"
+                      placeholder="80"
+                    />
+                  </div>
+                  <button
+                    onClick={() => handleUpdate('pharma_delivery_base_fee', settings.pharma_delivery_base_fee)}
+                    disabled={saving}
+                    className="p-3 bg-teal-600 text-white rounded-xl hover:bg-teal-700 transition disabled:opacity-50"
+                  >
+                    <Save size={20} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Pharma Threshold */}
+              <div className="space-y-3">
+                <label className="text-sm font-medium text-gray-700">Pharma Distance Threshold (KM)</label>
+                <div className="flex space-x-2">
+                  <div className="relative flex-1">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><Ruler size={16} /></span>
+                    <input
+                      type="number"
+                      value={settings.pharma_delivery_threshold_km || ''}
+                      onChange={(e) => handleSettingChange('pharma_delivery_threshold_km', e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600 outline-none transition"
+                      placeholder="3"
+                    />
+                  </div>
+                  <button
+                    onClick={() => handleUpdate('pharma_delivery_threshold_km', settings.pharma_delivery_threshold_km)}
+                    disabled={saving}
+                    className="p-3 bg-teal-600 text-white rounded-xl hover:bg-teal-700 transition disabled:opacity-50"
+                  >
+                    <Save size={20} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Pharma Per KM */}
+              <div className="space-y-3">
+                <label className="text-sm font-medium text-gray-700">Pharma Per KM Fee (Rs./KM)</label>
+                <div className="flex space-x-2">
+                  <div className="relative flex-1">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">Rs.</span>
+                    <input
+                      type="number"
+                      value={settings.pharma_delivery_per_km_fee || ''}
+                      onChange={(e) => handleSettingChange('pharma_delivery_per_km_fee', e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600 outline-none transition"
+                      placeholder="5"
+                    />
+                  </div>
+                  <button
+                    onClick={() => handleUpdate('pharma_delivery_per_km_fee', settings.pharma_delivery_per_km_fee)}
+                    disabled={saving}
+                    className="p-3 bg-teal-600 text-white rounded-xl hover:bg-teal-700 transition disabled:opacity-50"
+                  >
+                    <Save size={20} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Pharma Max Radius */}
+              <div className="space-y-3">
+                <label className="text-sm font-medium text-gray-700">Pharma Max Delivery Radius (KM)</label>
+                <div className="flex space-x-2">
+                  <div className="relative flex-1">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><MapPin size={16} /></span>
+                    <input
+                      type="number"
+                      value={settings.pharma_delivery_max_radius_km || ''}
+                      onChange={(e) => handleSettingChange('pharma_delivery_max_radius_km', e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600 outline-none transition"
+                      placeholder="15"
+                    />
+                  </div>
+                  <button
+                    onClick={() => handleUpdate('pharma_delivery_max_radius_km', settings.pharma_delivery_max_radius_km)}
+                    disabled={saving}
+                    className="p-3 bg-teal-600 text-white rounded-xl hover:bg-teal-700 transition disabled:opacity-50"
+                  >
+                    <Save size={20} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
 
         {/* Rashan Bulk Grocery Pricing */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -536,8 +647,8 @@ export default function SettingsPage() {
           </p>
 
           <div className="grid md:grid-cols-2 gap-8">
-            {['feature_show_mart', 'feature_show_restaurants', 'feature_show_brands', 'feature_rashan_enabled'].map(key => {
-              const label = key === 'feature_rashan_enabled' ? 'Rashan/Bulk Module' : key.includes('mart') ? 'Mart Section' : key.includes('restaurants') ? 'Restaurant Section' : 'Brand Carousel';
+            {['feature_show_mart', 'feature_show_restaurants', 'feature_show_brands', 'feature_rashan_enabled', 'feature_show_pharma'].map(key => {
+              const label = key === 'feature_rashan_enabled' ? 'Rashan/Bulk Module' : key === 'feature_show_pharma' ? 'Pharma Module' : key.includes('mart') ? 'Mart Section' : key.includes('restaurants') ? 'Restaurant Section' : 'Brand Carousel';
               const isEnabled = settings[key] === 'true' || settings[key] === true;
               return (
                 <div key={key} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">

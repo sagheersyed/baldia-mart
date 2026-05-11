@@ -80,6 +80,12 @@ export const colors = {
   rashan:         palette.purple600,
   rashanLight:    '#F3E8FF',
 
+  // Pharma — healthcare teal
+  pharma:         '#0D9488',   // teal-600
+  pharmaLight:    '#CCFBF1',   // teal-50
+  pharmaBorder:   '#99F6E4',   // teal-200
+  pharmaDark:     '#0F766E',   // teal-700
+
   // Backgrounds
   background:     palette.ink25,
   surface:        palette.white,

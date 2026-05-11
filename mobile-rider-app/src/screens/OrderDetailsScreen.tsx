@@ -100,6 +100,10 @@ export default function OrderDetailsScreen({ route, navigation }: any) {
               <View style={[styles.typeBadge, { backgroundColor: '#FF4500' }]}>
                 <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}>📦 RASHAN BULK</Text>
               </View>
+            ) : order.orderType === 'pharma' ? (
+              <View style={[styles.typeBadge, { backgroundColor: '#E0F2F1' }]}>
+                <Text style={{ color: '#00796B', fontSize: 10, fontWeight: 'bold' }}>💊 PHARMACY ORDER</Text>
+              </View>
             ) : (
               <View style={[styles.typeBadge, { backgroundColor: '#E8F5E9' }]}>
                 <Text style={{ color: '#2E7D32', fontSize: 10, fontWeight: 'bold' }}>🛒 MART ORDER</Text>
@@ -130,6 +134,14 @@ export default function OrderDetailsScreen({ route, navigation }: any) {
                 </>
               );
             }
+            if (order.pharmacy) {
+              return (
+                <>
+                  <Text style={styles.customerName}>🏥 {order.pharmacy.name}</Text>
+                  <Text style={styles.address}>📍 {order.pharmacy.address || 'Verified Pharmacy Location'}</Text>
+                </>
+              );
+            }
             return (
               <>
                 <Text style={styles.customerName}>{order.orderType === 'rashan' ? '📦 Wholesale Market' : '🏬 Baldia Mart'}</Text>
@@ -156,7 +168,7 @@ export default function OrderDetailsScreen({ route, navigation }: any) {
               {Object.entries(
                 order.items.filter((i: any) => i.status !== 'missing').reduce((acc: any, item: any) => {
                   const sub = order.subOrders?.find((s: any) => s.id === item.subOrderId);
-                  const groupName = sub?.vendor?.name || sub?.restaurant?.name || item.product?.brand?.name || item.menuItem?.restaurant?.name || order.restaurant?.name || 'Baldia Mart';
+                  const groupName = sub?.vendor?.name || sub?.restaurant?.name || item.product?.brand?.name || item.menuItem?.restaurant?.name || order.restaurant?.name || order.pharmacy?.name || 'Baldia Mart';
                   if (!acc[groupName]) acc[groupName] = [];
                   acc[groupName].push(item);
                   return acc;
@@ -165,7 +177,7 @@ export default function OrderDetailsScreen({ route, navigation }: any) {
                 <View key={groupIdx} style={{ marginBottom: 15 }}>
                   <Text style={styles.groupHeader}>{groupName}</Text>
                   {items.map((item: any, idx: number) => {
-                    const itemName = item.orderType === 'food' || item.menuItem ? item.menuItem?.name : item.product?.name;
+                    const itemName = item.orderType === 'food' || item.menuItem ? item.menuItem?.name : (item.medicine?.name || item.product?.name || item.productName);
                     return (
                       <View key={idx} style={styles.itemRow}>
                         <View style={{ flex: 1 }}>
@@ -209,7 +221,9 @@ export default function OrderDetailsScreen({ route, navigation }: any) {
           <Text style={styles.infoText}>
             {order.orderType === 'food'
               ? "Pickup food carefully. Ensure it's hot and packaged well."
-              : "Please verify all products with the merchant before picking up."}
+              : order.orderType === 'pharma'
+                ? "Handle medical supplies with care. Verify labels match the order before pickup."
+                : "Please verify all products with the merchant before picking up."}
           </Text>
         </View>
       </ScrollView>

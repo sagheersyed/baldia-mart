@@ -52,13 +52,14 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
 
   const isRashan = order?.orderType === 'rashan';
   const isFood = order?.orderType === 'food';
+  const isPharma = order?.orderType === 'pharma';
   const isDelivered = status === 'delivered';
   const isCancelled = status === 'cancelled';
 
-  const accent = isFood ? theme.colors.food : theme.colors.primary;
-  const accentLight = isFood ? theme.colors.foodLight : theme.colors.primaryLight;
+  const accent = isPharma ? theme.colors.pharma : isFood ? theme.colors.food : theme.colors.primary;
+  const accentLight = isPharma ? theme.colors.pharmaLight : isFood ? theme.colors.foodLight : theme.colors.primaryLight;
 
-  const eta = order?.estimatedDeliveryTime || (isFood ? '30-45 min' : '15-30 min');
+  const eta = order?.estimatedDeliveryTime || (isFood ? '30-45 min' : isPharma ? '20-40 min' : '15-30 min');
   const progressPct = useMemo(
     () => Math.max(5, ((currentStepIndex + 1) / Math.max(1, steps.length)) * 100),
     [currentStepIndex, steps.length]
@@ -136,16 +137,16 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
           </View>
         ) : (
           /* Status hero card */
-          <View style={[styles.statusCard, { borderColor: accentLight }]}>
+          <View style={[styles.statusCard, { borderColor: accentLight }, isPharma && styles.pharmaStatusCard]}>
             <View style={styles.statusHeadRow}>
               <View style={[styles.typeBadge, { backgroundColor: accentLight }]}>
                 <Ionicons
-                  name={isRashan ? 'cube-outline' : isFood ? 'restaurant-outline' : 'storefront-outline'}
+                  name={isRashan ? 'cube-outline' : isFood ? 'restaurant-outline' : isPharma ? 'medical-outline' : 'storefront-outline'}
                   size={12}
                   color={accent}
                 />
                 <AppText variant="badge" color={accent}>
-                  {isRashan ? 'RASHAN BULK' : isFood ? 'FOOD' : 'MART'}
+                  {isRashan ? 'RASHAN BULK' : isFood ? 'FOOD' : isPharma ? 'PHARMACY' : 'MART'}
                 </AppText>
               </View>
               {!isDelivered ? (
@@ -155,6 +156,15 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
                 </View>
               ) : null}
             </View>
+
+            {isPharma && (
+              <View style={styles.pharmaReassurance}>
+                <Ionicons name="shield-checkmark" size={16} color="#059669" />
+                <AppText variant="caption" color="#047857" style={{ marginLeft: 6 }}>
+                  Verified Pharmacist Handling
+                </AppText>
+              </View>
+            )}
 
             <AppText variant="h1" style={{ marginTop: theme.spacing.md }}>
               {steps[currentStepIndex]?.label || 'Processing…'}
@@ -426,7 +436,7 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
               <View style={{ flex: 1 }}>
                 <AppText variant="title">Order summary</AppText>
                 <AppText variant="caption">
-                  {order.items.length} item{order.items.length === 1 ? '' : 's'} • Rs. {Number(order.total).toFixed(0)}
+                  {order.items.length} item{order.items.length === 1 ? '' : 's'} • Rs. {Number(order.total).toLocaleString()}
                 </AppText>
               </View>
               <Ionicons
@@ -442,7 +452,7 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
                   <View key={it.id} style={styles.itemRow}>
                     <View style={{ flex: 1 }}>
                       <AppText variant="body" numberOfLines={1}>
-                        {it.menuItem?.name || it.product?.name || 'Item'}
+                        {it.productName || it.menuItem?.name || it.product?.name || it.medicine?.name || 'Item'}
                       </AppText>
                       <AppText variant="caption">
                         Rs. {it.priceAtTime} × {it.quantity}
@@ -476,7 +486,7 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
                       <View key={it.id} style={[styles.itemRow, { opacity: 0.6 }]}>
                         <View style={{ flex: 1 }}>
                           <AppText variant="body" style={{ textDecorationLine: 'line-through' }} numberOfLines={1}>
-                            {it.menuItem?.name || it.product?.name || 'Item'}
+                            {it.productName || it.menuItem?.name || it.product?.name || it.medicine?.name || 'Item'}
                           </AppText>
                           <AppText variant="caption">Marked as missing by rider</AppText>
                         </View>
@@ -515,7 +525,7 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
                 <View style={styles.divider} />
                 <View style={styles.sumRow}>
                   <AppText variant="title">Total</AppText>
-                  <AppText variant="h3" color={accent}>Rs. {Number(order.total).toFixed(0)}</AppText>
+                  <AppText variant="h3" color={accent}>Rs. {Number(order.total).toLocaleString()}</AppText>
                 </View>
               </>
             ) : null}
@@ -806,6 +816,18 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: theme.colors.divider,
     ...theme.shadows.sm,
     marginBottom: theme.spacing.lg,
+  },
+  pharmaStatusCard: {
+    borderColor: theme.colors.pharmaLight,
+    backgroundColor: '#F0F9FF', // Subtle medical blue-white
+  },
+  pharmaReassurance: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(5, 150, 105, 0.1)',
   },
   statusHeadRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, justifyContent: 'space-between' },
   typeBadge: {

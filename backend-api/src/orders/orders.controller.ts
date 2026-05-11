@@ -108,9 +108,10 @@ export class OrdersController {
   @Get('preview-fee/:addressId')
   async previewFee(
     @Param('addressId', ParseUUIDPipe) addressId: string,
-    @Query('restaurantId') restaurantId?: string
+    @Query('restaurantId') restaurantId?: string,
+    @Query('orderType') orderType?: string
   ) {
-    return this.ordersService.calculateDeliveryFee(addressId, restaurantId);
+    return this.ordersService.calculateDeliveryFee(addressId, restaurantId, orderType);
   }
 
   @Post(':id/accept')

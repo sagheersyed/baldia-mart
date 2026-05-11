@@ -13,6 +13,7 @@ interface Props {
   actionLabel?: string;
   onAction?: () => void;
   style?: StyleProp<ViewStyle>;
+  tint?: string;
 }
 
 const EmptyState = memo(function EmptyState({
@@ -23,6 +24,7 @@ const EmptyState = memo(function EmptyState({
   actionLabel,
   onAction,
   style,
+  tint,
 }: Props) {
   return (
     <View style={[styles.wrap, style]}>
@@ -36,7 +38,13 @@ const EmptyState = memo(function EmptyState({
       <AppText variant="h3" align="center">{title}</AppText>
       <AppText variant="caption" align="center" style={styles.subtitle}>{subtitle}</AppText>
       {onAction && actionLabel ? (
-        <AppButton label={actionLabel} variant="outline" onPress={onAction} style={{ marginTop: theme.spacing.lg, alignSelf: 'center', paddingHorizontal: theme.spacing.xxl }} />
+        <AppButton 
+          label={actionLabel} 
+          variant="outline" 
+          tint={tint}
+          onPress={onAction} 
+          style={{ marginTop: theme.spacing.lg, alignSelf: 'center', paddingHorizontal: theme.spacing.xxl }} 
+        />
       ) : null}
     </View>
   );

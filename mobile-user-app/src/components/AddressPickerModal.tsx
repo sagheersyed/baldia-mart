@@ -25,6 +25,7 @@ interface AddressPickerModalProps {
     longitude?: number;
   };
   title?: string;
+  tint?: string;
 }
 
 const LABEL_OPTIONS = ['Home', 'Work', 'Other'];
@@ -34,7 +35,8 @@ export default function AddressPickerModal({
   onClose,
   onSave,
   initialData,
-  title = 'Select Address'
+  title = 'Select Address',
+  tint = '#FF4500'
 }: AddressPickerModalProps) {
   const [label, setLabel] = useState(initialData?.label || 'Home');
   const [streetAddress, setStreetAddress] = useState(initialData?.streetAddress || '');
@@ -128,7 +130,10 @@ export default function AddressPickerModal({
             {LABEL_OPTIONS.map((l) => (
               <TouchableOpacity
                 key={l}
-                style={[styles.chip, label === l && styles.chipActive]}
+                style={[
+                  styles.chip, 
+                  label === l && { backgroundColor: tint, borderColor: tint }
+                ]}
                 onPress={() => setLabel(l)}
               >
                 <Text style={[styles.chipText, label === l && styles.chipTextActive]}>{l}</Text>
@@ -140,9 +145,9 @@ export default function AddressPickerModal({
             <Text style={styles.label}>Street Address *</Text>
             <TouchableOpacity onPress={handleLocateMe} disabled={locating}>
               {locating ? (
-                <ActivityIndicator size="small" color="#FF4500" />
+                <ActivityIndicator size="small" color={tint} />
               ) : (
-                <Text style={styles.locateText}>📍 Auto-Locate</Text>
+                <Text style={[styles.locateText, { color: tint }]}>📍 Auto-Locate</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -181,7 +186,7 @@ export default function AddressPickerModal({
             <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
               <Text style={styles.cancelBtnText}>Cancel</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
+            <TouchableOpacity style={[styles.saveBtn, { backgroundColor: tint }]} onPress={handleSave}>
               <Text style={styles.saveBtnText}>Save Address</Text>
             </TouchableOpacity>
           </View>

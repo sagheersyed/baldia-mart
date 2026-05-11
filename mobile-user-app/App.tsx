@@ -41,6 +41,12 @@ import OrderChatScreen from './src/screens/OrderChatScreen';
 import RashanOrderScreen from './src/screens/RashanOrderScreen';
 import PaymentWebViewScreen from './src/screens/PaymentWebViewScreen';
 import ProductListingScreen from './src/screens/ProductListingScreen';
+import PharmaScreen from './src/screens/PharmaScreen';
+import MedicineDetailScreen from './src/screens/MedicineDetailScreen';
+import MedicineListScreen from './src/screens/MedicineListScreen';
+import PrescriptionUploadScreen from './src/screens/PrescriptionUploadScreen';
+import PharmaCartScreen from './src/screens/PharmaCartScreen';
+import PharmaCheckoutScreen from './src/screens/PharmaCheckoutScreen';
 
 import FloatingTabBar from './src/components/FloatingTabBar';
 import AppLoader from './src/components/AppLoader';
@@ -55,11 +61,12 @@ function MainTabs() {
   const showMart = settings?.feature_show_mart === true;
   const showFood = settings?.feature_show_restaurants === true;
   const showBrands = settings?.feature_show_brands === true;
+  const showPharma = settings?.feature_show_pharma === true;
 
   if (loading) return <AppLoader label="Loading store…" />;
 
   // Key forces navigator remount when feature flags change so tabs appear/disappear
-  const navKey = `tabs-${showMart ? 1 : 0}${showFood ? 1 : 0}${showBrands ? 1 : 0}`;
+  const navKey = `tabs-${showMart ? 1 : 0}${showFood ? 1 : 0}${showBrands ? 1 : 0}${showPharma ? 1 : 0}`;
 
   return (
     <Tab.Navigator
@@ -89,6 +96,13 @@ function MainTabs() {
           name="Brands"
           component={BrandsScreen}
           options={{ tabBarLabel: 'Brands' }}
+        />
+      )}
+      {showPharma && (
+        <Tab.Screen
+          name="Pharma"
+          component={PharmaScreen}
+          options={{ tabBarLabel: 'Pharma' }}
         />
       )}
       <Tab.Screen
@@ -167,6 +181,11 @@ function Navigation() {
             <Stack.Screen name="RashanOrder" component={RashanOrderScreen} />
             <Stack.Screen name="PaymentWebView" component={PaymentWebViewScreen} />
             <Stack.Screen name="ProductListing" component={ProductListingScreen} />
+            <Stack.Screen name="MedicineDetail" component={MedicineDetailScreen} />
+            <Stack.Screen name="MedicineList" component={MedicineListScreen} />
+            <Stack.Screen name="PrescriptionUpload" component={PrescriptionUploadScreen} />
+          <Stack.Screen name="PharmaCart" component={PharmaCartScreen} />
+          <Stack.Screen name="PharmaCheckout" component={PharmaCheckoutScreen} />
           </>
         )}
       </Stack.Navigator>

@@ -22,6 +22,7 @@ import { Product } from '../products/product.entity';
 import { Address } from '../addresses/address.entity';
 import { Vendor } from '../vendors/vendor.entity';
 import { UsersService } from '../users/users.service';
+import { PharmaciesService } from '../pharma/pharmacies/pharmacies.service';
 
 @Injectable()
 export class OrdersService {
@@ -45,6 +46,8 @@ export class OrdersService {
     private walletsService: WalletsService,
     private usersService: UsersService,
     @InjectQueue('orders') private ordersQueue: Queue,
+    @Inject(forwardRef(() => PharmaciesService))
+    private pharmaciesService: PharmaciesService,
   ) { }
 
   private isBusinessOpen(openingTime: string | null, closingTime: string | null): boolean {
@@ -327,7 +330,7 @@ export class OrdersService {
     }
 
     // Dynamic Delivery Fee
-    const pricing = await this.calculateDeliveryFeeFromCoords(Number(address.latitude), Number(address.longitude), pickupLat, pickupLng);
+    const pricing = await this.calculateDeliveryFeeFromCoords(Number(address.latitude), Number(address.longitude), pickupLat, pickupLng, orderType);
     if (!pricing.isValid) {
       throw new BadRequestException(`Delivery not available: ${pricing.message}`);
     }
@@ -1343,8 +1346,8 @@ export class OrdersService {
     });
   }
 
-  async calculateDeliveryFee(addressId: string, restaurantId?: string) {
-    const address = await this.addressesService.findOne(addressId);
+  async calculateDeliveryFee(addressId: string, restaurantId?: string, orderType: string = 'mart') {
+    const address = await this.addressesService.findOne(addressId) as any;
     if (!address) {
       return {
         isValid: false,
@@ -1363,6 +1366,16 @@ export class OrdersService {
       if (restaurant && restaurant.latitude && restaurant.longitude) {
         pickupLat = Number(restaurant.latitude);
         pickupLng = Number(restaurant.longitude);
+      }
+    } else if (orderType === 'pharma') {
+      try {
+        const nearby = await this.pharmaciesService.findNearby(Number(address.latitude), Number(address.longitude), 15);
+        if (nearby && nearby.length > 0) {
+          pickupLat = Number(nearby[0].latitude);
+          pickupLng = Number(nearby[0].longitude);
+        }
+      } catch (err) {
+        console.error('Error finding nearby pharmacy for fee calculation:', err);
       }
     } else {
       try {
@@ -1384,16 +1397,18 @@ export class OrdersService {
       } catch (err) { }
     }
 
-    return this.calculateDeliveryFeeFromCoords(Number(address.latitude), Number(address.longitude), pickupLat, pickupLng);
+    return this.calculateDeliveryFeeFromCoords(Number(address.latitude), Number(address.longitude), pickupLat, pickupLng, orderType);
   }
 
-  async calculateDeliveryFeeFromCoords(custLat: number, custLng: number, pickupLat: number, pickupLng: number) {
-    console.log(`Calculating fee: Customer (${custLat}, ${custLng}) to Pickup (${pickupLat}, ${pickupLng})`);
+  async calculateDeliveryFeeFromCoords(custLat: number, custLng: number, pickupLat: number, pickupLng: number, orderType: string = 'mart') {
 
     const validation = await this.deliveryZonesService.validateAddressInZone(custLat, custLng);
 
-    if (!validation.isValid) {
-      const maxRad = (validation as any).maxRadius || 50;
+    // Pharma has a broader radius (15km default) than Mart (10km default)
+    const maxRadiusKey = orderType === 'pharma' ? 'pharma_delivery_max_radius_km' : 'delivery_max_radius_km';
+    const maxRad = await this.settingsService.getNumber(maxRadiusKey, orderType === 'pharma' ? 15 : 10);
+
+    if (!validation.isValid && validation.distance > maxRad) {
       return {
         isValid: false,
         deliveryFee: 0,
@@ -1405,22 +1420,24 @@ export class OrdersService {
     // Calculate actual distance from pickup point instead of just zone center
     const realDistance = this.deliveryZonesService.calculateDistance(custLat, custLng, pickupLat, pickupLng);
 
-    const baseFee = await this.settingsService.getNumber('delivery_base_fee', 150);
-    const threshold = await this.settingsService.getNumber('delivery_threshold_km', 3);
-    const perKmFee = await this.settingsService.getNumber('delivery_per_km_fee', 20);
+    const baseFeeKey = orderType === 'pharma' ? 'pharma_delivery_base_fee' : 'delivery_base_fee';
+    const thresholdKey = orderType === 'pharma' ? 'pharma_delivery_threshold_km' : 'delivery_threshold_km';
+    const perKmFeeKey = orderType === 'pharma' ? 'pharma_delivery_per_km_fee' : 'delivery_per_km_fee';
+
+    const baseFee = await this.settingsService.getNumber(baseFeeKey, orderType === 'pharma' ? 150 : 150);
+    const threshold = await this.settingsService.getNumber(thresholdKey, 3);
+    const perKmFee = await this.settingsService.getNumber(perKmFeeKey, orderType === 'pharma' ? 20 : 20);
 
     let deliveryFee = baseFee;
 
     if (realDistance > threshold) {
-      const extraKm = realDistance - threshold;
+      const extraKm = Math.ceil(realDistance - threshold);
       deliveryFee += extraKm * perKmFee;
     }
 
-    console.log(`Delivery Fee calculated: ${deliveryFee} for distance: ${realDistance}km`);
-
     return {
       isValid: true,
-      deliveryFee: Math.round(deliveryFee),
+      deliveryFee: parseFloat(deliveryFee.toFixed(2)),
       distance: realDistance,
       message: 'Service is available.',
     };

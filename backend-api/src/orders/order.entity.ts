@@ -55,6 +55,12 @@ export class Order {
   @JoinColumn({ name: 'brand_id' })
   brand: Brand;
 
+  @Column({ name: 'pharmacy_id', nullable: true })
+  pharmacyId: string;
+
+  @Column({ name: 'prescription_id', nullable: true })
+  prescriptionId: string;
+
   @Index()
   @Column({ default: 'pending' })
   status: string; // pending, confirmed, out_for_delivery, delivered, cancelled
@@ -87,7 +93,7 @@ export class Order {
   notes: string;
 
   @Column({ name: 'order_type', default: 'mart' })
-  orderType: string; // mart, food, rashan
+  orderType: string; // mart, food, rashan, pharma
 
   // ── Monthly Rashan Bulk Order Fields ──────────────────────────────────────
   @Column({ name: 'bulk_list_text', type: 'text', nullable: true })
