@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, StyleSheet, FlatList, Pressable, ActivityIndicator,
-  RefreshControl, Alert, ListRenderItem,
+  RefreshControl, Alert, ListRenderItem, ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -9,14 +9,16 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { useCart } from '../context/CartContext';
 import { authApi, connectSocket, ordersApi, socket } from '../api/api';
+import { useCartStore } from '../store/cartStore';
 import { useSettings } from '../context/SettingsContext';
+import { useOrdersStore } from '../store/ordersStore';
 import { generateReceiptPDF, printReceipt } from '../utils/receiptGenerator';
 import {
   AppText, AppButton, AppIconButton, AppBadge, EmptyState, SkeletonBlock,
 } from '../components/ui';
 import { theme } from '../theme/theme';
 
-type TabKey = 'active' | 'past' | 'rashan';
+type TabKey = 'active' | 'past' | 'pharma' | 'rashan';
 
 const STATUS_CONFIG: Record<string, {
   color: string; bg: string; label: string; icon: keyof typeof Ionicons.glyphMap;
@@ -60,15 +62,16 @@ function OrderCard({ order, onTrack, onCancel, onReorder, onChat, onShare, onPri
             <View style={[styles.typeChip, {
               backgroundColor: isRashan ? theme.colors.rashanLight
                 : isFood ? theme.colors.foodLight
-                  : theme.colors.primaryLight,
+                  : order.orderType === 'pharma' ? theme.colors.pharmaLight
+                    : theme.colors.primaryLight,
             }]}>
               <Ionicons
-                name={isRashan ? 'cube-outline' : isFood ? 'restaurant-outline' : 'storefront-outline'}
+                name={isRashan ? 'cube-outline' : isFood ? 'restaurant-outline' : order.orderType === 'pharma' ? 'medical-outline' : 'storefront-outline'}
                 size={10}
-                color={isRashan ? theme.colors.rashan : isFood ? theme.colors.food : theme.colors.primary}
+                color={isRashan ? theme.colors.rashan : isFood ? theme.colors.food : order.orderType === 'pharma' ? theme.colors.pharma : theme.colors.primary}
               />
-              <AppText variant="badge" color={isRashan ? theme.colors.rashan : isFood ? theme.colors.food : theme.colors.primary}>
-                {isRashan ? 'RASHAN' : isFood ? 'FOOD' : 'MART'}
+              <AppText variant="badge" color={isRashan ? theme.colors.rashan : isFood ? theme.colors.food : order.orderType === 'pharma' ? theme.colors.pharma : theme.colors.primary}>
+                {isRashan ? 'RASHAN' : isFood ? 'FOOD' : order.orderType === 'pharma' ? 'PHARMA' : 'MART'}
               </AppText>
             </View>
           </View>
@@ -126,7 +129,7 @@ function OrderCard({ order, onTrack, onCancel, onReorder, onChat, onShare, onPri
               </AppText>
             </View>
           ) : <View style={{ flex: 1 }} />}
-          <AppText variant="h3" color={theme.colors.primary}>
+          <AppText variant="h3" color={order.orderType === 'pharma' ? theme.colors.pharma : (isRashan ? theme.colors.rashan : theme.colors.primary)}>
             Rs. {Math.round(Number(order.total) || 0)}
           </AppText>
         </View>
@@ -143,11 +146,16 @@ function OrderCard({ order, onTrack, onCancel, onReorder, onChat, onShare, onPri
           fullWidth
           onPress={() => onTrack(order.id)}
           style={{ flex: 1 }}
+          tint={order.orderType === 'pharma' ? theme.colors.pharma : (isRashan ? theme.colors.rashan : undefined)}
           leadingIcon={<Ionicons name={isDelivered ? 'star-outline' : 'navigate-outline'} size={14} color="#fff" />}
         />
         {!isDelivered && chatEnabled ? (
-          <AppIconButton size={36} bg={theme.colors.surfaceMuted} onPress={() => onChat(order)}>
-            <Ionicons name="chatbubble-ellipses-outline" size={16} color={theme.colors.textPrimary} />
+          <AppIconButton 
+            size={36} 
+            bg={theme.colors.surfaceMuted} 
+            onPress={() => onChat(order)}
+          >
+            <Ionicons name="chatbubble-ellipses-outline" size={16} color={order.orderType === 'pharma' ? theme.colors.pharma : (isRashan ? theme.colors.rashan : theme.colors.textPrimary)} />
           </AppIconButton>
         ) : null}
         {isDelivered ? (
@@ -158,8 +166,16 @@ function OrderCard({ order, onTrack, onCancel, onReorder, onChat, onShare, onPri
             <AppIconButton size={36} bg={theme.colors.surfaceMuted} onPress={() => onPrint(order)}>
               <Ionicons name="receipt-outline" size={16} color={theme.colors.textPrimary} />
             </AppIconButton>
-            <AppIconButton size={36} bg={theme.colors.primaryLight} onPress={() => onReorder(order)}>
-              <Ionicons name="refresh-outline" size={16} color={theme.colors.primary} />
+            <AppIconButton 
+              size={36} 
+              bg={order.orderType === 'pharma' ? theme.colors.pharmaLight : (isRashan ? theme.colors.rashanLight : theme.colors.primaryLight)} 
+              onPress={() => onReorder(order)}
+            >
+              <Ionicons 
+                name="refresh-outline" 
+                size={16} 
+                color={order.orderType === 'pharma' ? theme.colors.pharma : (isRashan ? theme.colors.rashan : theme.colors.primary)} 
+              />
             </AppIconButton>
           </>
         ) : null}
@@ -180,59 +196,39 @@ function OrderCard({ order, onTrack, onCancel, onReorder, onChat, onShare, onPri
 
 const MemoOrderCard = React.memo(OrderCard);
 
-export default function MyOrdersScreen({ navigation }: any) {
+export default function MyOrdersScreen({ navigation, route }: any) {
   const { setActiveOrdersCount } = useCart();
   const { settings } = useSettings();
   const chatEnabled = settings?.feature_chat_enabled === true;
 
-  const [orders, setOrders] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { orders, loading, loadingMore, ordersPage, ordersTotalPages, fetchOrders, refreshAll } = useOrdersStore();
   const [refreshing, setRefreshing] = useState(false);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabKey>('active');
 
-  const fetchOrders = useCallback(async (pageNum = 1, shouldAppend = false) => {
-    try {
-      if (pageNum === 1 && !refreshing) setLoading(true);
-      else if (pageNum > 1) setLoadingMore(true);
+  const initialTabFromParams = route?.params?.initialTab as TabKey;
+  const { activeMode } = useCartStore();
 
-      const res = await ordersApi.getHistory(pageNum, 15);
-      const resData = res.data || {};
-      const newOrders = Array.isArray(resData)
-        ? resData
-        : (resData.data || resData.orders || resData.items || []);
+  const [activeTab, setActiveTab] = useState<TabKey>(
+    initialTabFromParams || (activeMode === 'pharma' ? 'pharma' : (activeMode as string) === 'rashan' ? 'rashan' : 'active')
+  );
 
-      setHasMore(newOrders.length === 15);
+  // Map tab to module type for backend query
+  const getModuleType = useCallback((tab: TabKey) => {
+    if (tab === 'pharma') return 'pharma';
+    if (tab === 'rashan') return 'rashan';
+    return 'mart_food'; // both 'active' and 'past' tabs show mart+food
+  }, []);
 
-      setOrders(prev => {
-        if (!shouldAppend) return newOrders;
-        const existingIds = new Set(prev.map((o: any) => o.id));
-        const uniqueNew = newOrders.filter((o: any) => !existingIds.has(o.id));
-        return [...prev, ...uniqueNew];
-      });
-    } catch {
-      // noop
-    } finally {
-      setLoading(false);
-      setLoadingMore(false);
-      setRefreshing(false);
-    }
-  }, [refreshing]);
-
-  const initialLoadDone = React.useRef(false);
-
+  // Fetch orders when tab changes or screen is focused
   useFocusEffect(
     useCallback(() => {
-      // Only do a full reload on first mount; subsequent updates come via sockets
-      if (!initialLoadDone.current) {
-        initialLoadDone.current = true;
-        setPage(1);
-        fetchOrders(1, false);
-      }
-    }, [fetchOrders])
+      fetchOrders(false, 1, getModuleType(activeTab));
+    }, [fetchOrders, activeTab, getModuleType])
   );
+
+  // Re-fetch when tab changes
+  useEffect(() => {
+    fetchOrders(false, 1, getModuleType(activeTab));
+  }, [activeTab, fetchOrders, getModuleType]);
 
   useEffect(() => {
     const activeCount = orders.filter((o: any) => ACTIVE_STATUSES.has(o.status)).length;
@@ -241,46 +237,37 @@ export default function MyOrdersScreen({ navigation }: any) {
 
   useEffect(() => {
     let isMounted = true;
-    let joinRoom: (() => void) | null = null;
     const onStatusUpdate = () => {
-      if (!isMounted) return;
-      setPage(1);
-      fetchOrders(1, false);
+      if (!isMounted || !navigation.isFocused()) return;
+      fetchOrders(true, 1, getModuleType(activeTab));
     };
+
     const setupSocket = async () => {
       try {
-        const userRes = await authApi.getMe();
-        const user = userRes.data;
-        if (!isMounted) return;
         connectSocket();
-        joinRoom = () => { if (user?.id) socket.emit('joinUserRoom', user.id); };
-        if (socket.connected) joinRoom();
-        socket.on('connect', joinRoom);
         socket.off('orderStatusUpdated', onStatusUpdate);
         socket.on('orderStatusUpdated', onStatusUpdate);
       } catch {
         // noop
       }
     };
+
     void setupSocket();
     return () => {
       isMounted = false;
-      if (joinRoom) socket.off('connect', joinRoom);
       socket.off('orderStatusUpdated', onStatusUpdate);
     };
-  }, [fetchOrders]);
+  }, [fetchOrders, navigation, activeTab, getModuleType]);
 
-  const onRefresh = useCallback(() => {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    setPage(1);
-    fetchOrders(1, false);
-  }, [fetchOrders]);
+    await fetchOrders(true, 1, getModuleType(activeTab));
+    setRefreshing(false);
+  }, [fetchOrders, activeTab, getModuleType]);
 
   const handleLoadMore = () => {
-    if (!loadingMore && hasMore) {
-      const nextPage = page + 1;
-      setPage(nextPage);
-      fetchOrders(nextPage, true);
+    if (!loading && !loadingMore && ordersPage < ordersTotalPages) {
+      fetchOrders(false, ordersPage + 1, getModuleType(activeTab));
     }
   };
 
@@ -294,14 +281,12 @@ export default function MyOrdersScreen({ navigation }: any) {
         style: 'destructive',
         onPress: async () => {
           try {
-            setLoading(true);
             await ordersApi.cancelOrder(orderId);
             Alert.alert('Cancelled', 'Order cancelled successfully');
-            fetchOrders(1, false);
+            fetchOrders(true, 1, getModuleType(activeTab));
           } catch (err: any) {
             const msg = err.response?.data?.message || 'Failed to cancel order. Please try again.';
             Alert.alert('Error', msg);
-            setLoading(false);
           }
         },
       },
@@ -328,26 +313,53 @@ export default function MyOrdersScreen({ navigation }: any) {
   }, [navigation]);
 
   const handleChat = useCallback((order: any) => {
-    navigation.navigate('OrderChat', { orderId: order.id, riderName: order.rider?.name });
+    const isPharma = order.orderType === 'pharma';
+    const defaultName = isPharma ? 'Pharmacist' : 'Support';
+    navigation.navigate('OrderChat', { 
+      orderId: order.id, 
+      riderName: order.rider?.name || defaultName,
+      isSupport: !order.rider
+    });
   }, [navigation]);
+
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'delivered' | 'cancelled'>('all');
 
   const filteredOrders = useMemo(() => {
     return orders.filter(o => {
-      if (activeTab === 'active') return ACTIVE_STATUSES.has(o.status) && o.orderType !== 'rashan';
-      if (activeTab === 'past') return PAST_STATUSES.has(o.status) && o.orderType !== 'rashan';
-      return o.orderType === 'rashan';
+      const status = o.status;
+
+      // For active/past tabs, module filtering is done server-side (mart_food)
+      // We still need to split by active vs past status client-side
+      if (activeTab === 'active' && !ACTIVE_STATUSES.has(status)) return false;
+      if (activeTab === 'past' && !PAST_STATUSES.has(status)) return false;
+
+      // For pharma/rashan tabs, apply sub-status filter if set
+      if (activeTab === 'pharma' || activeTab === 'rashan') {
+        if (statusFilter === 'active') return ACTIVE_STATUSES.has(status);
+        if (statusFilter === 'delivered') return status === 'delivered';
+        if (statusFilter === 'cancelled') return status === 'cancelled';
+      }
+
+      return true;
     });
-  }, [orders, activeTab]);
+  }, [orders, activeTab, statusFilter]);
+
+  // Reset status filter when changing module tabs
+  useEffect(() => {
+    setStatusFilter('all');
+  }, [activeTab]);
 
   const counts = useMemo(() => ({
-    active: orders.filter(o => ACTIVE_STATUSES.has(o.status) && o.orderType !== 'rashan').length,
-    past: orders.filter(o => PAST_STATUSES.has(o.status) && o.orderType !== 'rashan').length,
-    rashan: orders.filter(o => o.orderType === 'rashan').length,
+    active: orders.filter(o => ACTIVE_STATUSES.has(o.status)).length,
+    past: orders.filter(o => PAST_STATUSES.has(o.status)).length,
+    pharma: orders.length, // already module-scoped from cache
+    rashan: orders.length,
   }), [orders]);
 
   const tabs: { key: TabKey; label: string; count: number; icon: keyof typeof Ionicons.glyphMap }[] = [
     { key: 'active', label: 'Active', count: counts.active, icon: 'navigate-outline' },
     { key: 'past', label: 'Past', count: counts.past, icon: 'time-outline' },
+    { key: 'pharma', label: 'Pharma', count: counts.pharma, icon: 'medical-outline' },
     { key: 'rashan', label: 'Rashan', count: counts.rashan, icon: 'cube-outline' },
   ];
 
@@ -379,37 +391,76 @@ export default function MyOrdersScreen({ navigation }: any) {
       </View>
 
       {/* Tabs */}
-      <View style={styles.tabsRow}>
-        {tabs.map(t => {
-          const active = activeTab === t.key;
-          return (
-            <Pressable
-              key={t.key}
-              onPress={() => setActiveTab(t.key)}
-              style={[styles.tabBtn, active ? styles.tabBtnActive : null]}
-            >
-              <Ionicons
-                name={t.icon}
-                size={14}
-                color={active ? theme.colors.primary : theme.colors.textSecondary}
-              />
-              <AppText
-                variant="captionStrong"
-                color={active ? theme.colors.primary : theme.colors.textSecondary}
+      <View style={{ backgroundColor: theme.colors.surface }}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabsRow}
+        >
+          {tabs.map(t => {
+            const active = activeTab === t.key;
+            const activeColor = t.key === 'pharma' ? theme.colors.pharma 
+              : t.key === 'rashan' ? theme.colors.rashan 
+              : theme.colors.primary;
+            const activeBg = t.key === 'pharma' ? theme.colors.pharmaLight 
+              : t.key === 'rashan' ? theme.colors.rashanLight 
+              : theme.colors.primaryLight;
+            const activeBorder = t.key === 'pharma' ? theme.colors.pharmaBorder 
+              : t.key === 'rashan' ? theme.colors.primaryBorder // rashan uses primary border usually
+              : theme.colors.primaryBorder;
+
+            return (
+              <Pressable
+                key={t.key}
+                onPress={() => setActiveTab(t.key)}
+                style={[
+                  styles.tabBtn, 
+                  active ? { backgroundColor: activeBg, borderColor: activeBorder } : null
+                ]}
               >
-                {t.label}
-              </AppText>
-              {t.count > 0 ? (
-                <View style={[styles.tabCount, active ? { backgroundColor: theme.colors.primary } : { backgroundColor: theme.colors.surfaceMuted }]}>
-                  <AppText variant="badge" color={active ? '#fff' : theme.colors.textSecondary}>
-                    {t.count}
-                  </AppText>
-                </View>
-              ) : null}
-            </Pressable>
-          );
-        })}
+                <Ionicons
+                  name={t.icon}
+                  size={14}
+                  color={active ? activeColor : theme.colors.textSecondary}
+                />
+                <AppText
+                  variant="captionStrong"
+                  color={active ? activeColor : theme.colors.textSecondary}
+                >
+                  {t.label}
+                </AppText>
+                {t.count > 0 ? (
+                  <View style={[styles.tabCount, active ? { backgroundColor: activeColor } : { backgroundColor: theme.colors.surfaceMuted }]}>
+                    <AppText variant="badge" color={active ? '#fff' : theme.colors.textSecondary}>
+                      {t.count}
+                    </AppText>
+                  </View>
+                ) : null}
+              </Pressable>
+            );
+          })}
+        </ScrollView>
       </View>
+
+      {(activeTab === 'pharma' || activeTab === 'rashan') && (
+        <View style={styles.filterBar}>
+          {(['all', 'active', 'delivered', 'cancelled'] as const).map(f => {
+            const active = statusFilter === f;
+            const activeColor = activeTab === 'pharma' ? theme.colors.pharma : theme.colors.rashan;
+            return (
+              <Pressable 
+                key={f} 
+                onPress={() => setStatusFilter(f)}
+                style={[styles.filterChip, active ? { backgroundColor: activeColor } : null]}
+              >
+                <AppText variant="badge" color={active ? '#fff' : theme.colors.textSecondary}>
+                  {f.toUpperCase()}
+                </AppText>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
 
       {loading && !refreshing ? (
         <View style={{ padding: theme.spacing.lg, gap: theme.spacing.md }}>
@@ -427,15 +478,34 @@ export default function MyOrdersScreen({ navigation }: any) {
         </View>
       ) : filteredOrders.length === 0 ? (
         <EmptyState
-          icon={activeTab === 'rashan' ? 'cube-outline' : activeTab === 'active' ? 'bicycle-outline' : 'archive-outline'}
-          title={activeTab === 'active' ? 'No active orders' : activeTab === 'past' ? 'No past orders yet' : 'No rashan requests'}
-          subtitle={activeTab === 'active'
-            ? 'You\'ll see live order tracking here.'
-            : activeTab === 'past'
-              ? 'Once you place an order, it will appear here.'
-              : 'Place a bulk rashan request to see it here.'}
-          actionLabel={activeTab === 'rashan' ? 'Start Rashan' : 'Start shopping'}
-          onAction={() => navigation.navigate(activeTab === 'rashan' ? 'RashanOrder' : 'Main')}
+          icon={activeTab === 'rashan' ? 'cube-outline' : activeTab === 'pharma' ? 'medical-outline' : activeTab === 'active' ? 'bicycle-outline' : 'archive-outline'}
+          title={
+            activeTab === 'active' ? 'No active orders' : 
+            activeTab === 'past' ? 'No past orders yet' : 
+            activeTab === 'pharma' ? 'No pharma orders' :
+            'No rashan requests'
+          }
+          subtitle={
+            activeTab === 'active' ? "You'll see live order tracking here." : 
+            activeTab === 'past' ? "Once you place an order, it will appear here." : 
+            activeTab === 'pharma' ? "Your medicine orders and prescriptions will appear here." :
+            "Place a bulk rashan request to see it here."
+          }
+          actionLabel={
+            activeTab === 'rashan' ? 'Start Rashan' : 
+            activeTab === 'pharma' ? 'Go to Pharmacy' :
+            'Start shopping'
+          }
+          onAction={() => navigation.navigate(
+            activeTab === 'rashan' ? 'RashanOrder' : 
+            activeTab === 'pharma' ? 'Pharma' :
+            'Main'
+          )}
+          accent={
+            activeTab === 'pharma' ? theme.colors.pharma 
+            : activeTab === 'rashan' ? theme.colors.rashan 
+            : theme.colors.primary
+          }
         />
       ) : (
         <FlatList
@@ -443,13 +513,11 @@ export default function MyOrdersScreen({ navigation }: any) {
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ padding: theme.spacing.lg, paddingBottom: theme.spacing.xxxl }}
           showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} colors={[theme.colors.primary]} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={activeTab === 'pharma' ? theme.colors.pharma : theme.colors.primary} colors={[activeTab === 'pharma' ? theme.colors.pharma : theme.colors.primary]} />}
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.5}
-          ListFooterComponent={loadingMore
-            ? <ActivityIndicator size="small" color={theme.colors.primary} style={{ margin: 12 }} />
-            : null}
           renderItem={renderItem}
+          ListFooterComponent={loadingMore ? <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginVertical: 16 }} /> : null}
           ItemSeparatorComponent={() => <View style={{ height: theme.spacing.md }} />}
           initialNumToRender={6}
           maxToRenderPerBatch={6}
@@ -477,14 +545,14 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: theme.colors.divider,
   },
   tabBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    paddingVertical: 10, borderRadius: theme.radius.pill,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    paddingVertical: 10, paddingHorizontal: 16, borderRadius: theme.radius.pill,
     backgroundColor: theme.colors.surfaceMuted,
     borderWidth: 1.5, borderColor: 'transparent',
+    marginRight: 8,
   },
   tabBtnActive: {
-    backgroundColor: theme.colors.primaryLight,
-    borderColor: theme.colors.primaryBorder,
+    // Dynamically set in JSX
   },
   tabCount: {
     minWidth: 18, paddingHorizontal: 6, height: 18,
@@ -539,4 +607,22 @@ const styles = StyleSheet.create({
   },
 
   actions: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, marginTop: 4 },
+  
+  filterBar: {
+    flexDirection: 'row',
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.sm,
+    gap: 8,
+    backgroundColor: theme.colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.divider,
+  },
+  filterChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: theme.radius.sm,
+    backgroundColor: theme.colors.surfaceMuted,
+    borderWidth: 1,
+    borderColor: theme.colors.divider,
+  },
 });

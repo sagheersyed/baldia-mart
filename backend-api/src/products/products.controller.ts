@@ -36,12 +36,13 @@ export class ProductsController {
     @Query('featured') featured?: any,
     @Query('bestSeller') bestSeller?: any,
     @Query('deal') deal?: any,
+    @Query('ids') ids?: string,
   ) {
     const hasAdvancedQuery = Boolean(
       search || categoryId || brandId || sort ||
       minPrice !== undefined || maxPrice !== undefined ||
       inStock !== undefined || featured !== undefined ||
-      bestSeller !== undefined || deal !== undefined,
+      bestSeller !== undefined || deal !== undefined || ids,
     );
 
     if (hasAdvancedQuery) {
@@ -58,6 +59,7 @@ export class ProductsController {
         featured: parseBool(featured),
         bestSeller: parseBool(bestSeller),
         deal: parseBool(deal),
+        ids,
       });
     }
 

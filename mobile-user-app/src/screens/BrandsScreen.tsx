@@ -48,8 +48,8 @@ export default function BrandsScreen({ navigation }: any) {
         brandsApi.getAll('mart').catch(() => ({ data: [] })),
         productsApi.getAll().catch(() => ({ data: [] })),
       ]);
-      const allBrands = (brandsRes.data || []).filter((b: any) => b.isActive !== false);
-      const allProds = (prodRes.data || []).filter((p: any) => p.isActive !== false);
+      const allBrands = (brandsRes.data?.data || brandsRes.data || []).filter((b: any) => b.isActive !== false);
+      const allProds = (prodRes.data?.data || prodRes.data || []).filter((p: any) => p.isActive !== false);
       const brandsWithCount = allBrands.map((b: any) => ({
         ...b,
         productCount: allProds.filter((p: any) => p.brandId === b.id).length,

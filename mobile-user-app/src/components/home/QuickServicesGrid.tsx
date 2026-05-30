@@ -1,6 +1,7 @@
 import React, { memo, useMemo } from 'react';
 import { View, StyleSheet, Pressable, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import AppText from '../ui/AppText';
 import { theme } from '../../theme/theme';
 
@@ -20,9 +21,8 @@ interface Props {
 }
 
 /**
- * Bento-style quick service cards. The "rail" variant is the Pandamart-like
- * horizontal scroll of large colored tiles. The "grid" variant lays them out
- * in a 4-column grid.
+ * Premium bento-style quick service cards. Taller with gradient icon circles
+ * and contrasting badge chips. FoodPanda Pandamart-inspired.
  */
 const QuickServicesGrid = memo(function QuickServicesGrid({
   services,
@@ -31,27 +31,47 @@ const QuickServicesGrid = memo(function QuickServicesGrid({
   const Item = useMemo(() => {
     return ({ item }: { item: QuickService }) => {
       if (!item) return null;
+
+      // Derive a slightly darker shade for gradient
+      const darkerBg = item.bg.replace(/([0-9A-F]{2})$/i, (match) => {
+        const val = Math.max(0, parseInt(match, 16) - 30);
+        return val.toString(16).padStart(2, '0');
+      });
+
       return (
         <Pressable
           onPress={item.onPress}
           style={({ pressed }) => [
             styles.card,
-            { backgroundColor: item.bg },
             variant === 'grid' ? styles.gridCard : styles.railCard,
-            pressed ? { opacity: 0.85, transform: [{ scale: 0.97 }] } : null,
+            pressed ? { opacity: 0.88, transform: [{ scale: 0.95 }] } : null,
           ]}
         >
+          <LinearGradient
+            colors={[item.bg, darkerBg]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+          {/* Badge (HOT) — top-right */}
           {item.badge ? (
             <View style={styles.badgeChip}>
-              <AppText variant="badge" color={theme.colors.danger}>
+              <AppText variant="badge" color="#fff" style={{ fontSize: 9 }}>
                 {item.badge}
               </AppText>
             </View>
           ) : null}
-          <View style={[styles.iconCircle, { backgroundColor: 'rgba(255,255,255,0.55)' }]}>
-            <Ionicons name={item.icon} size={26} color={item.fg} />
+          {/* Icon circle */}
+          <View style={styles.iconCircle}>
+            <Ionicons name={item.icon} size={28} color={item.fg} />
           </View>
-          <AppText variant="bodyStrong" color={theme.colors.textHeader} numberOfLines={2} align="center">
+          <AppText
+            variant="captionStrong"
+            color={theme.colors.textHeader}
+            numberOfLines={2}
+            align="center"
+            style={styles.label}
+          >
             {item.title}
           </AppText>
         </Pressable>
@@ -93,33 +113,46 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.sm,
   },
   card: {
-    borderRadius: theme.radius.lg,
+    borderRadius: theme.radius.xl,
     padding: theme.spacing.md,
     alignItems: 'center',
     justifyContent: 'flex-end',
     overflow: 'hidden',
+    ...theme.shadows.sm,
   },
   railCard: {
-    width: 116,
-    height: 124,
+    width: 120,
+    height: 136,
     marginRight: theme.spacing.md,
   },
   gridCard: {
     width: '47%',
-    height: 110,
+    height: 120,
     flexGrow: 1,
   },
   iconCircle: {
-    width: 44, height: 44, borderRadius: 22,
-    alignItems: 'center', justifyContent: 'center',
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: theme.spacing.sm,
+    backgroundColor: 'rgba(255,255,255,0.65)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.8)',
   },
   badgeChip: {
     position: 'absolute',
-    top: 8, left: 8,
-    backgroundColor: '#fff',
+    top: 8,
+    right: 8,
+    backgroundColor: theme.colors.danger,
     borderRadius: theme.radius.pill,
-    paddingHorizontal: 6, paddingVertical: 2,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  label: {
+    fontSize: 12.5,
+    lineHeight: 16,
   },
 });
 

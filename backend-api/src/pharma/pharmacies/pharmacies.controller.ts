@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Param, Query, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Delete, Param, Query, Body, UseGuards } from '@nestjs/common';
 import { PharmaciesService } from './pharmacies.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 
@@ -59,6 +59,18 @@ export class PharmaciesController {
   removeInventory(@Param('id') id: string) {
     return this.pharmaciesService.removeInventoryItem(id);
   }
+  
+  @Put(':id')
+  @UseGuards(JwtAuthGuard)
+  update(@Param('id') id: string, @Body() dto: any) {
+    return this.pharmaciesService.update(id, dto);
+  }
+
+  @Patch(':id')
+  @UseGuards(JwtAuthGuard)
+  patch(@Param('id') id: string, @Body() dto: any) {
+    return this.pharmaciesService.update(id, dto);
+  }
 
   // ── Onboarding ────────────────────────────────────────────────
 
@@ -86,5 +98,18 @@ export class PharmaciesController {
   @UseGuards(JwtAuthGuard)
   nearExpiry(@Query('days') days?: string) {
     return this.pharmaciesService.getNearExpiry(days ? parseInt(days, 10) : 30);
+  }
+
+  // ── POS Integration (Phase 11 Mock) ───────────────────────────
+  @Post(':id/sync-pos')
+  @UseGuards(JwtAuthGuard)
+  syncWithPos(@Param('id') id: string, @Body() data: any) {
+    console.log(`[POS Sync] Pharmacy ${id} synced via POS API`, data);
+    return {
+      status: 'success',
+      syncedItems: data.items?.length || 0,
+      timestamp: new Date().toISOString(),
+      message: 'Real-time stock sync via POS Integration complete (Mock)'
+    };
   }
 }

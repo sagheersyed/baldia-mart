@@ -11,12 +11,14 @@ import { authApi } from '../api/api';
 import { useAuth } from '../context/AuthContext';
 
 import { AppText, AppButton, AppIconButton } from '../components/ui';
+import { useCartStore } from '../store/cartStore';
 import { theme } from '../theme/theme';
 
 const OTP_LENGTH = 6;
 
 export default function OtpScreen({ navigation, route }: any) {
   const { signIn } = useAuth();
+  const { activeMode } = useCartStore();
   const { phoneNumber } = route.params || {};
   const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(''));
   const [loading, setLoading] = useState(false);
@@ -98,6 +100,11 @@ export default function OtpScreen({ navigation, route }: any) {
     }
   };
 
+  const accent = activeMode === 'food' ? theme.colors.food : activeMode === 'pharma' ? theme.colors.pharma : theme.colors.primary;
+  const accentDark = activeMode === 'food' ? theme.colors.foodDark : activeMode === 'pharma' ? theme.colors.pharmaDark : theme.colors.primaryDark;
+  const accentLight = activeMode === 'food' ? theme.colors.foodLight : activeMode === 'pharma' ? theme.colors.pharmaLight : theme.colors.primaryLight;
+  const gradientColors: [string, string] = [accent || '#FF5A1F', accentDark || '#E64A19'];
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <KeyboardAvoidingView
@@ -106,7 +113,7 @@ export default function OtpScreen({ navigation, route }: any) {
       >
         <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <LinearGradient
-            colors={[theme.colors.primary, theme.colors.primaryDark]}
+            colors={gradientColors}
             style={styles.hero}
           >
             <View style={styles.headerRow}>
@@ -130,7 +137,11 @@ export default function OtpScreen({ navigation, route }: any) {
                 <TextInput
                   key={i}
                   ref={el => { inputRefs.current[i] = el; }}
-                  style={[styles.otpInput, digit ? styles.otpInputFilled : null]}
+                  style={[
+                    styles.otpInput, 
+                    digit ? { borderColor: accent, backgroundColor: accentLight } : null,
+                    { color: accent }
+                  ]}
                   value={digit}
                   onChangeText={val => handleOtpChange(val, i)}
                   onKeyPress={e => handleKeyPress(e, i)}
@@ -146,6 +157,7 @@ export default function OtpScreen({ navigation, route }: any) {
             <AppButton
               label={loading ? 'Verifying…' : 'Verify & continue'}
               variant="primary"
+              tint={accent}
               size="lg"
               fullWidth
               onPress={handleVerify}
@@ -157,10 +169,10 @@ export default function OtpScreen({ navigation, route }: any) {
 
             <View style={styles.resend}>
               {timer > 0 ? (
-                <AppText variant="caption">Resend code in <AppText variant="captionStrong" color={theme.colors.primary}>{timer}s</AppText></AppText>
+                <AppText variant="caption">Resend code in <AppText variant="captionStrong" color={accent}>{timer}s</AppText></AppText>
               ) : (
                 <Pressable onPress={handleResend} disabled={loading}>
-                  <AppText variant="bodyStrong" color={theme.colors.primary}>Resend OTP</AppText>
+                  <AppText variant="bodyStrong" color={accent}>Resend OTP</AppText>
                 </Pressable>
               )}
             </View>

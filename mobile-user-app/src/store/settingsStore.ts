@@ -18,6 +18,12 @@ interface Settings {
   feature_chat_enabled: boolean;
   feature_rashan_enabled: boolean;
   feature_show_pharma: boolean;
+  feature_pharma_lab_tests_enabled: boolean;
+  feature_pharma_doctor_consultations_enabled: boolean;
+  feature_pharma_reminders_enabled: boolean;
+  feature_pharma_refills_enabled: boolean;
+  pharma_skip_prescription_verification: boolean;
+  pharma_delivery_max_radius_km: number;
   chat_enable_replies: boolean;
   chat_enable_images: boolean;
   auth_customer_mpin_enabled: boolean;
@@ -29,6 +35,7 @@ interface Settings {
   rashan_floor_surcharge_low: number;
   rashan_floor_surcharge_high: number;
   rashan_placement_fee: number;
+  pharma_conditions?: any[];
 }
 
 interface SettingsState {

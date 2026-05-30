@@ -10,7 +10,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import {
   addressesApi, bannersApi, restaurantsApi, deliveryZonesApi,
-  normalizeUrl, socket, connectSocket,
+  normalizeUrl, socket, connectSocket, moduleEventsApi,
 } from '../api/api';
 import { useCart } from '../context/CartContext';
 import { formatRatingCount, getDistanceKm, isBusinessOpen } from '../utils/helpers';
@@ -18,6 +18,7 @@ import { formatRatingCount, getDistanceKm, isBusinessOpen } from '../utils/helpe
 import HomeHeader from '../components/home/HomeHeader';
 import HomeSearchBar from '../components/home/HomeSearchBar';
 import PromoCarousel from '../components/home/PromoCarousel';
+import CampaignStrip from '../components/home/CampaignStrip';
 import HomeSkeleton from '../components/home/HomeSkeleton';
 import {
   AppText, AppBadge, EmptyState, ErrorState, SectionHeader,
@@ -173,6 +174,7 @@ type ListRow =
   | { kind: 'banners' }
   | { kind: 'cuisines' }
   | { kind: 'toggles' }
+  | { kind: 'campaigns' }
   | { kind: 'sectionHeader'; title: string; subtitle?: string }
   | { kind: 'restaurant'; resto: any };
 
@@ -180,6 +182,7 @@ export default function FoodScreen({ navigation }: any) {
   const { setActiveMode, getCartCount } = useCart();
   const [restaurants, setRestaurants] = useState<any[]>([]);
   const [banners, setBanners] = useState<any[]>([]);
+  const [campaigns, setCampaigns] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -221,10 +224,14 @@ export default function FoodScreen({ navigation }: any) {
         zoneId = matching?.id;
       }
 
-      const bannerRes = await bannersApi.getBySection('food', zoneId).catch(() => ({ data: [] }));
+      const [bannerRes, campaignRes] = await Promise.all([
+        bannersApi.getBySection('food', zoneId).catch(() => ({ data: [] })),
+        moduleEventsApi.getAll('food').catch(() => ({ data: [] })),
+      ]);
 
       setRestaurants((restRes.data || []).filter((r: any) => r.isActive !== false));
       setBanners(bannerRes.data || []);
+      setCampaigns(campaignRes.data || []);
       setAddress(currentAddr);
       setActiveZones(zones);
     } catch (e: any) {
@@ -244,14 +251,19 @@ export default function FoodScreen({ navigation }: any) {
   useEffect(() => {
     connectSocket();
     const onBannersUpdated = async () => {
+      if (!navigation.isFocused()) return;
       try {
-        const res = await bannersApi.getBySection('food');
-        setBanners(res.data || []);
+        const [bRes, cRes] = await Promise.all([
+          bannersApi.getBySection('food'),
+          moduleEventsApi.getAll('food'),
+        ]);
+        setBanners(bRes.data || []);
+        setCampaigns(cRes.data || []);
       } catch {}
     };
     socket.on('bannersUpdated', onBannersUpdated);
     return () => { socket.off('bannersUpdated', onBannersUpdated); };
-  }, []);
+  }, [navigation]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -317,6 +329,9 @@ export default function FoodScreen({ navigation }: any) {
       { kind: 'cuisines' },
       { kind: 'toggles' },
     ];
+    if (campaigns.length > 0) {
+      rows.push({ kind: 'campaigns' });
+    }
     if (dealsRestaurants.length) {
       rows.push({ kind: 'sectionHeader', title: 'Deals near you', subtitle: 'Limited-time discounts' });
       dealsRestaurants.forEach(r => rows.push({ kind: 'restaurant', resto: r }));
@@ -328,7 +343,7 @@ export default function FoodScreen({ navigation }: any) {
     });
     filteredSorted.forEach(r => rows.push({ kind: 'restaurant', resto: r }));
     return rows;
-  }, [filteredSorted, dealsRestaurants, activeSort]);
+  }, [filteredSorted, dealsRestaurants, activeSort, campaigns]);
 
   // ── Banner navigation ──
   const handleBannerPress = useCallback((b: any) => {
@@ -340,6 +355,8 @@ export default function FoodScreen({ navigation }: any) {
       setActiveCuisine(b.linkId);
     } else if (b.linkType === 'brand' && b.linkId) {
       navigation.navigate('BrandDetail', { brandId: b.linkId });
+    } else if (b.linkType === 'event' && b.linkId) {
+      navigation.navigate('EventDetails', { eventId: b.linkId });
     } else {
       navigation.navigate('Search', { mode: 'food' });
     }
@@ -403,6 +420,13 @@ export default function FoodScreen({ navigation }: any) {
             })}
           </View>
         );
+      case 'campaigns':
+        return (
+          <CampaignStrip
+            events={campaigns}
+            onPress={(ev) => navigation.navigate('EventDetails', { eventId: ev.id })}
+          />
+        );
       case 'sectionHeader':
         return <SectionHeader title={item.title} subtitle={item.subtitle} />;
       case 'restaurant':
@@ -418,7 +442,7 @@ export default function FoodScreen({ navigation }: any) {
           />
         );
     }
-  }, [banners, activeCuisine, activeSort, toggles, cycleSort, handleBannerPress, navigation]);
+  }, [banners, campaigns, activeCuisine, activeSort, toggles, cycleSort, handleBannerPress, navigation]);
 
   const keyExtractor = useCallback((item: ListRow, index: number) => {
     if (item.kind === 'restaurant') return `r-${item.resto.id}`;

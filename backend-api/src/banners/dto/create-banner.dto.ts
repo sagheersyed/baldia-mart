@@ -2,10 +2,11 @@ import { IsBoolean, IsHexColor, IsIn, IsInt, IsOptional, IsString, IsUUID, Min }
 
 export class CreateBannerDto {
   @IsOptional()
-  @IsIn(['mart', 'food', 'all'])
+  @IsIn(['mart', 'food', 'pharma', 'all'])
   section?: string;
 
   @IsString()
+  @IsOptional()
   title: string;
 
   @IsOptional()
@@ -33,7 +34,7 @@ export class CreateBannerDto {
   tagLabel?: string;
 
   @IsOptional()
-  @IsIn(['product', 'brand', 'restaurant', 'category', 'none'])
+  @IsIn(['product', 'brand', 'restaurant', 'category', 'medicine', 'event', 'none'])
   linkType?: string;
 
   @IsOptional()

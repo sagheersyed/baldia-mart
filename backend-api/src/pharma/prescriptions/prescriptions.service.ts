@@ -19,6 +19,16 @@ export class PrescriptionsService {
   /**
    * Upload a new prescription — enters the verification queue automatically.
    */
+  async findAll(page = 1, limit = 20) {
+    const [data, total] = await this.prescriptionRepo.findAndCount({
+      relations: ['user'],
+      order: { createdAt: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+    return { data, total, page, limit };
+  }
+
   async upload(userId: string, dto: {
     imageUrl: string;
     additionalImageUrls?: string[];
@@ -96,18 +106,41 @@ export class PrescriptionsService {
 
   async getPendingQueue(page = 1, limit = 20) {
     const [data, total] = await this.prescriptionRepo.findAndCount({
-      where: { status: 'pending' },
+      where: [
+        { status: 'pending' },
+        { status: 'consultation_requested' },
+        { status: 'in_review' },
+      ],
       relations: ['user'],
-      order: { createdAt: 'ASC' }, // FIFO
+      order: { createdAt: 'ASC' },
       skip: (page - 1) * limit,
       take: limit,
     });
     return { data, total, page, limit };
   }
 
+  async requestConsultation(userId: string, medicineIds: string[]): Promise<Prescription> {
+    const rx = this.prescriptionRepo.create({
+      userId,
+      medicineIds,
+      status: 'consultation_requested',
+      imageUrl: 'CONSULTATION_PLACEHOLDER', // Internal flag
+    });
+    const saved = await this.prescriptionRepo.save(rx);
+
+    await this.complianceService.log({
+      eventType: 'consultation_requested',
+      userId,
+      prescriptionId: saved.id,
+      details: `User requested consultation for medicines: ${medicineIds.join(', ')}`,
+    });
+
+    return saved;
+  }
+
   async approve(id: string, reviewedBy: string, notes?: string, medicineIds?: string[], validUntil?: string) {
     const rx = await this.findById(id);
-    if (rx.status !== 'pending' && rx.status !== 'in_review') {
+    if (rx.status !== 'pending' && rx.status !== 'in_review' && rx.status !== 'consultation_requested') {
       throw new BadRequestException(`Cannot approve prescription in status: ${rx.status}`);
     }
 
@@ -134,7 +167,7 @@ export class PrescriptionsService {
 
   async reject(id: string, reviewedBy: string, reason: string) {
     const rx = await this.findById(id);
-    if (rx.status !== 'pending' && rx.status !== 'in_review') {
+    if (rx.status !== 'pending' && rx.status !== 'in_review' && rx.status !== 'consultation_requested') {
       throw new BadRequestException(`Cannot reject prescription in status: ${rx.status}`);
     }
 

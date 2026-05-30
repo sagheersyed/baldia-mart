@@ -1,4 +1,4 @@
-export type ToastVariant = 'success' | 'error' | 'info';
+export type ToastVariant = 'success' | 'error' | 'info' | 'warning';
 
 export interface ToastPayload {
   title: string;

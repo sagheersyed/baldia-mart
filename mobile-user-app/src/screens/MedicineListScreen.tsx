@@ -27,18 +27,27 @@ export default function MedicineListScreen({ route, navigation }: any) {
       let res;
       if (categoryId) {
         res = await pharmaApi.getByCategory(categoryId, pageNum, 20);
+      } else if (route.params?.conditionId) {
+        // Map condition to search or specialized endpoint
+        res = await pharmaApi.searchMedicines(route.params.conditionId, pageNum, 50);
       } else if (filter === 'emergency') {
         res = await pharmaApi.getEmergency(50);
+      } else if (filter === 'device') {
+        res = await pharmaApi.searchMedicines('', pageNum, 20, 'device');
       } else if (filter) {
-        // For OTC, vitamins, skincare, baby — use search with tags
         res = await pharmaApi.searchMedicines(filter, pageNum, 20);
       } else {
         res = await pharmaApi.getFeatured(50);
       }
 
-      const data = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+      const rawArr = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+      const data = Array.from(new Map(rawArr.map((m: any) => [m.id, m])).values());
       if (append) {
-        setMedicines((prev) => [...prev, ...data]);
+        setMedicines((prev) => {
+          const existingIds = new Set(prev.map(m => m.id));
+          const newItems = data.filter((m: any) => !existingIds.has(m.id));
+          return [...prev, ...newItems];
+        });
       } else {
         setMedicines(data);
       }
@@ -87,10 +96,13 @@ export default function MedicineListScreen({ route, navigation }: any) {
           )}
         </View>
         <View style={styles.cardInfo}>
+          <AppText variant="caption" color={theme.colors.textMuted} numberOfLines={1} style={{ fontSize: 10 }}>
+            {item.brand?.name || 'Pharma'}
+          </AppText>
+          <AppText variant="bodyStrong" numberOfLines={2}>{item.name}</AppText>
           <AppText variant="caption" color={theme.colors.textSecondary} numberOfLines={1}>
             {item.dosageForm || 'Medicine'}
           </AppText>
-          <AppText variant="bodyStrong" numberOfLines={2}>{item.name}</AppText>
           {item.genericName && (
             <AppText variant="caption" color={theme.colors.textMuted} numberOfLines={1}>
               {item.genericName}
@@ -116,7 +128,7 @@ export default function MedicineListScreen({ route, navigation }: any) {
         <AppText variant="title" numberOfLines={1} style={{ flex: 1, marginLeft: 12 }}>
           {title || 'Medicines'}
         </AppText>
-        <Pressable onPress={() => navigation.navigate('Search', { mode: 'pharma' })} hitSlop={12}>
+        <Pressable onPress={() => navigation.navigate('PharmaSearch')} hitSlop={12}>
           <Ionicons name="search-outline" size={22} color={theme.colors.textPrimary} />
         </Pressable>
       </View>
@@ -163,7 +175,7 @@ export default function MedicineListScreen({ route, navigation }: any) {
           style={styles.floatingCart}
           onPress={() => {
             setActiveMode('pharma');
-            navigation.navigate('Cart');
+            navigation.navigate('PharmaCart');
           }}
         >
           <View style={styles.cartIconBadge}>

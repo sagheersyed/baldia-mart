@@ -32,7 +32,7 @@ export interface HomeSection {
 }
 
 export interface HomePayload {
-  section: 'mart' | 'food';
+  section: 'mart' | 'food' | 'pharma';
   zoneId: string | null;
   generatedAt: string;
   banners: Banner[];

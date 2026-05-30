@@ -11,7 +11,7 @@ interface Rider {
   id: string; name: string; phoneNumber: string; email: string;
   vehicleType: string; vehicleNumber: string; cnicFrontUrl: string;
   cnicBackUrl: string; selfieUrl: string; isActive: boolean; isOnline: boolean;
-  isProfileComplete: boolean; totalEarnings: number; averageRating: number;
+  isProfileComplete: boolean; isPharmaApproved: boolean; totalEarnings: number; averageRating: number;
   totalReviews: number; createdAt: string;
 }
 
@@ -22,7 +22,7 @@ export default function RidersPage() {
   const [loading,     setLoading]     = useState(true);
   const [error,       setError]       = useState<string | null>(null);
   const [searchTerm,  setSearchTerm]  = useState('');
-  const [filterStatus,setFilterStatus]= useState<'all' | 'active' | 'blocked' | 'pending'>('all');
+  const [filterStatus,setFilterStatus]= useState<'all' | 'active' | 'blocked' | 'pending' | 'pharma'>('all');
   const [viewingDocs, setViewingDocs] = useState<Rider | null>(null);
   const [updating,    setUpdating]    = useState<string | null>(null);
   const [editingRider,setEditingRider]= useState<Rider | null>(null);
@@ -63,6 +63,23 @@ export default function RidersPage() {
     }
   };
 
+  const handleTogglePharma = async (rider: Rider) => {
+    setUpdating(rider.id);
+    try {
+      const res = await fetchWithAuth(`${API_URL}/${rider.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isPharmaApproved: !rider.isPharmaApproved }),
+      });
+      if (!res.ok) throw new Error(await parseApiError(res, 'Failed to update rider'));
+      setRiders(prev => prev.map(r => r.id === rider.id ? { ...r, isPharmaApproved: !rider.isPharmaApproved } : r));
+      showToast({ title: `Rider ${rider.isPharmaApproved ? 'removed from' : 'approved for'} pharma`, variant: 'success' });
+    } catch (err) {
+      showToast({ title: getErrorMessage(err, 'Failed to update rider'), variant: 'error' });
+    } finally {
+      setUpdating(null);
+    }
+  };
+
   const handleSaveEdit = async () => {
     if (!editingRider) return;
     setSavingEdit(true);
@@ -89,7 +106,7 @@ export default function RidersPage() {
 
   const filtered = riders.filter(r => {
     const matchS = r.name?.toLowerCase().includes(searchTerm.toLowerCase()) || r.phoneNumber?.includes(searchTerm) || r.vehicleNumber?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchF = filterStatus === 'all' || (filterStatus === 'active' && r.isActive && r.isProfileComplete) || (filterStatus === 'blocked' && !r.isActive) || (filterStatus === 'pending' && !r.isProfileComplete);
+    const matchF = filterStatus === 'all' || (filterStatus === 'active' && r.isActive && r.isProfileComplete) || (filterStatus === 'blocked' && !r.isActive) || (filterStatus === 'pending' && !r.isProfileComplete) || (filterStatus === 'pharma' && r.isPharmaApproved);
     return matchS && matchF;
   });
 
@@ -109,10 +126,10 @@ export default function RidersPage() {
             <input type="text" placeholder="Search name, phone, vehicle…" className="input pl-9 w-56" value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }} />
           </div>
           <div className="flex gap-1">
-            {(['all', 'active', 'blocked', 'pending'] as const).map(s => (
+            {(['all', 'active', 'blocked', 'pending', 'pharma'] as const).map(s => (
               <button key={s} onClick={() => { setFilterStatus(s); setPage(1); }}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${filterStatus === s ? 'bg-primary-600 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
-                {s.charAt(0).toUpperCase() + s.slice(1)}
+                {s === 'pharma' ? 'Pharma Approved' : s.charAt(0).toUpperCase() + s.slice(1)}
               </button>
             ))}
           </div>
@@ -171,15 +188,28 @@ export default function RidersPage() {
                         {rider.averageRating ? Number(rider.averageRating).toFixed(1) : '—'}
                       </span>
                     </td>
-                    <td className="text-center">
-                      {!rider.isProfileComplete ? <span className="badge-yellow"><AlertCircle size={10} /> Pending</span>
-                        : rider.isActive ? <span className="badge-green"><CheckCircle size={10} /> Active</span>
-                        : <span className="badge-red"><ShieldX size={10} /> Blocked</span>}
+                    <td className="text-center space-y-1">
+                      <div>
+                        {!rider.isProfileComplete ? <span className="badge-yellow"><AlertCircle size={10} /> Pending</span>
+                          : rider.isActive ? <span className="badge-green"><CheckCircle size={10} /> Active</span>
+                          : <span className="badge-red"><ShieldX size={10} /> Blocked</span>}
+                      </div>
+                      {rider.isPharmaApproved && (
+                        <div><span className="badge-blue"><ShieldCheck size={10} /> Pharma</span></div>
+                      )}
                     </td>
                     <td className="text-right">
                       <div className="flex justify-end gap-1.5">
                         <button onClick={() => setViewingDocs(rider)} className="btn-ghost btn-icon text-slate-500" title="View Documents"><FileText size={14} /></button>
                         <button onClick={() => openEdit(rider)} className="btn-ghost btn-icon text-blue-600 border-blue-100 hover:bg-blue-50" title="Edit"><Pencil size={14} /></button>
+                        <button
+                          disabled={updating === rider.id}
+                          onClick={() => handleTogglePharma(rider)}
+                          className={`btn-icon border ${rider.isPharmaApproved ? 'text-blue-600 border-blue-200 bg-blue-50 hover:bg-blue-100' : 'text-slate-400 border-slate-200 hover:bg-slate-50'}`}
+                          title={rider.isPharmaApproved ? "Revoke Pharma Access" : "Approve for Pharma"}
+                        >
+                          <ShieldCheck size={14} />
+                        </button>
                         <button
                           disabled={updating === rider.id}
                           onClick={() => handleToggleActive(rider)}

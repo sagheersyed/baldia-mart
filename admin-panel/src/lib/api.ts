@@ -61,3 +61,13 @@ export const getErrorMessage = (error: unknown, fallback: string): string => {
   if (error instanceof Error && error.message.trim()) return error.message;
   return fallback;
 };
+
+export const normalizeUrl = (path: string | undefined | null) => {
+  if (!path) return '';
+  if (path.startsWith('http')) return path;
+  if (path.startsWith('blob:')) return path;
+  const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+  // Point to backend root for uploads
+  const backendRoot = BASE_URL.replace('/api/v1', '');
+  return `${backendRoot}/${cleanPath}`;
+};

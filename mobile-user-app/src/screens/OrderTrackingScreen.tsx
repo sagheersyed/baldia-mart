@@ -11,6 +11,7 @@ import { isBusinessOpen } from '../utils/helpers';
 import { useOrderTracking } from '../hooks/useOrderTracking';
 import { useSettings } from '../context/SettingsContext';
 import { generateReceiptPDF, printReceipt } from '../utils/receiptGenerator';
+import { normalizeUrl } from '../api/api';
 import {
   AppText, AppButton, AppIconButton, EmptyState, AppBadge,
 } from '../components/ui';
@@ -233,7 +234,7 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
               </View>
             ) : null}
 
-            {isRashan && ['pending_review', 'quoted', 'approved'].includes(order.rashanStatus) ? (
+            {isRashan && ['pending_review', 'quoted'].includes(order.rashanStatus) ? (
               <AppButton
                 label="Cancel request"
                 variant="outline"
@@ -309,7 +310,7 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
               <View style={[styles.iconCircle, { backgroundColor: accentLight }]}>
                 {rider.avatar ? (
-                  <Image source={{ uri: rider.avatar }} style={{ width: 44, height: 44, borderRadius: 22 }} />
+                  <Image source={{ uri: normalizeUrl(rider.avatar) || undefined }} style={{ width: 44, height: 44, borderRadius: 22 }} />
                 ) : (
                   <AppText variant="h3" color={accent}>{rider.name?.[0] || 'R'}</AppText>
                 )}
@@ -351,7 +352,7 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: theme.spacing.sm }}>
                   {order.bulkListPhotoUrls.map((url: string, index: number) => (
                     <Pressable key={index} onPress={() => setSelectedImageUrl(url)} style={[styles.photoWrap, { width: 160 }]}>
-                      <Image source={{ uri: url }} style={[styles.photo, { width: 160, height: 160 }]} contentFit="cover" />
+                      <Image source={{ uri: normalizeUrl(url) || undefined }} style={[styles.photo, { width: 160, height: 160 }]} contentFit="cover" />
                       <View style={styles.expandHint}>
                         <Ionicons name="expand-outline" size={12} color="#fff" />
                         <AppText variant="badge" color="#fff">Expand</AppText>
@@ -364,7 +365,7 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
               <View style={{ marginBottom: theme.spacing.md }}>
                 <AppText variant="overline" style={{ marginBottom: 6 }}>Grocery list photo</AppText>
                 <Pressable onPress={() => setSelectedImageUrl(order.bulkListPhotoUrl)} style={styles.photoWrap}>
-                  <Image source={{ uri: order.bulkListPhotoUrl }} style={styles.photo} contentFit="cover" />
+                  <Image source={{ uri: normalizeUrl(order.bulkListPhotoUrl) || undefined }} style={styles.photo} contentFit="cover" />
                   <View style={styles.expandHint}>
                     <Ionicons name="expand-outline" size={12} color="#fff" />
                     <AppText variant="badge" color="#fff">Tap to expand</AppText>
@@ -402,8 +403,8 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
             <AppText variant="bodyStrong" style={{ marginTop: 4 }}>{order.bulkStreetAddress}, {order.bulkCity}</AppText>
             {order.bulkLandmark ? <AppText variant="caption">Near {order.bulkLandmark}</AppText> : null}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 }}>
-              <Ionicons name="call-outline" size={14} color={theme.colors.primary} />
-              <AppText variant="captionStrong" color={theme.colors.primary}>{order.bulkMobileNumber}</AppText>
+              <Ionicons name="call-outline" size={14} color={accent} />
+              <AppText variant="captionStrong" color={accent}>{order.bulkMobileNumber}</AppText>
             </View>
 
             {order.total > 0 ? (
@@ -420,6 +421,68 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
                 <View style={[styles.sumRow, { marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: theme.colors.divider }]}>
                   <AppText variant="title">Grand total</AppText>
                   <AppText variant="h3" color={accent}>Rs. {Number(order.total).toLocaleString()}</AppText>
+                </View>
+              </>
+            ) : null}
+          </View>
+        ) : null}
+
+        {/* Prescription-specific details */}
+        {order && isPharma && order.prescription ? (
+          <View style={styles.card}>
+            <AppText variant="title" style={{ marginBottom: theme.spacing.md }}>Prescription details</AppText>
+
+            {order.prescription.imageUrl ? (
+              <View style={{ marginBottom: theme.spacing.md }}>
+                <AppText variant="overline" style={{ marginBottom: 6 }}>Prescription photo</AppText>
+                <Pressable onPress={() => setSelectedImageUrl(order.prescription.imageUrl)} style={styles.photoWrap}>
+                  <Image source={{ uri: normalizeUrl(order.prescription.imageUrl) || undefined }} style={styles.photo} contentFit="cover" />
+                  <View style={styles.expandHint}>
+                    <Ionicons name="expand-outline" size={12} color="#fff" />
+                    <AppText variant="badge" color="#fff">Tap to expand</AppText>
+                  </View>
+                </Pressable>
+              </View>
+            ) : null}
+
+            {order.prescription.additionalImageUrls && order.prescription.additionalImageUrls.length > 0 ? (
+              <View style={{ marginBottom: theme.spacing.md }}>
+                <AppText variant="overline" style={{ marginBottom: 6 }}>Additional pages</AppText>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: theme.spacing.sm }}>
+                  {order.prescription.additionalImageUrls.map((url: string, index: number) => (
+                    <Pressable key={index} onPress={() => setSelectedImageUrl(url)} style={[styles.photoWrap, { width: 160 }]}>
+                      <Image source={{ uri: normalizeUrl(url) || undefined }} style={[styles.photo, { width: 160, height: 160 }]} contentFit="cover" />
+                      <View style={styles.expandHint}>
+                        <Ionicons name="expand-outline" size={12} color="#fff" />
+                        <AppText variant="badge" color="#fff">Expand</AppText>
+                      </View>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            ) : null}
+
+            <View style={styles.metaGrid}>
+              <View style={styles.metaItem}>
+                <AppText variant="caption">Patient Name</AppText>
+                <AppText variant="bodyStrong">{order.prescription.patientName || 'Anonymous'}</AppText>
+              </View>
+              <View style={styles.metaItem}>
+                <AppText variant="caption">Doctor</AppText>
+                <AppText variant="bodyStrong">{order.prescription.doctorName ? `Dr. ${order.prescription.doctorName}` : '—'}</AppText>
+              </View>
+              <View style={styles.metaItem}>
+                <AppText variant="caption">Status</AppText>
+                <AppText variant="bodyStrong" color={theme.colors.success}>{String(order.prescription.status || 'approved').toUpperCase()}</AppText>
+              </View>
+            </View>
+
+            {order.prescription.reviewerNotes ? (
+              <>
+                <View style={styles.divider} />
+                <AppText variant="overline" style={{ marginBottom: 4 }}>Pharmacist Notes</AppText>
+                <View style={[styles.textListPanel, { backgroundColor: theme.colors.pharmaLight, borderColor: theme.colors.pharmaBorder }]}>
+                  <AppText variant="body" color={theme.colors.pharmaDark}>{order.prescription.reviewerNotes}</AppText>
                 </View>
               </>
             ) : null}
@@ -448,31 +511,68 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
 
             {!itemsCollapsed ? (
               <>
-                {localItems.filter((i: any) => i.status !== 'missing').map((it: any) => (
-                  <View key={it.id} style={styles.itemRow}>
-                    <View style={{ flex: 1 }}>
-                      <AppText variant="body" numberOfLines={1}>
-                        {it.productName || it.menuItem?.name || it.product?.name || it.medicine?.name || 'Item'}
-                      </AppText>
-                      <AppText variant="caption">
-                        Rs. {it.priceAtTime} × {it.quantity}
-                      </AppText>
-                    </View>
-                    {(status === 'pending' || status === 'confirmed') && order.orderType === 'mart' ? (
-                      <View style={styles.qtyControls}>
-                        <Pressable style={styles.qtyBtn} onPress={() => handleUpdateQuantityLocal(it.id, it.quantity - 1)}>
-                          <Ionicons name="remove" size={14} color={accent} />
-                        </Pressable>
-                        <AppText variant="bodyStrong" style={{ minWidth: 22, textAlign: 'center' }}>{it.quantity}</AppText>
-                        <Pressable style={styles.qtyBtn} onPress={() => handleUpdateQuantityLocal(it.id, it.quantity + 1)}>
-                          <Ionicons name="add" size={14} color={accent} />
-                        </Pressable>
+                {/* Group items by sub-order for Pharma Split Deliveries */}
+                {isPharma && order.subOrders && order.subOrders.length > 1 ? (
+                  order.subOrders.map((sub: any, index: number) => {
+                    const subItems = localItems.filter((i: any) => i.subOrderId === sub.id && i.status !== 'missing');
+                    if (subItems.length === 0) return null;
+                    
+                    return (
+                      <View key={sub.id} style={{ marginBottom: 16 }}>
+                        <View style={styles.subOrderHeader}>
+                          <Ionicons name="cube-outline" size={14} color={theme.colors.textMuted} />
+                          <AppText variant="captionStrong" style={{ marginLeft: 6 }}>
+                            Package {index + 1} of {order.subOrders.length}
+                          </AppText>
+                        </View>
+                        {subItems.map((it: any) => (
+                          <View key={it.id} style={styles.itemRow}>
+                            <View style={{ flex: 1 }}>
+                              <AppText variant="body" numberOfLines={1}>{it.productName || it.medicine?.name}</AppText>
+                              <AppText variant="caption">Rs. {it.priceAtTime} × {it.quantity}</AppText>
+                              {isDelivered && (
+                                <Pressable 
+                                  onPress={() => navigation.navigate('MedicineReviews', { medicineId: it.medicineId, medicineName: it.productName || it.medicine?.name })}
+                                  style={{ marginTop: 4, flexDirection: 'row', alignItems: 'center' }}
+                                >
+                                  <Ionicons name="star-outline" size={12} color={accent} />
+                                  <AppText variant="captionStrong" color={accent} style={{ marginLeft: 4 }}>Read reviews</AppText>
+                                </Pressable>
+                              )}
+                            </View>
+                            <AppText variant="bodyStrong">×{it.quantity}</AppText>
+                          </View>
+                        ))}
                       </View>
-                    ) : (
-                      <AppText variant="bodyStrong">×{it.quantity}</AppText>
-                    )}
-                  </View>
-                ))}
+                    );
+                  })
+                ) : (
+                  localItems.filter((i: any) => i.status !== 'missing').map((it: any) => (
+                    <View key={it.id} style={styles.itemRow}>
+                      <View style={{ flex: 1 }}>
+                        <AppText variant="body" numberOfLines={1}>
+                          {it.productName || it.menuItem?.name || it.product?.name || it.medicine?.name || 'Item'}
+                        </AppText>
+                        <AppText variant="caption">
+                          Rs. {it.priceAtTime} × {it.quantity}
+                        </AppText>
+                      </View>
+                      {(status === 'pending' || status === 'confirmed') && order.orderType === 'mart' ? (
+                        <View style={styles.qtyControls}>
+                          <Pressable style={styles.qtyBtn} onPress={() => handleUpdateQuantityLocal(it.id, it.quantity - 1)}>
+                            <Ionicons name="remove" size={14} color={accent} />
+                          </Pressable>
+                          <AppText variant="bodyStrong" style={{ minWidth: 22, textAlign: 'center' }}>{it.quantity}</AppText>
+                          <Pressable style={styles.qtyBtn} onPress={() => handleUpdateQuantityLocal(it.id, it.quantity + 1)}>
+                            <Ionicons name="add" size={14} color={accent} />
+                          </Pressable>
+                        </View>
+                      ) : (
+                        <AppText variant="bodyStrong">×{it.quantity}</AppText>
+                      )}
+                    </View>
+                  ))
+                )}
 
                 {order.items.filter((i: any) => i.status === 'missing').length > 0 ? (
                   <View style={{ marginTop: theme.spacing.md }}>
@@ -510,10 +610,10 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
                       />
                     ) : null}
                     <AppButton
-                      label="+ Add product"
+                      label={isPharma ? "+ Add medicine" : "+ Add product"}
                       variant="outline"
-                      tint={theme.colors.success}
-                      textColor={theme.colors.success}
+                      tint={accent}
+                      textColor={accent}
                       size="sm"
                       fullWidth
                       onPress={() => setShowAddProduct(true)}
@@ -550,7 +650,13 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
                       isPassed ? { borderColor: accent, backgroundColor: isCurrent ? accent : theme.colors.surface } : null,
                     ]}>
                       <Ionicons
-                        name={STEP_ICON_MAP[step.key] || 'ellipse-outline'}
+                        name={
+                          isPharma && step.key === 'pending'
+                            ? 'search-outline'
+                            : isPharma && step.key === 'preparing'
+                            ? 'medical-outline'
+                            : STEP_ICON_MAP[step.key] || 'ellipse-outline'
+                        }
                         size={14}
                         color={isCurrent ? '#fff' : isPassed ? accent : theme.colors.textMuted}
                       />
@@ -664,7 +770,7 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
             <View style={[styles.bottomSheet, { height: '82%' }]}>
               <View style={styles.sheetHandle} />
               <View style={styles.sheetHeader}>
-                <AppText variant="h2">Add {isFood ? 'dishes' : 'items'} to order</AppText>
+                <AppText variant="h2">Add {isPharma ? 'medicines' : isFood ? 'dishes' : 'items'} to order</AppText>
                 <AppIconButton size={32} bg={theme.colors.surfaceMuted} onPress={() => setShowAddProduct(false)}>
                   <Ionicons name="close" size={18} color={theme.colors.textPrimary} />
                 </AppIconButton>
@@ -674,7 +780,7 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
                 <Ionicons name="search" size={16} color={theme.colors.textSecondary} />
                 <TextInput
                   style={styles.searchInput}
-                  placeholder={isFood ? 'Search dishes…' : 'Search products…'}
+                  placeholder={isPharma ? 'Search medicines…' : isFood ? 'Search dishes…' : 'Search products…'}
                   placeholderTextColor={theme.colors.textMuted}
                   value={searchQuery}
                   onChangeText={setSearchQuery}
@@ -697,14 +803,16 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
                     <View style={styles.addRow}>
                       <View style={styles.addImg}>
                         {item.imageUrl ? (
-                          <Image source={{ uri: item.imageUrl }} style={styles.fill} contentFit="cover" />
+                          <Image source={{ uri: normalizeUrl(item.imageUrl) || undefined }} style={styles.fill} contentFit="cover" />
                         ) : (
                           <Ionicons name="image-outline" size={20} color={theme.colors.textMuted} />
                         )}
                       </View>
                       <View style={{ flex: 1 }}>
                         <AppText variant="bodyStrong" numberOfLines={1}>{item.name}</AppText>
-                        <AppText variant="captionStrong" color={accent}>Rs. {price.toFixed(0)}</AppText>
+                        <AppText variant="captionStrong" color={accent}>
+                          Rs. {Number(item.price || item.mrp || 0).toFixed(0)}
+                        </AppText>
                       </View>
                       <AppButton
                         label={out ? 'Out' : closed ? 'Closed' : '+ Add'}
@@ -735,7 +843,7 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
               <Ionicons name="close" size={20} color="#fff" />
             </AppIconButton>
             {selectedImageUrl ? (
-              <Image source={{ uri: selectedImageUrl }} style={styles.fullImage} contentFit="contain" />
+              <Image source={{ uri: normalizeUrl(selectedImageUrl) || undefined }} style={styles.fullImage} contentFit="contain" />
             ) : null}
           </View>
         </Modal>
@@ -880,6 +988,15 @@ const styles = StyleSheet.create({
   subStatus: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: theme.radius.sm },
 
   // Items
+  subOrderHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: theme.colors.surfaceMuted,
+    borderRadius: theme.radius.sm,
+    marginBottom: 8,
+  },
   itemRow: {
     flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md,
     paddingVertical: theme.spacing.sm,

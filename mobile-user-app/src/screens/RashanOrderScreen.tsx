@@ -12,6 +12,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import axios from 'axios';
 import AddressPickerModal from '../components/AddressPickerModal';
 import { useSettings } from '../context/SettingsContext';
+import { theme } from '../theme/theme';
+import { AppText, AppButton, AppIconButton } from '../components/ui';
 
 type RootStackParamList = {
   Home: undefined;
@@ -299,11 +301,11 @@ export default function RashanOrderScreen() {
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.infoBox}>
-          <Ionicons name="information-circle" size={24} color="#FF4500" />
-          <Text style={styles.infoText}>
+        <View style={[styles.infoBox, { backgroundColor: theme.colors.rashanLight }]}>
+          <Ionicons name="information-circle" size={24} color={theme.colors.rashan} />
+          <AppText variant="caption" style={{ color: theme.colors.rashan, flex: 1, marginLeft: 12 }}>
             Type your grocery list or upload a photo. We source from wholesale markets and deliver via Rickshaw/Suzuki!
-          </Text>
+          </AppText>
         </View>
 
         <Text style={styles.sectionTitle}>1. Grocery List</Text>
@@ -319,16 +321,16 @@ export default function RashanOrderScreen() {
         <Text style={styles.orText}>— OR —</Text>
 
         <TouchableOpacity
-          style={[styles.uploadBtn, photoUris.length >= 5 && { opacity: 0.5 }]}
+          style={[styles.uploadBtn, { borderColor: theme.colors.rashan, backgroundColor: theme.colors.rashanLight }, photoUris.length >= 5 && { opacity: 0.5 }]}
           onPress={pickImages}
           disabled={photoUris.length >= 5}
         >
-          <Ionicons name="images-outline" size={24} color="#FF4500" />
-          <Text style={styles.uploadBtnText}>
+          <Ionicons name="images-outline" size={24} color={theme.colors.rashan} />
+          <AppText variant="bodyStrong" style={{ marginLeft: 8, color: theme.colors.rashan }}>
             {photoUris.length === 0
               ? 'Upload Photos of List'
               : `Add More Photos (${photoUris.length}/5)`}
-          </Text>
+          </AppText>
         </TouchableOpacity>
 
         {photoUris.length > 0 && (
@@ -347,7 +349,7 @@ export default function RashanOrderScreen() {
         <Text style={styles.sectionTitle}>2. Delivery Location</Text>
         
         {isLoadingAddresses ? (
-          <ActivityIndicator color="#FF4500" style={{ marginVertical: 20 }} />
+          <ActivityIndicator color={theme.colors.rashan} style={{ marginVertical: 20 }} />
         ) : selectedAddress ? (
           <TouchableOpacity style={styles.addressBox} onPress={() => setShowAddressListModal(true)}>
             <View style={styles.addressIcon}>
@@ -488,17 +490,17 @@ export default function RashanOrderScreen() {
           </Text>
         </View>
 
-        <TouchableOpacity
-          style={styles.submitBtn}
+        <AppButton
+          label={isLoading ? 'Requesting…' : 'Request Quotation'}
+          variant="primary"
+          tint={theme.colors.rashan}
+          size="lg"
+          fullWidth
           onPress={handleSubmit}
           disabled={isLoading}
-        >
-          {isLoading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.submitBtnText}>Request Quotation</Text>
-          )}
-        </TouchableOpacity>
+          loading={isLoading}
+          style={{ marginTop: theme.spacing.lg }}
+        />
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -560,148 +562,139 @@ export default function RashanOrderScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FAFAFA',
+    backgroundColor: '#FDFDFD', // Super clean white
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
   },
   backButton: {
-    padding: 8,
-    marginRight: 8,
+    width: 40, height: 40, borderRadius: 12, backgroundColor: '#F8FAFC',
+    justifyContent: 'center', alignItems: 'center', marginRight: 12,
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1A1A1A',
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0F172A',
   },
   content: {
-    padding: 16,
+    paddingHorizontal: 20,
   },
   infoBox: {
     flexDirection: 'row',
-    backgroundColor: '#FFF0E6',
+    backgroundColor: '#F0FDF4', // Very light green
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 20,
     alignItems: 'center',
     marginBottom: 24,
-  },
-  infoText: {
-    flex: 1,
-    marginLeft: 12,
-    fontSize: 14,
-    color: '#D84315',
-    lineHeight: 20,
+    borderWidth: 1, borderColor: '#DCFCE7',
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 12,
+    fontWeight: '800',
+    color: '#1E293B',
+    marginBottom: 16,
     marginTop: 8,
   },
   textArea: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#F1F5F9',
+    borderRadius: 20,
+    padding: 20,
     fontSize: 16,
-    minHeight: 100,
+    minHeight: 120,
     textAlignVertical: 'top',
+    color: '#334155',
   },
   orText: {
     textAlign: 'center',
-    color: '#8E8E93',
-    marginVertical: 12,
-    fontWeight: '600',
+    color: '#94A3B8',
+    marginVertical: 16,
+    fontWeight: '700',
+    fontSize: 12,
+    letterSpacing: 1,
   },
   uploadBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFF0E6',
-    borderWidth: 1,
-    borderColor: '#FF4500',
+    borderWidth: 2,
     borderStyle: 'dashed',
-    padding: 16,
-    borderRadius: 12,
+    padding: 18,
+    borderRadius: 20,
     marginBottom: 24,
-  },
-  uploadBtnText: {
-    marginLeft: 8,
-    color: '#FF4500',
-    fontWeight: '600',
-    fontSize: 16,
   },
   photosGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 16,
+    gap: 10,
+    marginBottom: 20,
   },
   photoThumbWrap: {
     width: '31%',
     aspectRatio: 1,
     position: 'relative',
-    borderRadius: 12,
+    borderRadius: 16,
     overflow: 'hidden',
+    borderWidth: 1, borderColor: '#F1F5F9',
   },
   photoThumb: {
     width: '100%',
     height: '100%',
-    borderRadius: 12,
   },
   removePhotoBtn: {
     position: 'absolute',
-    top: 4,
-    right: 4,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderRadius: 12,
+    top: 6,
+    right: 6,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    borderRadius: 10,
+    padding: 2,
   },
   input: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#F1F5F9',
+    borderRadius: 16,
     padding: 16,
-    fontSize: 16,
-    marginBottom: 12,
-  },
-  row: {
-    flexDirection: 'row',
+    fontSize: 15,
+    marginBottom: 16,
+    color: '#334155',
   },
   label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#666',
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#64748B',
     marginTop: 16,
-    marginBottom: 8,
+    marginBottom: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   selectorRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
   },
   selectChip: {
     flex: 1,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 20,
+    paddingVertical: 12,
+    borderWidth: 1.5,
+    borderColor: '#F1F5F9',
+    borderRadius: 14,
     alignItems: 'center',
     backgroundColor: '#fff',
   },
   selectChipActive: {
-    backgroundColor: '#FF4500',
-    borderColor: '#FF4500',
+    backgroundColor: '#16A34A',
+    borderColor: '#16A34A',
+    ...theme.shadows.brand,
+    shadowColor: '#16A34A',
   },
   selectChipText: {
-    fontWeight: '600',
-    color: '#666',
+    fontWeight: '700',
+    color: '#64748B',
     fontSize: 13,
   },
   selectChipTextActive: {
@@ -710,134 +703,104 @@ const styles = StyleSheet.create({
   counterRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#F8FAFC',
     alignSelf: 'flex-start',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#F1F5F9',
   },
   counterBtn: {
-    padding: 12,
+    padding: 14,
   },
   counterText: {
     fontSize: 18,
-    fontWeight: '700',
-    paddingHorizontal: 16,
+    fontWeight: '800',
+    paddingHorizontal: 20,
+    color: '#1E293B',
   },
   previewBox: {
-    backgroundColor: '#FFF8F0',
-    padding: 16,
-    borderRadius: 16,
-    marginTop: 24,
-    marginBottom: 24,
-    borderWidth: 1.5,
-    borderColor: '#FF4500',
+    backgroundColor: '#F0FDF4',
+    padding: 24,
+    borderRadius: 24,
+    marginTop: 32,
+    marginBottom: 32,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
   },
   previewLabel: {
-    fontSize: 12,
-    color: '#888',
-    fontWeight: '600',
+    fontSize: 11,
+    color: '#166534',
+    fontWeight: '800',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 4,
+    letterSpacing: 1,
+    marginBottom: 8,
   },
   previewValue: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#FF4500',
-    marginBottom: 8,
+    fontSize: 32,
+    fontWeight: '900',
+    color: '#16A34A',
+    marginBottom: 12,
   },
   previewBreakRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 8,
+    gap: 8,
+    marginBottom: 12,
   },
   previewBreakItem: {
     fontSize: 12,
-    color: '#444',
-    backgroundColor: '#FFE4D0',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    fontWeight: '600',
+    color: '#166534',
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    fontWeight: '700',
   },
   previewSubtext: {
-    fontSize: 11,
-    color: '#8E8E93',
-    lineHeight: 15,
-  },
-  submitBtn: {
-    backgroundColor: '#FF4500',
-    paddingVertical: 18,
-    borderRadius: 16,
-    alignItems: 'center',
-    shadowColor: '#FF4500',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  submitBtnText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 12,
+    color: '#166534',
+    lineHeight: 18,
+    opacity: 0.7,
   },
   addressBox: { 
     backgroundColor: '#fff', 
-    padding: 18, 
-    borderRadius: 20, 
+    padding: 20, 
+    borderRadius: 24, 
     flexDirection: 'row', 
     alignItems: 'center', 
-    marginBottom: 20, 
-    elevation: 2, 
-    shadowColor: '#000', 
-    shadowOpacity: 0.05, 
-    shadowRadius: 5,
+    marginBottom: 24, 
+    ...theme.shadows.md,
     borderWidth: 1,
-    borderColor: '#f0f0f0'
+    borderColor: '#F1F5F9'
   },
-  addressIcon: { width: 45, height: 45, backgroundColor: '#FFF5F0', borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 15 },
-  addressLabelSelected: { fontWeight: 'bold', fontSize: 15, color: '#1a1a1a', marginBottom: 2 },
-  addressTextSelected: { color: '#888', fontSize: 13 },
-  changeBtn: { color: '#FF4500', fontWeight: 'bold', borderLeftWidth: 1, borderLeftColor: '#eee', paddingLeft: 15 },
+  addressIcon: { width: 52, height: 52, backgroundColor: '#F8FAFC', borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
+  addressLabelSelected: { fontWeight: '800', fontSize: 16, color: '#0F172A', marginBottom: 4 },
+  addressTextSelected: { color: '#64748B', fontSize: 13, lineHeight: 18 },
+  changeBtn: { color: '#16A34A', fontWeight: '800', fontSize: 14, borderLeftWidth: 1.5, borderLeftColor: '#F1F5F9', paddingLeft: 16 },
 
-  // Modal Styles
-  modalOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end', zIndex: 100 },
-  addressListContainer: { backgroundColor: '#fff', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, maxHeight: '80%', paddingBottom: 40 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  modalTitle: { fontSize: 20, fontWeight: '900', color: '#1a1a1a' },
-  closeBtn: { width: 36, height: 36, backgroundColor: '#f0f0f0', borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
+  zoneWarning: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: '#FEF2F2', padding: 16, borderRadius: 16,
+    marginBottom: 20, borderWidth: 1, borderColor: '#FEE2E2',
+  },
+  zoneWarningText: { color: '#B91C1C', fontSize: 13, fontWeight: '600', flex: 1 },
+
+  modalOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'flex-end', zIndex: 100 },
+  addressListContainer: { backgroundColor: '#fff', borderTopLeftRadius: 40, borderTopRightRadius: 40, padding: 32, maxHeight: '85%', paddingBottom: 50 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  modalTitle: { fontSize: 22, fontWeight: '900', color: '#0F172A' },
+  closeBtn: { width: 40, height: 40, backgroundColor: '#F1F5F9', borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
   addressListScroll: { maxHeight: 400 },
   addressItem: { flexDirection: 'row', flexWrap: 'nowrap', backgroundColor: '#f9f9f9', borderRadius: 20, marginBottom: 15, paddingRight: 15, borderWidth: 1, borderColor: '#f0f0f0' },
-  addressItemSelected: { borderColor: '#FF4500', backgroundColor: '#FFF5F0' },
+  addressItemSelected: { borderColor: '#16A34A', backgroundColor: '#F0FDF4' },
   addressItemInfo: { flex: 1, flexDirection: 'row', alignItems: 'center', padding: 15 },
-  addressIconItem: { width: 36, height: 36, backgroundColor: '#fff', borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: 15, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, elevation: 1 },
-  addressItemLabel: { fontWeight: 'bold', fontSize: 15, color: '#1a1a1a', marginBottom: 2 },
-  addressItemText: { color: '#888', fontSize: 12, paddingRight: 10 },
-  selectedCircle: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#FF4500', justifyContent: 'center', alignItems: 'center' },
-  editAddressBtn: { paddingVertical: 15, paddingLeft: 10, justifyContent: 'center', alignItems: 'center', borderLeftWidth: 1, borderLeftColor: '#f0f0f0' },
-  editAddressBtnText: { color: '#FF4500', fontWeight: 'bold', fontSize: 13 },
-  addNewAddressBtn: { marginTop: 10, backgroundColor: '#fff', borderWidth: 2, borderStyle: 'dashed', borderColor: '#ccc', borderRadius: 20, padding: 18, alignItems: 'center' },
-  addNewAddressText: { color: '#666', fontWeight: 'bold', fontSize: 15 },
-  zoneWarning: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF5F5',
-    padding: 12,
-    borderRadius: 12,
-    marginTop: 10,
-    borderWidth: 1,
-    borderColor: '#FED7D7',
-  },
-  zoneWarningText: {
-    color: '#C53030',
-    fontSize: 13,
-    fontWeight: '600',
-    marginLeft: 8,
-    flex: 1,
-  },
-  landmarkContainer: {
-    marginTop: 10,
-  },
+  addressIconItem: { width: 36, height: 36, backgroundColor: '#fff', borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: 15, ...theme.shadows.sm },
+  addressItemLabel: { fontWeight: 'bold', fontSize: 15, color: '#0F172A', marginBottom: 2 },
+  addressItemText: { color: '#64748B', fontSize: 12, paddingRight: 10 },
+  selectedCircle: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#16A34A', justifyContent: 'center', alignItems: 'center' },
+  editAddressBtn: { paddingVertical: 15, paddingLeft: 10, justifyContent: 'center', alignItems: 'center', borderLeftWidth: 1, borderLeftColor: '#F1F5F9' },
+  editAddressBtnText: { color: '#16A34A', fontWeight: 'bold', fontSize: 13 },
+  addNewAddressBtn: { marginTop: 10, backgroundColor: '#fff', borderWidth: 2, borderStyle: 'dashed', borderColor: '#F1F5F9', borderRadius: 20, padding: 18, alignItems: 'center' },
+  addNewAddressText: { color: '#64748B', fontWeight: 'bold', fontSize: 15 },
+  landmarkContainer: { marginTop: 10 },
 });

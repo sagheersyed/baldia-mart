@@ -44,6 +44,9 @@ export class Rider {
   @Column({ name: 'is_profile_complete', default: false })
   isProfileComplete: boolean;
 
+  @Column({ name: 'is_pharma_approved', default: false })
+  isPharmaApproved: boolean;
+
   @Index()
   @Column({ name: 'is_online', default: false })
   isOnline: boolean;

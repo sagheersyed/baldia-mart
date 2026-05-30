@@ -28,6 +28,13 @@ export class SettingsService implements OnModuleInit {
     await this.seedDefault('pharma_delivery_per_km_fee', '20');
     await this.seedDefault('pharma_delivery_max_radius_km', '15');
     
+    // Healthcare & Expert Mode
+    await this.seedDefault('pharma_skip_prescription_verification', 'false');
+    await this.seedDefault('feature_pharma_lab_tests_enabled', 'false');
+    await this.seedDefault('feature_pharma_doctor_consultations_enabled', 'false');
+    await this.seedDefault('feature_pharma_reminders_enabled', 'false');
+    await this.seedDefault('feature_pharma_refills_enabled', 'false');
+    
     // Feature Visibility
     await this.seedDefault('feature_show_mart', 'true');
     await this.seedDefault('feature_show_restaurants', 'true');
@@ -63,6 +70,14 @@ export class SettingsService implements OnModuleInit {
     await this.seedDefault('auth_customer_google_enabled', 'true');
     await this.seedDefault('auth_rider_mpin_enabled', 'true');
     await this.seedDefault('auth_rider_otp_enabled', 'true');
+
+    // Pharma Conditions Catalog
+    await this.seedDefault('pharma_conditions_list', JSON.stringify([
+      { id: 'fever', label: 'Fever & Pain', icon: 'thermometer-outline', bg: '#FEE2E2', color: '#DC2626' },
+      { id: 'cold', label: 'Cold & Cough', icon: 'water-outline', bg: '#E0F2FE', color: '#0369A1' },
+      { id: 'stomach', label: 'Stomach Care', icon: 'medkit-outline', bg: '#D1FAE5', color: '#059669' },
+      { id: 'skin', label: 'Skin Care', icon: 'sparkles-outline', bg: '#FCE7F3', color: '#DB2777' },
+    ]));
   }
 
   private async seedDefault(key: string, value: string) {
@@ -112,6 +127,12 @@ export class SettingsService implements OnModuleInit {
       pharma_delivery_threshold_km: getNum('pharma_delivery_threshold_km', 0),
       pharma_delivery_per_km_fee: getNum('pharma_delivery_per_km_fee', 20),
       pharma_delivery_max_radius_km: getNum('pharma_delivery_max_radius_km', 15),
+      pharma_skip_prescription_verification: getVal('pharma_skip_prescription_verification', 'false') === 'true',
+      feature_pharma_lab_tests_enabled: getVal('feature_pharma_lab_tests_enabled', 'false') === 'true',
+      feature_pharma_doctor_consultations_enabled: getVal('feature_pharma_doctor_consultations_enabled', 'false') === 'true',
+      feature_pharma_reminders_enabled: getVal('feature_pharma_reminders_enabled', 'false') === 'true',
+      feature_pharma_refills_enabled: getVal('feature_pharma_refills_enabled', 'false') === 'true',
+      pharma_conditions: JSON.parse(getVal('pharma_conditions_list', '[]')),
     };
   }
 
@@ -132,6 +153,11 @@ export class SettingsService implements OnModuleInit {
   async getNumber(key: string, defaultValue: number): Promise<number> {
     const val = await this.getByKey(key);
     return val ? parseFloat(val) : defaultValue;
+  }
+
+  async getBoolean(key: string, defaultValue: boolean): Promise<boolean> {
+    const val = await this.getByKey(key);
+    return val ? val === 'true' : defaultValue;
   }
 
   async setByKey(key: string, value: string): Promise<Setting> {

@@ -119,7 +119,7 @@ export const authApi = {
 };
 
 export const usersApi = {
-  updateMe: (data: { name?: string; phoneNumber?: string; email?: string; fcmToken?: string }) => api.patch('/users/me', data),
+  updateMe: (data: { name?: string; phoneNumber?: string; email?: string; fcmToken?: string; age?: number; gender?: string; }) => api.patch('/users/me', data),
 };
 
 export const addressesApi = {
@@ -168,6 +168,7 @@ export interface ProductListParams {
   featured?: boolean;
   bestSeller?: boolean;
   deal?: boolean;
+  ids?: string;
 }
 
 export interface PaginatedProducts {
@@ -192,6 +193,7 @@ const buildProductQuery = (params: ProductListParams = {}): string => {
   if (params.featured) qs.set('featured', 'true');
   if (params.bestSeller) qs.set('bestSeller', 'true');
   if (params.deal) qs.set('deal', 'true');
+  if (params.ids) qs.set('ids', params.ids);
   const str = qs.toString();
   return str ? `?${str}` : '';
 };
@@ -201,19 +203,18 @@ export const productsApi = {
   getAll: async (page?: number, limit?: number) => {
     const qs = page && limit ? `?page=${page}&limit=${limit}` : '';
     const res = await api.get(`/products${qs}`);
-    if (res.data && typeof res.data === 'object' && !Array.isArray(res.data) && res.data.data) res.data = res.data.data;
     return res;
   },
-  getByCategory: async (catId: string, page?: number, limit?: number) => {
-    const qs = page && limit ? `?page=${page}&limit=${limit}` : '';
-    const res = await api.get(`/products/category/${catId}${qs}`);
-    if (res.data && typeof res.data === 'object' && !Array.isArray(res.data) && res.data.data) res.data = res.data.data;
+
+  getByCategory: async (categoryId: string, page = 1, limit = 20) => {
+    const qs = `?page=${page}&limit=${limit}`;
+    const res = await api.get(`/products/category/${categoryId}${qs}`);
     return res;
   },
-  getByBrand: async (brandId: string, page?: number, limit?: number) => {
-    const qs = page && limit ? `?page=${page}&limit=${limit}` : '';
+
+  getByBrand: async (brandId: string, page = 1, limit = 20) => {
+    const qs = `?page=${page}&limit=${limit}`;
     const res = await api.get(`/products/brand/${brandId}${qs}`);
-    if (res.data && typeof res.data === 'object' && !Array.isArray(res.data) && res.data.data) res.data = res.data.data;
     return res;
   },
 
@@ -268,13 +269,17 @@ export interface HomePayload {
 }
 
 export const homeApi = {
-  getHome: (section: 'mart' | 'food' = 'mart', zoneId?: string) =>
+  getHome: (section: string = 'mart', zoneId?: string) =>
     api.get<HomePayload>(`/home?section=${section}${zoneId ? `&zoneId=${zoneId}` : ''}`),
 };
 
 export const ordersApi = {
   checkout: (data: any) => api.post('/orders/checkout', data),
-  getHistory: (page: number = 1, limit: number = 20) => api.get(`/orders/history?page=${page}&limit=${limit}&_t=${Date.now()}`),
+  getHistory: (page: number = 1, limit: number = 20, orderType?: string) => {
+    let url = `/orders/history?page=${page}&limit=${limit}&_t=${Date.now()}`;
+    if (orderType) url += `&orderType=${orderType}`;
+    return api.get(url);
+  },
   getById: (orderId: string) => api.get(`/orders/${orderId}`),
   updateStatus: (orderId: string, status: string) =>
     api.put(`/orders/${orderId}/status`, { status }),
@@ -288,10 +293,11 @@ export const ordersApi = {
   updateOrderItems: (orderId: string, items: { itemId: string; quantity: number }[]) =>
     api.patch(`/orders/${orderId}/items`, { items }),
   getTimeline: (orderId: string) => api.get(`/orders/${orderId}/timeline`),
-  getDeliveryFee: (addressId: string, restaurantId?: string, orderType?: string) => {
+  getDeliveryFee: (addressId: string, restaurantId?: string, orderType?: string, items?: string) => {
     const params = new URLSearchParams();
     if (restaurantId) params.set('restaurantId', restaurantId);
     if (orderType) params.set('orderType', orderType);
+    if (items) params.set('items', items);
     const qs = params.toString();
     return api.get(`/orders/preview-fee/${addressId}${qs ? `?${qs}` : ''}`);
   },
@@ -307,6 +313,25 @@ export const paymentsApi = {
 
 export const settingsApi = {
   getPublicSettings: () => api.get(`/settings/public?_t=${Date.now()}`),
+};
+
+export const uploadApi = {
+  uploadFile: (fileUri: string) => {
+    const formData = new FormData();
+    const filename = fileUri.split('/').pop() || 'upload.jpg';
+    const match = /\.(\w+)$/.exec(filename);
+    const type = match ? `image/${match[1]}` : `image`;
+
+    formData.append('file', {
+      uri: fileUri,
+      name: filename,
+      type,
+    } as any);
+
+    return api.post('/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
 };
 
 export const rashanApi = {
@@ -327,7 +352,7 @@ export const ridersApi = {
 };
 
 export const bannersApi = {
-  getBySection: (section: 'mart' | 'food' | 'all', zoneId?: string) =>
+  getBySection: (section: 'mart' | 'food' | 'pharma' | 'all', zoneId?: string) =>
     api.get(`/banners?section=${section}${zoneId ? `&zoneId=${zoneId}` : ''}`),
 };
 
@@ -346,6 +371,7 @@ export const restaurantsApi = {
 export const menuItemsApi = {
   getAll: () => api.get('/menu-items'),
   getByRestaurant: (restaurantId: string) => api.get(`/menu-items?restaurantId=${restaurantId}`),
+  getByIds: (ids: string) => api.get(`/menu-items?ids=${ids}`),
 };
 
 export const businessReviewsApi = {
@@ -360,21 +386,46 @@ export const businessReviewsApi = {
   getAll: () => api.get('/business-reviews/all'),
 };
 
+export const notificationsApi = {
+  getLatest: () => api.get('/notifications'),
+  markAsRead: (id: string) => api.patch(`/notifications/${id}/read`),
+  markAllAsRead: () => api.post('/notifications/mark-all-read'),
+  saveFcmToken: (token: string, deviceId: string, deviceType: string) =>
+    api.post('/notifications/device-token', { token, deviceId, deviceType }),
+};
+
+
 export const deliveryZonesApi = {
   getActive: () => api.get('/delivery-zones/active'),
 };
 
 export const favoritesApi = {
   getAll: () => api.get('/favorites'),
-  toggle: (type: 'product' | 'restaurant' | 'brand', targetId: string) => api.post('/favorites/toggle', { type, targetId }),
-  sync: (items: { type: 'product' | 'restaurant' | 'brand', targetId: string }[]) => api.post('/favorites/sync', { items }),
+  toggle: (type: 'product' | 'restaurant' | 'brand' | 'medicine', targetId: string) => api.post('/favorites/toggle', { type, targetId }),
+  sync: (items: { type: 'product' | 'restaurant' | 'brand' | 'medicine', targetId: string }[]) => api.post('/favorites/sync', { items }),
 };
 
 // ── Pharma Domain ─────────────────────────────────────────────
 export const pharmaApi = {
   // Medicine browsing
-  searchMedicines: (q: string, page = 1, limit = 20) =>
-    api.get(`/pharma/medicines/search?q=${encodeURIComponent(q)}&page=${page}&limit=${limit}`),
+  searchMedicines: (q: string, page = 1, limit = 20, options?: string | Record<string, any>) => {
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    params.set('page', String(page));
+    params.set('limit', String(limit));
+    if (options) {
+      if (typeof options === 'string') {
+        params.set('itemType', options);
+      } else {
+        Object.entries(options).forEach(([key, val]) => {
+          if (val !== undefined && val !== null) {
+            params.set(key, String(val));
+          }
+        });
+      }
+    }
+    return api.get(`/pharma/medicines/search?${params.toString()}`);
+  },
   getMedicine: (id: string) => api.get(`/pharma/medicines/${id}`),
   getAvailability: (id: string, lat?: number, lng?: number) =>
     api.get(`/pharma/medicines/${id}/availability`, { params: { lat, lng } }),
@@ -396,6 +447,10 @@ export const pharmaApi = {
   getSubstitutes: (medicineId: string) =>
     api.get(`/pharma/substitutions/${medicineId}`),
 
+  // Reviews
+  getReviews: (id: string) => api.get(`/pharma/medicines/${id}/reviews`),
+  submitReview: (id: string, data: any) => api.post(`/pharma/medicines/${id}/reviews`, data),
+
   // Orders
   placeOrder: (data: {
     addressId: string;
@@ -408,11 +463,47 @@ export const pharmaApi = {
   getOrderDetails: (id: string) => api.get(`/pharma/orders/${id}`),
 };
 
+export const labApi = {
+  getTests: (category?: string) => api.get(`/pharma/lab/tests${category ? `?category=${category}` : ''}`),
+  getTest: (id: string) => api.get(`/pharma/lab/tests/${id}`),
+  getAvailability: (date?: string) => api.get(`/pharma/lab/availability${date ? `?date=${date}` : ''}`),
+  createBooking: (data: any) => api.post('/pharma/lab/bookings', data),
+  getMyBookings: () => api.get('/pharma/lab/bookings/my'),
+  getBooking: (id: string) => api.get(`/pharma/lab/bookings/${id}`),
+};
+
+export const telemedicineApi = {
+  getDoctors: (specialization?: string) => api.get(`/pharma/telemedicine/doctors${specialization ? `?specialization=${specialization}` : ''}`),
+  getDoctor: (id: string) => api.get(`/pharma/telemedicine/doctors/${id}`),
+  getAvailability: (doctorId: string, date: string, clinicId?: string) => {
+    const params = new URLSearchParams({ date });
+    if (clinicId) params.set('clinicId', clinicId);
+    return api.get(`/pharma/telemedicine/doctors/${doctorId}/availability?${params.toString()}`);
+  },
+  bookConsultation: (data: any) => api.post('/pharma/telemedicine/consultations', data),
+  getMyConsultations: () => api.get('/pharma/telemedicine/consultations/my'),
+  getClinics: () => api.get('/pharma/telemedicine/clinics'),
+};
+
+export const remindersApi = {
+  getAll: () => api.get('/pharma/reminders'),
+  create: (data: any) => api.post('/pharma/reminders', data),
+  update: (id: string, data: any) => api.put(`/pharma/reminders/${id}`, data),
+  delete: (id: string) => api.delete(`/pharma/reminders/${id}`),
+
+  // Refills
+  getRefills: () => api.get('/pharma/reminders/refills'),
+  createRefill: (data: any) => api.post('/pharma/reminders/refills', data),
+  deleteRefill: (id: string) => api.delete(`/pharma/reminders/refills/${id}`),
+};
+
 export const prescriptionsApi = {
   upload: (data: { imageUrl: string; additionalImageUrls?: string[]; doctorName?: string; doctorNotes?: string; patientName?: string }) =>
     api.post('/pharma/prescriptions/upload', data),
   getMyPrescriptions: () => api.get('/pharma/prescriptions/my'),
   getById: (id: string) => api.get(`/pharma/prescriptions/${id}`),
+  requestConsultation: (data: { medicineIds: string[]; notes?: string }) =>
+    api.post('/pharma/prescriptions/consultation', data),
 };
 
 export const recurringOrdersApi = {
@@ -421,4 +512,11 @@ export const recurringOrdersApi = {
   pause: (id: string, reason?: string) => api.put(`/pharma/recurring/${id}/pause`, { reason }),
   resume: (id: string) => api.put(`/pharma/recurring/${id}/resume`),
   cancel: (id: string) => api.put(`/pharma/recurring/${id}/cancel`),
+};
+
+// ── Module Events / Campaigns ─────────────────────────────────
+export const moduleEventsApi = {
+  getAll: (section?: string) =>
+    api.get(`/module-events${section ? `?section=${section}` : ''}`),
+  getById: (id: string) => api.get(`/module-events/${id}`),
 };

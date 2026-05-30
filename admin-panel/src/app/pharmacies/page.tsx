@@ -27,6 +27,7 @@ interface Pharmacy {
   latitude?: number;
   longitude?: number;
   zoneId?: string;
+  hasColdChainSupport: boolean;
 }
 
 interface DeliveryZone {
@@ -48,6 +49,7 @@ const emptyPharmacyForm = {
   isVerified: false,
   isActive: true,
   isOpen: true,
+  hasColdChainSupport: false,
   zoneId: '',
   latitude: '',
   longitude: ''
@@ -87,7 +89,7 @@ export default function PharmaciesPage() {
       const res = await fetchWithAuth(API_URL);
       if (!res.ok) throw new Error(await parseApiError(res, 'Failed to fetch pharmacies'));
       const data = await res.json();
-      setPharmacies(Array.isArray(data) ? data : []);
+      setPharmacies(Array.isArray(data.data) ? data.data : (Array.isArray(data) ? data : []));
     } catch (err) {
       console.error('Failed to fetch pharmacies:', err);
       showToast({ title: getErrorMessage(err, 'Failed to load pharmacies'), variant: 'error' });
@@ -173,6 +175,7 @@ export default function PharmaciesPage() {
       isVerified: p.isVerified,
       isActive: p.isActive,
       isOpen: p.isOpen,
+      hasColdChainSupport: p.hasColdChainSupport || false,
       zoneId: p.zoneId || '',
       latitude: p.latitude?.toString() || '',
       longitude: p.longitude?.toString() || ''
@@ -247,6 +250,11 @@ export default function PharmaciesPage() {
                         {pharma.isVerified && (
                           <span className="bg-blue-50 text-blue-600 text-[10px] font-black px-1.5 py-0.5 rounded flex items-center gap-0.5 uppercase">
                             <ShieldCheck size={10} /> Verified
+                          </span>
+                        )}
+                        {pharma.hasColdChainSupport && (
+                          <span className="bg-cyan-50 text-cyan-600 text-[10px] font-black px-1.5 py-0.5 rounded flex items-center gap-0.5 uppercase border border-cyan-100">
+                            ❄️ Cold Chain
                           </span>
                         )}
                       </div>
@@ -374,6 +382,17 @@ export default function PharmaciesPage() {
 
               <div className="grid grid-cols-2 gap-6">
                 <div>
+                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Latitude (GPS) *</label>
+                  <input required type="number" step="any" className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none font-bold text-slate-800" value={form.latitude} onChange={e => setForm({ ...form, latitude: e.target.value })} placeholder="e.g. 24.8607" />
+                </div>
+                <div>
+                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Longitude (GPS) *</label>
+                  <input required type="number" step="any" className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none font-bold text-slate-800" value={form.longitude} onChange={e => setForm({ ...form, longitude: e.target.value })} placeholder="e.g. 67.0011" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-6">
+                <div>
                   <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Delivery Zone</label>
                   <select required className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none font-bold text-slate-800" value={form.zoneId} onChange={e => setForm({ ...form, zoneId: e.target.value })}>
                     <option value="">Select a zone...</option>
@@ -390,6 +409,10 @@ export default function PharmaciesPage() {
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" checked={form.isOpen} onChange={e => setForm({ ...form, isOpen: e.target.checked })} className="w-6 h-6 accent-teal-600" />
                     <span className="font-bold text-slate-700">Accepting Orders</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={form.hasColdChainSupport} onChange={e => setForm({ ...form, hasColdChainSupport: e.target.checked })} className="w-6 h-6 accent-cyan-600" />
+                    <span className="font-bold text-cyan-700">❄️ Cold Chain Support</span>
                   </label>
                 </div>
               </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { connectSocket, ordersApi, ridersApi, businessReviewsApi, productsApi, menuItemsApi, socket } from '../api/api';
@@ -32,6 +32,14 @@ const GET_RASHAN_STEPS = (): TrackingStep[] => [
   { key: 'delivered', label: 'Delivered', icon: '🎁', description: 'Your stash has arrived!' },
 ];
 
+const GET_PHARMA_STEPS = (): TrackingStep[] => [
+  { key: 'pending', label: 'Review', icon: '🔍', description: 'Pharmacist is reviewing the order/prescription' },
+  { key: 'confirmed', label: 'Approved', icon: '✅', description: 'Order has been approved' },
+  { key: 'preparing', label: 'Ready', icon: '📦', description: 'Medicines are packed and ready' },
+  { key: 'out_for_delivery', label: 'Out for Delivery', icon: '🚴', description: 'Rider is delivering your medicines' },
+  { key: 'delivered', label: 'Delivered', icon: '🎁', description: 'Medicines successfully delivered' },
+];
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Hook
 // ─────────────────────────────────────────────────────────────────────────────
@@ -59,22 +67,56 @@ export function useOrderTracking(orderId: string, navigation: any) {
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [allProducts, setAllProducts] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searching, setSearching] = useState(false);
   const [addingProductId, setAddingProductId] = useState<string | null>(null);
 
   // ── Fetch helpers ────────────────────────────────────────────────────────
-  const fetchProductsList = useCallback(async (currentOrder: any) => {
+  const performSearch = useCallback(async (q: string) => {
+    if (!order) return;
+    const isFood = order?.orderType === 'food';
+    const isPharma = order?.orderType === 'pharma';
+    const isMart = !isFood && !isPharma;
+
+    setSearching(true);
     try {
-      if (currentOrder?.orderType === 'food' && currentOrder?.restaurantId) {
-        const res = await menuItemsApi.getByRestaurant(currentOrder.restaurantId);
+      if (isFood && order.restaurantId) {
+        // Food: always load full menu (filter client-side)
+        const res = await menuItemsApi.getByRestaurant(order.restaurantId);
         setAllProducts(res.data);
-      } else {
-        const res = await productsApi.getAll();
-        setAllProducts(res.data);
+      } else if (isPharma) {
+        // Pharma: load first page of all medicines, or search if query provided
+        const { pharmaApi } = require('../api/api');
+        const res = await pharmaApi.searchMedicines(q.trim() || '', 1, 50);
+        setAllProducts(Array.isArray(res.data) ? res.data : (res.data?.data || []));
+      } else if (isMart) {
+        // Mart: load first page of all products, or search if query provided
+        const res = await productsApi.search(q.trim() || '', 1, 50);
+        setAllProducts(Array.isArray(res.data) ? res.data : (res.data?.data || []));
       }
     } catch (e) {
-      console.error('Failed to fetch products for adding:', e);
+      console.error('Search failed:', e);
+    } finally {
+      setSearching(false);
     }
-  }, []);
+    // We only depend on the orderType and restaurantId, not the whole order object
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order?.orderType, order?.restaurantId]);
+
+  useEffect(() => {
+    if (!showAddProduct) return;
+    const timeout = setTimeout(() => {
+      performSearch(searchQuery);
+    }, 400);
+    return () => clearTimeout(timeout);
+  }, [searchQuery, showAddProduct, performSearch]);
+
+  // Auto-load items immediately when modal opens
+  useEffect(() => {
+    if (showAddProduct && order) {
+      performSearch('');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showAddProduct]);
 
   const fetchOrderDetails = useCallback(async () => {
     try {
@@ -88,8 +130,6 @@ export function useOrderTracking(orderId: string, navigation: any) {
       setTimeline(timelineRes.data);
       setStatus(data.status || 'pending');
       if (data.rider) setRider(data.rider);
-
-      await fetchProductsList(data);
 
       // Trigger rating modal for delivered orders
       if (data.status === 'delivered') {
@@ -114,24 +154,40 @@ export function useOrderTracking(orderId: string, navigation: any) {
     } finally {
       setLoading(false);
     }
-  }, [orderId, fetchProductsList]);
+  }, [orderId]);
 
-  // ── Socket + initial fetch ────────────────────────────────────────────────
   useEffect(() => {
     fetchOrderDetails();
+  }, [orderId, fetchOrderDetails]);
 
+  // ── Socket listeners ──────────────────────────────────────────────────────
+  const lastSocketFetchRef = useRef(0);
+
+  useEffect(() => {
     connectSocket();
 
     const joinRoom = () => socket.emit('joinOrder', orderId);
     if (socket.connected) joinRoom();
     socket.on('connect', joinRoom);
 
+    const throttledRefresh = () => {
+      const now = Date.now();
+      if (now - lastSocketFetchRef.current < 2000) return; // 2s throttle
+      lastSocketFetchRef.current = now;
+      fetchOrderDetails();
+    };
+
     const onStatusUpdate = async (data: any) => {
-      if (data.orderId === orderId) { setStatus(data.status); await fetchOrderDetails(); }
+      if (data.orderId === orderId) { 
+        setStatus(prev => {
+          if (prev !== data.status) throttledRefresh();
+          return data.status;
+        });
+      }
     };
 
     const onOrderUpdate = async (data: any) => {
-      if (data.orderId === orderId) await fetchOrderDetails();
+      if (data.orderId === orderId) throttledRefresh();
     };
 
     const onRiderLocation = (data: any) => {
@@ -155,6 +211,7 @@ export function useOrderTracking(orderId: string, navigation: any) {
   // ── Derived values ────────────────────────────────────────────────────────
   const steps = useMemo(() => {
     if (order?.orderType === 'rashan') return GET_RASHAN_STEPS();
+    if (order?.orderType === 'pharma') return GET_PHARMA_STEPS();
     return GET_STATUS_STEPS(order?.orderType);
   }, [order?.orderType]);
 
@@ -168,9 +225,8 @@ export function useOrderTracking(orderId: string, navigation: any) {
   }, [status, order?.orderType, order?.rashanStatus, steps]);
 
   const filteredProducts = useMemo(() => {
-    if (!searchQuery) return allProducts;
-    return allProducts.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
-  }, [searchQuery, allProducts]);
+    return allProducts;
+  }, [allProducts]);
 
   const hasChanges = useCallback(() => {
     if (!order?.items) return false;
@@ -180,8 +236,15 @@ export function useOrderTracking(orderId: string, navigation: any) {
 
   // ── Handlers ──────────────────────────────────────────────────────────────
   const handleReorder = async () => {
-    await ordersApi.reorderOrder(orderId);
-    navigation.navigate('MyOrders');
+    try {
+      await ordersApi.reorderOrder(orderId);
+      Alert.alert('Order Placed', 'Your reorder has been placed successfully!', [
+        { text: 'View Orders', onPress: () => navigation.navigate('MyOrders') },
+      ]);
+    } catch (e: any) {
+      const msg = e?.response?.data?.message || 'Failed to reorder. Please try again.';
+      Alert.alert('Reorder Failed', msg);
+    }
   };
 
   const handleUpdateQuantityLocal = (itemId: string, newQuantity: number) => {

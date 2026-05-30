@@ -33,6 +33,7 @@ export default function BrandsPage() {
   });
   const [editingBrand, setEditingBrand] = useState<Brand | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activeTab, setActiveTab] = useState<'mart' | 'pharma' | 'restaurant'>('mart');
 
   useEffect(() => {
     fetchBrands();
@@ -52,6 +53,10 @@ export default function BrandsPage() {
       setLoading(false);
     }
   };
+
+  const filteredBrands = React.useMemo(() => {
+    return brands.filter(b => b.section === activeTab);
+  }, [brands, activeTab]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -154,8 +159,30 @@ export default function BrandsPage() {
           <p className="text-gray-400 font-medium">Fetching brands...</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-          {brands.map((brand) => (
+        <>
+          <div className="flex bg-slate-100 p-1 rounded-xl w-fit mb-8">
+            <button 
+              onClick={() => setActiveTab('mart')}
+              className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${activeTab === 'mart' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              Quick Mart (Grocery)
+            </button>
+            <button 
+              onClick={() => setActiveTab('pharma')}
+              className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${activeTab === 'pharma' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              Pharma (Medicines)
+            </button>
+            <button 
+              onClick={() => setActiveTab('restaurant')}
+              className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${activeTab === 'restaurant' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              Restaurant (Food)
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+            {filteredBrands.map((brand) => (
             <div 
               key={brand.id} 
               className="group relative bg-white p-5 rounded-[2.5rem] border border-gray-100 shadow-sm hover:shadow-2xl hover:shadow-blue-500/10 transition-all duration-300 transform hover:-translate-y-2"
@@ -201,14 +228,19 @@ export default function BrandsPage() {
             </div>
           ))}
 
-          {brands.length === 0 && !loading && (
+          {filteredBrands.length === 0 && !loading && (
             <div className="col-span-full py-20 bg-gray-50/50 rounded-[3rem] border-2 border-dashed border-gray-100 flex flex-col items-center">
                <Building2 className="text-gray-200 mb-4" size={50} />
-               <h3 className="text-xl font-bold text-gray-400">No brands partner found</h3>
-               <button onClick={() => setShowModal(true)} className="mt-4 text-blue-600 font-bold hover:underline">Add First Brand</button>
+               <h3 className="text-xl font-bold text-gray-400">No {activeTab} brands found</h3>
+               <button onClick={() => {
+                  setEditingBrand(null);
+                  setFormData({ name: '', description: '', logoUrl: '', section: activeTab, location: '', latitude: '', longitude: '', openingTime: '09:00', closingTime: '23:00', category: '', isActive: true });
+                  setShowModal(true);
+               }} className="mt-4 text-blue-600 font-bold hover:underline">Add First Brand</button>
             </div>
           )}
-        </div>
+          </div>
+        </>
       )}
 
       {/* Modal */}
@@ -259,6 +291,7 @@ export default function BrandsPage() {
                     >
                       <option value="mart">Retail Mart</option>
                       <option value="restaurant">Food & Restaurant</option>
+                      <option value="pharma">Pharma (Medicine)</option>
                     </select>
                   </div>
                   <div>

@@ -10,7 +10,18 @@ export class MenuItemsController {
   constructor(private readonly menuItemsService: MenuItemsService) {}
 
   @Get()
-  findAll(@Query('restaurantId') restaurantId?: string) {
+  findAll(
+    @Query('restaurantId') restaurantId?: string,
+    @Query('search') search?: string,
+    @Query('ids') ids?: string,
+  ) {
+    if (ids) {
+      const idList = ids.split(',').map(id => id.trim()).filter(Boolean);
+      return this.menuItemsService.findByIds(idList);
+    }
+    if (search) {
+      return this.menuItemsService.search(search);
+    }
     if (restaurantId) {
       return this.menuItemsService.findByRestaurant(restaurantId);
     }

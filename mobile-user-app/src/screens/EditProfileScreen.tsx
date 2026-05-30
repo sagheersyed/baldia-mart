@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, StyleSheet, ActivityIndicator, Alert, TextInput,
-  ScrollView, KeyboardAvoidingView, Platform,
+  ScrollView, KeyboardAvoidingView, Platform, Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { authApi, usersApi } from '../api/api';
+import { useAuthStore } from '../store/authStore';
+import { useCartStore } from '../store/cartStore';
 import {
   AppText, AppButton, AppIconButton, AppBadge,
 } from '../components/ui';
@@ -18,9 +20,10 @@ function getInitials(name: string) {
 }
 
 export default function EditProfileScreen({ navigation }: any) {
+  const { activeMode } = useCartStore();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ name: '', phoneNumber: '', email: '' });
+  const [form, setForm] = useState({ name: '', phoneNumber: '', email: '', age: '', gender: '' });
   const [originalUser, setOriginalUser] = useState<any>(null);
 
   useEffect(() => {
@@ -29,7 +32,13 @@ export default function EditProfileScreen({ navigation }: any) {
         const res = await authApi.getMe();
         const u = res.data;
         setOriginalUser(u);
-        setForm({ name: u.name || '', phoneNumber: u.phoneNumber || '', email: u.email || '' });
+        setForm({ 
+          name: u.name || '', 
+          phoneNumber: u.phoneNumber || '', 
+          email: u.email || '',
+          age: u.age?.toString() || '',
+          gender: u.gender || ''
+        });
       } catch {
         Alert.alert('Error', 'Failed to load profile.');
         navigation.goBack();
@@ -39,6 +48,8 @@ export default function EditProfileScreen({ navigation }: any) {
     })();
   }, [navigation]);
 
+  const { updateUserData } = useAuthStore();
+
   const handleSave = async () => {
     if (!form.name.trim()) {
       Alert.alert('Validation', 'Please enter your name.');
@@ -46,11 +57,18 @@ export default function EditProfileScreen({ navigation }: any) {
     }
     setSaving(true);
     try {
-      await usersApi.updateMe({
+      const updateDto = {
         name: form.name.trim(),
         phoneNumber: form.phoneNumber.trim(),
         email: form.email.trim(),
-      });
+        age: form.age ? parseInt(form.age) : undefined,
+        gender: form.gender,
+      };
+      await usersApi.updateMe(updateDto);
+      
+      // Update local store immediately to fix latency
+      updateUserData({ ...originalUser, ...updateDto });
+
       Alert.alert('Success', 'Profile updated successfully!', [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
@@ -64,12 +82,16 @@ export default function EditProfileScreen({ navigation }: any) {
   const hasChanges =
     form.name !== (originalUser?.name || '') ||
     form.phoneNumber !== (originalUser?.phoneNumber || '') ||
-    form.email !== (originalUser?.email || '');
+    form.email !== (originalUser?.email || '') ||
+    form.age !== (originalUser?.age?.toString() || '') ||
+    form.gender !== (originalUser?.gender || '');
+
+  const accent = activeMode === 'food' ? theme.colors.food : activeMode === 'pharma' ? theme.colors.pharma : theme.colors.primary;
 
   if (loading) {
     return (
       <View style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
+        <ActivityIndicator size="large" color={accent} />
       </View>
     );
   }
@@ -90,7 +112,7 @@ export default function EditProfileScreen({ navigation }: any) {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.avatarSection}>
-            <View style={styles.avatarCircle}>
+            <View style={[styles.avatarCircle, { backgroundColor: accent }]}>
               <AppText variant="h1" color="#fff">{getInitials(form.name)}</AppText>
             </View>
             <AppText variant="caption" align="center" style={{ marginTop: theme.spacing.sm }}>
@@ -125,6 +147,43 @@ export default function EditProfileScreen({ navigation }: any) {
           </View>
 
           <AppText variant="overline" style={[styles.sectionLabel, { marginTop: theme.spacing.lg }]}>
+            Healthcare Information
+          </AppText>
+          <View style={styles.fieldCard}>
+            <View style={[styles.field, styles.fieldBorder]}>
+              <AppText variant="caption" style={{ marginBottom: 4 }}>Age</AppText>
+              <TextInput
+                style={styles.fieldInput}
+                value={form.age}
+                onChangeText={(v) => setForm({ ...form, age: v.replace(/[^0-9]/g, '') })}
+                placeholder="Enter your age"
+                placeholderTextColor={theme.colors.textMuted}
+                keyboardType="numeric"
+                maxLength={3}
+              />
+            </View>
+            <View style={styles.field}>
+              <AppText variant="caption" style={{ marginBottom: 4 }}>Gender</AppText>
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+                {['Male', 'Female', 'Other'].map(g => (
+                  <Pressable
+                    key={g}
+                    onPress={() => setForm({ ...form, gender: g })}
+                    style={[
+                      styles.genderBtn,
+                      form.gender === g && { backgroundColor: accent, borderColor: accent }
+                    ]}
+                  >
+                    <AppText variant="captionStrong" color={form.gender === g ? '#fff' : theme.colors.textSecondary}>
+                      {g}
+                    </AppText>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          </View>
+
+          <AppText variant="overline" style={[styles.sectionLabel, { marginTop: theme.spacing.lg }]}>
             Account information
           </AppText>
           <View style={styles.fieldCard}>
@@ -146,6 +205,7 @@ export default function EditProfileScreen({ navigation }: any) {
                 <AppBadge
                   label={originalUser?.role || 'Customer'}
                   variant="primary"
+                  tint={accent}
                 />
               </View>
             </View>
@@ -157,6 +217,7 @@ export default function EditProfileScreen({ navigation }: any) {
           <AppButton
             label={saving ? 'Saving…' : 'Save changes'}
             variant="primary"
+            tint={accent}
             size="lg"
             fullWidth
             onPress={handleSave}
@@ -183,7 +244,6 @@ const styles = StyleSheet.create({
   avatarSection: { alignItems: 'center', marginBottom: theme.spacing.lg },
   avatarCircle: {
     width: 88, height: 88, borderRadius: 44,
-    backgroundColor: theme.colors.primary,
     alignItems: 'center', justifyContent: 'center',
     ...theme.shadows.md,
   },
@@ -204,4 +264,12 @@ const styles = StyleSheet.create({
   fieldInput: {
     fontSize: 15, color: theme.colors.textPrimary, padding: 0,
   },
+  genderBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.colors.divider,
+    backgroundColor: theme.colors.surfaceMuted,
+  }
 });

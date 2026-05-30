@@ -27,6 +27,10 @@ export class BannersService {
       return [];
     }
 
+    if (section === 'pharma' && publicSettings.feature_show_pharma !== true) {
+      return [];
+    }
+
     const query = this.bannerRepository.createQueryBuilder('banner')
       .where('banner.isActive = :isActive', { isActive: true })
       .orderBy('banner.sortOrder', 'ASC')

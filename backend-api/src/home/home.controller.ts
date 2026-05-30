@@ -11,10 +11,9 @@ export class HomeController {
    */
   @Get()
   async getHome(
-    @Query('section') section: 'mart' | 'food' = 'mart',
+    @Query('section') section: 'mart' | 'food' | 'pharma' = 'mart',
     @Query('zoneId') zoneId?: string,
   ) {
-    const normalizedSection = section === 'food' ? 'food' : 'mart';
-    return this.homeService.getHome(normalizedSection, zoneId || null);
+    return this.homeService.getHome(section, zoneId || null);
   }
 }

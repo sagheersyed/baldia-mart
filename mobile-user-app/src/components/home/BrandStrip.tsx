@@ -2,6 +2,7 @@ import React, { memo, useCallback } from 'react';
 import { View, StyleSheet, FlatList, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import AppText from '../ui/AppText';
 import SectionHeader from '../ui/SectionHeader';
 import FavouriteButton from '../ui/FavouriteButton';
@@ -20,8 +21,8 @@ interface BrandStripProps {
 }
 
 /**
- * Foodpanda-style "Popular Shops" rail. Each card is a logo tile + name +
- * delivery time hint, with a heart overlay if a favourite handler is provided.
+ * Premium brand rail with gradient overlay, delivery time pill, and
+ * FoodPanda-style "Popular Shops" visual density.
  */
 const BrandStrip = memo(function BrandStrip({
   brands,
@@ -43,7 +44,7 @@ const BrandStrip = memo(function BrandStrip({
         onPress={() => onBrandPress(item)}
         style={({ pressed }) => [
           styles.card,
-          pressed ? { opacity: 0.92, transform: [{ scale: 0.98 }] } : null,
+          pressed ? { opacity: 0.92, transform: [{ scale: 0.97 }] } : null,
         ]}
       >
         <View style={styles.imgWrap}>
@@ -51,13 +52,30 @@ const BrandStrip = memo(function BrandStrip({
             <Image
               source={{ uri }}
               style={styles.img}
-              contentFit="cover"
+              contentFit="contain"
               cachePolicy="memory-disk"
               transition={150}
             />
           ) : (
-            <Ionicons name="storefront" size={26} color={theme.colors.textSecondary} />
+            <View style={styles.imgPlaceholder}>
+              <Ionicons name="storefront" size={30} color={theme.colors.textSecondary} />
+            </View>
           )}
+
+          {/* Bottom gradient overlay */}
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.5)']}
+            start={{ x: 0, y: 0.4 }}
+            end={{ x: 0, y: 1 }}
+            style={styles.imgGradient}
+          />
+
+          {/* Delivery time pill on image */}
+          <View style={styles.etaPill}>
+            <Ionicons name="bicycle-outline" size={11} color="#fff" />
+            <AppText variant="badge" color="#fff" style={{ fontSize: 9 }}>{eta}</AppText>
+          </View>
+
           {!isOpen && (
             <View style={styles.closedOverlay}>
               <AppText variant="badge" color="#fff">CLOSED</AppText>
@@ -75,7 +93,6 @@ const BrandStrip = memo(function BrandStrip({
         <AppText variant="bodyStrong" numberOfLines={2} style={styles.name}>
           {item.name}
         </AppText>
-        <AppText variant="caption" numberOfLines={1}>{eta}</AppText>
       </Pressable>
     );
   }, [onBrandPress, isFavourite, onToggleFavourite]);
@@ -100,20 +117,46 @@ const BrandStrip = memo(function BrandStrip({
 
 const styles = StyleSheet.create({
   wrap: { paddingBottom: theme.spacing.lg },
-  list: { paddingHorizontal: theme.spacing.lg, gap: theme.spacing.md },
-  card: { width: 124, marginRight: theme.spacing.md },
+  list: { paddingHorizontal: theme.spacing.lg, gap: theme.spacing.sm },
+  card: { width: 136, marginRight: theme.spacing.sm },
   imgWrap: {
-    width: 124,
-    height: 124,
+    width: 136,
+    height: 136,
     borderRadius: theme.radius.lg,
     backgroundColor: theme.colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    ...theme.shadows.sm,
+    ...theme.shadows.md,
     marginBottom: theme.spacing.sm,
   },
   img: { width: '100%', height: '100%' },
+  imgPlaceholder: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.surfaceMuted,
+  },
+  imgGradient: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 60,
+  },
+  etaPill: {
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: theme.radius.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
   closedOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(15,23,42,0.55)',

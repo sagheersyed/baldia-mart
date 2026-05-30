@@ -5,6 +5,7 @@ import {
 import { Image } from 'expo-image';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { useCartStore } from '../store/cartStore';
 import { settingsApi, addressesApi, ordersApi } from '../api/api';
@@ -21,19 +22,21 @@ type Row =
   | { kind: 'item'; item: any }
   | { kind: 'summary' };
 
-export default function CartScreen({ navigation }: any) {
+export default function CartScreen({ navigation, route }: any) {
   const insets = useSafeAreaInsets();
   const {
     martCart, foodCart, pharmaCart, updateQuantity, removeFromCart, getCartTotal,
     getCartCount, activeMode: contextMode, setActiveMode, getCurrentTotal, getCurrentCount,
   } = useCartStore();
 
-  const [mode, setMode] = useState<Mode>(contextMode || 'mart');
+  const routeMode = route?.params?.mode;
+  const [mode, setMode] = useState<Mode>(routeMode || contextMode || 'mart');
 
   useEffect(() => {
-    if (contextMode && contextMode !== mode) setMode(contextMode);
+    const active = routeMode || contextMode;
+    if (active && active !== mode) setMode(active as Mode);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contextMode]);
+  }, [contextMode, routeMode]);
 
   const cart = mode === 'mart' ? martCart : mode === 'food' ? foodCart : pharmaCart;
 
@@ -52,8 +55,8 @@ export default function CartScreen({ navigation }: any) {
       const addrRes = await addressesApi.getAll();
       const defaultAddr = addrRes.data.find((a: any) => a.isDefault) || addrRes.data[0];
       if (defaultAddr) {
-        const restaurantId = mode === 'food' ? cart[0]?.restaurantId : undefined;
-        const feeRes = await ordersApi.getDeliveryFee(defaultAddr.id, restaurantId, mode, subtotal);
+        const restaurantId = mode === 'food' ? (cart[0] as any)?.restaurantId : undefined;
+        const feeRes = await ordersApi.getDeliveryFee(defaultAddr.id, restaurantId, mode);
         if (feeRes.data.isValid) {
           setDeliveryFee(Number(feeRes.data.deliveryFee) || 0);
           setIsValidAddress(true);
@@ -120,9 +123,9 @@ export default function CartScreen({ navigation }: any) {
   const subtotal = getCartTotal(mode);
   const total = subtotal + (isValidAddress ? deliveryFee : 0);
 
-  const otherCount = mode === 'mart' ? getCartCount('food') + getCartCount('pharma') : 
-                    mode === 'food' ? getCartCount('mart') + getCartCount('pharma') :
-                    getCartCount('mart') + getCartCount('food');
+  const otherCount = mode === 'mart' ? getCartCount('food') + getCartCount('pharma') :
+    mode === 'food' ? getCartCount('mart') + getCartCount('pharma') :
+      getCartCount('mart') + getCartCount('food');
 
   const handleSwitchMode = (next: Mode) => {
     setMode(next);
@@ -136,45 +139,57 @@ export default function CartScreen({ navigation }: any) {
     ]);
   };
 
-  const accent = mode === 'food' ? theme.colors.food : mode === 'pharma' ? theme.colors.pharma : theme.colors.primary;
+  const accent = mode === 'food' ? theme.colors.food : mode === 'pharma' ? theme.colors.pharma : theme.colors.mart;
+
+  // Savings calc
+  const totalDiscount = useMemo(() => {
+    return cart.reduce((sum: number, it: any) => {
+      const disc = Number(it.discount || 0) * (it.quantity || 1);
+      return sum + disc;
+    }, 0);
+  }, [cart]);
 
   // ── Renderers ──
   const renderRow = useCallback(({ item }: { item: Row }) => {
     if (item.kind === 'modeSwitch') {
       return (
-        <View style={styles.modeSwitch}>
-          {(['mart', 'food', 'pharma'] as Mode[]).map(m => {
-            const active = mode === m;
-            const c = getCartCount(m);
-            return (
-              <Pressable
-                key={m}
-                onPress={() => handleSwitchMode(m)}
-                style={[styles.modePill, active ? {
-                  backgroundColor: m === 'food' ? theme.colors.food : m === 'pharma' ? theme.colors.pharma : theme.colors.primary,
-                } : null]}
-              >
-                <Ionicons
-                  name={m === 'mart' ? 'basket' : m === 'food' ? 'restaurant' : 'medical'}
-                  size={14}
-                  color={active ? '#fff' : theme.colors.textSecondary}
-                />
-                <AppText
-                  variant="captionStrong"
-                  color={active ? '#fff' : theme.colors.textSecondary}
+        <View style={styles.modeSwitchWrap}>
+          <View style={styles.modeSwitch}>
+            {(['mart', 'food', 'pharma'] as Mode[]).map(m => {
+              const active = mode === m;
+              const c = getCartCount(m);
+              const tint = m === 'food' ? theme.colors.food : m === 'pharma' ? theme.colors.pharma : theme.colors.mart;
+              return (
+                <Pressable
+                  key={m}
+                  onPress={() => handleSwitchMode(m)}
+                  style={[styles.modeTab, active ? styles.modeTabActive : null]}
                 >
-                  {m === 'mart' ? 'Mart' : m === 'food' ? 'Food' : 'Pharma'}
-                </AppText>
-                {c > 0 ? (
-                  <View style={[styles.countDot, active ? { backgroundColor: 'rgba(255,255,255,0.25)' } : null]}>
-                    <AppText variant="badge" color={active ? '#fff' : theme.colors.textPrimary}>
-                      {c}
-                    </AppText>
-                  </View>
-                ) : null}
-              </Pressable>
-            );
-          })}
+                  <Ionicons
+                    name={m === 'mart' ? 'basket' : m === 'food' ? 'restaurant' : 'medical'}
+                    size={16}
+                    color={active ? tint : theme.colors.textSecondary}
+                  />
+                  <AppText
+                    variant="captionStrong"
+                    color={active ? tint : theme.colors.textSecondary}
+                    style={{ fontSize: 13 }}
+                  >
+                    {m === 'mart' ? 'Mart' : m === 'food' ? 'Food' : 'Pharma'}
+                  </AppText>
+                  {c > 0 ? (
+                    <View style={[styles.countDot, { backgroundColor: active ? tint : theme.colors.surfaceMuted }]}>
+                      <AppText variant="badge" color={active ? '#fff' : theme.colors.textPrimary}>
+                        {c}
+                      </AppText>
+                    </View>
+                  ) : null}
+                  {/* Active underline */}
+                  {active && <View style={[styles.modeUnderline, { backgroundColor: tint }]} />}
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
       );
     }
@@ -182,11 +197,13 @@ export default function CartScreen({ navigation }: any) {
     if (item.kind === 'groupHeader') {
       return (
         <View style={styles.groupHeader}>
-          <Ionicons
-            name={mode === 'food' ? 'restaurant' : mode === 'pharma' ? 'medical' : 'storefront'}
-            size={16}
-            color={accent}
-          />
+          <View style={[styles.groupIcon, { backgroundColor: accent + '15' }]}>
+            <Ionicons
+              name={mode === 'food' ? 'restaurant' : mode === 'pharma' ? 'medical' : 'storefront'}
+              size={18}
+              color={accent}
+            />
+          </View>
           <AppText variant="title" style={{ flex: 1 }} numberOfLines={1}>{item.name}</AppText>
           {item.maxPrep && item.maxPrep > 0 ? (
             <AppBadge label={`~${item.maxPrep} min`} variant="secondary" tint={accent} />
@@ -200,7 +217,7 @@ export default function CartScreen({ navigation }: any) {
       const price = mode === 'pharma' ? it.sellingPrice : it.price;
       const lineTotal = (Number(price) || 0) * it.quantity;
       return (
-        <View style={styles.itemCard}>
+        <View style={[styles.itemCard, { borderLeftColor: accent }]}>
           <View style={styles.itemImage}>
             {it.imageUrl ? (
               <Image source={{ uri: it.imageUrl }} style={styles.fill} contentFit="cover" cachePolicy="memory-disk" />
@@ -227,7 +244,7 @@ export default function CartScreen({ navigation }: any) {
                 tint={accent}
               />
               <Pressable onPress={() => handleRemove(it)} hitSlop={8} style={styles.removeBtn}>
-                <Ionicons name="trash-outline" size={16} color={theme.colors.danger} />
+                <Ionicons name="trash-outline" size={15} color={theme.colors.danger} />
               </Pressable>
               <AppText variant="bodyStrong" color={accent} style={{ marginLeft: 'auto' }}>
                 Rs. {lineTotal.toLocaleString()}
@@ -241,7 +258,7 @@ export default function CartScreen({ navigation }: any) {
     if (item.kind === 'summary') {
       return (
         <View style={styles.summary}>
-          <AppText variant="overline">Order summary</AppText>
+          <AppText variant="overline" style={{ letterSpacing: 1 }}>ORDER SUMMARY</AppText>
           <View style={styles.sumRow}>
             <AppText variant="body" color={theme.colors.textSecondary}>Subtotal</AppText>
             <AppText variant="bodyStrong">Rs. {subtotal.toLocaleString()}</AppText>
@@ -256,9 +273,18 @@ export default function CartScreen({ navigation }: any) {
               <AppText variant="bodyStrong">Rs. {deliveryFee.toLocaleString()}</AppText>
             )}
           </View>
+          {/* Savings chip */}
+          {totalDiscount > 0 && (
+            <View style={styles.savingsRow}>
+              <Ionicons name="checkmark-circle" size={15} color={theme.colors.success} />
+              <AppText variant="captionStrong" color={theme.colors.success}>
+                You save Rs. {totalDiscount.toLocaleString()}
+              </AppText>
+            </View>
+          )}
           <View style={styles.sumDivider} />
           <View style={styles.sumRow}>
-            <AppText variant="title">Total</AppText>
+            <AppText variant="title" style={{ fontSize: 16 }}>Total</AppText>
             <AppText variant="h3" color={accent}>
               {!isValidAddress ? 'N/A' : `Rs. ${total.toLocaleString()}`}
             </AppText>
@@ -272,7 +298,7 @@ export default function CartScreen({ navigation }: any) {
             </View>
           ) : null}
 
-          {/* Suggested addons (quick picks) */}
+          {/* Tip */}
           <View style={styles.tipsRow}>
             <Ionicons name="bulb-outline" size={14} color={theme.colors.textSecondary} />
             <AppText variant="caption" color={theme.colors.textSecondary} style={{ flex: 1 }}>
@@ -285,7 +311,7 @@ export default function CartScreen({ navigation }: any) {
     return null;
   }, [
     mode, accent, subtotal, total, deliveryFee, isLoadingFee, isValidAddress, outOfZoneMsg,
-    getCartCount, updateQuantity,
+    getCartCount, updateQuantity, totalDiscount,
   ]);
 
   const keyExtractor = useCallback((item: Row, index: number) => {
@@ -297,39 +323,43 @@ export default function CartScreen({ navigation }: any) {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <AppIconButton size={36} bg={theme.colors.surfaceMuted} onPress={() => navigation.goBack()}>
+        <AppIconButton size={38} bg={theme.colors.surfaceMuted} onPress={() => navigation.goBack()}>
           <Ionicons name="chevron-back" size={20} color={theme.colors.textPrimary} />
         </AppIconButton>
         <AppText variant="h2" style={{ flex: 1 }}>Your cart</AppText>
         {cart.length > 0 ? (
-          <AppText variant="caption">{cart.length} {cart.length === 1 ? 'item' : 'items'}</AppText>
+          <View style={styles.itemCountChip}>
+            <AppText variant="captionStrong" color={accent}>{cart.length} {cart.length === 1 ? 'item' : 'items'}</AppText>
+          </View>
         ) : null}
       </View>
 
       {cart.length === 0 ? (
         <View style={{ flex: 1 }}>
-          <View style={styles.modeSwitch}>
-            {(['mart', 'food', 'pharma'] as Mode[]).map(m => {
-              const active = mode === m;
-              return (
-                <Pressable
-                  key={m}
-                  onPress={() => handleSwitchMode(m)}
-                  style={[styles.modePill, active ? {
-                    backgroundColor: m === 'food' ? theme.colors.food : m === 'pharma' ? theme.colors.pharma : theme.colors.primary,
-                  } : null]}
-                >
-                  <Ionicons
-                    name={m === 'mart' ? 'basket' : m === 'food' ? 'restaurant' : 'medical'}
-                    size={14}
-                    color={active ? '#fff' : theme.colors.textSecondary}
-                  />
-                  <AppText variant="captionStrong" color={active ? '#fff' : theme.colors.textSecondary}>
-                    {m === 'mart' ? 'Mart' : m === 'food' ? 'Food' : 'Pharma'}
-                  </AppText>
-                </Pressable>
-              );
-            })}
+          <View style={styles.modeSwitchWrap}>
+            <View style={styles.modeSwitch}>
+              {(['mart', 'food', 'pharma'] as Mode[]).map(m => {
+                const active = mode === m;
+                const tint = m === 'food' ? theme.colors.food : m === 'pharma' ? theme.colors.pharma : theme.colors.mart;
+                return (
+                  <Pressable
+                    key={m}
+                    onPress={() => handleSwitchMode(m)}
+                    style={[styles.modeTab, active ? styles.modeTabActive : null]}
+                  >
+                    <Ionicons
+                      name={m === 'mart' ? 'basket' : m === 'food' ? 'restaurant' : 'medical'}
+                      size={16}
+                      color={active ? tint : theme.colors.textSecondary}
+                    />
+                    <AppText variant="captionStrong" color={active ? tint : theme.colors.textSecondary}>
+                      {m === 'mart' ? 'Mart' : m === 'food' ? 'Food' : 'Pharma'}
+                    </AppText>
+                    {active && <View style={[styles.modeUnderline, { backgroundColor: tint }]} />}
+                  </Pressable>
+                );
+              })}
+            </View>
           </View>
 
           <EmptyState
@@ -337,16 +367,16 @@ export default function CartScreen({ navigation }: any) {
             title={`Your ${mode} cart is empty`}
             subtitle={mode === 'mart'
               ? 'Browse fresh groceries, brands and daily essentials.'
-              : mode === 'food' 
-              ? 'Discover top restaurants near you and treat yourself.'
-              : 'Add medicines and healthcare products to your cart.'}
+              : mode === 'food'
+                ? 'Discover top restaurants near you and treat yourself.'
+                : 'Add medicines and healthcare products to your cart.'}
             actionLabel={mode === 'mart' ? 'Browse groceries' : mode === 'food' ? 'Browse restaurants' : 'Browse pharmacy'}
             onAction={() => navigation.navigate(mode === 'mart' ? 'Home' : mode === 'food' ? 'Food' : 'Pharma')}
             tint={accent}
           />
 
           {otherCount > 0 ? (
-            <View style={styles.otherCartTip}>
+            <View style={[styles.otherCartTip, { marginBottom: 110 }]}>
               <Ionicons
                 name={getCartCount('pharma') > 0 && mode !== 'pharma' ? 'medical' : getCartCount('food') > 0 && mode !== 'food' ? 'restaurant' : 'basket'}
                 size={16}
@@ -374,19 +404,52 @@ export default function CartScreen({ navigation }: any) {
             contentContainerStyle={{ paddingVertical: theme.spacing.md, paddingBottom: 160 + insets.bottom }}
           />
 
-          <View style={styles.footer}>
-            <AppButton
-              label={!isValidAddress && mode !== 'pharma'
-                ? 'Address out of zone'
-                : `Checkout • Rs. ${Math.round(total)}`}
-              variant="primary"
-              tint={accent}
-              size="lg"
-              fullWidth
-              disabled={(!isValidAddress && mode !== 'pharma') || total <= 0}
-              onPress={() => navigation.navigate('Checkout', { mode })}
-              trailingIcon={<Ionicons name="arrow-forward" size={18} color="#fff" />}
+          {/* Sticky gradient footer */}
+          <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) + 110 }]}>
+            <LinearGradient
+              colors={['transparent', theme.colors.surface]}
+              style={styles.footerGradient}
             />
+            <View style={styles.footerContent}>
+              <Pressable
+                onPress={() => navigation.navigate('Checkout', { mode })}
+                disabled={(!isValidAddress && mode !== 'pharma') || total <= 0}
+                style={({ pressed }) => [
+                  styles.checkoutBtn,
+                  { opacity: ((!isValidAddress && mode !== 'pharma') || total <= 0) ? 0.5 : 1 },
+                  pressed ? { transform: [{ scale: 0.98 }] } : null,
+                ]}
+              >
+                <LinearGradient
+                  colors={
+                    mode === 'food'
+                      ? [theme.colors.food, theme.colors.foodDark]
+                      : mode === 'pharma'
+                        ? [theme.colors.pharma, theme.colors.pharmaDark]
+                        : [theme.colors.mart, theme.colors.martDark]
+                  }
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={StyleSheet.absoluteFill}
+                />
+                <View style={styles.checkoutInner}>
+                  <View>
+                    <AppText variant="bodyStrong" color="#fff" style={{ fontSize: 15 }}>
+                      {!isValidAddress && mode !== 'pharma' ? 'Address out of zone' : 'Proceed to Checkout'}
+                    </AppText>
+                    <AppText variant="caption" color="rgba(255,255,255,0.8)">
+                      {cart.length} {cart.length === 1 ? 'item' : 'items'}
+                    </AppText>
+                  </View>
+                  <View style={styles.checkoutPrice}>
+                    <AppText variant="h3" color="#fff">
+                      Rs. {Math.round(total).toLocaleString()}
+                    </AppText>
+                    <Ionicons name="arrow-forward" size={18} color="#fff" />
+                  </View>
+                </View>
+              </Pressable>
+            </View>
           </View>
         </>
       )}
@@ -395,7 +458,7 @@ export default function CartScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.colors.background , marginBottom:110 },
+  container: { flex: 1, backgroundColor: theme.colors.background },
   fill: { width: '100%', height: '100%' },
 
   header: {
@@ -407,23 +470,44 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: theme.colors.divider,
     gap: theme.spacing.md,
   },
-
-  // Mode switch
-  modeSwitch: {
-    flexDirection: 'row', gap: 8,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
-  },
-  modePill: {
-    paddingHorizontal: theme.spacing.md, paddingVertical: 8,
-    borderRadius: theme.radius.pill,
+  itemCountChip: {
     backgroundColor: theme.colors.surfaceMuted,
-    flexDirection: 'row', alignItems: 'center', gap: 6,
+    borderRadius: theme.radius.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+
+  // Mode switch — tab style with underline
+  modeSwitchWrap: {
+    backgroundColor: theme.colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.divider,
+  },
+  modeSwitch: {
+    flexDirection: 'row',
+    paddingHorizontal: theme.spacing.lg,
+  },
+  modeTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    gap: 6,
+    position: 'relative',
+  },
+  modeTabActive: {},
+  modeUnderline: {
+    position: 'absolute',
+    bottom: 0,
+    left: '20%',
+    right: '20%',
+    height: 3,
+    borderRadius: 2,
   },
   countDot: {
-    minWidth: 18, height: 18, borderRadius: 9, marginLeft: 4,
+    minWidth: 20, height: 20, borderRadius: 10, marginLeft: 2,
     paddingHorizontal: 5,
-    backgroundColor: theme.colors.surface,
     alignItems: 'center', justifyContent: 'center',
   },
 
@@ -435,8 +519,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
     paddingVertical: theme.spacing.md,
   },
+  groupIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
-  // Items
+  // Items — left accent border
   itemCard: {
     flexDirection: 'row',
     backgroundColor: theme.colors.surface,
@@ -444,11 +535,14 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.sm,
     borderRadius: theme.radius.lg,
     padding: theme.spacing.md,
-    borderWidth: 1, borderColor: theme.colors.divider,
+    borderWidth: 1,
+    borderColor: theme.colors.divider,
+    borderLeftWidth: 3,
     gap: theme.spacing.md,
+    ...theme.shadows.md,
   },
   itemImage: {
-    width: 76, height: 76,
+    width: 88, height: 88,
     borderRadius: theme.radius.md,
     backgroundColor: theme.colors.surfaceMuted,
     overflow: 'hidden',
@@ -457,9 +551,11 @@ const styles = StyleSheet.create({
   itemBody: { flex: 1, justifyContent: 'space-between' },
   itemActions: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, marginTop: 4 },
   removeBtn: {
-    width: 32, height: 32, borderRadius: 16,
+    width: 30, height: 30, borderRadius: 10,
     backgroundColor: theme.colors.dangerLight,
     alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: theme.colors.dangerBorder,
   },
 
   // Summary
@@ -471,10 +567,20 @@ const styles = StyleSheet.create({
     padding: theme.spacing.lg,
     borderWidth: 1, borderColor: theme.colors.divider,
     gap: theme.spacing.sm,
-    ...theme.shadows.sm,
+    ...theme.shadows.md,
   },
   sumRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sumDivider: { height: 1, backgroundColor: theme.colors.divider, marginVertical: theme.spacing.sm },
+  savingsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: theme.colors.successLight,
+    borderRadius: theme.radius.sm,
+    padding: theme.spacing.sm,
+    borderWidth: 1,
+    borderColor: theme.colors.successBorder,
+  },
   warnRow: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     backgroundColor: theme.colors.dangerLight,
@@ -495,11 +601,41 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: theme.colors.divider,
   },
 
+  // Sticky footer
   footer: {
-    // position: 'absolute', left: 0, right: 0, bottom: 0,
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: -40,
+
+  },
+  footerGradient: {
+    height: 0,
+  },
+  footerContent: {
+    backgroundColor: 'transparent',
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.md,
-    // backgroundColor: theme.colors.surface,
-    // borderTopWidth: 1, borderTopColor: theme.colors.divider,
+    paddingBottom: theme.spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: 'transparent',
+  },
+  checkoutBtn: {
+    borderRadius: theme.radius.lg,
+    overflow: 'hidden',
+    height: 60,
+    justifyContent: 'center',
+  },
+  checkoutInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    height: '100%',
+  },
+  checkoutPrice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
 });

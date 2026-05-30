@@ -18,6 +18,30 @@ interface HomeSectionProps {
   tint?: string;
 }
 
+/** Emoji prefix map for section titles */
+const EMOJI_MAP: Record<string, string> = {
+  'deals': '🔥',
+  'offer': '🔥',
+  'best': '⭐',
+  'seller': '⭐',
+  'popular': '🏆',
+  'trending': '📈',
+  'new': '✨',
+  'fresh': '🥬',
+  'featured': '💎',
+  'daily': '📦',
+  'essential': '🏪',
+  'budget': '💰',
+};
+
+function getEmoji(title: string): string {
+  const lower = title.toLowerCase();
+  for (const [key, emoji] of Object.entries(EMOJI_MAP)) {
+    if (lower.includes(key)) return emoji;
+  }
+  return '';
+}
+
 const HomeSection = memo(function HomeSection({
   section,
   cartQuantities,
@@ -31,6 +55,7 @@ const HomeSection = memo(function HomeSection({
   tint,
 }: HomeSectionProps) {
   const isHorizontal = section.layout !== 'grid-2';
+  const emoji = getEmoji(section.title);
 
   const renderHorizontalCard = useCallback(({ item }: { item: ProductCardProduct }) => (
     <ProductCard
@@ -39,7 +64,7 @@ const HomeSection = memo(function HomeSection({
       cartQty={cartQuantities[item.id] || 0}
       variant="horizontal"
       isFavourite={isFavourite?.(item.id)}
-      onPress={() => onProductPress?.(item)}
+      onPress={onProductPress ? () => onProductPress(item) : undefined}
       onAdd={() => onAdd(item)}
       onIncrement={() => onIncrement(item)}
       onDecrement={() => onDecrement(item)}
@@ -50,10 +75,15 @@ const HomeSection = memo(function HomeSection({
 
   if (!section.products?.length) return null;
 
+  const displayTitle = emoji ? `${emoji}  ${section.title}` : section.title;
+
   return (
     <View style={styles.wrap}>
+      {/* Subtle top divider */}
+      <View style={styles.divider} />
+
       <SectionHeader
-        title={section.title}
+        title={displayTitle}
         subtitle={section.subtitle}
         onAction={section.viewAll ? () => onSeeAll?.(section) : undefined}
       />
@@ -80,7 +110,7 @@ const HomeSection = memo(function HomeSection({
                 cartQty={cartQuantities[item.id] || 0}
                 variant="grid"
                 isFavourite={isFavourite?.(item.id)}
-                onPress={() => onProductPress?.(item)}
+                onPress={onProductPress ? () => onProductPress(item) : undefined}
                 onAdd={() => onAdd(item)}
                 onIncrement={() => onIncrement(item)}
                 onDecrement={() => onDecrement(item)}
@@ -96,7 +126,13 @@ const HomeSection = memo(function HomeSection({
 });
 
 const styles = StyleSheet.create({
-  wrap: { paddingBottom: theme.spacing.lg },
+  wrap: { paddingBottom: theme.spacing.sm },
+  divider: {
+    height: 1,
+    backgroundColor: theme.colors.divider,
+    marginHorizontal: theme.spacing.lg,
+    marginBottom: theme.spacing.xs,
+  },
   listContent: {
     paddingHorizontal: theme.spacing.md,
     paddingBottom: theme.spacing.xs,

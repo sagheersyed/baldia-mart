@@ -1,12 +1,16 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, LessThanOrEqual } from 'typeorm';
 import { Pharmacy } from './pharmacy.entity';
 import { PharmacyInventory } from './pharmacy-inventory.entity';
 import { DeliveryZone } from '../../delivery-zones/delivery-zone.entity';
+import { NotificationsService } from '../../notifications/notifications.service';
+import { Cron, CronExpression } from '@nestjs/schedule';
 
 @Injectable()
 export class PharmaciesService {
+  private readonly logger = new Logger(PharmaciesService.name);
+
   constructor(
     @InjectRepository(Pharmacy)
     private readonly pharmacyRepo: Repository<Pharmacy>,
@@ -14,7 +18,31 @@ export class PharmaciesService {
     private readonly inventoryRepo: Repository<PharmacyInventory>,
     @InjectRepository(DeliveryZone)
     private readonly zoneRepo: Repository<DeliveryZone>,
+    private readonly notificationsService: NotificationsService,
   ) {}
+
+  /**
+   * Cron Job: Runs every night at 2:00 AM to quarantine expired medicines
+   * and alert admins about near-expiry stock.
+   */
+  @Cron(CronExpression.EVERY_DAY_AT_2AM)
+  async processExpiryIntelligence() {
+    this.logger.log('Running Expiry Intelligence scan...');
+    
+    // 1. Auto-quarantine expired stock
+    const quarantinedCount = await this.quarantineExpired();
+    if (quarantinedCount > 0) {
+      this.logger.warn(`Quarantined ${quarantinedCount} expired inventory items.`);
+    }
+
+    // 2. Scan for near-expiry (30 days) and log warnings
+    const nearExpiry = await this.getNearExpiry(30);
+    if (nearExpiry.length > 0) {
+      this.logger.warn(`Found ${nearExpiry.length} items near expiry. Check admin dashboard for details.`);
+    }
+
+    this.logger.log('Expiry Intelligence scan completed.');
+  }
 
   // ── Discovery ─────────────────────────────────────────────────
 
@@ -44,8 +72,7 @@ export class PharmaciesService {
 
   async getAll(page = 1, limit = 20) {
     const [data, total] = await this.pharmacyRepo.findAndCount({
-      where: { isActive: true, isVerified: true },
-      order: { rating: 'DESC', name: 'ASC' },
+      order: { onboardingStatus: 'ASC', name: 'ASC' },
       skip: (page - 1) * limit,
       take: limit,
     });
@@ -65,17 +92,21 @@ export class PharmaciesService {
     return { data, total, page, limit };
   }
 
-  async addInventoryItem(pharmacyId: string, data: Partial<PharmacyInventory>) {
+  async addInventoryItem(pharmacyId: string, dto: any) {
+    const stockQuantity = dto.quantity !== undefined ? dto.quantity : dto.stockQuantity;
+    const updateData: Partial<PharmacyInventory> = { ...dto, stockQuantity };
+    delete (updateData as any).quantity;
+
     const existing = await this.inventoryRepo.findOne({
-      where: { pharmacyId, medicineId: data.medicineId },
+      where: { pharmacyId, medicineId: dto.medicineId },
     });
 
     if (existing) {
-      Object.assign(existing, data);
+      Object.assign(existing, updateData);
       return this.inventoryRepo.save(existing);
     }
 
-    const newItem = this.inventoryRepo.create({ ...data, pharmacyId });
+    const newItem = this.inventoryRepo.create({ ...updateData, pharmacyId });
     return this.inventoryRepo.save(newItem);
   }
 
@@ -129,7 +160,29 @@ export class PharmaciesService {
       inv.stockQuantity -= quantity;
       inv.reservedQuantity = Math.max(0, inv.reservedQuantity - quantity);
       await em.save(inv);
+
+      // Phase 21: Low Stock Alert
+      if (inv.stockQuantity < 10) {
+        this.triggerLowStockAlert(inv.pharmacyId, inv.medicineId, inv.stockQuantity);
+      }
     });
+  }
+
+  private async triggerLowStockAlert(pharmacyId: string, medicineId: string, currentStock: number) {
+    try {
+      const pharmacy = await this.pharmacyRepo.findOne({ where: { id: pharmacyId }, relations: ['medicine'] } as any);
+      const inventory = await this.inventoryRepo.findOne({ where: { pharmacyId, medicineId }, relations: ['medicine'] });
+      
+      if (pharmacy && inventory) {
+        this.logger.warn(`Low stock alert: ${inventory.medicine.name} @ ${pharmacy.name}. Remaining: ${currentStock}`);
+        
+        // In a real scenario, we'd find the pharmacist's user ID to send a push notification
+        // For now, we log it and could potentially send an email or SMS if configured.
+        // Assuming pharmacy entity might have a linked userId in future
+      }
+    } catch (err) {
+      this.logger.error('Failed to trigger low stock alert', err);
+    }
   }
 
   /**
@@ -150,11 +203,15 @@ export class PharmaciesService {
   }
 
   /**
-   * Find the best pharmacy for an order based on availability + proximity.
+   * Find the best pharmacy for an order based on availability + proximity + ZONE.
+   * A Senior Pharmacist approach: Only fulfill from the user's delivery zone 
+   * to ensure cold-chain maintenance and local regulation compliance.
    */
   async findBestPharmacy(
     medicineId: string,
     quantity: number,
+    zoneId?: string, // Made optional for anonymous availability checks
+    requiresColdChain: boolean = false,
     lat?: number,
     lng?: number,
   ): Promise<Pharmacy | null> {
@@ -166,6 +223,16 @@ export class PharmaciesService {
       .andWhere('inv.is_quarantined = false')
       .andWhere('(inv.stock_quantity - inv.reserved_quantity) >= :qty', { qty: quantity })
       .andWhere('p.is_active = true AND p.is_verified = true AND p.is_open = true');
+
+    // Filter by Zone if provided (Strict Enforcement for fulfillment)
+    if (zoneId) {
+      qb.andWhere('p.zone_id = :zoneId', { zoneId });
+    }
+
+    // Ensure cold-chain compliance if the medicine requires it
+    if (requiresColdChain) {
+      qb.andWhere('p.has_cold_chain_support = true');
+    }
 
     if (lat && lng) {
       qb.addOrderBy(
@@ -179,6 +246,12 @@ export class PharmaciesService {
   }
 
   // ── Onboarding ────────────────────────────────────────────────
+
+  async update(id: string, dto: Partial<Pharmacy>): Promise<Pharmacy> {
+    const pharmacy = await this.findById(id);
+    Object.assign(pharmacy, dto);
+    return this.pharmacyRepo.save(pharmacy);
+  }
 
   async register(dto: Partial<Pharmacy>): Promise<Pharmacy> {
     const pharmacy = this.pharmacyRepo.create({

@@ -15,12 +15,24 @@ export class FavoritesController {
     
     // Transform to mobile-friendly format
     return favs.map(f => {
-      const item = f.type === 'product' ? f.product : f.type === 'brand' ? f.brand : f.restaurant;
+      const item = f.type === 'product'
+        ? f.product
+        : f.type === 'brand'
+          ? f.brand
+          : f.type === 'medicine'
+            ? f.medicine
+            : f.restaurant;
       if (!item) return null;
       return {
         ...item,
         type: f.type,
-        targetId: f.type === 'product' ? f.productId : f.type === 'brand' ? f.brandId : f.restaurantId,
+        targetId: f.type === 'product'
+          ? f.productId
+          : f.type === 'brand'
+            ? f.brandId
+            : f.type === 'medicine'
+              ? f.medicineId
+              : f.restaurantId,
       };
     }).filter(Boolean);
   }
@@ -28,7 +40,7 @@ export class FavoritesController {
   @Post('toggle')
   async toggleFavorite(
     @Req() req: Request,
-    @Body() body: { type: 'product' | 'restaurant' | 'brand', targetId: string }
+    @Body() body: { type: 'product' | 'restaurant' | 'brand' | 'medicine', targetId: string }
   ) {
     const user = req.user as any;
     return this.favoritesService.toggleFavorite(user.id, body.type, body.targetId);
@@ -37,7 +49,7 @@ export class FavoritesController {
   @Post('sync')
   async syncFavorites(
     @Req() req: Request,
-    @Body() body: { items: { type: 'product' | 'restaurant' | 'brand', targetId: string }[] }
+    @Body() body: { items: { type: 'product' | 'restaurant' | 'brand' | 'medicine', targetId: string }[] }
   ) {
     const user = req.user as any;
     return this.favoritesService.syncFavorites(user.id, body.items);

@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Plus, Trash2, X, Pencil, Activity, Package, Search, 
-  Tag, Pill, Droplets, FlaskConical, Stethoscope, AlertCircle
+  Tag, Pill, Droplets, FlaskConical, Stethoscope, AlertCircle, Star
 } from 'lucide-react';
 import { fetchWithAuth, BASE_URL, getErrorMessage, parseApiError } from '@/lib/api';
 import { showToast } from '@/hooks/useToast';
@@ -15,14 +15,19 @@ interface Medicine {
   mrp: number;
   discount?: number;
   categoryId: string;
+  brandId?: string;
   category?: { name: string };
   image_url?: string;
   isActive: boolean;
   requiresPrescription: boolean;
   isEmergency: boolean;
+  isOtc?: boolean;
   dosageForm?: string;
   strength?: string;
   packSize?: string;
+  isFeatured: boolean;
+  itemType: string;
+  tags?: string[];
 }
 
 interface Category {
@@ -39,6 +44,7 @@ const EMPTY_FORM = {
   mrp: '',
   discount: '',
   categoryId: '',
+  brandId: '',
   imageUrl: '',
   isActive: true,
   requiresPrescription: false,
@@ -47,21 +53,29 @@ const EMPTY_FORM = {
   dosageForm: 'Tablet',
   strength: '',
   packSize: '',
+  isFeatured: false,
+  itemType: 'medicine',
+  tags: '',
 };
 
 export default function MedicinesPage() {
   const [medicines, setMedicines] = useState<Medicine[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [brands, setBrands] = useState<{id: string, name: string}[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [formData, setFormData] = useState({ ...EMPTY_FORM });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
 
   useEffect(() => {
-    fetchMedicines();
+    fetchMedicines(1);
     fetchCategories();
+    fetchBrands();
   }, []);
 
   const fetchCategories = async () => {
@@ -74,17 +88,47 @@ export default function MedicinesPage() {
     }
   };
 
-  const fetchMedicines = async () => {
+  const fetchBrands = async () => {
+    try {
+      const res = await fetchWithAuth(`${BASE_URL}/brands?section=pharma`);
+      const data = await res.json();
+      setBrands(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Failed to load brands');
+    }
+  };
+
+  const fetchMedicines = async (targetPage = page) => {
     setLoading(true);
     try {
-      const res = await fetchWithAuth(`${API_URL}/search?limit=100`);
+      const res = await fetchWithAuth(`${API_URL}/search?page=${targetPage}&limit=20`);
       if (!res.ok) throw new Error(await parseApiError(res, 'Failed to load medicines'));
       const payload = await res.json();
       setMedicines(Array.isArray(payload.data) ? payload.data : []);
+      setTotalPages(payload.totalPages || 1);
+      setTotalItems(payload.total || 0);
+      setPage(targetPage);
     } catch (err) {
       showToast({ title: getErrorMessage(err, 'Failed to load medicines'), variant: 'error' });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const toggleFlag = async (m: Medicine, flag: 'isFeatured' | 'isActive') => {
+    const next = !m[flag];
+    setMedicines(prev => prev.map(x => x.id === m.id ? { ...x, [flag]: next } : x));
+    try {
+      const res = await fetchWithAuth(`${API_URL}/${m.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [flag]: next }),
+      });
+      if (!res.ok) throw new Error(await parseApiError(res, 'Failed to update flag'));
+      showToast({ title: `${flag === 'isFeatured' ? 'Featured' : 'Status'} updated`, variant: 'success' });
+    } catch (err) {
+      setMedicines(prev => prev.map(x => x.id === m.id ? { ...x, [flag]: !next } : x));
+      showToast({ title: getErrorMessage(err, 'Failed to update flag'), variant: 'error' });
     }
   };
 
@@ -98,6 +142,7 @@ export default function MedicinesPage() {
         ...formData,
         mrp: parseFloat(formData.mrp),
         discount: formData.discount ? parseFloat(formData.discount) : 0,
+        tags: formData.tags ? formData.tags.split(',').map((t: string) => t.trim()).filter(Boolean) : [],
       };
 
       const res = await fetchWithAuth(url, {
@@ -143,6 +188,7 @@ export default function MedicinesPage() {
       mrp: m.mrp.toString(),
       discount: m.discount?.toString() || '',
       categoryId: m.categoryId || '',
+      brandId: m.brandId || '',
       imageUrl: m.imageUrl || '',
       isActive: m.isActive,
       requiresPrescription: m.requiresPrescription,
@@ -151,6 +197,9 @@ export default function MedicinesPage() {
       dosageForm: m.dosageForm || 'Tablet',
       strength: m.strength || '',
       packSize: m.packSize || '',
+      isFeatured: m.isFeatured || false,
+      itemType: m.itemType || 'medicine',
+      tags: m.tags?.join(', ') || '',
     });
     setShowModal(true);
   };
@@ -192,6 +241,7 @@ export default function MedicinesPage() {
                 <th>Category</th>
                 <th className="text-center">Price</th>
                 <th className="text-center">Reqs</th>
+                <th className="text-center">Featured</th>
                 <th className="text-center">Status</th>
                 <th className="text-right">Actions</th>
               </tr>
@@ -223,10 +273,26 @@ export default function MedicinesPage() {
                     <div className="flex justify-center gap-1">
                       {m.requiresPrescription && <span title="Rx Required" className="w-5 h-5 rounded bg-purple-100 text-purple-700 flex items-center justify-center text-[10px] font-black">Rx</span>}
                       {m.isEmergency && <span title="Emergency" className="w-5 h-5 rounded bg-red-100 text-red-700 flex items-center justify-center"><AlertCircle size={10} /></span>}
+                      {m.isOtc && <span title="OTC Medicine" className="w-8 h-5 rounded bg-teal-100 text-teal-700 flex items-center justify-center text-[10px] font-black">OTC</span>}
                     </div>
                   </td>
                   <td className="text-center">
-                    <span className={m.isActive ? 'badge-green' : 'badge-gray'}>{m.isActive ? 'Active' : 'Hidden'}</span>
+                    <button
+                      onClick={() => toggleFlag(m, 'isFeatured')}
+                      className={`w-8 h-8 rounded-lg border transition-all flex items-center justify-center m-auto ${
+                        m.isFeatured ? 'bg-amber-50 border-amber-200 text-amber-600' : 'bg-white border-slate-200 text-slate-300'
+                      }`}
+                    >
+                      <Star size={14} fill={m.isFeatured ? 'currentColor' : 'none'} />
+                    </button>
+                  </td>
+                  <td className="text-center">
+                    <button 
+                      onClick={() => toggleFlag(m, 'isActive')}
+                      className={m.isActive ? 'badge-green cursor-pointer' : 'badge-gray cursor-pointer'}
+                    >
+                      {m.isActive ? 'Active' : 'Hidden'}
+                    </button>
                   </td>
                   <td className="text-right">
                     <div className="flex justify-end gap-1.5">
@@ -238,6 +304,32 @@ export default function MedicinesPage() {
               ))}
             </tbody>
           </table>
+        </div>
+        
+        {/* Pagination Controls */}
+        <div className="flex items-center justify-between px-6 py-4 bg-slate-50 border-t border-slate-100">
+          <div className="text-sm text-slate-500">
+            Showing <span className="font-semibold text-slate-700">{medicines.length}</span> of <span className="font-semibold text-slate-700">{totalItems}</span> items
+          </div>
+          <div className="flex gap-2">
+            <button 
+              disabled={page <= 1} 
+              onClick={() => fetchMedicines(page - 1)}
+              className="px-3 py-1 text-sm border border-slate-200 rounded-lg hover:bg-white disabled:opacity-50 transition-all"
+            >
+              Previous
+            </button>
+            <div className="flex items-center px-3 text-sm font-semibold text-slate-700">
+              Page {page} of {totalPages}
+            </div>
+            <button 
+              disabled={page >= totalPages} 
+              onClick={() => fetchMedicines(page + 1)}
+              className="px-3 py-1 text-sm border border-slate-200 rounded-lg hover:bg-white disabled:opacity-50 transition-all"
+            >
+              Next
+            </button>
+          </div>
         </div>
       </div>
 
@@ -278,6 +370,14 @@ export default function MedicinesPage() {
                 </div>
               </div>
 
+              <div>
+                <label className="input-label">Brand</label>
+                <select className="input" value={formData.brandId} onChange={e => setFormData({ ...formData, brandId: e.target.value })}>
+                  <option value="">Select Brand</option>
+                  {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                </select>
+              </div>
+
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="input-label">Dosage Form</label>
@@ -305,7 +405,7 @@ export default function MedicinesPage() {
                 <input className="input" value={formData.imageUrl} onChange={e => setFormData({ ...formData, imageUrl: e.target.value })} placeholder="https://..." />
               </div>
 
-              <div className="flex gap-6 pt-2">
+              <div className="flex flex-wrap gap-6 pt-2">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" checked={formData.requiresPrescription} onChange={e => setFormData({ ...formData, requiresPrescription: e.target.checked })} className="w-4 h-4 accent-primary-600" />
                   <span className="text-sm font-bold text-slate-700">Requires Prescription (Rx)</span>
@@ -314,6 +414,29 @@ export default function MedicinesPage() {
                   <input type="checkbox" checked={formData.isEmergency} onChange={e => setFormData({ ...formData, isEmergency: e.target.checked })} className="w-4 h-4 accent-red-600" />
                   <span className="text-sm font-bold text-slate-700">Emergency Medicine</span>
                 </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={formData.isFeatured} onChange={e => setFormData({ ...formData, isFeatured: e.target.checked })} className="w-4 h-4 accent-amber-600" />
+                  <span className="text-sm font-bold text-slate-700">Featured (on Home)</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={formData.isOtc} onChange={e => setFormData({ ...formData, isOtc: e.target.checked })} className="w-4 h-4 accent-teal-600" />
+                  <span className="text-sm font-bold text-slate-700">Over The Counter (OTC)</span>
+                </label>
+              </div>
+
+              <div>
+                <label className="input-label">Tags / Conditions</label>
+                <input className="input" value={formData.tags} onChange={e => setFormData({ ...formData, tags: e.target.value })} placeholder="pain-relief, fever, headache (comma separated)" />
+              </div>
+
+              <div>
+                <label className="input-label">Product Type *</label>
+                <select required className="input" value={formData.itemType} onChange={e => setFormData({ ...formData, itemType: e.target.value })}>
+                  <option value="medicine">Medicine</option>
+                  <option value="device">Device / Electronic</option>
+                  <option value="supplement">Supplement</option>
+                  <option value="healthcare">Healthcare Item</option>
+                </select>
               </div>
 
               <div className="modal-footer pt-6">

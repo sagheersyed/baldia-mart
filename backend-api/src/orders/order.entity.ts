@@ -7,6 +7,7 @@ import { Restaurant } from '../restaurants/restaurant.entity';
 import { SubOrder } from './sub-order.entity';
 import { Brand } from '../brands/brand.entity';
 import { OrderHistory } from './order-history.entity';
+import { Pharmacy } from '../pharma/pharmacies/pharmacy.entity';
 
 @Index('IDX_ORDERS_USER_CREATED_AT', ['userId', 'createdAt'])
 @Index('IDX_ORDERS_RIDER_STATUS_UPDATED_AT', ['riderId', 'status', 'updatedAt'])
@@ -57,6 +58,10 @@ export class Order {
 
   @Column({ name: 'pharmacy_id', nullable: true })
   pharmacyId: string;
+
+  @ManyToOne(() => Pharmacy)
+  @JoinColumn({ name: 'pharmacy_id' })
+  pharmacy: Pharmacy;
 
   @Column({ name: 'prescription_id', nullable: true })
   prescriptionId: string;
@@ -158,6 +163,19 @@ export class Order {
 
   @Column({ name: 'release_count', default: 0 })
   releaseCount: number;
+
+  // ── Pharma Intelligence Fields ──────────────────────────────────────────
+  @Column({ default: 'standard' })
+  priority: string; // standard, high (for emergency pharma)
+
+  @Column({ name: 'is_cold_chain', default: false })
+  isColdChain: boolean;
+
+  @Column({ name: 'cold_chain_verified_at', type: 'timestamp', nullable: true })
+  coldChainVerifiedAt: Date;
+
+  @Column({ name: 'cold_chain_photo_url', nullable: true })
+  coldChainPhotoUrl: string;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

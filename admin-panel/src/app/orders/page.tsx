@@ -4,8 +4,9 @@ import React, { useState, useEffect } from 'react';
 import {
   ShoppingBag, Search, Eye, Clock, CheckCircle, Truck, XCircle,
   Package, MapPin, Phone, User, Bike, RefreshCw, X, ChevronDown,
+  FileText, ExternalLink,
 } from 'lucide-react';
-import { fetchWithAuth, BASE_URL, getErrorMessage, parseApiError } from '@/lib/api';
+import { fetchWithAuth, BASE_URL, getErrorMessage, parseApiError, normalizeUrl } from '@/lib/api';
 import { useAsyncData } from '@/hooks/useAsyncData';
 import { LoadingState, ErrorState, EmptyState } from '@/components/PageState';
 import { showToast } from '@/hooks/useToast';
@@ -66,13 +67,11 @@ export default function OrdersPage() {
   useEffect(() => { fetchRiders(); fetchZones(); fetchSettings(); }, []);
   useEffect(() => { void fetchOrders(page); }, [page]);
   useEffect(() => {
-    const t = setInterval(() => void fetchOrders(page), 30000);
     const handleRefresh = () => void fetchOrders(page);
     if (typeof window !== 'undefined') {
       window.addEventListener('refreshOrders', handleRefresh);
     }
     return () => {
-      clearInterval(t);
       if (typeof window !== 'undefined') window.removeEventListener('refreshOrders', handleRefresh);
     };
   }, [page]);
@@ -339,6 +338,44 @@ export default function OrdersPage() {
                   <p className="text-xs text-slate-500 mt-0.5">{selectedOrder.address?.city}</p>
                 </div>
               </div>
+
+              {/* Prescription details */}
+              {(selectedOrder as any).prescription && (
+                <div className="space-y-3">
+                  <p className="input-label flex items-center gap-1.5"><FileText size={11} /> Attached Prescription</p>
+                  <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-4">
+                    <div className="aspect-[3/4] bg-white rounded-xl overflow-hidden border border-slate-200 relative group max-h-60">
+                      <img src={normalizeUrl((selectedOrder as any).prescription.imageUrl)} className="w-full h-full object-contain" alt="Attached Rx" />
+                      <a 
+                        href={normalizeUrl((selectedOrder as any).prescription.imageUrl)} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="absolute bottom-3 right-3 bg-white/90 backdrop-blur p-2 rounded-lg shadow opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <ExternalLink size={14} className="text-slate-700" />
+                      </a>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="bg-white p-2 rounded-lg border border-slate-100">
+                        <span className="text-[10px] text-slate-400 block font-semibold uppercase">Patient</span>
+                        <span className="font-bold text-slate-700">{(selectedOrder as any).prescription.patientName || 'Anonymous'}</span>
+                      </div>
+                      <div className="bg-white p-2 rounded-lg border border-slate-100">
+                        <span className="text-[10px] text-slate-400 block font-semibold uppercase">Doctor</span>
+                        <span className="font-bold text-slate-700">{(selectedOrder as any).prescription.doctorName ? `Dr. ${(selectedOrder as any).prescription.doctorName}` : '—'}</span>
+                      </div>
+                    </div>
+
+                    {(selectedOrder as any).prescription.reviewerNotes && (
+                      <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-xs text-emerald-800">
+                        <p className="font-bold mb-1">Pharmacist Notes:</p>
+                        <p className="text-emerald-700">{(selectedOrder as any).prescription.reviewerNotes}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Items */}
               <div>

@@ -108,7 +108,15 @@ export class WalletsService {
     // Amounts
     const subtotal = Number(order.subtotal);
     const deliveryFee = Number(order.deliveryFee);
-    const riderEarnings = deliveryFee; // Rider gets the full delivery fee
+    
+    // Phase 20: Rider Incentives for Pharma
+    let pharmaBonus = 0;
+    if (order.orderType === 'pharma') {
+      if ((order as any).priority === 'high') pharmaBonus += 50; // Emergency Bonus
+      if ((order as any).isColdChain) pharmaBonus += 30; // Cold Chain Bonus
+    }
+
+    const riderEarnings = deliveryFee + pharmaBonus; // Rider gets delivery fee + any pharma bonuses
 
     // Platform Commission (10% of vendor subtotal)
     const platformCommissionPercent = 0.10;

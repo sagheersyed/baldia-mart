@@ -45,11 +45,26 @@ import PharmaScreen from './src/screens/PharmaScreen';
 import MedicineDetailScreen from './src/screens/MedicineDetailScreen';
 import MedicineListScreen from './src/screens/MedicineListScreen';
 import PrescriptionUploadScreen from './src/screens/PrescriptionUploadScreen';
-import PharmaCartScreen from './src/screens/PharmaCartScreen';
-import PharmaCheckoutScreen from './src/screens/PharmaCheckoutScreen';
-
+import PharmaSubscribeScreen from './src/screens/PharmaSubscribeScreen';
+import PharmaSubscriptionListScreen from './src/screens/PharmaSubscriptionListScreen';
+import LabTestListScreen from './src/screens/LabTestListScreen';
+import LabBookingScreen from './src/screens/LabBookingScreen';
+import MyLabBookingsScreen from './src/screens/MyLabBookingsScreen';
+import DoctorListScreen from './src/screens/DoctorListScreen';
+import DoctorDetailScreen from './src/screens/DoctorDetailScreen';
+import ConsultationBookingScreen from './src/screens/ConsultationBookingScreen';
+import MyConsultationsScreen from './src/screens/MyConsultationsScreen';
+import ReminderSetupScreen from './src/screens/ReminderSetupScreen';
+import ReminderListScreen from './src/screens/ReminderListScreen';
+import RefillRemindersScreen from './src/screens/RefillRemindersScreen';
+import MedicineReviewsScreen from './src/screens/MedicineReviewsScreen';
+import LabBookingDetailsScreen from './src/screens/LabBookingDetailsScreen';
+import MyPrescriptionsScreen from './src/screens/MyPrescriptionsScreen';
+import PharmaSearchScreen from './src/screens/PharmaSearchScreen';
+import EventDetailsScreen from './src/screens/EventDetailsScreen';
 import FloatingTabBar from './src/components/FloatingTabBar';
 import AppLoader from './src/components/AppLoader';
+import { usePushNotifications } from './src/hooks/usePushNotifications';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -103,6 +118,7 @@ function MainTabs() {
           name="Pharma"
           component={PharmaScreen}
           options={{ tabBarLabel: 'Pharma' }}
+          listeners={{ focus: () => setActiveMode('pharma') }}
         />
       )}
       <Tab.Screen
@@ -128,6 +144,8 @@ function MainTabs() {
 
 function Navigation() {
   const { userToken, isLoading, userData } = useAuth();
+  
+  usePushNotifications(userToken);
 
   if (isLoading) {
     return <AppLoader label="Signing you in…" />;
@@ -184,8 +202,25 @@ function Navigation() {
             <Stack.Screen name="MedicineDetail" component={MedicineDetailScreen} />
             <Stack.Screen name="MedicineList" component={MedicineListScreen} />
             <Stack.Screen name="PrescriptionUpload" component={PrescriptionUploadScreen} />
-          <Stack.Screen name="PharmaCart" component={PharmaCartScreen} />
-          <Stack.Screen name="PharmaCheckout" component={PharmaCheckoutScreen} />
+            <Stack.Screen name="MyPrescriptions" component={MyPrescriptionsScreen} />
+            <Stack.Screen name="PharmaSearch" component={PharmaSearchScreen} />
+          <Stack.Screen name="PharmaCart" component={CartScreen} />
+          <Stack.Screen name="PharmaCheckout" component={CheckoutScreen} />
+          <Stack.Screen name="PharmaSubscribe" component={PharmaSubscribeScreen} />
+          <Stack.Screen name="PharmaSubscriptionList" component={PharmaSubscriptionListScreen} />
+          <Stack.Screen name="LabTestList" component={LabTestListScreen} />
+          <Stack.Screen name="LabBooking" component={LabBookingScreen} />
+          <Stack.Screen name="MyLabBookings" component={MyLabBookingsScreen} />
+          <Stack.Screen name="DoctorList" component={DoctorListScreen} />
+          <Stack.Screen name="DoctorDetail" component={DoctorDetailScreen} />
+          <Stack.Screen name="ConsultationBooking" component={ConsultationBookingScreen} />
+          <Stack.Screen name="MyConsultations" component={MyConsultationsScreen} />
+          <Stack.Screen name="ReminderSetup" component={ReminderSetupScreen} />
+          <Stack.Screen name="ReminderList" component={ReminderListScreen} />
+          <Stack.Screen name="RefillReminders" component={RefillRemindersScreen} />
+          <Stack.Screen name="MedicineReviews" component={MedicineReviewsScreen} />
+          <Stack.Screen name="LabBookingDetails" component={LabBookingDetailsScreen} />
+          <Stack.Screen name="EventDetails" component={EventDetailsScreen} />
           </>
         )}
       </Stack.Navigator>

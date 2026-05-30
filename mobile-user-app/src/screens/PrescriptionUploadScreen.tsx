@@ -5,7 +5,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { prescriptionsApi } from '../api/api';
+import { prescriptionsApi, uploadApi } from '../api/api';
 import AppText from '../components/ui/AppText';
 import { theme } from '../theme/theme';
 
@@ -66,11 +66,15 @@ export default function PrescriptionUploadScreen({ navigation }: any) {
 
     setUploading(true);
     try {
-      // TODO: upload images to server first via upload API, then send URLs
-      // For now, send local URIs as placeholders
+      // 1. Upload all images to the server
+      const uploadPromises = images.map((uri) => uploadApi.uploadFile(uri));
+      const uploadResults = await Promise.all(uploadPromises);
+      const serverUrls = uploadResults.map((res) => res.data.url);
+
+      // 2. Submit the prescription with server URLs
       await prescriptionsApi.upload({
-        imageUrl: images[0],
-        additionalImageUrls: images.slice(1),
+        imageUrl: serverUrls[0],
+        additionalImageUrls: serverUrls.slice(1),
         doctorName: doctorName || undefined,
         patientName: patientName || undefined,
         doctorNotes: notes || undefined,
@@ -83,6 +87,25 @@ export default function PrescriptionUploadScreen({ navigation }: any) {
       );
     } catch (e: any) {
       Alert.alert('Error', e?.response?.data?.message || 'Failed to upload prescription. Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleConsultationRequest = async () => {
+    setUploading(true);
+    try {
+      await prescriptionsApi.requestConsultation({ 
+        medicineIds: [], // User will select in the call
+        notes: 'Consultation requested via app'
+      });
+      Alert.alert(
+        'Call Requested ✓',
+        'Our pharmacist will call you shortly to discuss your requirements.',
+        [{ text: 'OK', onPress: () => navigation.goBack() }]
+      );
+    } catch (e: any) {
+      Alert.alert('Error', e?.response?.data?.message || 'Failed to request consultation.');
     } finally {
       setUploading(false);
     }
@@ -188,6 +211,32 @@ export default function PrescriptionUploadScreen({ navigation }: any) {
           <StepItem num={2} icon="person-outline" text="Our pharmacist reviews & verifies" />
           <StepItem num={3} icon="checkmark-circle-outline" text="You get notified once approved" />
           <StepItem num={4} icon="cart-outline" text="Medicines are added to your cart" />
+        </View>
+
+        {/* ── Consultation Option ───────────────────────────── */}
+        <View style={styles.consultationCard}>
+          <View style={styles.consultHeader}>
+            <Ionicons name="call-outline" size={22} color={ACCENT} />
+            <AppText variant="bodyStrong" style={{ marginLeft: 10 }}>Don't have a prescription?</AppText>
+          </View>
+          <AppText variant="caption" color={theme.colors.textSecondary} style={{ marginTop: 8 }}>
+            Our licensed pharmacist can call you to discuss your health needs and verify if a prescription is appropriate.
+          </AppText>
+          <Pressable 
+            style={styles.consultBtn} 
+            onPress={() => {
+              Alert.alert(
+                'Request Consultation',
+                'A pharmacist will call you on your registered number within 1 hour. Continue?',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Yes, Call Me', onPress: handleConsultationRequest }
+                ]
+              );
+            }}
+          >
+            <AppText variant="bodyStrong" color={ACCENT}>Request Pharmacist Call</AppText>
+          </Pressable>
         </View>
       </ScrollView>
 
@@ -338,5 +387,27 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: theme.radius.lg,
     ...theme.shadows.md,
+  },
+  consultationCard: {
+    marginTop: 20,
+    padding: 16,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    borderColor: theme.colors.pharmaBorder,
+    borderStyle: 'dashed',
+  },
+  consultHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  consultBtn: {
+    marginTop: 12,
+    backgroundColor: theme.colors.pharmaLight,
+    paddingVertical: 12,
+    borderRadius: theme.radius.md,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: theme.colors.pharmaBorder,
   },
 });

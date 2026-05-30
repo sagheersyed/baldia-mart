@@ -2,6 +2,7 @@ import React, { memo } from 'react';
 import { View, StyleSheet } from 'react-native';
 import AppSearchBar from '../ui/AppSearchBar';
 import { theme } from '../../theme/theme';
+import { LinearGradient } from 'expo-linear-gradient';
 
 interface Props {
   placeholder?: string;
@@ -12,8 +13,8 @@ interface Props {
 }
 
 /**
- * Home / Food search affordance. Floating variant overlaps the gradient header
- * — used inside `HomeScreen` and `FoodScreen` headers for a Foodpanda-style hero.
+ * Elevated search bar with stronger shadow and tighter floating overlap.
+ * Sits atop the gradient header like FoodPanda/Pandamart hero search.
  */
 const HomeSearchBar = memo(function HomeSearchBar({
   placeholder,
@@ -23,18 +24,26 @@ const HomeSearchBar = memo(function HomeSearchBar({
   floating = true,
 }: Props) {
   const ph = placeholder
-    || (variant === 'food' ? 'Search restaurants and dishes' : 'Search groceries, brands and essentials');
+    || (variant === 'food' ? '🍔  Search restaurants and dishes' : '🛒  Search groceries, brands...');
+  const backgroundColor =
+    variant === 'mart' ? 'green' : 'white';
+  const isFood = variant === 'food';
+  const colors: [string, string, string] = isFood
+    ? [theme.colors.palette.pink500, theme.colors.palette.pink400, theme.colors.palette.pink300]
+    : [theme.colors.palette.orange600, theme.colors.palette.orange500, theme.colors.palette.orange400];
 
   return (
-    <View style={[styles.wrap, floating ? styles.floating : null]}>
-      <AppSearchBar
-        mode="tappable"
-        placeholder={ph}
-        onPress={onPress}
-        onFilter={onFilter}
-        trailingFilter={!!onFilter}
-      />
-    </View>
+    <LinearGradient colors={colors} style={[styles.wrap, floating ? { ...styles.floating } : null]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+      <View >
+        <AppSearchBar
+          mode="tappable"
+          placeholder={ph}
+          onPress={onPress}
+          onFilter={onFilter}
+          trailingFilter={!!onFilter}
+        />
+      </View>
+    </LinearGradient>
   );
 });
 
@@ -46,8 +55,8 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
   },
   floating: {
-    marginTop: -28,
-    backgroundColor: 'transparent',
+    marginTop: -22,
+    zIndex: 5
   },
 });
 

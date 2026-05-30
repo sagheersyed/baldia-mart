@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { settingsApi } from '../api/api';
 import { AppText, AppIconButton } from '../components/ui';
+import { useCartStore } from '../store/cartStore';
 import { theme } from '../theme/theme';
 
 const FAQ = [
@@ -35,6 +36,7 @@ function FAQItem({ item }: any) {
 }
 
 export default function HelpScreen({ navigation }: any) {
+  const { activeMode } = useCartStore();
   const [settings, setSettings] = React.useState<any>(null);
   const [isLoading, setIsLoading] = React.useState(true);
 
@@ -75,6 +77,11 @@ export default function HelpScreen({ navigation }: any) {
     },
   ];
 
+  const accent = activeMode === 'food' ? theme.colors.food : activeMode === 'pharma' ? theme.colors.pharma : theme.colors.primary;
+  const accentLight = activeMode === 'food' ? theme.colors.foodLight : activeMode === 'pharma' ? theme.colors.pharmaLight : theme.colors.primaryLight;
+  const isPharma = activeMode === 'pharma';
+  const isFood = activeMode === 'food';
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
@@ -86,7 +93,7 @@ export default function HelpScreen({ navigation }: any) {
 
       {isLoading ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <ActivityIndicator size="large" color={accent} />
         </View>
       ) : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: theme.spacing.lg, paddingBottom: theme.spacing.xxl }}>
@@ -126,11 +133,15 @@ export default function HelpScreen({ navigation }: any) {
           </View>
 
           <View style={styles.appInfoCard}>
-            <View style={styles.logoCircle}>
-              <Ionicons name="basket" size={28} color={theme.colors.primary} />
+            <View style={[styles.logoCircle, { backgroundColor: accentLight }]}>
+              <Ionicons name={isPharma ? 'medical' : isFood ? 'fast-food' : 'basket'} size={28} color={accent} />
             </View>
-            <AppText variant="h2" style={{ marginTop: 8 }}>BaldiaMart</AppText>
-            <AppText variant="caption">Hyperlocal delivery made easy</AppText>
+            <AppText variant="h2" style={{ marginTop: 8 }}>
+              {isPharma ? 'Baldia Pharma' : isFood ? 'Baldia Food' : 'BaldiaMart'}
+            </AppText>
+            <AppText variant="caption">
+              {isPharma ? 'Healthcare delivered fast' : isFood ? 'Delicious meals delivered' : 'Hyperlocal delivery made easy'}
+            </AppText>
             <AppText variant="caption" style={{ marginTop: 6 }}>Version 1.0.0 · Karachi, Pakistan</AppText>
           </View>
         </ScrollView>

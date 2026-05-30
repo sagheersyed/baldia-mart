@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import {
-  homeApi, addressesApi, deliveryZonesApi, connectSocket, socket,
+  homeApi, addressesApi, deliveryZonesApi, moduleEventsApi, connectSocket, socket,
   HomePayload, HomeSectionPayload,
 } from '../api/api';
 import { getDistanceKm } from '../utils/helpers';
@@ -24,6 +24,7 @@ import HomeSection from '../components/home/HomeSection';
 import HomeSkeleton from '../components/home/HomeSkeleton';
 import QuickServicesGrid, { QuickService } from '../components/home/QuickServicesGrid';
 import { EmptyState, ErrorState } from '../components/ui';
+import CampaignStrip from '../components/home/CampaignStrip';
 import { theme } from '../theme/theme';
 
 type HeaderItem =
@@ -31,6 +32,7 @@ type HeaderItem =
   | { kind: 'services'; services: QuickService[] }
   | { kind: 'categories'; categories: any[] }
   | { kind: 'brands'; brands: any[] }
+  | { kind: 'campaigns'; campaigns: any[] }
   | { kind: 'rashan' };
 
 type ListItem = HeaderItem | { kind: 'section'; section: HomeSectionPayload };
@@ -48,6 +50,7 @@ export default function HomeScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [campaigns, setCampaigns] = useState<any[]>([]);
 
   const scrollY = useRef(new Animated.Value(0)).current;
 
@@ -78,8 +81,12 @@ export default function HomeScreen({ navigation }: any) {
       setZoneId(resolvedZoneId);
       setAddress(currentAddr);
 
-      const res = await homeApi.getHome('mart', resolvedZoneId);
-      setHome(res.data);
+      const [homeRes, campaignRes] = await Promise.all([
+        homeApi.getHome('mart', resolvedZoneId),
+        moduleEventsApi.getAll('mart').catch(() => ({ data: [] })),
+      ]);
+      setHome(homeRes.data);
+      setCampaigns(Array.isArray(campaignRes.data) ? campaignRes.data : []);
     } catch (e: any) {
       console.warn('[Home] failed to load home payload', e?.message || e);
       setError(e?.response?.data?.message || e?.message || 'Failed to load home.');
@@ -100,6 +107,7 @@ export default function HomeScreen({ navigation }: any) {
     connectSocket();
 
     const onProductsUpdated = (payload: any) => {
+      if (!navigation.isFocused()) return;
       if (payload?.event === 'stock_updated' && payload.productId) {
         setHome(prev => {
           if (!prev) return prev;
@@ -118,7 +126,9 @@ export default function HomeScreen({ navigation }: any) {
       loadHome(false);
     };
 
-    const onBannersUpdated = () => loadHome(false);
+    const onBannersUpdated = () => {
+      if (navigation.isFocused()) loadHome(false);
+    };
 
     socket.on('productsUpdated', onProductsUpdated);
     socket.on('bannersUpdated', onBannersUpdated);
@@ -154,8 +164,8 @@ export default function HomeScreen({ navigation }: any) {
 
   const handleToggleFav = useCallback((prod: any) => {
     toggleFavourite({
-      id: prod.id, name: prod.name, imageUrl: prod.imageUrl, price: prod.price,
-      discount: prod.discount, category: prod.category, brand: prod.brand,
+      id: prod.id, name: prod.name, imageUrl: prod.imageUrl, price: prod.price || prod.mrp || 0,
+      discount: prod.discount || 0, category: prod.category, brand: prod.brand,
       openingTime: prod.openingTime, closingTime: prod.closingTime,
       maxQuantityPerOrder: prod.maxQuantityPerOrder, stockQuantity: prod.stockQuantity,
     }, 'products');
@@ -170,6 +180,7 @@ export default function HomeScreen({ navigation }: any) {
     else if (b.linkType === 'brand' && b.linkId) navigation.navigate('BrandDetail', { brandId: b.linkId });
     else if (b.linkType === 'category' && b.linkId) navigation.navigate('ProductListing', { type: 'category', categoryId: b.linkId, title: 'Category' });
     else if (b.linkType === 'restaurant' && b.linkId) navigation.navigate('RestaurantDetail', { restaurantId: b.linkId });
+    else if (b.linkType === 'event' && b.linkId) navigation.navigate('EventDetails', { eventId: b.linkId });
   }, [navigation]);
 
   const handleSeeAll = useCallback((section: HomeSectionPayload) => {
@@ -229,7 +240,7 @@ export default function HomeScreen({ navigation }: any) {
         id: 'rashan',
         title: 'Monthly Rashan',
         icon: 'cube',
-        bg: '#1F1B47', fg: '#fff',
+        bg: '#7267e9ff', fg: '#fff',
         onPress: () => navigation.navigate('RashanOrder'),
       });
     }
@@ -244,10 +255,11 @@ export default function HomeScreen({ navigation }: any) {
     items.push({ kind: 'services', services: quickServices });
     if (home.categories?.length) items.push({ kind: 'categories', categories: home.categories });
     if (home.brands?.length) items.push({ kind: 'brands', brands: home.brands });
+    if (campaigns.length > 0) items.push({ kind: 'campaigns', campaigns });
     if (showRashan && home.rashanEnabled) items.push({ kind: 'rashan' });
     home.sections.forEach(section => items.push({ kind: 'section', section }));
     return items;
-  }, [home, showRashan, quickServices]);
+  }, [home, showRashan, quickServices, campaigns]);
 
   const renderItem: ListRenderItem<ListItem> = useCallback(({ item }) => {
     switch (item.kind) {
@@ -263,6 +275,13 @@ export default function HomeScreen({ navigation }: any) {
             brands={item.brands}
             onBrandPress={(b) => navigation.navigate('BrandDetail', { brandId: b.id })}
             onSeeAll={() => navigation.navigate('BrandsList')}
+          />
+        );
+      case 'campaigns':
+        return (
+          <CampaignStrip
+            events={item.campaigns}
+            onPress={(ev) => navigation.navigate('EventDetails', { eventId: ev.id })}
           />
         );
       case 'rashan':

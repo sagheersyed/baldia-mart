@@ -3,6 +3,7 @@ import { Order } from './order.entity';
 import { Restaurant } from '../restaurants/restaurant.entity';
 import { OrderItem } from './order-item.entity';
 import { Vendor } from '../vendors/vendor.entity';
+import { Pharmacy } from '../pharma/pharmacies/pharmacy.entity';
 
 @Entity('sub_orders')
 export class SubOrder {
@@ -30,6 +31,13 @@ export class SubOrder {
   @ManyToOne(() => Vendor, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'vendor_id' })
   vendor: Vendor;
+
+  @Column({ type: 'uuid', name: 'pharmacy_id', nullable: true })
+  pharmacyId: string;
+
+  @ManyToOne(() => Pharmacy, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'pharmacy_id' })
+  pharmacy: Pharmacy;
 
   // Optimized pickup order (1 = first stop, 2 = second, etc.)
   @Column({ name: 'pickup_sequence', type: 'int', default: 1 })

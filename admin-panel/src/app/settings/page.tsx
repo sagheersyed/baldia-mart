@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Save, RefreshCw, Truck, ArrowRight, Ruler, Phone, Mail, MapPin, Building2, Shield, ToggleLeft, ToggleRight, Boxes, Scale, ArrowUpCircle } from 'lucide-react';
+import { Save, RefreshCw, Truck, ArrowRight, Ruler, Phone, Mail, MapPin, Building2, Shield, ToggleLeft, ToggleRight, Boxes, Scale, ArrowUpCircle, Plus, Trash2, Pill } from 'lucide-react';
 import { fetchWithAuth, BASE_URL, getErrorMessage, parseApiError } from '@/lib/api';
 import { showToast } from '@/hooks/useToast';
 
@@ -12,6 +12,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+  const [conditionsList, setConditionsList] = useState<any[]>([]);
 
   useEffect(() => {
     fetchSettings();
@@ -24,6 +25,15 @@ export default function SettingsPage() {
       if (!res.ok) throw new Error(await parseApiError(res, 'Failed to load settings'));
       const data = await res.json();
       setSettings(data);
+      if (data.pharma_conditions_list) {
+        try {
+          setConditionsList(JSON.parse(data.pharma_conditions_list));
+        } catch {
+          setConditionsList([]);
+        }
+      } else {
+        setConditionsList([]);
+      }
     } catch (error) {
       console.error('Failed to fetch settings:', error);
       setMessage('Failed to load settings');
@@ -316,7 +326,191 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* Rashan Bulk Grocery Pricing */}
+        {/* Healthcare Service Management */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="bg-gray-50 p-6 border-b border-gray-100 flex items-center space-x-3">
+            <Shield className="text-teal-600" size={24} />
+            <h2 className="text-xl font-semibold text-gray-800">Healthcare Service Management</h2>
+          </div>
+
+          <div className="p-6 space-y-6">
+            <p className="text-sm text-gray-500 bg-teal-50 p-4 rounded-xl border border-teal-100">
+              <strong>Control Panel:</strong> Manage specialist verification and advanced healthcare modules.
+            </p>
+
+            <div className="grid md:grid-cols-2 gap-6">
+              {[
+                { key: 'pharma_skip_prescription_verification', label: 'Expert Mode (Bypass Rx)', desc: 'Allow orders without pharmacist approval' },
+                { key: 'feature_pharma_lab_tests_enabled', label: 'Lab Test Module', desc: 'Enable/Disable home sample collection' },
+                { key: 'feature_pharma_doctor_consultations_enabled', label: 'Doctor Consultation', desc: 'Enable/Disable video appointments' },
+                { key: 'feature_pharma_reminders_enabled', label: 'Pill Reminders', desc: 'Enable/Disable medicine schedule alerts' },
+                { key: 'feature_pharma_refills_enabled', label: 'Medicine Refills', desc: 'Enable/Disable recurring medicine orders' },
+              ].map(({ key, label, desc }) => {
+                const isEnabled = settings[key] === 'true' || settings[key] === true;
+                return (
+                  <div key={key} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100">
+                    <div>
+                      <p className="font-semibold text-gray-800">{label}</p>
+                      <p className="text-xs text-gray-500">{desc}</p>
+                    </div>
+                    <button
+                      disabled={saving}
+                      onClick={() => handleUpdate(key, isEnabled ? 'false' : 'true')}
+                      className={`transition ${isEnabled ? 'text-teal-600' : 'text-gray-400 hover:text-gray-600'} disabled:opacity-50`}
+                    >
+                      {isEnabled ? <ToggleRight size={44} /> : <ToggleLeft size={44} />}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Pharma Shop by Condition Catalog */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="bg-gray-50 p-6 border-b border-gray-100 flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <Pill className="text-teal-600" size={24} />
+              <h2 className="text-xl font-semibold text-gray-800">Pharma "Shop by Condition" Catalog</h2>
+            </div>
+            <button
+              onClick={() => {
+                const newCond = {
+                  id: `cond_${Date.now()}`,
+                  label: 'New Condition',
+                  icon: 'medical-outline',
+                  bg: '#E0F2FE',
+                  color: '#0369A1'
+                };
+                setConditionsList(prev => [...prev, newCond]);
+              }}
+              className="px-4 py-2 bg-teal-600 text-white rounded-xl font-bold flex items-center text-sm hover:bg-teal-700 transition"
+            >
+              <Plus size={16} className="mr-1" /> Add Condition
+            </button>
+          </div>
+
+          <div className="p-6 space-y-6">
+            <p className="text-sm text-gray-500 bg-teal-50 p-4 rounded-xl border border-teal-100">
+              <strong>Dynamic Navigation:</strong> These conditions appear in the mobile user app under "Shop by Condition". Clicking a condition searches for matching products in the catalog.
+            </p>
+
+            <div className="space-y-4">
+              {conditionsList.length === 0 ? (
+                <div className="text-center p-8 text-gray-400 border border-dashed rounded-xl">
+                  No conditions configured. Click "Add Condition" to create one.
+                </div>
+              ) : (
+                conditionsList.map((cond, idx) => (
+                  <div key={cond.id || idx} className="grid grid-cols-1 md:grid-cols-5 gap-4 p-4 border border-gray-100 bg-gray-50/50 rounded-2xl items-center">
+                    <div>
+                      <label className="text-[10px] font-black text-gray-400 uppercase">Search Tag / ID *</label>
+                      <input
+                        type="text"
+                        value={cond.id || ''}
+                        onChange={e => {
+                          const next = [...conditionsList];
+                          next[idx].id = e.target.value;
+                          setConditionsList(next);
+                        }}
+                        placeholder="e.g. fever"
+                        className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-semibold outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-gray-400 uppercase">Display Label *</label>
+                      <input
+                        type="text"
+                        value={cond.label || ''}
+                        onChange={e => {
+                          const next = [...conditionsList];
+                          next[idx].label = e.target.value;
+                          setConditionsList(next);
+                        }}
+                        placeholder="e.g. Fever & Pain"
+                        className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-semibold outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-gray-400 uppercase">Icon Name *</label>
+                      <select
+                        value={cond.icon || 'medical-outline'}
+                        onChange={e => {
+                          const next = [...conditionsList];
+                          next[idx].icon = e.target.value;
+                          setConditionsList(next);
+                        }}
+                        className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-semibold outline-none"
+                      >
+                        <option value="thermometer-outline">Thermometer (Fever) 🌡️</option>
+                        <option value="water-outline">Water Drop (Cough) 💧</option>
+                        <option value="medkit-outline">Medkit (Stomach) 🩺</option>
+                        <option value="sparkles-outline">Sparkles (Skin) ✨</option>
+                        <option value="heart-outline">Heart (Cardio) ❤️</option>
+                        <option value="eye-outline">Eye Care 👁️</option>
+                        <option value="nutrition-outline">Nutrition / Baby 🍼</option>
+                        <option value="bandage-outline">Bandage / First Aid 🩹</option>
+                        <option value="medical-outline">General Meds 💊</option>
+                      </select>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] font-black text-gray-400 uppercase block">BG Color</label>
+                        <input
+                          type="color"
+                          value={cond.bg || '#FEE2E2'}
+                          onChange={e => {
+                            const next = [...conditionsList];
+                            next[idx].bg = e.target.value;
+                            setConditionsList(next);
+                          }}
+                          className="w-full h-8 rounded border border-gray-200 cursor-pointer"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-gray-400 uppercase block">Icon Color</label>
+                        <input
+                          type="color"
+                          value={cond.color || '#DC2626'}
+                          onChange={e => {
+                            const next = [...conditionsList];
+                            next[idx].color = e.target.value;
+                            setConditionsList(next);
+                          }}
+                          className="w-full h-8 rounded border border-gray-200 cursor-pointer"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end pr-2 pt-4 md:pt-0">
+                      <button
+                        onClick={() => {
+                          setConditionsList(prev => prev.filter((_, i) => i !== idx));
+                        }}
+                        className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition"
+                        title="Delete Condition"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {conditionsList.length > 0 && (
+              <button
+                onClick={() => handleUpdate('pharma_conditions_list', JSON.stringify(conditionsList))}
+                disabled={saving}
+                className="w-full py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold flex items-center justify-center transition shadow-lg shadow-teal-600/10 disabled:opacity-50"
+              >
+                {saving ? <RefreshCw className="animate-spin mr-2" size={16} /> : <Save size={16} className="mr-2" />}
+                Save Conditions Catalog Configuration
+              </button>
+            )}
+          </div>
+        </div>
+
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="bg-gray-50 p-6 border-b border-gray-100 flex items-center space-x-3">
             <Boxes className="text-orange-600" size={24} />

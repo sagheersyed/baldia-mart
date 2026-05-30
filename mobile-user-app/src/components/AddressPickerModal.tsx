@@ -25,7 +25,7 @@ interface AddressPickerModalProps {
     longitude?: number;
   };
   title?: string;
-  tint?: string;
+  accent?: string;
 }
 
 const LABEL_OPTIONS = ['Home', 'Work', 'Other'];
@@ -36,7 +36,7 @@ export default function AddressPickerModal({
   onSave,
   initialData,
   title = 'Select Address',
-  tint = '#FF4500'
+  accent = '#FF5A1F'
 }: AddressPickerModalProps) {
   const [label, setLabel] = useState(initialData?.label || 'Home');
   const [streetAddress, setStreetAddress] = useState(initialData?.streetAddress || '');
@@ -132,7 +132,7 @@ export default function AddressPickerModal({
                 key={l}
                 style={[
                   styles.chip, 
-                  label === l && { backgroundColor: tint, borderColor: tint }
+                  label === l && { backgroundColor: accent, borderColor: accent }
                 ]}
                 onPress={() => setLabel(l)}
               >
@@ -145,9 +145,9 @@ export default function AddressPickerModal({
             <Text style={styles.label}>Street Address *</Text>
             <TouchableOpacity onPress={handleLocateMe} disabled={locating}>
               {locating ? (
-                <ActivityIndicator size="small" color={tint} />
+                <ActivityIndicator size="small" color={accent} />
               ) : (
-                <Text style={[styles.locateText, { color: tint }]}>📍 Auto-Locate</Text>
+                <Text style={[styles.locateText, { color: accent }]}>📍 Auto-Locate</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -186,7 +186,7 @@ export default function AddressPickerModal({
             <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
               <Text style={styles.cancelBtnText}>Cancel</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.saveBtn, { backgroundColor: tint }]} onPress={handleSave}>
+            <TouchableOpacity style={[styles.saveBtn, { backgroundColor: accent }]} onPress={handleSave}>
               <Text style={styles.saveBtnText}>Save Address</Text>
             </TouchableOpacity>
           </View>
@@ -204,11 +204,11 @@ const styles = StyleSheet.create({
   label: { fontSize: 13, fontWeight: 'bold', color: '#555', marginBottom: 8 },
   labelRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
   chip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: '#eee' },
-  chipActive: { backgroundColor: '#FF4500', borderColor: '#FF4500' },
+  chipActive: { backgroundColor: '#eee', borderColor: '#eee' }, // Fallback, real style is inline
   chipText: { fontSize: 13, color: '#666', fontWeight: 'bold' },
   chipTextActive: { color: '#fff' },
   inputHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  locateText: { color: '#FF4500', fontWeight: 'bold', fontSize: 14 },
+  locateText: { fontWeight: 'bold', fontSize: 14 },
   input: {
     height: 50,
     backgroundColor: '#f9f9f9',
@@ -223,6 +223,6 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', gap: 12, marginTop: 10 },
   cancelBtn: { flex: 1, height: 55, borderRadius: 15, borderWidth: 1.5, borderColor: '#eee', justifyContent: 'center', alignItems: 'center' },
   cancelBtnText: { fontSize: 16, fontWeight: 'bold', color: '#666' },
-  saveBtn: { flex: 2, height: 55, borderRadius: 15, backgroundColor: '#FF4500', justifyContent: 'center', alignItems: 'center' },
+  saveBtn: { flex: 2, height: 55, borderRadius: 15, justifyContent: 'center', alignItems: 'center' },
   saveBtnText: { fontSize: 16, fontWeight: 'bold', color: '#fff' }
 });

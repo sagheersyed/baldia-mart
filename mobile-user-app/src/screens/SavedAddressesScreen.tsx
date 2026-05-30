@@ -11,9 +11,10 @@ import AddressPickerModal from '../components/AddressPickerModal';
 import {
   AppText, AppButton, AppIconButton, AppBadge, EmptyState,
 } from '../components/ui';
+import { useCartStore } from '../store/cartStore';
 import { theme } from '../theme/theme';
 
-function AddressCard({ addr, onDelete, onSetDefault, onEdit }: any) {
+function AddressCard({ addr, onDelete, onSetDefault, onEdit, accent }: any) {
   const isDefault = addr.isDefault;
   const labelKey = (addr.label || '').toLowerCase();
   const icon: keyof typeof Ionicons.glyphMap =
@@ -21,24 +22,35 @@ function AddressCard({ addr, onDelete, onSetDefault, onEdit }: any) {
       : labelKey === 'home' ? 'home-outline'
         : 'location-outline';
 
+  const lightAccent = accent === theme.colors.pharma ? theme.colors.pharma + '12' : accent + '12';
+
   return (
-    <View style={[styles.addrCard, isDefault ? styles.addrCardDefault : null]}>
+    <View style={[
+      styles.addrCard, 
+      isDefault ? { borderColor: accent, backgroundColor: lightAccent, borderWidth: 1.5 } : null
+    ]}>
       <View style={styles.addrTop}>
-        <View style={[styles.addrIcon, { backgroundColor: theme.colors.primaryLight }]}>
-          <Ionicons name={icon} size={18} color={theme.colors.primary} />
+        <View style={[styles.addrIcon, { backgroundColor: isDefault ? 'rgba(255,255,255,0.6)' : theme.colors.surfaceMuted }]}>
+          <Ionicons name={icon} size={18} color={accent} />
         </View>
         <View style={{ flex: 1, gap: 2 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <AppText variant="bodyStrong">{addr.label || 'Address'}</AppText>
-            {isDefault ? <AppBadge label="Default" variant="primary" /> : null}
+            <AppText variant="bodyStrong" style={isDefault ? { color: theme.colors.textHeader } : null}>
+              {addr.label || 'Address'}
+            </AppText>
+            {isDefault ? <AppBadge label="Default" variant="primary" tint={accent} /> : null}
           </View>
-          <AppText variant="caption" numberOfLines={3}>
+          <AppText variant="caption" numberOfLines={3} style={isDefault ? { color: theme.colors.textPrimary } : null}>
             {addr.streetAddress}
             {addr.city ? `, ${addr.city}` : ''}
             {addr.postalCode ? ` ${addr.postalCode}` : ''}
           </AppText>
         </View>
-        <AppIconButton size={32} bg={theme.colors.surfaceMuted} onPress={() => onEdit(addr)}>
+        <AppIconButton 
+          size={32} 
+          bg={isDefault ? 'rgba(255,255,255,0.6)' : theme.colors.surfaceMuted} 
+          onPress={() => onEdit(addr)}
+        >
           <Ionicons name="create-outline" size={16} color={theme.colors.textPrimary} />
         </AppIconButton>
       </View>
@@ -49,10 +61,10 @@ function AddressCard({ addr, onDelete, onSetDefault, onEdit }: any) {
             label="Set as default"
             variant="outline"
             size="sm"
-            tint={theme.colors.primary}
-            textColor={theme.colors.primary}
+            tint={accent}
+            textColor={accent}
             onPress={() => onSetDefault(addr.id)}
-            leadingIcon={<Ionicons name="checkmark-circle-outline" size={14} color={theme.colors.primary} />}
+            leadingIcon={<Ionicons name="checkmark-circle-outline" size={14} color={accent} />}
             style={{ flex: 1 }}
             fullWidth
           />
@@ -71,7 +83,11 @@ function AddressCard({ addr, onDelete, onSetDefault, onEdit }: any) {
   );
 }
 
-export default function SavedAddressesScreen({ navigation }: any) {
+export default function SavedAddressesScreen({ navigation, route }: any) {
+  const { activeMode } = useCartStore();
+  const mode = route.params?.mode || activeMode || 'mart';
+  const ACCENT = mode === 'food' ? theme.colors.food : mode === 'pharma' ? theme.colors.pharma : theme.colors.primary;
+
   const [addresses, setAddresses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -147,7 +163,7 @@ export default function SavedAddressesScreen({ navigation }: any) {
   if (loading) {
     return (
       <View style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
+        <ActivityIndicator size="large" color={ACCENT} />
       </View>
     );
   }
@@ -165,6 +181,7 @@ export default function SavedAddressesScreen({ navigation }: any) {
         <AppButton
           label="+ Add"
           variant="primary"
+          tint={ACCENT}
           size="sm"
           onPress={handleAddNew}
         />
@@ -177,6 +194,7 @@ export default function SavedAddressesScreen({ navigation }: any) {
           subtitle="Add a delivery address to start ordering."
           actionLabel="Add address"
           onAction={handleAddNew}
+          accent={ACCENT}
         />
       ) : (
         <FlatList
@@ -184,13 +202,14 @@ export default function SavedAddressesScreen({ navigation }: any) {
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ padding: theme.spacing.lg, paddingBottom: theme.spacing.xxl }}
           showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} colors={[theme.colors.primary]} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={ACCENT} colors={[ACCENT]} />}
           renderItem={({ item }) => (
             <AddressCard
               addr={item}
               onDelete={handleDelete}
               onSetDefault={handleSetDefault}
               onEdit={handleEdit}
+              accent={ACCENT}
             />
           )}
           ItemSeparatorComponent={() => <View style={{ height: theme.spacing.md }} />}
@@ -203,6 +222,7 @@ export default function SavedAddressesScreen({ navigation }: any) {
         onSave={handleSaveAddress}
         initialData={editingAddress}
         title={editingAddress ? 'Edit address' : 'Add new address'}
+        accent={ACCENT}
       />
     </SafeAreaView>
   );
@@ -225,7 +245,6 @@ const styles = StyleSheet.create({
     borderWidth: 1.5, borderColor: theme.colors.divider,
     ...theme.shadows.sm,
   },
-  addrCardDefault: { borderColor: theme.colors.primary, backgroundColor: theme.colors.primaryLight },
 
   addrTop: { flexDirection: 'row', alignItems: 'flex-start', gap: theme.spacing.md },
   addrIcon: {

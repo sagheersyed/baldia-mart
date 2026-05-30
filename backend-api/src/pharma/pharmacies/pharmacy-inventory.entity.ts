@@ -1,6 +1,6 @@
 import {
   Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn,
-  ManyToOne, JoinColumn, Index, Unique,
+  ManyToOne, JoinColumn, Index, Unique, Check,
 } from 'typeorm';
 import { Medicine } from '../medicines/medicine.entity';
 import { Pharmacy } from './pharmacy.entity';
@@ -11,6 +11,8 @@ import { Pharmacy } from './pharmacy.entity';
  * This enables the multi-pharmacy marketplace model.
  */
 @Unique('UQ_PHARMACY_MEDICINE', ['pharmacyId', 'medicineId'])
+@Check('CHK_PHARMA_STOCK', '"stock_quantity" >= 0')
+@Check('CHK_PHARMA_RESERVED', '"reserved_quantity" >= 0')
 @Index('IDX_PHARMA_INV_PHARMACY', ['pharmacyId'])
 @Index('IDX_PHARMA_INV_MEDICINE', ['medicineId'])
 @Index('IDX_PHARMA_INV_EXPIRY', ['expiryDate'])

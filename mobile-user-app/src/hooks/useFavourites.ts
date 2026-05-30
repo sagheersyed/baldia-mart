@@ -27,6 +27,7 @@ export type FavItem = {
   closingTime?: string | null;
   maxQuantityPerOrder?: number;
   stockQuantity?: number;
+  isPharma?: boolean;
 };
 
 export type FavType = 'restaurants' | 'products' | 'brands';
@@ -58,7 +59,10 @@ export function useFavourites() {
         if (res.data) {
           const dbItems = res.data;
           const dbR = dbItems.filter((i: any) => i.type === 'restaurant');
-          const dbP = dbItems.filter((i: any) => i.type === 'product');
+          const dbP = dbItems.filter((i: any) => i.type === 'product' || i.type === 'medicine').map((i: any) => ({
+            ...i,
+            isPharma: i.type === 'medicine',
+          }));
           const dbB = dbItems.filter((i: any) => i.type === 'brand');
 
           // Deduplicate
@@ -70,7 +74,7 @@ export function useFavourites() {
           if ((localR.length > 0 || localP.length > 0 || localB.length > 0) && dbItems.length === 0) {
             const syncItems = [
                 ...localR.map((r: any) => ({ type: 'restaurant' as const, targetId: r.id })),
-                ...localP.map((p: any) => ({ type: 'product' as const, targetId: p.id })),
+                ...localP.map((p: any) => ({ type: (p.isPharma ? 'medicine' : 'product') as any, targetId: p.id })),
                 ...localB.map((b: any) => ({ type: 'brand' as const, targetId: b.id })),
             ];
             await favoritesApi.sync(syncItems);
@@ -108,24 +112,30 @@ export function useFavourites() {
     async (item: FavItem, type: FavType) => {
       const key = KEYS[type];
       const current = type === 'restaurants' ? restaurants : type === 'brands' ? brands : products;
+      const set = type === 'restaurants' ? setRestaurants : type === 'brands' ? setBrands : setProducts;
       const exists = current.some((i) => i.id === item.id);
-      const next = exists
+      const updated = exists
         ? current.filter((i) => i.id !== item.id)
         : [...current, item];
 
-      if (type === 'restaurants') setRestaurants(next);
-      else if (type === 'brands') setBrands(next);
-      else setProducts(next);
+      // Optimistic update
+      set(updated);
 
       try {
-        await AsyncStorage.setItem(key, JSON.stringify(next));
+        await AsyncStorage.setItem(key, JSON.stringify(updated));
         if (userToken) {
            // Call API to toggle in DB
-           const apiType = type === 'restaurants' ? 'restaurant' : type === 'brands' ? 'brand' : 'product';
+           let apiType: 'product' | 'restaurant' | 'brand' | 'medicine' = type === 'restaurants' ? 'restaurant' : type === 'brands' ? 'brand' : 'product';
+           if (apiType === 'product' && item.isPharma) {
+             apiType = 'medicine';
+           }
            await favoritesApi.toggle(apiType, item.id);
         }
-      } catch (e) {
-        console.error('[useFavourites] save/toggle error', e);
+      } catch (e: any) {
+        console.warn('[useFavourites] save/toggle error, rolling back', e?.message);
+        // Rollback optimistic update
+        set(current);
+        await AsyncStorage.setItem(key, JSON.stringify(current));
       }
     },
     [restaurants, products, brands, userToken],
@@ -150,7 +160,8 @@ export function useFavourites() {
 
         const updatedP = savedP
           .map((fav) => {
-            const live = allProducts.find((p) => p.id === fav.id);
+            const items = Array.isArray(allProducts) ? allProducts : ((allProducts as any)?.data || []);
+            const live = items.find((p: any) => p.id === fav.id);
             if (!live) return fav;
             return {
               ...fav,

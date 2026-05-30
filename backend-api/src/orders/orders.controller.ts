@@ -43,8 +43,7 @@ export class OrdersController {
   @Get('pending')
   async getPendingOrders(@Req() req: Request) {
     const user = req.user as any;
-    if (user.role !== 'rider') throw new BadRequestException('Only riders can access pending orders');
-    return this.ordersService.getPendingOrders();
+    return this.ordersService.getPendingOrders(user.role === 'rider' ? user.id : undefined);
   }
 
   @Get('active')
@@ -60,7 +59,8 @@ export class OrdersController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('startDate') startDate?: string,
-    @Query('endDate') endDate?: string
+    @Query('endDate') endDate?: string,
+    @Query('orderType') orderType?: string
   ) {
     const user = req.user as any;
     return this.ordersService.getOrderHistory(
@@ -68,7 +68,8 @@ export class OrdersController {
       page ? parseInt(page, 10) : 1,
       limit ? parseInt(limit, 10) : 20,
       startDate,
-      endDate
+      endDate,
+      orderType
     );
   }
 
@@ -109,9 +110,18 @@ export class OrdersController {
   async previewFee(
     @Param('addressId', ParseUUIDPipe) addressId: string,
     @Query('restaurantId') restaurantId?: string,
-    @Query('orderType') orderType?: string
+    @Query('orderType') orderType?: string,
+    @Query('items') itemsJson?: string
   ) {
-    return this.ordersService.calculateDeliveryFee(addressId, restaurantId, orderType);
+    let items = undefined;
+    if (itemsJson) {
+      try {
+        items = JSON.parse(itemsJson);
+      } catch (e) {
+        console.warn('Failed to parse items for fee calculation', e);
+      }
+    }
+    return this.ordersService.calculateDeliveryFee(addressId, restaurantId, orderType, items);
   }
 
   @Post(':id/accept')

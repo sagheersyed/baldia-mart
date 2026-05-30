@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, X, RefreshCw, Package, Pencil, Star, Zap, Flame } from 'lucide-react';
+import { Plus, Trash2, X, RefreshCw, Package, Pencil, Star, Zap, Flame, Search } from 'lucide-react';
 import { fetchWithAuth, BASE_URL, getErrorMessage, parseApiError } from '@/lib/api';
 import { useAsyncData } from '@/hooks/useAsyncData';
 import { LoadingState, ErrorState, EmptyState } from '@/components/PageState';
 import { showToast } from '@/hooks/useToast';
+import Pagination from '@/components/Pagination';
 
 interface Category { id: string; name: string; section?: string }
 interface Brand    { id: string; name: string }
@@ -41,13 +42,23 @@ export default function ProductsPage() {
   const [isSubmitting,   setIsSubmitting]   = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [formData, setFormData] = useState({ ...EMPTY_FORM });
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(1, ''); }, []);
 
-  const fetchData = async () => {
+  const fetchData = async (targetPage = page, query = searchQuery) => {
     await execute(async () => {
+      const params = new URLSearchParams();
+      params.append('page', String(targetPage));
+      params.append('limit', '20');
+      if (query.trim()) {
+        params.append('search', query.trim());
+      }
       const [pR, cR, bR] = await Promise.all([
-        fetchWithAuth(API_URL),
+        fetchWithAuth(`${API_URL}?${params.toString()}`),
         fetchWithAuth(CAT_URL),
         fetchWithAuth(`${BASE_URL}/brands`),
       ]);
@@ -55,10 +66,14 @@ export default function ProductsPage() {
       if (!cR.ok) throw new Error(await parseApiError(cR, 'Failed to load categories'));
       if (!bR.ok) throw new Error(await parseApiError(bR, 'Failed to load brands'));
       const [pRaw, c, b] = await Promise.all([pR.json(), cR.json(), bR.json()]);
-      // /products returns paginated shape { data, total, page, limit, totalPages } now;
-      // fall back to raw array if older shape returned.
+      
       const p = Array.isArray(pRaw) ? pRaw : (pRaw?.data || []);
-      setProducts(p); setCategories(Array.isArray(c) ? c : (c?.data || []));
+      setProducts(p);
+      setTotalPages(pRaw?.totalPages || 1);
+      setTotalItems(pRaw?.total || 0);
+      setPage(targetPage);
+      
+      setCategories(Array.isArray(c) ? c : (c?.data || []));
       setBrands(Array.isArray(b) ? b : (b?.data || []));
       return true;
     });
@@ -168,7 +183,20 @@ export default function ProductsPage() {
           <p className="page-subtitle">Manage inventory, pricing and merchandising · {products.length} items</p>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={fetchData} className="btn-ghost btn-icon">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
+            <input 
+              type="text" 
+              placeholder="Search products…" 
+              className="input pl-9 w-56" 
+              value={searchQuery} 
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                fetchData(1, e.target.value);
+              }} 
+            />
+          </div>
+          <button onClick={() => fetchData(1)} className="btn-ghost btn-icon">
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
           </button>
           <button onClick={openAdd} className="btn-primary">
@@ -292,6 +320,13 @@ export default function ProductsPage() {
             </table>
           </div>
         )}
+
+        <div className="flex items-center justify-between px-6 py-4 bg-slate-50 border-t border-slate-100">
+          <div className="text-sm text-slate-500">
+            Showing <span className="font-semibold text-slate-700">{products.length}</span> of <span className="font-semibold text-slate-700">{totalItems}</span> items
+          </div>
+          <Pagination page={page} totalPages={totalPages} onPageChange={fetchData} />
+        </div>
       </div>
 
       {showModal && (

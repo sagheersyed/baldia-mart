@@ -25,7 +25,7 @@ export class PaymentsService {
     private paymentsRepo: Repository<Payment>,
     @InjectRepository(Order)
     private ordersRepo: Repository<Order>,
-  ) {}
+  ) { }
 
   /**
    * Generate a unique merchant reference.

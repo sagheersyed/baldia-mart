@@ -36,6 +36,7 @@ export interface ProductListQuery {
   featured?: boolean;
   bestSeller?: boolean;
   deal?: boolean;
+  ids?: string;
 }
 
 export interface PaginatedResult<T> {
@@ -208,6 +209,13 @@ export class ProductsService {
     const limit = Math.min(50, Math.max(1, Number(query.limit) || 20));
 
     const qb = this.buildBaseQuery();
+
+    if (query.ids) {
+      const idList = query.ids.split(',').map(x => x.trim()).filter(Boolean);
+      if (idList.length > 0) {
+        qb.andWhere('p.id IN (:...idList)', { idList });
+      }
+    }
 
     if (query.categoryId) qb.andWhere('p.categoryId = :categoryId', { categoryId: query.categoryId });
     if (query.brandId) qb.andWhere('p.brandId = :brandId', { brandId: query.brandId });

@@ -33,6 +33,7 @@ export interface PharmaCartItem {
   strength?: string;
   packSize?: string;
   categoryId?: string;
+  maxQuantityPerOrder?: number;
 }
 
 interface CartState {
@@ -55,6 +56,7 @@ interface CartState {
 
   getCartTotal: (mode?: 'mart' | 'food' | 'pharma') => number;
   getCartCount: (mode?: 'mart' | 'food' | 'pharma') => number;
+  getItemCount: (productId: string, mode?: 'mart' | 'food' | 'pharma') => number;
 
   getCurrentCart: () => (CartItem | PharmaCartItem)[];
   getCurrentTotal: () => number;
@@ -110,8 +112,14 @@ export const useCartStore = create<CartState>((set, get) => ({
 
     if (mode === 'pharma') {
       const existing = pharmaCart.find((i) => i.id === product.id);
+      const limit = Number(product.maxQuantityPerOrder) || 0;
       let next: PharmaCartItem[];
+      
       if (existing) {
+        if (limit > 0 && existing.quantity >= limit) {
+          Alert.alert('Limit Reached ✋', `Maximum allowed per order is ${limit} units for ${product.name}.`);
+          return;
+        }
         next = pharmaCart.map((i) => (i.id === product.id ? { ...i, quantity: i.quantity + 1 } : i));
       } else {
         // Map medicine properties to PharmaCartItem
@@ -124,11 +132,12 @@ export const useCartStore = create<CartState>((set, get) => ({
             sellingPrice: Number(product.mrp) - Number(product.discount || 0),
             quantity: 1,
             imageUrl: product.imageUrl,
-            requiresPrescription: !!product.requiresPrescription,
+            requiresPrescription: product.requiresPrescription === true || product.requiresPrescription === 'true' || product.requiresPrescription === 1 || product.requiresPrescription === '1',
             dosageForm: product.dosageForm,
             strength: product.strength,
             packSize: product.packSize,
             categoryId: product.categoryId,
+            maxQuantityPerOrder: product.maxQuantityPerOrder,
           },
         ];
       }
@@ -211,6 +220,11 @@ export const useCartStore = create<CartState>((set, get) => ({
     }
 
     if (mode === 'pharma') {
+      const item = pharmaCart.find((i) => i.id === productId);
+      if (item && item.maxQuantityPerOrder && item.maxQuantityPerOrder > 0 && quantity > item.maxQuantityPerOrder) {
+        Alert.alert('Limit Reached ✋', `Maximum allowed per order is ${item.maxQuantityPerOrder} units.`);
+        return;
+      }
       const next = pharmaCart.map((i) => (i.id === productId ? { ...i, quantity } : i));
       set({ pharmaCart: next });
       savePharmaCart(next);
@@ -274,6 +288,18 @@ export const useCartStore = create<CartState>((set, get) => ({
     return cart.reduce((count, item) => count + item.quantity, 0);
   },
 
+  getItemCount: (productId, modeOpt) => {
+    const { activeMode, martCart, foodCart, pharmaCart } = get();
+    const mode = modeOpt || activeMode;
+    if (mode === 'pharma') {
+      const item = pharmaCart.find((i) => i.id === productId);
+      return item ? item.quantity : 0;
+    }
+    const cart = mode === 'mart' ? martCart : foodCart;
+    const item = cart.find((i) => i.id === productId);
+    return item ? item.quantity : 0;
+  },
+
   getCurrentCart: () => {
     const { activeMode, martCart, foodCart, pharmaCart } = get();
     if (activeMode === 'pharma') return pharmaCart;
@@ -303,9 +329,14 @@ export const useCartStore = create<CartState>((set, get) => ({
   },
 
   updatePharmaQuantity: (medicineId, quantity) => {
-    const { pharmaCart, removeFromPharmaCart } = get();
-    if (quantity <= 0) {
-      removeFromPharmaCart(medicineId);
+    if (quantity < 1) {
+      get().removeFromPharmaCart(medicineId);
+      return;
+    }
+    const { pharmaCart } = get();
+    const item = pharmaCart.find(i => i.id === medicineId);
+    if (item && item.maxQuantityPerOrder && item.maxQuantityPerOrder > 0 && quantity > item.maxQuantityPerOrder) {
+      Alert.alert('Limit Reached ✋', `Maximum allowed per order is ${item.maxQuantityPerOrder} units for ${item.name}.`);
       return;
     }
     const next = pharmaCart.map((i) => (i.id === medicineId ? { ...i, quantity } : i));

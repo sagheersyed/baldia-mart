@@ -17,6 +17,12 @@ export class User {
   @Column({ nullable: true })
   name: string;
 
+  @Column({ nullable: true, type: 'int' })
+  age: number;
+
+  @Column({ nullable: true })
+  gender: string;
+
   // Nullable email for phone-only users
   @Column({ unique: true, nullable: true })
   email: string;

@@ -16,4 +16,18 @@ export class AnalyticsController {
   ) {
     return this.analyticsService.getDashboardMetrics(range, startDate, endDate);
   }
+
+  @Get('pharma')
+  async getPharmaMetrics(
+    @Query('range') range?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.analyticsService.getPharmaMetrics(range, startDate, endDate);
+  }
+
+  @Get('pharma/regulatory')
+  async getControlledReport() {
+    return this.analyticsService.getControlledSubstancesReport();
+  }
 }

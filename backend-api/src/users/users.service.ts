@@ -55,6 +55,8 @@ export class UsersService {
   async update(id: string, updateData: Partial<User>): Promise<User> {
     const user = await this.findById(id);
     Object.assign(user, updateData);
-    return this.usersRepository.save(user);
+    const saved = await this.usersRepository.save(user);
+    await this.cacheService.del(`user:${id}`);
+    return saved;
   }
 }

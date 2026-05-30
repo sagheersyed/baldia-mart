@@ -8,7 +8,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import { brandsApi, productsApi, categoriesApi, normalizeUrl } from '../api/api';
+import { brandsApi, productsApi, categoriesApi, pharmaApi, normalizeUrl } from '../api/api';
 import { useCart } from '../context/CartContext';
 import { useFavourites } from '../hooks/useFavourites';
 import { isBusinessOpen } from '../utils/helpers';
@@ -27,7 +27,7 @@ type Row =
 
 export default function BrandDetailScreen({ navigation, route }: any) {
   const { brandId } = route.params;
-  const { martCart, addToCart, updateQuantity, getCartCount, setActiveMode } = useCart();
+  const { martCart, pharmaCart, addToCart, updateQuantity, getCartCount, setActiveMode } = useCart();
   const { isFavourite, toggleFavourite } = useFavourites();
 
   const [brand, setBrand] = useState<any>(null);
@@ -38,21 +38,28 @@ export default function BrandDetailScreen({ navigation, route }: any) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const isPharma = route.params?.section === 'pharma' || brand?.section === 'pharma';
+
   useFocusEffect(useCallback(() => {
-    setActiveMode('mart');
-  }, [setActiveMode]));
+    setActiveMode(isPharma ? 'pharma' : 'mart');
+  }, [setActiveMode, isPharma]));
 
   const loadData = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true);
     setError(null);
     try {
+      const isPharmaMode = route.params?.section === 'pharma';
       const [brandRes, prodsRes, catsRes] = await Promise.all([
         brandsApi.getById(brandId),
-        productsApi.getByBrand(brandId),
-        categoriesApi.getAll(),
+        isPharmaMode 
+          ? pharmaApi.searchMedicines('', 1, 50, { brandId })
+          : productsApi.getByBrand(brandId),
+        isPharmaMode
+          ? pharmaApi.getCategories()
+          : categoriesApi.getAll(),
       ]);
       setBrand(brandRes.data);
-      const brandProds = prodsRes.data || [];
+      const brandProds = Array.isArray(prodsRes.data) ? prodsRes.data : (prodsRes.data?.data || []);
       setProducts(brandProds);
 
       const brandCatIds = Array.from(new Set(brandProds.map((p: any) => p.categoryId)));
@@ -64,7 +71,7 @@ export default function BrandDetailScreen({ navigation, route }: any) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [brandId]);
+  }, [brandId, route.params]);
 
   useEffect(() => { loadData(true); }, [loadData]);
 
@@ -91,8 +98,9 @@ export default function BrandDetailScreen({ navigation, route }: any) {
   }, [filteredProducts]);
 
   const cartQty = useCallback((id: string) => {
-    return martCart.find((c: any) => c.productId === id || c.id === id)?.quantity || 0;
-  }, [martCart]);
+    const cart = isPharma ? pharmaCart : martCart;
+    return cart.find((c: any) => c.productId === id || c.id === id)?.quantity || 0;
+  }, [martCart, pharmaCart, isPharma]);
 
   const brandClosed = brand && !isBusinessOpen(brand.openingTime, brand.closingTime);
   const cover = normalizeUrl(brand?.coverUrl || brand?.imageUrl);
@@ -100,6 +108,8 @@ export default function BrandDetailScreen({ navigation, route }: any) {
   const isFav = isFavourite(brandId, 'restaurants');
 
   const renderRow: ListRenderItem<Row> = useCallback(({ item }) => {
+    const accentColor = isPharma ? theme.colors.pharma : theme.colors.primary;
+
     if (item.kind === 'hero') {
       return (
         <View style={styles.hero}>
@@ -107,7 +117,7 @@ export default function BrandDetailScreen({ navigation, route }: any) {
             {cover || logo ? (
               <Image source={{ uri: cover || logo! }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="memory-disk" />
             ) : (
-              <View style={[StyleSheet.absoluteFill, styles.heroPlaceholder]}>
+              <View style={[StyleSheet.absoluteFill, styles.heroPlaceholder, isPharma && { backgroundColor: theme.colors.pharma }]}>
                 <Ionicons name="storefront" size={48} color="#fff" />
               </View>
             )}
@@ -129,9 +139,9 @@ export default function BrandDetailScreen({ navigation, route }: any) {
                 <AppIconButton
                   size={32}
                   bg="rgba(255,255,255,0.9)"
-                  onPress={() => navigation.navigate('Cart')}
+                  onPress={() => navigation.navigate(isPharma ? 'PharmaCart' : 'Cart')}
                 >
-                  <Ionicons name="bag-handle" size={18} color={theme.colors.primary} />
+                  <Ionicons name="bag-handle" size={18} color={accentColor} />
                 </AppIconButton>
               </View>
             </View>
@@ -151,7 +161,7 @@ export default function BrandDetailScreen({ navigation, route }: any) {
                 ) : null}
               </View>
               {brand?.productCount != null ? (
-                <AppBadge label={`${brand.productCount} items`} variant="primary" />
+                <AppBadge label={`${brand.productCount} items`} variant={isPharma ? 'success' : 'primary'} />
               ) : null}
             </View>
             <View style={styles.metaRow}>
@@ -189,7 +199,7 @@ export default function BrandDetailScreen({ navigation, route }: any) {
                   onPress={() => setSelectedCatId(cat.id)}
                   style={[
                     styles.chip,
-                    active ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : null,
+                    active ? { backgroundColor: accentColor, borderColor: accentColor } : null,
                   ]}
                 >
                   <AppText
@@ -207,6 +217,7 @@ export default function BrandDetailScreen({ navigation, route }: any) {
     }
 
     // productRow
+    const sectionName = isPharma ? 'pharma' : 'mart';
     return (
       <View style={styles.gridRow}>
         <View style={styles.gridCol}>
@@ -214,18 +225,20 @@ export default function BrandDetailScreen({ navigation, route }: any) {
             product={item.left}
             cartQty={cartQty(item.left.id)}
             variant="grid"
+            tint={accentColor}
             isFavourite={isFavourite(item.left.id, 'products')}
-            onPress={() => {}}
-            onAdd={() => addToCart(item.left, 'mart')}
-            onIncrement={() => addToCart(item.left, 'mart')}
-            onDecrement={() => updateQuantity(item.left.id, Math.max(0, cartQty(item.left.id) - 1), 'mart')}
+            onPress={isPharma ? () => navigation.navigate('MedicineDetail', { medicineId: item.left.id }) : undefined}
+            onAdd={() => addToCart(item.left, sectionName)}
+            onIncrement={() => addToCart(item.left, sectionName)}
+            onDecrement={() => updateQuantity(item.left.id, Math.max(0, cartQty(item.left.id) - 1), sectionName)}
             onToggleFavourite={() => toggleFavourite({
               id: item.left.id, name: item.left.name, imageUrl: item.left.imageUrl,
-              price: item.left.price, discount: item.left.discount,
+              price: item.left.price || item.left.mrp || 0, discount: item.left.discount || 0,
               category: item.left.category, brand: item.left.brand,
               openingTime: item.left.openingTime, closingTime: item.left.closingTime,
               maxQuantityPerOrder: item.left.maxQuantityPerOrder,
               stockQuantity: item.left.stockQuantity,
+              isPharma: isPharma,
             }, 'products')}
           />
         </View>
@@ -235,18 +248,20 @@ export default function BrandDetailScreen({ navigation, route }: any) {
               product={item.right}
               cartQty={cartQty(item.right.id)}
               variant="grid"
+              tint={accentColor}
               isFavourite={isFavourite(item.right.id, 'products')}
-              onPress={() => {}}
-              onAdd={() => addToCart(item.right, 'mart')}
-              onIncrement={() => addToCart(item.right, 'mart')}
-              onDecrement={() => updateQuantity(item.right.id, Math.max(0, cartQty(item.right.id) - 1), 'mart')}
+              onPress={isPharma ? () => navigation.navigate('MedicineDetail', { medicineId: item.right.id }) : undefined}
+              onAdd={() => addToCart(item.right, sectionName)}
+              onIncrement={() => addToCart(item.right, sectionName)}
+              onDecrement={() => updateQuantity(item.right.id, Math.max(0, cartQty(item.right.id) - 1), sectionName)}
               onToggleFavourite={() => toggleFavourite({
                 id: item.right.id, name: item.right.name, imageUrl: item.right.imageUrl,
-                price: item.right.price, discount: item.right.discount,
+                price: item.right.price || item.right.mrp || 0, discount: item.right.discount || 0,
                 category: item.right.category, brand: item.right.brand,
                 openingTime: item.right.openingTime, closingTime: item.right.closingTime,
                 maxQuantityPerOrder: item.right.maxQuantityPerOrder,
                 stockQuantity: item.right.stockQuantity,
+                isPharma: isPharma,
               }, 'products')}
             />
           ) : <View style={{ flex: 1 }} />}
@@ -254,7 +269,7 @@ export default function BrandDetailScreen({ navigation, route }: any) {
       </View>
     );
   }, [
-    cover, logo, brand, brandId, brandClosed, isFav,
+    cover, logo, brand, brandId, brandClosed, isFav, isPharma,
     categories, selectedCatId,
     cartQty, isFavourite, addToCart, updateQuantity, toggleFavourite, navigation,
   ]);
@@ -280,7 +295,7 @@ export default function BrandDetailScreen({ navigation, route }: any) {
     );
   }
 
-  const cartTotalQty = getCartCount('mart');
+  const cartTotalQty = getCartCount(isPharma ? 'pharma' : 'mart');
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -297,17 +312,22 @@ export default function BrandDetailScreen({ navigation, route }: any) {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={theme.colors.primary}
-            colors={[theme.colors.primary]}
+            tintColor={isPharma ? theme.colors.pharma : theme.colors.primary}
+            colors={[isPharma ? theme.colors.pharma : theme.colors.primary]}
           />
         }
       />
 
       {cartTotalQty > 0 ? (
         <View style={styles.stickyCta}>
-          <Pressable onPress={() => navigation.navigate('Cart')} style={({ pressed }) => [
-            styles.stickyBtn, pressed ? { opacity: 0.9 } : null,
-          ]}>
+          <Pressable 
+            onPress={() => navigation.navigate(isPharma ? 'PharmaCart' : 'Cart')} 
+            style={({ pressed }) => [
+              styles.stickyBtn, 
+              { backgroundColor: isPharma ? theme.colors.pharma : theme.colors.primary },
+              pressed ? { opacity: 0.9 } : null,
+            ]}
+          >
             <View style={styles.stickyBadge}>
               <AppText variant="bodyStrong" color="#fff">{cartTotalQty}</AppText>
             </View>

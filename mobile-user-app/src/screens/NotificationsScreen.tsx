@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import {
-  View, StyleSheet, FlatList, RefreshControl, ListRenderItem,
+  View, StyleSheet, FlatList, RefreshControl, ListRenderItem, ActivityIndicator,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -10,6 +10,7 @@ import { ordersApi } from '../api/api';
 import {
   AppText, AppIconButton, EmptyState, SkeletonBlock,
 } from '../components/ui';
+import { useCartStore } from '../store/cartStore';
 import { theme } from '../theme/theme';
 
 const STATUS_CONFIG: Record<string, {
@@ -36,7 +37,7 @@ type Row =
   | { kind: 'header'; title: string; count: number }
   | { kind: 'notif'; order: any; isUnread: boolean };
 
-function NotificationCard({ order, isUnread, onPress }: { order: any; isUnread: boolean; onPress: () => void }) {
+function NotificationCard({ order, isUnread, onPress, accent }: { order: any; isUnread: boolean; onPress: () => void; accent: string }) {
   const cfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.pending;
   const msg = STATUS_MESSAGES[order.status] || `Order status updated to: ${order.status}`;
   const time = new Date(order.updatedAt || order.createdAt).toLocaleString('en-PK', {
@@ -47,7 +48,7 @@ function NotificationCard({ order, isUnread, onPress }: { order: any; isUnread: 
     <View style={[styles.card, isUnread ? styles.cardUnread : null]}>
       <View style={[styles.iconBubble, { backgroundColor: cfg.bg }]}>
         <Ionicons name={cfg.icon} size={20} color={cfg.color} />
-        {isUnread ? <View style={styles.unreadDot} /> : null}
+        {isUnread ? <View style={[styles.unreadDot, { backgroundColor: accent }]} /> : null}
       </View>
       <View style={{ flex: 1, gap: 2 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -67,7 +68,7 @@ function NotificationCard({ order, isUnread, onPress }: { order: any; isUnread: 
           {order.total ? (
             <>
               <View style={styles.dot} />
-              <AppText variant="captionStrong" color={theme.colors.primary}>
+              <AppText variant="captionStrong" color={order.orderType === 'pharma' ? theme.colors.pharma : theme.colors.primary}>
                 Rs. {Math.round(Number(order.total))}
               </AppText>
             </>
@@ -79,30 +80,60 @@ function NotificationCard({ order, isUnread, onPress }: { order: any; isUnread: 
 }
 
 export default function NotificationsScreen({ navigation }: any) {
+  const { activeMode } = useCartStore();
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
-  const fetchNotifications = useCallback(async () => {
+  const fetchNotifications = useCallback(async (isRefresh = false, targetPage = 1) => {
     try {
-      const res = await ordersApi.getHistory();
+      if (!navigation.isFocused()) return;
+      if (isRefresh || targetPage === 1) setLoading(true);
+      else setLoadingMore(true);
+
+      const res = await ordersApi.getHistory(targetPage, 20);
       const resData = res.data || {};
       const orderData = Array.isArray(resData) ? resData : (resData.data || []);
-      setOrders(orderData);
+      const totalCount = resData.total || 0;
+      const limit = resData.limit || 20;
+      const calculatedTotalPages = Math.ceil(totalCount / limit);
+
+      if (targetPage === 1) {
+        setOrders(orderData);
+        setPage(1);
+      } else {
+        setOrders(prev => {
+          const existingIds = new Set(prev.map(o => o.id));
+          const newItems = orderData.filter((o: any) => !existingIds.has(o.id));
+          return [...prev, ...newItems];
+        });
+        setPage(targetPage);
+      }
+      setTotalPages(calculatedTotalPages);
     } catch {
       // noop
     } finally {
       setLoading(false);
+      setLoadingMore(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [navigation]);
 
   useFocusEffect(useCallback(() => { fetchNotifications(); }, [fetchNotifications]));
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    fetchNotifications();
+    fetchNotifications(true, 1);
   }, [fetchNotifications]);
+
+  const handleLoadMore = () => {
+    if (!loading && !loadingMore && page < totalPages) {
+      fetchNotifications(false, page + 1);
+    }
+  };
 
   const data = useMemo<Row[]>(() => {
     if (orders.length === 0) return [];
@@ -139,6 +170,7 @@ export default function NotificationsScreen({ navigation }: any) {
         order={item.order}
         isUnread={item.isUnread}
         onPress={() => navigation.navigate('OrderTracking', { orderId: item.order.id })}
+        accent={item.order?.orderType === 'pharma' ? theme.colors.pharma : theme.colors.primary}
       />
     );
   };
@@ -181,8 +213,15 @@ export default function NotificationsScreen({ navigation }: any) {
             item.kind === 'header' ? `head-${item.title}-${index}` : `${item.order.id}-${index}`}
           contentContainerStyle={{ padding: theme.spacing.lg, paddingBottom: theme.spacing.xxl }}
           showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} colors={[theme.colors.primary]} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={activeMode === 'pharma' ? theme.colors.pharma : theme.colors.primary} colors={[activeMode === 'pharma' ? theme.colors.pharma : theme.colors.primary]} />}
           renderItem={renderRow}
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={loadingMore ? (
+            <View style={{ paddingVertical: 20 }}>
+              <ActivityIndicator color={activeMode === 'pharma' ? theme.colors.pharma : theme.colors.primary} />
+            </View>
+          ) : null}
           ItemSeparatorComponent={({ leadingItem }: any) => leadingItem?.kind === 'header'
             ? <View style={{ height: 6 }} />
             : <View style={{ height: theme.spacing.sm }} />}
@@ -215,7 +254,10 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: theme.colors.divider,
     ...theme.shadows.sm,
   },
-  cardUnread: { borderColor: theme.colors.primaryBorder, backgroundColor: theme.colors.primaryLight },
+  cardUnread: { 
+    borderColor: 'rgba(0,0,0,0.05)', 
+    backgroundColor: '#F8FAFC' 
+  },
 
   iconBubble: {
     width: 42, height: 42, borderRadius: 21,
@@ -225,7 +267,6 @@ const styles = StyleSheet.create({
   unreadDot: {
     position: 'absolute', top: -2, right: -2,
     width: 10, height: 10, borderRadius: 5,
-    backgroundColor: theme.colors.primary,
     borderWidth: 2, borderColor: theme.colors.surface,
   },
 

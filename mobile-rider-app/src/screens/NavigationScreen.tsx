@@ -134,22 +134,22 @@ export default function NavigationScreen({ navigation, route }: any) {
 
   if (order) {
     if (order.subOrders?.length > 0) {
-      // Handle both Food (Restaurants) and Mart (Vendors) sub-orders
+      // Handle both Food (Restaurants), Mart (Vendors), and Pharma (Pharmacies) sub-orders
       order.subOrders.forEach((sub: any, i: number) => {
-        const entity = sub.restaurant || sub.vendor;
+        const entity = sub.restaurant || sub.vendor || sub.pharmacy;
         if (entity?.latitude || entity?.lat) {
           pickupStops.push({
             id: sub.id,
             stopNum: i + 1,
             name: entity.name,
-            description: entity.location || entity.address || (isFood ? 'Restaurant' : 'Shop'),
+            description: entity.location || entity.address || (isFood ? 'Restaurant' : sub.pharmacy ? 'Pharmacy' : 'Shop'),
             coords: {
               latitude: Number(entity.latitude || entity.lat || 0),
               longitude: Number(entity.longitude || entity.lng || 0)
             },
             subOrderId: sub.id,
             subStatus: sub.status,
-            emoji: isFood ? '🍽️' : '🏪',
+            emoji: sub.pharmacy ? '🏥' : isFood ? '🍽️' : '🏪',
           });
         }
       });
@@ -163,7 +163,7 @@ export default function NavigationScreen({ navigation, route }: any) {
     } else if (order.orderType === 'pharma' && order.pharmacy) {
       pickupStops.push({
         id: order.pharmacy.id, stopNum: 1, name: order.pharmacy.name,
-        description: order.pharmacy.address || 'Verified Pharmacy',
+        description: order.pharmacy.location || order.pharmacy.address || 'Pharmacy',
         coords: { 
           latitude: Number(order.pharmacy.latitude || 0), 
           longitude: Number(order.pharmacy.longitude || 0) 
@@ -560,10 +560,17 @@ export default function NavigationScreen({ navigation, route }: any) {
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={styles.orderTitle}>Order #{(orderId || '').slice(0, 8).toUpperCase()}</Text>
-          <View style={[styles.typeBadge, order.orderType === 'rashan' && { backgroundColor: '#FF4500' }, order.orderType === 'pharma' && { backgroundColor: '#E0F2F1' }]}>
-            <Text style={[styles.typeTxt, order.orderType === 'rashan' && { color: '#fff' }, order.orderType === 'pharma' && { color: '#00796B' }]}>
-              {order.orderType === 'food' ? '🍽️ Food Order' : order.orderType === 'rashan' ? '📦 RASHAN BULK' : order.orderType === 'pharma' ? '🏥 PHARMACY' : '🛒 Mart Order'}
-            </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, flexWrap: 'wrap', gap: 6 }}>
+            <View style={[styles.typeBadge, order.orderType === 'rashan' && { backgroundColor: '#FF4500' }, order.orderType === 'pharma' && { backgroundColor: '#E0F2F1' }, { marginTop: 0 }]}>
+              <Text style={[styles.typeTxt, order.orderType === 'rashan' && { color: '#fff' }, order.orderType === 'pharma' && { color: '#00796B' }]}>
+                {order.orderType === 'food' ? '🍽️ Food Order' : order.orderType === 'rashan' ? '📦 RASHAN BULK' : order.orderType === 'pharma' ? '🏥 PHARMACY' : '🛒 Mart Order'}
+              </Text>
+            </View>
+            {order.priority === 'high' && (
+              <View style={[styles.emergencyBadge, { marginTop: 0 }]}>
+                <Text style={styles.emergencyTxt}>🚨 EMERGENCY</Text>
+              </View>
+            )}
           </View>
         </View>
         {settings?.feature_chat_enabled === true && status !== 'delivered' && status !== 'cancelled' && (
@@ -646,6 +653,17 @@ export default function NavigationScreen({ navigation, route }: any) {
           )}
         </View>
 
+        {/* Cold Chain Reminder */}
+        {order.isColdChain && (
+          <View style={styles.coldChainBox}>
+            <View style={styles.coldChainHeader}>
+              <Ionicons name="thermometer" size={18} color="#00796B" />
+              <Text style={styles.coldChainTitle}>Cold Chain Required ❄️</Text>
+            </View>
+            <Text style={styles.coldChainMsg}>Use a cool-box. Keep medicine between 2°C - 8°C.</Text>
+          </View>
+        )}
+
         {/* Item Checklist (collapsible) */}
         {order.items?.length > 0 && (
           <TouchableOpacity style={styles.checklistToggle} onPress={() => setExpandedChecklist(v => !v)}>
@@ -661,7 +679,7 @@ export default function NavigationScreen({ navigation, route }: any) {
             {Object.entries(
               order.items.reduce((acc: any, item: any) => {
                 const sub = order.subOrders?.find((s: any) => s.id === item.subOrderId);
-                const gName = sub?.vendor?.name || sub?.restaurant?.name || item.product?.brand?.name || item.menuItem?.restaurant?.name || order.restaurant?.name || 'Baldia Mart';
+                const gName = sub?.pharmacy?.name || sub?.vendor?.name || sub?.restaurant?.name || item.product?.brand?.name || item.menuItem?.restaurant?.name || order.restaurant?.name || 'Baldia Mart';
                 if (!acc[gName]) acc[gName] = { active: [], missing: [], subOrderId: item.subOrderId, status: sub?.status };
                 if (item.status === 'missing') acc[gName].missing.push(item);
                 else acc[gName].active.push(item);
@@ -916,6 +934,43 @@ const styles = StyleSheet.create({
     justifyContent: 'center', 
     alignItems: 'center',
     marginRight: 4
+  },
+  emergencyBadge: {
+    backgroundColor: '#C53030',
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginTop: 4,
+    alignSelf: 'flex-start',
+  },
+  emergencyTxt: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '900',
+  },
+  coldChainBox: {
+    backgroundColor: '#E0F2F1',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#B2DFDB',
+  },
+  coldChainHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  coldChainTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#00796B',
+    marginLeft: 6,
+  },
+  coldChainMsg: {
+    fontSize: 11,
+    color: '#004D40',
+    lineHeight: 16,
   },
   blockOverlay: {
     ...StyleSheet.absoluteFillObject,

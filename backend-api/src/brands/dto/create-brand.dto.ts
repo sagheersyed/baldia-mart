@@ -17,7 +17,7 @@ export class CreateBrandDto {
   isActive?: boolean;
 
   @IsOptional()
-  @IsIn(['mart', 'restaurant'])
+  @IsIn(['mart', 'restaurant', 'pharma'])
   section?: string;
 
   @IsOptional()

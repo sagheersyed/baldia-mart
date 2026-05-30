@@ -9,6 +9,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { authApi, setAuthToken } from '../api/api';
 import { useAuth } from '../context/AuthContext';
+import { useCartStore } from '../store/cartStore';
 import { AppText, AppButton, AppIconButton } from '../components/ui';
 import { theme } from '../theme/theme';
 
@@ -16,6 +17,7 @@ const MPIN_LENGTH = 4;
 
 export default function MpinSetupScreen({ navigation, route }: any) {
   const { signIn } = useAuth();
+  const { activeMode } = useCartStore();
   const { access_token, user } = route.params || {};
 
   const [step, setStep] = useState(1);
@@ -86,6 +88,9 @@ export default function MpinSetupScreen({ navigation, route }: any) {
   };
 
   const currentArr = step === 1 ? mpin : confirmMpin;
+  const accent = theme.colors.primary;
+  const accentDark = theme.colors.primaryDark;
+  const accentLight = theme.colors.primaryLight;
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -95,7 +100,7 @@ export default function MpinSetupScreen({ navigation, route }: any) {
       >
         <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <LinearGradient
-            colors={[theme.colors.primary, theme.colors.primaryDark]}
+            colors={[accent, accentDark]}
             style={styles.hero}
           >
             <View style={styles.headerRow}>
@@ -135,7 +140,11 @@ export default function MpinSetupScreen({ navigation, route }: any) {
                 <TextInput
                   key={`${step}-${i}`}
                   ref={el => { inputRefs.current[i] = el; }}
-                  style={[styles.mpinInput, digit ? styles.mpinInputFilled : null]}
+                  style={[
+                    styles.mpinInput, 
+                    digit ? { borderColor: accent, backgroundColor: accentLight } : null,
+                    { color: accent }
+                  ]}
                   value={digit}
                   onChangeText={val => handleMpinChange(val, i, step === 2)}
                   onKeyPress={e => handleKeyPress(e, i, step === 2)}
@@ -154,6 +163,7 @@ export default function MpinSetupScreen({ navigation, route }: any) {
                   : (step === 1 ? 'Next' : 'Confirm & login')
               }
               variant="primary"
+              tint={accent}
               size="lg"
               fullWidth
               onPress={step === 1 ? handleNext : handleSetup}

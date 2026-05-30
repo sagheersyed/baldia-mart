@@ -113,15 +113,18 @@ export default function OrderDetailsScreen({ route, navigation }: any) {
           {(() => {
             if (order.subOrders?.length > 0) {
               return order.subOrders.map((sub: any, idx: number) => {
-                const entity = sub.restaurant || sub.vendor;
+                const entity = sub.restaurant || sub.vendor || sub.pharmacy;
                 if (!entity) return null;
+                const emoji = sub.pharmacy ? '🏥 ' : (order.orderType === 'food' ? '👨‍🍳 ' : '🏬 ');
+                const name = entity.name;
+                const address = entity.location || entity.address || 'Local area';
                 return (
                   <View key={sub.id || idx} style={{ marginBottom: order.subOrders.length > 1 ? 15 : 0 }}>
                     <Text style={styles.customerName}>
-                      {order.orderType === 'food' ? '👨‍🍳 ' : '🏬 '}
-                      {order.subOrders.length > 1 ? `[Stop ${idx + 1}] ` : ''}{entity.name}
+                      {emoji}
+                      {order.subOrders.length > 1 ? `[Stop ${idx + 1}] ` : ''}{name}
                     </Text>
-                    <Text style={styles.address}>📍 {entity.location || entity.address || 'Local area'}</Text>
+                    <Text style={styles.address}>📍 {address}</Text>
                   </View>
                 );
               });
@@ -138,7 +141,7 @@ export default function OrderDetailsScreen({ route, navigation }: any) {
               return (
                 <>
                   <Text style={styles.customerName}>🏥 {order.pharmacy.name}</Text>
-                  <Text style={styles.address}>📍 {order.pharmacy.address || 'Verified Pharmacy Location'}</Text>
+                  <Text style={styles.address}>📍 {order.pharmacy.location || order.pharmacy.address || 'Pharmacy'}</Text>
                 </>
               );
             }
@@ -168,7 +171,7 @@ export default function OrderDetailsScreen({ route, navigation }: any) {
               {Object.entries(
                 order.items.filter((i: any) => i.status !== 'missing').reduce((acc: any, item: any) => {
                   const sub = order.subOrders?.find((s: any) => s.id === item.subOrderId);
-                  const groupName = sub?.vendor?.name || sub?.restaurant?.name || item.product?.brand?.name || item.menuItem?.restaurant?.name || order.restaurant?.name || order.pharmacy?.name || 'Baldia Mart';
+                  const groupName = sub?.pharmacy?.name || sub?.vendor?.name || sub?.restaurant?.name || item.product?.brand?.name || item.menuItem?.restaurant?.name || order.restaurant?.name || order.pharmacy?.name || 'Pharmacy';
                   if (!acc[groupName]) acc[groupName] = [];
                   acc[groupName].push(item);
                   return acc;
@@ -214,6 +217,26 @@ export default function OrderDetailsScreen({ route, navigation }: any) {
             <Text style={styles.totalLabel}>Total Bill (COD)</Text>
             <Text style={styles.totalVal}>Rs. {order?.total || 0}</Text>
           </View>
+          
+          {/* Phase 20: Rider Pharma Incentives UI */}
+          {order.orderType === 'pharma' && (
+            <View style={styles.bonusBox}>
+              <Text style={styles.bonusTitle}>🛡️ Pharma Bonus Included:</Text>
+              {order.priority === 'high' && (
+                <View style={styles.bonusRow}>
+                  <Text style={styles.bonusLabel}>Emergency Priority</Text>
+                  <Text style={styles.bonusVal}>+ Rs. 50</Text>
+                </View>
+              )}
+              {order.isColdChain && (
+                <View style={styles.bonusRow}>
+                  <Text style={styles.bonusLabel}>Cold Chain Handling</Text>
+                  <Text style={styles.bonusVal}>+ Rs. 30</Text>
+                </View>
+              )}
+              <Text style={styles.bonusNote}>* Added to your wallet on delivery</Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.infoBox}>
@@ -296,4 +319,10 @@ const styles = StyleSheet.create({
   typeBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
   receiptHeaderBtn: { backgroundColor: '#fff', width: 38, height: 38, borderRadius: 19, justifyContent: 'center', alignItems: 'center' },
   chatHeaderBtn: { backgroundColor: '#FF4500', width: 38, height: 38, borderRadius: 19, justifyContent: 'center', alignItems: 'center' },
+  bonusBox: { marginTop: 15, padding: 12, backgroundColor: '#F0FDF4', borderRadius: 12, borderWidth: 1, borderColor: '#DCFCE7' },
+  bonusTitle: { fontSize: 13, fontWeight: 'bold', color: '#166534', marginBottom: 8 },
+  bonusRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
+  bonusLabel: { fontSize: 13, color: '#15803D' },
+  bonusVal: { fontSize: 13, fontWeight: 'bold', color: '#15803D' },
+  bonusNote: { fontSize: 10, color: '#166534', marginTop: 6, fontStyle: 'italic' },
 });

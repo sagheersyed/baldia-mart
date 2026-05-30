@@ -7,9 +7,25 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 export class PrescriptionsController {
   constructor(private readonly prescriptionsService: PrescriptionsService) {}
 
+  @Get()
+  getAll(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.prescriptionsService.findAll(
+      page ? parseInt(page, 10) : 1,
+      limit ? parseInt(limit, 10) : 20,
+    );
+  }
+
   @Post('upload')
   upload(@Request() req: any, @Body() dto: any) {
     return this.prescriptionsService.upload(req.user.id || req.user.sub, dto);
+  }
+
+  @Post('consultation')
+  requestConsultation(@Request() req: any, @Body() dto: { medicineIds: string[]; notes?: string }) {
+    return this.prescriptionsService.requestConsultation(req.user.id || req.user.sub, dto.medicineIds);
   }
 
   @Get('my')

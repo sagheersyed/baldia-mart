@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AppText from './ui/AppText';
 import { theme } from '../theme/theme';
+import { useCartStore } from '../store/cartStore';
 
 const ICON_BY_ROUTE: Record<string, [keyof typeof Ionicons.glyphMap, keyof typeof Ionicons.glyphMap]> = {
   Home:    ['home',         'home-outline'],
@@ -29,6 +30,7 @@ const LABEL_BY_ROUTE: Record<string, string> = {
 export default function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const bottom = Math.max(insets.bottom, theme.spacing.sm);
+  const activeMode = useCartStore(s => s.activeMode);
 
   return (
     <View pointerEvents="box-none" style={[styles.container, { paddingBottom: bottom }]}>
@@ -44,12 +46,19 @@ export default function FloatingTabBar({ state, descriptors, navigation }: Botto
             if (!focused && !event.defaultPrevented) navigation.navigate(route.name as never);
           };
 
-          // Food uses red accent, everything else uses brand orange
-          const tabAccent = route.name === 'Food'
-            ? theme.colors.food
-            : route.name === 'Pharma'
-            ? theme.colors.pharma
-            : theme.colors.primary;
+          // Dynamic accent based on route or active mode
+          let tabAccent = theme.colors.primary; // Default Mart (Orange)
+          
+          if (route.name === 'Food') {
+            tabAccent = theme.colors.food;
+          } else if (route.name === 'Pharma') {
+            tabAccent = theme.colors.pharma;
+          } else if (route.name === 'Cart' || route.name === 'Orders' || route.name === 'Profile') {
+            // These tabs adapt to the current active module
+            if (activeMode === 'food') tabAccent = theme.colors.food;
+            else if (activeMode === 'pharma') tabAccent = theme.colors.pharma;
+            else tabAccent = theme.colors.mart;
+          }
 
           const badge = options.tabBarBadge;
 

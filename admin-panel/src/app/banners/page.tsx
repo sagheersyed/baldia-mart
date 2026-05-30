@@ -7,7 +7,7 @@ import { showToast } from '@/hooks/useToast';
 
 interface Banner {
   id: string;
-  section: 'mart' | 'food' | 'all';
+  section: 'mart' | 'food' | 'pharma' | 'all';
   title: string;
   subtitle: string;
   description: string;
@@ -29,6 +29,9 @@ export default function BannersPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingBanner, setEditingBanner] = useState<Partial<Banner> | null>(null);
   const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState<'mart' | 'food' | 'pharma' | 'all'>('mart');
+
+  const filteredBanners = React.useMemo(() => banners.filter(b => b.section === activeTab || (activeTab !== 'all' && b.section === 'all')), [banners, activeTab]);
   const [linkEntities, setLinkEntities] = useState<{ id: string, name: string }[]>([]);
 
   useEffect(() => {
@@ -46,10 +49,13 @@ export default function BannersPage() {
   const fetchLinkEntities = async (type: string) => {
     try {
       let endpoint = '';
-      if (type === 'product') endpoint = `${BASE_URL}/products`;
+      if (type === 'product' && editingBanner?.section === 'pharma') endpoint = `${BASE_URL}/pharma/medicines/search`;
+      else if (type === 'product') endpoint = `${BASE_URL}/products`;
       else if (type === 'restaurant') endpoint = `${BASE_URL}/restaurants`;
-      else if (type === 'brand') endpoint = `${BASE_URL}/brands`;
-      else if (type === 'category') endpoint = `${BASE_URL}/categories`;
+      else if (type === 'brand') endpoint = `${BASE_URL}/brands?section=${editingBanner?.section || 'mart'}`;
+      else if (type === 'category' && editingBanner?.section === 'pharma') endpoint = `${BASE_URL}/pharma/medicines/categories`;
+      else if (type === 'category') endpoint = `${BASE_URL}/categories?section=${editingBanner?.section || 'mart'}`;
+      else if (type === 'event') endpoint = `${BASE_URL}/module-events?section=${editingBanner?.section || 'mart'}&admin=true`;
 
       if (!endpoint) return;
       const res = await fetchWithAuth(endpoint);
@@ -58,7 +64,8 @@ export default function BannersPage() {
         return;
       }
       const data = await res.json();
-      setLinkEntities(Array.isArray(data) ? data.map((item: any) => ({ id: item.id, name: item.name || item.title || item.id })) : []);
+      const items = data.data && Array.isArray(data.data) ? data.data : (Array.isArray(data) ? data : []);
+      setLinkEntities(items.map((item: any) => ({ id: item.id, name: item.name || item.title || item.id })));
     } catch (error) {
       console.error('Failed to fetch link entities:', error);
       showToast({ title: getErrorMessage(error, 'Failed to load link entities'), variant: 'error' });
@@ -91,10 +98,15 @@ export default function BannersPage() {
         : `${BASE_URL}/banners`;
       const method = editingBanner.id ? 'PATCH' : 'POST';
 
+      const payload = {
+        ...editingBanner,
+        title: editingBanner.title || (editingBanner.bannerType === 'image' ? 'Image Banner' : 'Untitled Banner')
+      };
+
       const res = await fetchWithAuth(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editingBanner),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) throw new Error(await parseApiError(res, 'Failed to save banner'));
@@ -139,7 +151,7 @@ export default function BannersPage() {
         <button
           onClick={() => {
             setEditingBanner({
-              section: 'mart',
+              section: activeTab,
               isActive: true,
               sortOrder: 1,
               backgroundColor: '#FF4500',
@@ -162,8 +174,15 @@ export default function BannersPage() {
       {loading ? (
         <div className="flex justify-center p-20"><RefreshCw className="animate-spin text-primary-600" size={40} /></div>
       ) : (
+        <>
+        <div className="flex bg-slate-100 p-1 rounded-xl w-fit mb-8">
+          <button onClick={() => setActiveTab('mart')} className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${activeTab === 'mart' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}>Quick Mart (Grocery)</button>
+          <button onClick={() => setActiveTab('food')} className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${activeTab === 'food' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}>Food</button>
+          <button onClick={() => setActiveTab('pharma')} className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${activeTab === 'pharma' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}>Pharma (Medicines)</button>
+          <button onClick={() => setActiveTab('all')} className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${activeTab === 'all' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}>All Sections</button>
+        </div>
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {banners.map(banner => (
+          {filteredBanners.map(banner => (
             <div key={banner.id} className="bg-white rounded-[2rem] border border-gray-100 shadow-xl overflow-hidden group">
               <div
                 className="h-40 p-6 flex flex-col justify-center relative"
@@ -208,6 +227,7 @@ export default function BannersPage() {
             </div>
           ))}
         </div>
+        </>
       )}
 
       {/* Modal */}
@@ -229,7 +249,8 @@ export default function BannersPage() {
                   >
                     <option value="mart">Mart</option>
                     <option value="food">Food</option>
-                    <option value="all">Both</option>
+                    <option value="pharma">Pharma</option>
+                    <option value="all">All</option>
                   </select>
                 </div>
                 <div>
@@ -243,36 +264,40 @@ export default function BannersPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-black text-gray-400 uppercase mb-1">Title</label>
-                <input
-                  type="text"
-                  required
-                  value={editingBanner?.title}
-                  onChange={e => setEditingBanner({ ...editingBanner!, title: e.target.value })}
-                  className="w-full p-3 bg-gray-50 border rounded-xl font-bold"
-                />
-              </div>
+              {editingBanner?.bannerType !== 'image' && (
+                <>
+                  <div>
+                    <label className="block text-xs font-black text-gray-400 uppercase mb-1">Title</label>
+                    <input
+                      type="text"
+                      required
+                      value={editingBanner?.title || ''}
+                      onChange={e => setEditingBanner({ ...editingBanner!, title: e.target.value })}
+                      className="w-full p-3 bg-gray-50 border rounded-xl font-bold"
+                    />
+                  </div>
 
-              <div>
-                <label className="block text-xs font-black text-gray-400 uppercase mb-1">Subtitle</label>
-                <input
-                  type="text"
-                  value={editingBanner?.subtitle}
-                  onChange={e => setEditingBanner({ ...editingBanner!, subtitle: e.target.value })}
-                  className="w-full p-3 bg-gray-50 border rounded-xl font-bold"
-                />
-              </div>
+                  <div>
+                    <label className="block text-xs font-black text-gray-400 uppercase mb-1">Subtitle</label>
+                    <input
+                      type="text"
+                      value={editingBanner?.subtitle || ''}
+                      onChange={e => setEditingBanner({ ...editingBanner!, subtitle: e.target.value })}
+                      className="w-full p-3 bg-gray-50 border rounded-xl font-bold"
+                    />
+                  </div>
 
-              <div>
-                <label className="block text-xs font-black text-gray-400 uppercase mb-1">Description</label>
-                <textarea
-                  value={editingBanner?.description}
-                  onChange={e => setEditingBanner({ ...editingBanner!, description: e.target.value })}
-                  className="w-full p-3 bg-gray-50 border rounded-xl font-bold h-24"
-                  placeholder="Additional details..."
-                />
-              </div>
+                  <div>
+                    <label className="block text-xs font-black text-gray-400 uppercase mb-1">Description</label>
+                    <textarea
+                      value={editingBanner?.description || ''}
+                      onChange={e => setEditingBanner({ ...editingBanner!, description: e.target.value })}
+                      className="w-full p-3 bg-gray-50 border rounded-xl font-bold h-24"
+                      placeholder="Additional details..."
+                    />
+                  </div>
+                </>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -287,56 +312,82 @@ export default function BannersPage() {
                     <option value="hybrid">Text + Background Image</option>
                   </select>
                 </div>
-                <div>
-                  <label className="block text-xs font-black text-gray-400 uppercase mb-1">Tag Label</label>
-                  <input
-                    type="text"
-                    value={editingBanner?.tagLabel}
-                    onChange={e => setEditingBanner({ ...editingBanner!, tagLabel: e.target.value })}
-                    className="w-full p-3 bg-gray-50 border rounded-xl font-bold"
-                    placeholder="e.g. FLASH SALE"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-black text-gray-400 uppercase mb-1">Quick Presets</label>
-                  <select
-                    onChange={e => {
-                      if (e.target.value) setEditingBanner({ ...editingBanner!, imageUrl: e.target.value });
-                    }}
-                    className="w-full p-3 bg-gray-50 border rounded-xl font-bold text-sm"
-                  >
-                    <option value="">-- Select Preset --</option>
-                    <option value="https://images.unsplash.com/photo-1589302168068-964664d93dc0?auto=format&fit=crop&w=800&q=80">Biryani 🍛</option>
-                    <option value="https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=800&q=80">BBQ Platter 🥩</option>
-                    <option value="https://images.unsplash.com/photo-1626700051175-6818013e184f?auto=format&fit=crop&w=800&q=80">Roll / Wrap 🌯</option>
-                    <option value="https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=800&q=80">Burger 🍔</option>
-                    <option value="https://images.unsplash.com/photo-1550547660-d9450f859349?auto=format&fit=crop&w=800&q=80">Pizza 🍕</option>
-                  </select>
-                </div>
+                {editingBanner?.bannerType !== 'image' && (
+                  <div>
+                    <label className="block text-xs font-black text-gray-400 uppercase mb-1">Tag Label</label>
+                    <input
+                      type="text"
+                      value={editingBanner?.tagLabel || ''}
+                      onChange={e => setEditingBanner({ ...editingBanner!, tagLabel: e.target.value })}
+                      className="w-full p-3 bg-gray-50 border rounded-xl font-bold"
+                      placeholder="e.g. FLASH SALE"
+                    />
+                  </div>
+                )}
+                {editingBanner?.bannerType !== 'text' && (
+                  <div>
+                    <label className="block text-xs font-black text-gray-400 uppercase mb-1">Quick Presets</label>
+                    <select
+                      onChange={e => {
+                        if (e.target.value) setEditingBanner({ ...editingBanner!, imageUrl: e.target.value });
+                      }}
+                      className="w-full p-3 bg-gray-50 border rounded-xl font-bold text-sm"
+                    >
+                      <option value="">-- Select Preset --</option>
+                      {editingBanner?.section === 'pharma' ? (
+                        <>
+                          <option value="https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&w=800&q=80">Medicines 💊</option>
+                          <option value="https://images.unsplash.com/photo-1631549916768-4119b2e5f926?auto=format&fit=crop&w=800&q=80">Pharmacy 🏥</option>
+                          <option value="https://images.unsplash.com/photo-1576091160550-2173dba999ef?auto=format&fit=crop&w=800&q=80">Healthcare 🩺</option>
+                          <option value="https://images.unsplash.com/photo-1587854692152-cbe660dbde88?auto=format&fit=crop&w=800&q=80">Supplements 💪</option>
+                        </>
+                      ) : editingBanner?.section === 'mart' ? (
+                        <>
+                          <option value="https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=800&q=80">Groceries 🛒</option>
+                          <option value="https://images.unsplash.com/photo-1601004890684-d8cbf643f5f2?auto=format&fit=crop&w=800&q=80">Fresh Fruits 🍎</option>
+                          <option value="https://images.unsplash.com/photo-1556767576-5ec41e3239ea?auto=format&fit=crop&w=800&q=80">Vegetables 🥦</option>
+                          <option value="https://images.unsplash.com/photo-1607349913338-fca6f7fc608c?auto=format&fit=crop&w=800&q=80">Dairy & Eggs 🥛</option>
+                        </>
+                      ) : (
+                        <>
+                          <option value="https://images.unsplash.com/photo-1589302168068-964664d93dc0?auto=format&fit=crop&w=800&q=80">Biryani 🍛</option>
+                          <option value="https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=800&q=80">BBQ Platter 🥩</option>
+                          <option value="https://images.unsplash.com/photo-1626700051175-6818013e184f?auto=format&fit=crop&w=800&q=80">Roll / Wrap 🌯</option>
+                          <option value="https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=800&q=80">Burger 🍔</option>
+                          <option value="https://images.unsplash.com/photo-1550547660-d9450f859349?auto=format&fit=crop&w=800&q=80">Pizza 🍕</option>
+                        </>
+                      )}
+                    </select>
+                  </div>
+                )}
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-black text-gray-400 uppercase mb-1">Image URL</label>
-                  <input
-                    type="text"
-                    value={editingBanner?.imageUrl}
-                    onChange={e => setEditingBanner({ ...editingBanner!, imageUrl: e.target.value })}
-                    className="w-full p-3 bg-gray-50 border rounded-xl font-bold"
-                    placeholder="https://..."
-                  />
+              {editingBanner?.bannerType !== 'text' && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-black text-gray-400 uppercase mb-1">Image URL</label>
+                    <input
+                      type="text"
+                      value={editingBanner?.imageUrl || ''}
+                      onChange={e => setEditingBanner({ ...editingBanner!, imageUrl: e.target.value })}
+                      className="w-full p-3 bg-gray-50 border rounded-xl font-bold"
+                      placeholder="https://..."
+                    />
+                  </div>
+                  {editingBanner?.bannerType === 'hybrid' && (
+                    <div>
+                      <label className="block text-xs font-black text-gray-400 uppercase mb-1">Background Image URL</label>
+                      <input
+                        type="text"
+                        value={editingBanner?.backgroundImageUrl || ''}
+                        onChange={e => setEditingBanner({ ...editingBanner!, backgroundImageUrl: e.target.value })}
+                        className="w-full p-3 bg-gray-50 border rounded-xl font-bold"
+                        placeholder="https://..."
+                      />
+                    </div>
+                  )}
                 </div>
-                <div>
-                  <label className="block text-xs font-black text-gray-400 uppercase mb-1">Background Image URL</label>
-                  <input
-                    type="text"
-                    value={editingBanner?.backgroundImageUrl || ''}
-                    onChange={e => setEditingBanner({ ...editingBanner!, backgroundImageUrl: e.target.value })}
-                    className="w-full p-3 bg-gray-50 border rounded-xl font-bold"
-                    placeholder="https://..."
-                  />
-                </div>
-              </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -348,10 +399,22 @@ export default function BannersPage() {
                       className="p-3 bg-gray-50 border rounded-xl font-bold text-sm w-1/2"
                     >
                       <option value="none">None</option>
-                      <option value="product">Product</option>
-                      <option value="brand">Brand</option>
-                      <option value="restaurant">Restaurant</option>
-                      <option value="category">Category</option>
+                      {editingBanner?.section === 'pharma' ? (
+                        <>
+                          <option value="product">Medicine</option>
+                          <option value="brand">Brand</option>
+                          <option value="category">Category</option>
+                          <option value="event">Event / Campaign</option>
+                        </>
+                      ) : (
+                        <>
+                          <option value="product">Product</option>
+                          <option value="brand">Brand</option>
+                          <option value="restaurant">Restaurant</option>
+                          <option value="category">Category</option>
+                          <option value="event">Event / Campaign</option>
+                        </>
+                      )}
                     </select>
                     {editingBanner?.linkType && editingBanner.linkType !== 'none' ? (
                       <select
@@ -376,26 +439,28 @@ export default function BannersPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-black text-gray-400 uppercase mb-1">BG Color</label>
-                  <input
-                    type="color"
-                    value={editingBanner?.backgroundColor}
-                    onChange={e => setEditingBanner({ ...editingBanner!, backgroundColor: e.target.value })}
-                    className="w-full h-12 p-1 bg-gray-50 border rounded-xl"
-                  />
+              {editingBanner?.bannerType !== 'image' && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-black text-gray-400 uppercase mb-1">BG Color</label>
+                    <input
+                      type="color"
+                      value={editingBanner?.backgroundColor || '#FF4500'}
+                      onChange={e => setEditingBanner({ ...editingBanner!, backgroundColor: e.target.value })}
+                      className="w-full h-12 p-1 bg-gray-50 border rounded-xl"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-black text-gray-400 uppercase mb-1">Text Color</label>
+                    <input
+                      type="color"
+                      value={editingBanner?.textColor || '#FFFFFF'}
+                      onChange={e => setEditingBanner({ ...editingBanner!, textColor: e.target.value })}
+                      className="w-full h-12 p-1 bg-gray-50 border rounded-xl"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-black text-gray-400 uppercase mb-1">Text Color</label>
-                  <input
-                    type="color"
-                    value={editingBanner?.textColor}
-                    onChange={e => setEditingBanner({ ...editingBanner!, textColor: e.target.value })}
-                    className="w-full h-12 p-1 bg-gray-50 border rounded-xl"
-                  />
-                </div>
-              </div>
+              )}
 
               <div className="flex items-center space-x-2 pt-2">
                 <input

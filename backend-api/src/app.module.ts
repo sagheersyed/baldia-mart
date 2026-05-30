@@ -34,6 +34,8 @@ import { FavoritesModule } from './favorites/favorites.module';
 import { AppCacheModule } from './cache/cache.module';
 import { HomeModule } from './home/home.module';
 import { PharmaModule } from './pharma/pharma.module';
+import { ModuleEventsModule } from './module-events/module-events.module';
+import { ModuleEvent } from './module-events/module-event.entity';
 
 // Entities
 import { User } from './users/user.entity';
@@ -76,6 +78,17 @@ import { Prescription } from './pharma/prescriptions/prescription.entity';
 import { MedicineSubstitution } from './pharma/substitutions/medicine-substitution.entity';
 import { PharmaComplianceLog } from './pharma/compliance/pharma-compliance-log.entity';
 import { PharmaRecurringOrder } from './pharma/recurring/pharma-recurring-order.entity';
+import { MedicineReminder } from './pharma/reminders/medicine-reminder.entity';
+import { RefillReminder } from './pharma/reminders/refill-reminder.entity';
+import { Doctor } from './pharma/telemedicine/doctor.entity';
+import { Consultation } from './pharma/telemedicine/consultation.entity';
+import { LabTest } from './pharma/lab/lab-test.entity';
+import { LabBooking } from './pharma/lab/lab-booking.entity';
+import { DoctorAvailability } from './pharma/telemedicine/availability.entity';
+import { LabAvailability } from './pharma/lab/availability.entity';
+import { Clinic } from './pharma/telemedicine/clinic.entity';
+import { DoctorClinic } from './pharma/telemedicine/doctor-clinic.entity';
+import { AvailabilityTemplate } from './pharma/telemedicine/availability-template.entity';
 
 @Module({
   imports: [
@@ -114,6 +127,11 @@ import { PharmaRecurringOrder } from './pharma/recurring/pharma-recurring-order.
         // Pharma domain
         Medicine, Pharmacy, PharmacyInventory, Prescription,
         MedicineSubstitution, PharmaComplianceLog, PharmaRecurringOrder,
+        MedicineReminder, RefillReminder,
+        Doctor, Consultation, LabTest, LabBooking,
+        DoctorAvailability, LabAvailability,
+        Clinic, DoctorClinic, AvailabilityTemplate,
+        ModuleEvent,
       ],
       logging: false,
       synchronize: process.env.NODE_ENV !== 'production',
@@ -148,6 +166,7 @@ import { PharmaRecurringOrder } from './pharma/recurring/pharma-recurring-order.
     WalletsModule,
     HomeModule,
     PharmaModule,
+    ModuleEventsModule,
   ],
   controllers: [AppController, HealthController],
   providers: [

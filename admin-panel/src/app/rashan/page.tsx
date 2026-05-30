@@ -42,6 +42,7 @@ interface RashanOrder {
   };
   bulkListText?: string;
   bulkListPhotoUrl?: string;
+  bulkListPhotoUrls?: string[];
   bulkMobileNumber: string;
   bulkStreetAddress: string;
   bulkCity: string;
@@ -65,6 +66,7 @@ export default function RashanRequestsPage() {
   const [filter, setFilter] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<RashanOrder | null>(null);
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
   
   // Action states
   const [productTotal, setProductTotal] = useState('');
@@ -87,6 +89,10 @@ export default function RashanRequestsPage() {
       if (typeof window !== 'undefined') window.removeEventListener('refreshRashan', handleRefresh);
     };
   }, []);
+
+  useEffect(() => {
+    setActiveImageIndex(0);
+  }, [selectedOrder]);
 
   const fetchOrders = async () => {
     try {
@@ -205,6 +211,28 @@ export default function RashanRequestsPage() {
       showToast({ title: getErrorMessage(e, 'Failed to update status'), variant: 'error' });
     }
     finally { setProcessing(false); }
+  };
+
+  const handleAssignRider = async (orderId: string, riderId: string) => {
+    if (!riderId) return;
+    try {
+      const res = await fetchWithAuth(`${BASE_URL}/orders/${orderId}/assign`, { 
+        method: 'PUT', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ riderId }) 
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        const fullRider = riders.find(r => r.id === riderId);
+        setOrders(orders.map(o => o.id === orderId ? { ...o, rider: fullRider || o.rider } : o));
+        setSelectedOrder(s => s ? { ...s, rider: fullRider || s.rider } : s);
+        showToast({ title: 'Rider assigned successfully', variant: 'success' });
+      } else {
+        showToast({ title: await parseApiError(res, 'Failed to assign rider'), variant: 'error' });
+      }
+    } catch (e) {
+      showToast({ title: getErrorMessage(e, 'Failed to assign rider'), variant: 'error' });
+    }
   };
 
   const filteredOrders = orders.filter(o => {
@@ -463,6 +491,34 @@ export default function RashanRequestsPage() {
                       <p className="text-lg font-black text-gray-900">{selectedOrder.user.name}</p>
                       <p className="text-sm font-bold text-primary-600 mt-1 flex items-center"><Phone size={14} className="mr-2" /> {selectedOrder.bulkMobileNumber}</p>
                    </div>
+
+                   <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mt-8 mb-4">Rider Information</h3>
+                   <div className="bg-gray-50 p-6 rounded-3xl border border-gray-100 space-y-4">
+                      {selectedOrder.rider ? (
+                        <div>
+                          <p className="text-lg font-black text-gray-900">{selectedOrder.rider.name}</p>
+                          <p className="text-sm font-bold text-blue-600 mt-1 flex items-center"><Phone size={14} className="mr-2" /> {selectedOrder.rider.phoneNumber || '—'}</p>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-400 italic">No rider assigned yet.</p>
+                      )}
+                      
+                      {['approved', 'sourcing'].includes(selectedOrder.rashanStatus) && (
+                        <div className="pt-2 border-t border-gray-200">
+                          <label className="text-[10px] font-black text-gray-400 uppercase block mb-1">Assign / Change Rider</label>
+                          <select 
+                            className="w-full p-2.5 rounded-xl border border-gray-200 focus:outline-none font-bold text-xs bg-white"
+                            value={selectedOrder.rider?.id || ''}
+                            onChange={(e) => handleAssignRider(selectedOrder.id, e.target.value)}
+                          >
+                            <option value="">Select rider…</option>
+                            {riders.map(r => (
+                              <option key={r.id} value={r.id}>{r.name} ({r.vehicleNumber || 'No Plate'}) · {r.isOnline ? '🟢' : '🔴'}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                   </div>
                    
                    <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mt-8 mb-4">Logistics Requirements</h3>
                    <div className="grid grid-cols-2 gap-4">
@@ -506,20 +562,44 @@ export default function RashanRequestsPage() {
                 </h3>
                 
                 <div className="space-y-4">
-                  {selectedOrder.bulkListPhotoUrl && (
-                    <div className="group relative rounded-[2.5rem] overflow-hidden border border-gray-100 shadow-lg">
-                      <img 
-                        src={selectedOrder.bulkListPhotoUrl} 
-                        alt="Grocery List" 
-                        className="w-full h-auto max-h-[500px] object-contain bg-gray-50"
-                      />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                        <a href={selectedOrder.bulkListPhotoUrl} target="_blank" rel="noreferrer" className="px-6 py-3 bg-white rounded-2xl font-black text-gray-900 shadow-xl scale-90 group-hover:scale-100 transition-transform flex items-center">
-                           <Eye className="mr-2" size={20} /> View Full Image
-                        </a>
-                      </div>
-                    </div>
-                  )}
+                  {(() => {
+                    const images = [selectedOrder.bulkListPhotoUrl, ...(selectedOrder.bulkListPhotoUrls || [])].filter(Boolean);
+                    if (images.length === 0) return null;
+                    const activeImg = images[activeImageIndex] || selectedOrder.bulkListPhotoUrl;
+                    return (
+                      <>
+                        <div className="group relative rounded-[2.5rem] overflow-hidden border border-gray-100 shadow-lg">
+                          <img 
+                            src={activeImg} 
+                            alt="Grocery List" 
+                            className="w-full h-auto max-h-[500px] object-contain bg-gray-50"
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <a href={activeImg} target="_blank" rel="noreferrer" className="px-6 py-3 bg-white rounded-2xl font-black text-gray-900 shadow-xl scale-90 group-hover:scale-100 transition-transform flex items-center">
+                               <Eye className="mr-2" size={20} /> View Full Image
+                            </a>
+                          </div>
+                        </div>
+
+                        {images.length > 1 && (
+                          <div className="flex gap-2 overflow-x-auto py-1">
+                            {images.map((img, idx) => (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => setActiveImageIndex(idx)}
+                                className={`w-12 h-16 rounded-xl overflow-hidden border-2 shrink-0 transition-all ${
+                                  activeImageIndex === idx ? 'border-primary-600 scale-105 shadow-md' : 'border-gray-200 opacity-60'
+                                }`}
+                              >
+                                <img src={img} className="w-full h-full object-cover" alt={`Thumb ${idx}`} />
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
 
                   {selectedOrder.bulkListText && (
                     <div className="bg-orange-50/30 p-8 rounded-[2.5rem] border border-orange-100">

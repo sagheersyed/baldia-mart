@@ -31,63 +31,45 @@ const HomeHeader = memo(function HomeHeader({
   etaLabel,
 }: HomeHeaderProps) {
   const isFood = variant === 'food';
-  const colors: [string, string] = isFood
-    ? [theme.colors.palette.pink500, theme.colors.palette.pink400]
-    : [theme.colors.palette.orange500, theme.colors.palette.orange400];
+  const colors: [string, string, string] = isFood
+    ? [theme.colors.palette.pink500, theme.colors.palette.pink400, theme.colors.palette.pink300]
+    : [theme.colors.palette.orange600, theme.colors.palette.orange500, theme.colors.palette.orange400];
 
   return (
-    <LinearGradient colors={colors} style={styles.wrap}>
-      <View style={styles.row}>
-        <Pressable onPress={onLocationPress} style={styles.locationBtn} hitSlop={6}>
-          <Ionicons name="location" size={16} color="#fff" />
-          <View style={styles.locationCol}>
-            <View style={styles.locationLine}>
-              <AppText
-                variant="bodyStrong"
-                color="#fff"
-                numberOfLines={1}
-                style={styles.locationLabel}
-              >
-                {locationLabel}
-              </AppText>
-              <Ionicons name="chevron-down" size={14} color="#fff" />
-            </View>
-            {etaLabel ? (
-              <AppText variant="caption" color="rgba(255,255,255,0.85)" numberOfLines={1}>
-                {etaLabel}
-              </AppText>
-            ) : null}
-          </View>
-        </Pressable>
-
+    <LinearGradient colors={colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.wrap}>
+      {/* Top row: Brand + Action buttons */}
+      <View style={styles.topRow}>
+        <AppText variant="overline" color="rgba(255,255,255,0.7)" style={styles.brand}>
+          {isFood ? 'BALDIAFOOD' : 'BALDIAMART'}
+        </AppText>
         <View style={styles.actions}>
           {onFavouritesPress ? (
             <AppIconButton
-              size={36}
-              bg="rgba(255,255,255,0.18)"
+              size={38}
+              bg="rgba(255,255,255,0.15)"
               onPress={onFavouritesPress}
             >
               <Ionicons name="heart-outline" size={20} color="#fff" />
             </AppIconButton>
           ) : null}
           <AppIconButton
-            size={36}
-            bg="rgba(255,255,255,0.18)"
+            size={38}
+            bg="rgba(255,255,255,0.15)"
             onPress={onNotificationsPress}
           >
             <Ionicons name="notifications-outline" size={20} color="#fff" />
           </AppIconButton>
           <View>
             <AppIconButton
-              size={36}
-              bg="rgba(255,255,255,0.18)"
+              size={38}
+              bg="rgba(255,255,255,0.15)"
               onPress={onCartPress}
             >
               <Ionicons name="bag-handle-outline" size={20} color="#fff" />
             </AppIconButton>
             {cartCount > 0 && (
               <View style={styles.cartBadge}>
-                <AppText variant="badge" color={isFood ? theme.colors.food : theme.colors.primary}>
+                <AppText variant="badge" color={isFood ? theme.colors.food : theme.colors.primary} style={{ fontSize: 10 }}>
                   {cartCount > 9 ? '9+' : String(cartCount)}
                 </AppText>
               </View>
@@ -96,11 +78,37 @@ const HomeHeader = memo(function HomeHeader({
         </View>
       </View>
 
-      {greeting ? (
-        <AppText variant="caption" color="rgba(255,255,255,0.9)" style={{ marginTop: theme.spacing.none, marginBottom: theme.spacing.md }}>
-          {greeting}
-        </AppText>
-      ) : null}
+      {/* Location row with "Delivering to" prefix */}
+      <Pressable onPress={onLocationPress} style={styles.locationBtn} hitSlop={6}>
+        <View style={styles.locationIconWrap}>
+          <Ionicons name="location" size={18} color="#fff" />
+        </View>
+        <View style={styles.locationCol}>
+          <AppText variant="caption" color="rgba(255,255,255,0.75)" style={{ fontSize: 11 }}>
+            Delivering to
+          </AppText>
+          <View style={styles.locationLine}>
+            <AppText
+              variant="bodyStrong"
+              color="#fff"
+              numberOfLines={1}
+              style={styles.locationLabel}
+            >
+              {locationLabel}
+            </AppText>
+            <Ionicons name="chevron-down" size={14} color="rgba(255,255,255,0.8)" />
+          </View>
+        </View>
+        {/* ETA chip */}
+        {etaLabel ? (
+          <View style={styles.etaChip}>
+            <Ionicons name="bicycle-outline" size={13} color="#fff" />
+            <AppText variant="badge" color="#fff" style={{ fontSize: 10 }}>
+              {etaLabel}
+            </AppText>
+          </View>
+        ) : null}
+      </Pressable>
     </LinearGradient>
   );
 });
@@ -108,19 +116,21 @@ const HomeHeader = memo(function HomeHeader({
 const styles = StyleSheet.create({
   wrap: {
     paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.xxs,
-    paddingBottom: theme.spacing.lg,
+    paddingTop: theme.spacing.xs,
+    paddingBottom: theme.spacing.xxl,
   },
-  row: { flexDirection: 'row', alignItems: 'center' , minHeight: 75 },
-  locationBtn: {
-    flex: 1,
+  topRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.xs,
+    justifyContent: 'space-between',
+    marginBottom: theme.spacing.sm,
+    minHeight: 42,
   },
-  locationCol: { flex: 1 },
-  locationLine: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  locationLabel: { maxWidth: '78%' },
+  brand: {
+    letterSpacing: 1.5,
+    fontSize: 11,
+    fontWeight: '900',
+  },
   actions: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm },
   cartBadge: {
     position: 'absolute',
@@ -129,12 +139,39 @@ const styles = StyleSheet.create({
     minWidth: 20,
     height: 20,
     borderRadius: 10,
-    paddingHorizontal: 6,
+    paddingHorizontal: 5,
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: 'rgba(255,255,255,0.4)',
+  },
+  locationBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
+  locationIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  locationCol: { flex: 1 },
+  locationLine: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  locationLabel: { maxWidth: '78%', fontSize: 15 },
+  etaChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: theme.radius.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
   },
 });
 

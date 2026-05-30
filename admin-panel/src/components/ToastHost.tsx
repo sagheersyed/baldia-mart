@@ -23,6 +23,11 @@ const VARIANT = {
     icon: <Info size={16} />,
     cls:  'text-blue-600',
   },
+  warning: {
+    bar:  'bg-amber-500',
+    icon: <AlertTriangle size={16} />,
+    cls:  'text-amber-600',
+  },
 } as const;
 
 export default function ToastHost() {

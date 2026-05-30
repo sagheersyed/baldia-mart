@@ -1,11 +1,18 @@
 import { Controller, Get, Post, Put, Param, Body, UseGuards, Request } from '@nestjs/common';
 import { RecurringOrdersService } from './recurring-orders.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { AdminRoleGuard } from '../../auth/admin-role.guard';
 
 @Controller('pharma/recurring')
 @UseGuards(JwtAuthGuard)
 export class RecurringOrdersController {
   constructor(private readonly recurringService: RecurringOrdersService) {}
+
+  @Get('admin/all')
+  @UseGuards(AdminRoleGuard)
+  findAll() {
+    return this.recurringService.findAll();
+  }
 
   @Post()
   create(@Request() req: any, @Body() dto: any) {

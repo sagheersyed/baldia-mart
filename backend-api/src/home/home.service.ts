@@ -6,6 +6,7 @@ import { Product } from '../products/product.entity';
 import { Category } from '../categories/category.entity';
 import { Brand } from '../brands/brand.entity';
 import { Restaurant } from '../restaurants/restaurant.entity';
+import { Medicine } from '../pharma/medicines/medicine.entity';
 import { BannersService } from '../banners/banners.service';
 import { SettingsService } from '../settings/settings.service';
 import { HomePayload, HomeSection } from './home.types';
@@ -14,8 +15,9 @@ const SECTION_LIMIT = 10;
 const HOME_CACHE_TTL_SECONDS = 120;
 const TOP_CATEGORY_SECTIONS = 4;
 const BRAND_LIMIT = 12;
+const TRENDING_LIMIT = 8;
 
-const homeCacheKey = (section: 'mart' | 'food', zoneId?: string | null) =>
+const homeCacheKey = (section: 'mart' | 'food' | 'pharma', zoneId?: string | null) =>
   `home:${section}:zone:${zoneId || 'all'}`;
 
 @Injectable()
@@ -27,6 +29,7 @@ export class HomeService {
     @InjectRepository(Category) private readonly categoriesRepo: Repository<Category>,
     @InjectRepository(Brand) private readonly brandsRepo: Repository<Brand>,
     @InjectRepository(Restaurant) private readonly restaurantsRepo: Repository<Restaurant>,
+    @InjectRepository(Medicine) private readonly medicinesRepo: Repository<Medicine>,
     private readonly bannersService: BannersService,
     private readonly settingsService: SettingsService,
     private readonly cacheService: CacheService,
@@ -41,7 +44,7 @@ export class HomeService {
   }
 
   async getHome(
-    section: 'mart' | 'food',
+    section: 'mart' | 'food' | 'pharma',
     zoneId?: string | null,
   ): Promise<HomePayload> {
     const key = homeCacheKey(section, zoneId);
@@ -59,7 +62,7 @@ export class HomeService {
   // ─── private builders ─────────────────────────────────────────────
 
   private async buildHome(
-    section: 'mart' | 'food',
+    section: 'mart' | 'food' | 'pharma',
     zoneId?: string | null,
   ): Promise<HomePayload> {
     const settings = await this.settingsService.getPublic();
@@ -74,9 +77,23 @@ export class HomeService {
     const sections: HomeSection[] = [];
 
     if (section === 'food') {
-      // Food mode: don't use mart product sections — build restaurant-aware sections
-      // (categories from restaurant section, brands = restaurants)
       const trending = await this.collectFoodTrending();
+
+      return {
+        section,
+        zoneId: zoneId || null,
+        generatedAt: new Date().toISOString(),
+        banners,
+        categories,
+        brands,
+        rashanEnabled,
+        trending,
+        sections: [],
+      };
+    }
+
+    if (section === 'pharma') {
+      const trending = await this.collectPharmaTrending();
 
       return {
         section,
@@ -118,11 +135,11 @@ export class HomeService {
     };
   }
 
-  private async fetchTopCategories(section: 'mart' | 'food'): Promise<Category[]> {
+  private async fetchTopCategories(section: 'mart' | 'food' | 'pharma'): Promise<Category[]> {
     return this.categoriesRepo.find({
       where: {
         isActive: true,
-        section: section === 'food' ? 'restaurant' : 'mart',
+        section: section === 'food' ? 'restaurant' : section === 'pharma' ? 'pharma' : 'mart',
         parentCategoryId: null as any,
       },
       order: { sortOrder: 'ASC', createdAt: 'ASC' },
@@ -130,11 +147,11 @@ export class HomeService {
     });
   }
 
-  private async fetchTopBrands(section: 'mart' | 'food'): Promise<Brand[]> {
+  private async fetchTopBrands(section: 'mart' | 'food' | 'pharma'): Promise<Brand[]> {
     return this.brandsRepo.find({
       where: {
         isActive: true,
-        section: section === 'food' ? 'restaurant' : 'mart',
+        section: section === 'food' ? 'restaurant' : section === 'pharma' ? 'pharma' : 'mart',
       },
       order: { rating: 'DESC', name: 'ASC' },
       take: BRAND_LIMIT,
@@ -307,6 +324,43 @@ export class HomeService {
       return trending;
     } catch {
       return ['Pizza', 'Biryani', 'Burger', 'Karahi', 'Desserts', 'Drinks'];
+    }
+  }
+
+  /**
+   * Collect trending search terms specifically for pharma mode.
+   * Uses medicine names and common tags.
+   */
+  private async collectPharmaTrending(): Promise<string[]> {
+    try {
+      const medicines = await this.medicinesRepo.find({
+        where: { isActive: true },
+        order: { viewCount: 'DESC', soldCount: 'DESC' },
+        take: 30,
+      });
+
+      const seen = new Set<string>();
+      const trending: string[] = [];
+
+      // 1. Add some featured tags first
+      const tags = ['Panadol', 'Augmentin', 'Insulin', 'Cough Syrup', 'Vitamins', 'Masks', 'Inhaler'];
+      tags.forEach(t => {
+        seen.add(t.toLowerCase());
+        trending.push(t);
+      });
+
+      // 2. Add top medicine names (simplified)
+      for (const m of medicines) {
+        const key = m.name.split(' ').slice(0, 2).join(' ');
+        if (key.length < 3 || seen.has(key.toLowerCase())) continue;
+        seen.add(key.toLowerCase());
+        trending.push(key);
+        if (trending.length >= TRENDING_LIMIT + 4) break; // Allow a few more for diversity
+      }
+
+      return trending.slice(0, TRENDING_LIMIT);
+    } catch {
+      return ['Panadol', 'Augmentin', 'Insulin', 'Cough Syrup', 'Vitamins', 'Masks'];
     }
   }
 }

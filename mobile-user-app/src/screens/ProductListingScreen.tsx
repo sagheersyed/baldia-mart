@@ -7,8 +7,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import {
-  productsApi, ProductSort, ProductListParams, brandsApi, connectSocket, socket,
+  productsApi, ProductSort, ProductListParams, brandsApi, connectSocket, socket, pharmaApi,
 } from '../api/api';
+import { useCartStore } from '../store/cartStore';
 import ProductCard, { ProductCardProduct } from '../components/home/ProductCard';
 import HomeSkeleton from '../components/home/HomeSkeleton';
 import {
@@ -74,14 +75,19 @@ export default function ProductListingScreen({ navigation, route }: any) {
   const [brandFilter, setBrandFilter] = useState<string | undefined>(params.brandId);
   const [brandsList, setBrandsList] = useState<any[]>([]);
 
-  const { martCart, addToCart, updateQuantity, getCartCount } = useCart();
+  const { martCart, foodCart, pharmaCart, addToCart, updateQuantity, getCartCount } = useCart();
+  const { activeMode } = useCartStore();
   const { isFavourite, toggleFavourite } = useFavourites();
 
   const cartQuantities = useMemo(() => {
     const q: Record<string, number> = {};
-    martCart.forEach((item: any) => { q[item.id] = item.quantity; });
+    const cart = activeMode === 'pharma' ? pharmaCart : (activeMode === 'food' ? foodCart : martCart);
+    cart.forEach((item: any) => { q[item.id] = item.quantity; });
     return q;
-  }, [martCart]);
+  }, [martCart, foodCart, pharmaCart, activeMode]);
+
+  const accent = activeMode === 'food' ? theme.colors.food : activeMode === 'pharma' ? theme.colors.pharma : theme.colors.primary;
+  const accentLight = activeMode === 'food' ? theme.colors.foodLight : activeMode === 'pharma' ? theme.colors.pharmaLight : theme.colors.primaryLight;
 
   // ── Build query params from current state ──
   const buildParams = useCallback((targetPage: number): ProductListParams => {
@@ -118,10 +124,20 @@ export default function ProductListingScreen({ navigation, route }: any) {
       setError(null);
 
       let res: any;
-      if (params.type === 'search' && params.search) {
-        res = await productsApi.search(params.search, targetPage, PAGE_LIMIT);
+      if (activeMode === 'pharma') {
+        if (params.type === 'category' && params.categoryId) {
+          res = await pharmaApi.getByCategory(params.categoryId, targetPage, PAGE_LIMIT);
+        } else {
+          // Fetch medicines via unified search endpoint
+          const q = params.search || '';
+          res = await pharmaApi.searchMedicines(q, targetPage, PAGE_LIMIT);
+        }
       } else {
-        res = await productsApi.list(buildParams(targetPage));
+        if (params.type === 'search' && params.search) {
+          res = await productsApi.search(params.search, targetPage, PAGE_LIMIT);
+        } else {
+          res = await productsApi.list(buildParams(targetPage));
+        }
       }
 
       const payload = res.data || {};
@@ -148,6 +164,7 @@ export default function ProductListingScreen({ navigation, route }: any) {
   useEffect(() => {
     connectSocket();
     const onProductsUpdated = (payload: any) => {
+      if (!navigation.isFocused()) return;
       if (payload?.event === 'stock_updated' && payload.productId) {
         setItems(prev => prev.map((p: any) =>
           p.id === payload.productId
@@ -158,13 +175,13 @@ export default function ProductListingScreen({ navigation, route }: any) {
     };
     socket.on('productsUpdated', onProductsUpdated);
     return () => { socket.off('productsUpdated', onProductsUpdated); };
-  }, []);
+  }, [navigation]);
 
   useEffect(() => {
-    brandsApi.getAll('mart').then(res => {
+    brandsApi.getAll(activeMode === 'pharma' ? 'pharma' : 'mart').then(res => {
       setBrandsList(Array.isArray(res.data) ? res.data : []);
     }).catch(() => setBrandsList([]));
-  }, []);
+  }, [activeMode]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -180,23 +197,24 @@ export default function ProductListingScreen({ navigation, route }: any) {
   // ── Cart handlers ──
   const handleAdd = useCallback((p: any) => {
     if ((p.stock ?? p.stockQuantity ?? 1) <= 0) return;
-    addToCart(p, 'mart');
-  }, [addToCart]);
+    addToCart(p, activeMode);
+  }, [addToCart, activeMode]);
 
-  const handleIncrement = useCallback((p: any) => addToCart(p, 'mart'), [addToCart]);
+  const handleIncrement = useCallback((p: any) => addToCart(p, activeMode), [addToCart, activeMode]);
 
   const handleDecrement = useCallback((p: any) => {
     const cur = cartQuantities[p.id] || 0;
-    updateQuantity(p.id, Math.max(0, cur - 1), 'mart');
-  }, [cartQuantities, updateQuantity]);
+    updateQuantity(p.id, Math.max(0, cur - 1), activeMode);
+  }, [cartQuantities, updateQuantity, activeMode]);
 
   const handleFav = useCallback((p: any) => {
     toggleFavourite({
-      id: p.id, name: p.name, imageUrl: p.imageUrl, price: p.price, discount: p.discount,
+      id: p.id, name: p.name, imageUrl: p.imageUrl, price: p.price || p.mrp || 0, discount: p.discount || 0,
       category: p.category, brand: p.brand, openingTime: p.openingTime, closingTime: p.closingTime,
       maxQuantityPerOrder: p.maxQuantityPerOrder, stockQuantity: p.stockQuantity,
+      isPharma: activeMode === 'pharma',
     }, 'products');
-  }, [toggleFavourite]);
+  }, [toggleFavourite, activeMode]);
 
   const isFav = useCallback((id: string) => isFavourite(id, 'products'), [isFavourite]);
 
@@ -215,7 +233,7 @@ export default function ProductListingScreen({ navigation, route }: any) {
     </View>
   ), [cartQuantities, isFav, handleAdd, handleIncrement, handleDecrement, handleFav]);
 
-  const cartCount = getCartCount('mart');
+  const cartCount = getCartCount(activeMode);
   const activeFiltersCount =
     (brandFilter && params.type !== 'brand' ? 1 : 0) +
     (minPrice ? 1 : 0) +
@@ -236,10 +254,10 @@ export default function ProductListingScreen({ navigation, route }: any) {
             <AppText variant="caption">{total} item{total === 1 ? '' : 's'}</AppText>
           ) : null}
         </View>
-        <Pressable onPress={() => setShowFilters(true)} style={styles.filterBtn}>
-          <Ionicons name="options-outline" size={18} color={theme.colors.primary} />
+        <Pressable onPress={() => setShowFilters(true)} style={[styles.filterBtn, { backgroundColor: accentLight, borderColor: accent + '33' }]}>
+          <Ionicons name="options-outline" size={18} color={accent} />
           {activeFiltersCount > 0 ? (
-            <View style={styles.filterDot}>
+            <View style={[styles.filterDot, { backgroundColor: accent }]}>
               <AppText variant="badge" color="#fff" style={{ fontSize: 9 }}>{activeFiltersCount}</AppText>
             </View>
           ) : null}
@@ -259,7 +277,7 @@ export default function ProductListingScreen({ navigation, route }: any) {
             return (
               <Pressable
                 onPress={() => { setSort(item.id); fetchPage(1, 'replace'); }}
-                style={[styles.chip, active ? styles.chipActive : null]}
+                style={[styles.chip, active ? { backgroundColor: accent, borderColor: accent } : null]}
               >
                 <Ionicons name={item.icon} size={14} color={active ? '#fff' : theme.colors.textSecondary} />
                 <AppText variant="captionStrong" color={active ? '#fff' : theme.colors.textPrimary}>
@@ -317,7 +335,7 @@ export default function ProductListingScreen({ navigation, route }: any) {
           removeClippedSubviews
           ListFooterComponent={
             loadingMore ? (
-              <ActivityIndicator color={theme.colors.primary} style={{ marginVertical: 18 }} />
+              <ActivityIndicator color={accent} style={{ marginVertical: 18 }} />
             ) : page >= totalPages && items.length > PAGE_LIMIT ? (
               <View style={{ paddingVertical: 24, alignItems: 'center' }}>
                 <AppText variant="caption" color={theme.colors.textSecondary}>You've reached the end</AppText>
@@ -328,8 +346,8 @@ export default function ProductListingScreen({ navigation, route }: any) {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor={theme.colors.primary}
-              colors={[theme.colors.primary]}
+              tintColor={accent}
+              colors={[accent]}
             />
           }
         />
@@ -339,7 +357,7 @@ export default function ProductListingScreen({ navigation, route }: any) {
       {cartCount > 0 ? (
         <View style={styles.stickyCta}>
           <Pressable onPress={() => navigation.navigate('Cart')} style={({ pressed }) => [
-            styles.stickyBtn, pressed ? { opacity: 0.92 } : null,
+            styles.stickyBtn, { backgroundColor: accent }, pressed ? { opacity: 0.92 } : null,
           ]}>
             <View style={styles.stickyBadge}>
               <AppText variant="bodyStrong" color="#fff">{cartCount}</AppText>
@@ -372,7 +390,7 @@ export default function ProductListingScreen({ navigation, route }: any) {
                     <Pressable
                       key={opt.id}
                       onPress={() => setSort(opt.id)}
-                      style={[styles.optionChip, active ? styles.optionChipActive : null]}
+                      style={[styles.optionChip, active ? { backgroundColor: accent, borderColor: accent } : null]}
                     >
                       <Ionicons name={opt.icon} size={14} color={active ? '#fff' : theme.colors.textSecondary} />
                       <AppText variant="captionStrong" color={active ? '#fff' : theme.colors.textPrimary}>
@@ -429,7 +447,7 @@ export default function ProductListingScreen({ navigation, route }: any) {
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 4, gap: 8 }}>
                     <Pressable
                       onPress={() => setBrandFilter(undefined)}
-                      style={[styles.brandChip, !brandFilter ? styles.brandChipActive : null]}
+                      style={[styles.brandChip, !brandFilter ? { backgroundColor: accent, borderColor: accent } : null]}
                     >
                       <AppText variant="captionStrong" color={!brandFilter ? '#fff' : theme.colors.textPrimary}>All</AppText>
                     </Pressable>
@@ -439,7 +457,7 @@ export default function ProductListingScreen({ navigation, route }: any) {
                         <Pressable
                           key={b.id}
                           onPress={() => setBrandFilter(b.id)}
-                          style={[styles.brandChip, active ? styles.brandChipActive : null]}
+                          style={[styles.brandChip, active ? { backgroundColor: accent, borderColor: accent } : null]}
                         >
                           <AppText variant="captionStrong" color={active ? '#fff' : theme.colors.textPrimary}>{b.name}</AppText>
                         </Pressable>
@@ -468,6 +486,7 @@ export default function ProductListingScreen({ navigation, route }: any) {
               <AppButton
                 label="Apply filters"
                 variant="primary"
+                tint={accent}
                 fullWidth
                 onPress={() => {
                   setShowFilters(false);

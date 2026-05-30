@@ -36,6 +36,7 @@ export default function CategoriesPage() {
   const [formData, setFormData] = useState({ ...EMPTY_FORM });
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activeTab, setActiveTab] = useState<'mart' | 'pharma' | 'restaurant'>('mart');
 
   useEffect(() => { fetchCategories(); }, []);
 
@@ -59,6 +60,10 @@ export default function CategoriesPage() {
     categories.forEach(c => m.set(c.id, c));
     return m;
   }, [categories]);
+
+  const filteredCategories = useMemo(() => {
+    return categories.filter(cat => cat.section === activeTab);
+  }, [categories, activeTab]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -123,7 +128,7 @@ export default function CategoriesPage() {
 
   const openAdd = () => {
     setEditingCategory(null);
-    setFormData({ ...EMPTY_FORM });
+    setFormData({ ...EMPTY_FORM, section: activeTab });
     setShowModal(true);
   };
 
@@ -144,6 +149,27 @@ export default function CategoriesPage() {
         </div>
       </div>
 
+      <div className="flex bg-slate-100 p-1 rounded-xl w-fit">
+        <button 
+          onClick={() => setActiveTab('mart')}
+          className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${activeTab === 'mart' ? 'bg-white shadow-sm text-primary-600' : 'text-slate-500 hover:text-slate-700'}`}
+        >
+          Quick Mart (Grocery)
+        </button>
+        <button 
+          onClick={() => setActiveTab('pharma')}
+          className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${activeTab === 'pharma' ? 'bg-white shadow-sm text-primary-600' : 'text-slate-500 hover:text-slate-700'}`}
+        >
+          Pharma (Medicines)
+        </button>
+        <button 
+          onClick={() => setActiveTab('restaurant')}
+          className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${activeTab === 'restaurant' ? 'bg-white shadow-sm text-primary-600' : 'text-slate-500 hover:text-slate-700'}`}
+        >
+          Restaurant (Food)
+        </button>
+      </div>
+
       <div className="card overflow-hidden">
         {error && !loading ? (
           <ErrorState message={error} onRetry={fetchCategories} />
@@ -161,23 +187,23 @@ export default function CategoriesPage() {
                 </tr>
               </thead>
               <tbody>
-                {loading && categories.length === 0 ? (
+                {loading && filteredCategories.length === 0 ? (
                   <tr>
                     <td colSpan={6}>
                       <LoadingState message="Loading categories…" />
                     </td>
                   </tr>
-                ) : categories.length === 0 ? (
+                ) : filteredCategories.length === 0 ? (
                   <tr>
                     <td colSpan={6}>
                       <EmptyState
                         title="No categories yet"
-                        message="Add your first category to start organizing inventory."
+                        message={`Add your first category to start organizing ${activeTab === 'pharma' ? 'medicines' : activeTab === 'restaurant' ? 'dishes' : 'grocery inventory'}.`}
                         icon={<FolderTree size={22} className="text-slate-300" />}
                       />
                     </td>
                   </tr>
-                ) : categories.map((cat) => {
+                ) : filteredCategories.map((cat) => {
                   const parent = cat.parentCategoryId ? parentMap.get(cat.parentCategoryId) : null;
                   return (
                     <tr key={cat.id}>

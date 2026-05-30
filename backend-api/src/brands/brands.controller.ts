@@ -1,13 +1,18 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query, Inject, forwardRef } from '@nestjs/common';
 import { BrandsService } from './brands.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AdminRoleGuard } from '../auth/admin-role.guard';
 import { CreateBrandDto } from './dto/create-brand.dto';
 import { UpdateBrandDto } from './dto/update-brand.dto';
+import { OrdersGateway } from '../orders/orders.gateway';
 
 @Controller('brands')
 export class BrandsController {
-  constructor(private readonly brandsService: BrandsService) {}
+  constructor(
+    private readonly brandsService: BrandsService,
+    @Inject(forwardRef(() => OrdersGateway))
+    private readonly ordersGateway: OrdersGateway,
+  ) {}
 
   @Get()
   findAll(@Query('section') section?: string) {
@@ -37,19 +42,25 @@ export class BrandsController {
 
   @Post()
   @UseGuards(JwtAuthGuard, AdminRoleGuard)
-  create(@Body() data: CreateBrandDto) {
-    return this.brandsService.create(data);
+  async create(@Body() data: CreateBrandDto) {
+    const result = await this.brandsService.create(data);
+    this.ordersGateway.emitPharmaUpdated();
+    return result;
   }
 
   @Patch(':id')
   @UseGuards(JwtAuthGuard, AdminRoleGuard)
-  update(@Param('id') id: string, @Body() data: UpdateBrandDto) {
-    return this.brandsService.update(id, data);
+  async update(@Param('id') id: string, @Body() data: UpdateBrandDto) {
+    const result = await this.brandsService.update(id, data);
+    this.ordersGateway.emitPharmaUpdated();
+    return result;
   }
 
   @Delete(':id')
   @UseGuards(JwtAuthGuard, AdminRoleGuard)
-  remove(@Param('id') id: string) {
-    return this.brandsService.remove(id);
+  async remove(@Param('id') id: string) {
+    const result = await this.brandsService.remove(id);
+    this.ordersGateway.emitPharmaUpdated();
+    return result;
   }
 }

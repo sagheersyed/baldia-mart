@@ -2,6 +2,7 @@ import {
   Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn,
   ManyToOne, JoinColumn, Index, OneToMany,
 } from 'typeorm';
+import { Brand } from '../../brands/brand.entity';
 
 /**
  * Core medicine/pharmaceutical product entity.
@@ -39,7 +40,19 @@ export class Medicine {
   categoryId: string; // FK to categories table (section='pharma')
 
   @Column({ name: 'brand_id', nullable: true })
-  brandId: string; // FK to brands table (section='pharma') — manufacturer
+  brandId: string;
+
+  @ManyToOne(() => Brand)
+  @JoinColumn({ name: 'brand_id' })
+  brand: Brand;
+
+  @Column({ 
+    type: 'enum', 
+    enum: ['medicine', 'device', 'supplement', 'healthcare'], 
+    default: 'medicine',
+    name: 'item_type'
+  })
+  itemType: string;
 
   @Column({ name: 'dosage_form', nullable: true })
   dosageForm: string; // tablet, capsule, syrup, injection, cream, drops, inhaler

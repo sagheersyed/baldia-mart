@@ -122,7 +122,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
 
   useEffect(() => {
     if (selectedAddress?.id) {
-      const restaurantId = mode === 'food' ? cart[0]?.restaurantId : undefined;
+      const restaurantId = mode === 'food' ? (cart[0] as any)?.restaurantId : undefined;
       fetchDeliveryFee(selectedAddress.id, restaurantId, mode);
     }
   }, [selectedAddress, cart, mode, fetchDeliveryFee]);
@@ -208,12 +208,20 @@ export default function CheckoutScreen({ navigation, route }: any) {
         const res = await pharmaApi.placeOrder(orderData);
         if (res.data && res.data.id) {
           clearCart('pharma');
-          navigation.replace('OrderTracking', { orderId: res.data.id });
+          if (selectedPayment === 'jazzcash' || selectedPayment === 'easypaisa') {
+            navigation.replace('PaymentWebView', {
+              orderId: res.data.id,
+              provider: selectedPayment,
+              amount: total,
+            });
+          } else {
+            navigation.replace('OrderTracking', { orderId: res.data.id });
+          }
         }
         return;
       }
 
-      const restaurantId = mode === 'food' ? cart[0]?.restaurantId : undefined;
+      const restaurantId = mode === 'food' ? (cart[0] as any)?.restaurantId : undefined;
       const orderData = {
         addressId: selectedAddress.id,
         paymentMethod: selectedPayment,
@@ -285,7 +293,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
                 </View>
                 <AppText variant="caption" numberOfLines={2}>{selectedAddress.streetAddress}</AppText>
               </View>
-              <View style={styles.changeBtn}>
+              <View style={[styles.changeBtn, { backgroundColor: accent + '15' }]}>
                 <AppText variant="captionStrong" color={accent}>Change</AppText>
               </View>
             </Pressable>
@@ -298,7 +306,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
                 <AppText variant="bodyStrong">Add a delivery address</AppText>
                 <AppText variant="caption">We'll use this to confirm your zone</AppText>
               </View>
-              <View style={styles.changeBtn}>
+              <View style={[styles.changeBtn, { backgroundColor: accent + '15' }]}>
                 <AppText variant="captionStrong" color={accent}>Add</AppText>
               </View>
             </Pressable>
@@ -344,9 +352,13 @@ export default function CheckoutScreen({ navigation, route }: any) {
                     size={32} 
                     bg={theme.colors.surface} 
                     onPress={fetchPrescription}
-                    loading={loadingRx}
+                    disabled={loadingRx}
                   >
-                    <Ionicons name="refresh" size={16} color={theme.colors.textPrimary} />
+                    {loadingRx ? (
+                      <ActivityIndicator size="small" color={accent} />
+                    ) : (
+                      <Ionicons name="refresh" size={16} color={theme.colors.textPrimary} />
+                    )}
                   </AppIconButton>
                 )}
               </View>
@@ -597,7 +609,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
           onSave={handleUpdateAddress}
           initialData={editingAddressData}
           title={editingAddressData ? 'Edit address' : 'Add new address'}
-          tint={accent}
+          accent={accent}
         />
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -642,7 +654,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.sm,
     paddingVertical: 6,
     borderRadius: theme.radius.pill,
-    backgroundColor: theme.colors.primaryLight,
   },
 
   // Notes

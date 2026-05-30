@@ -12,6 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { authApi } from '../api/api';
 import { useAuth } from '../context/AuthContext';
+import { useCartStore } from '../store/cartStore';
 import { auth } from '../firebaseConfig';
 import { GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
 
@@ -22,7 +23,9 @@ WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen({ navigation }: any) {
   const { signIn } = useAuth();
+  const { activeMode } = useCartStore();
   const [phone, setPhone] = useState('');
+  const [phoneError, setPhoneError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [config, setConfig] = useState<any>({
     auth_customer_mpin_enabled: true,
@@ -69,24 +72,42 @@ export default function LoginScreen({ navigation }: any) {
     }
   };
 
+  /** Normalize Pakistani phone number to +92XXXXXXXXXX format */
+  const normalizePhone = (raw: string): string | null => {
+    const digits = raw.replace(/\D/g, '');
+    // +923XXXXXXXXX → 923XXXXXXXXX (12 digits)
+    if (raw.startsWith('+92') && digits.length === 12) return `+${digits}`;
+    // 923XXXXXXXXX (12 digits without +)
+    if (digits.length === 12 && digits.startsWith('92')) return `+${digits}`;
+    // 03XXXXXXXXX (11 digits)
+    if (digits.length === 11 && digits.startsWith('0')) return `+92${digits.slice(1)}`;
+    return null;
+  };
+
+  const handlePhoneChange = (val: string) => {
+    setPhone(val);
+    setPhoneError(null);
+  };
+
   const handleLogin = async () => {
-    if (phone.length < 10) {
-      Alert.alert('Invalid number', 'Please enter a valid phone number (e.g. +923001234567).');
+    const normalized = normalizePhone(phone.trim());
+    if (!normalized) {
+      setPhoneError('Enter a valid Pakistani number: 03XXXXXXXXX or +923XXXXXXXXX');
       return;
     }
 
     setLoading(true);
     try {
-      const statusRes = await authApi.checkStatus(phone, 'customer');
+      const statusRes = await authApi.checkStatus(normalized, 'customer');
       const { hasMpin } = statusRes.data;
 
       if (config.auth_customer_mpin_enabled && hasMpin) {
-        navigation.navigate('MpinLogin', { phoneNumber: phone });
+        navigation.navigate('MpinLogin', { phoneNumber: normalized });
       } else if (config.auth_customer_otp_enabled) {
-        await authApi.sendOtp(phone);
-        navigation.navigate('Otp', { phoneNumber: phone });
+        await authApi.sendOtp(normalized);
+        navigation.navigate('Otp', { phoneNumber: normalized });
       } else if (config.auth_customer_mpin_enabled) {
-        navigation.navigate('MpinSetupDirect', { phoneNumber: phone });
+        navigation.navigate('MpinSetupDirect', { phoneNumber: normalized });
       } else {
         Alert.alert('Unavailable', 'No authentication methods available. Please contact support.');
       }
@@ -97,6 +118,10 @@ export default function LoginScreen({ navigation }: any) {
       setLoading(false);
     }
   };
+
+  const accent = theme.colors.primary;
+  const accentDark = theme.colors.primaryDark;
+  const gradientColors: [string, string] = [accent, accentDark];
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -110,15 +135,17 @@ export default function LoginScreen({ navigation }: any) {
           showsVerticalScrollIndicator={false}
         >
           <LinearGradient
-            colors={[theme.colors.primary, theme.colors.primaryDark]}
+            colors={gradientColors}
             style={styles.hero}
           >
             <View style={styles.logoBox}>
-              <Ionicons name="basket" size={36} color={theme.colors.primary} />
+              <Ionicons name="basket" size={36} color={accent} />
             </View>
-            <AppText variant="h1" color="#fff" style={{ marginTop: theme.spacing.md }}>BaldiaMart</AppText>
+            <AppText variant="h1" color="#fff" style={{ marginTop: theme.spacing.md }}>
+              BaldiaMart
+            </AppText>
             <AppText variant="caption" color="rgba(255,255,255,0.9)" style={{ marginTop: 4 }}>
-              Hyperlocal grocery & food delivery
+              One App, Every Need • Groceries, Food & Pharma
             </AppText>
           </LinearGradient>
 
@@ -135,20 +162,27 @@ export default function LoginScreen({ navigation }: any) {
                 <AppText variant="caption">+92</AppText>
               </View>
               <TextInput
-                style={styles.input}
-                placeholder="3001234567"
+                style={[styles.input, phoneError ? { color: theme.colors.danger } : null]}
+                placeholder="03001234567"
                 placeholderTextColor={theme.colors.textMuted}
                 keyboardType="phone-pad"
                 value={phone}
-                onChangeText={setPhone}
+                onChangeText={handlePhoneChange}
                 editable={!loading}
                 autoComplete="tel"
+                maxLength={14}
               />
             </View>
+            {phoneError ? (
+              <AppText variant="caption" color={theme.colors.danger} style={{ marginTop: 6, marginLeft: 4 }}>
+                {phoneError}
+              </AppText>
+            ) : null}
 
             <AppButton
               label={loading ? 'Please wait…' : 'Continue'}
               variant="primary"
+              tint={accent}
               size="lg"
               fullWidth
               onPress={handleLogin}

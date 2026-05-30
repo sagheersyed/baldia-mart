@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEnum } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsBoolean } from 'class-validator';
 
 export class UpdateRiderDto {
   @IsOptional()
@@ -20,4 +20,8 @@ export class UpdateRiderDto {
   @IsOptional()
   @IsString()
   email?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isPharmaApproved?: boolean;
 }

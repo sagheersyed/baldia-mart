@@ -63,6 +63,12 @@ export class RidersService {
     }));
   }
 
+  async findAllActivePharmaRiders(): Promise<Rider[]> {
+    return this.ridersRepository.find({
+      where: { isActive: true, isPharmaApproved: true },
+    });
+  }
+
   async create(riderData: Partial<Rider>): Promise<Rider> {
     const rider = this.ridersRepository.create(riderData);
     return this.ridersRepository.save(rider);
@@ -70,11 +76,13 @@ export class RidersService {
 
   async update(id: string, updateData: Partial<Rider>): Promise<Rider | null> {
     await this.ridersRepository.update(id, updateData);
+    await this.cacheService.del(`rider:${id}`);
     return this.ridersRepository.findOne({ where: { id } });
   }
 
   async updateStatus(id: string, status: { isActive?: boolean; isProfileComplete?: boolean }): Promise<Rider | null> {
     await this.ridersRepository.update(id, status);
+    await this.cacheService.del(`rider:${id}`);
     
     if (status.isActive === false) {
       this.ordersGateway.kickRider(id);
@@ -212,8 +220,12 @@ export class RidersService {
     if (nearbyRiderIds.length === 0) return [];
 
     // 2. Get rider details from DB for those IDs
+    const whereClause: any = { id: In(nearbyRiderIds), isActive: true, isOnline: true };
+    if (order.orderType === 'pharma') {
+      whereClause.isPharmaApproved = true;
+    }
     const onlineRiders = await this.ridersRepository.find({
-      where: { id: In(nearbyRiderIds), isActive: true, isOnline: true },
+      where: whereClause,
     });
 
     if (onlineRiders.length === 0) return [];

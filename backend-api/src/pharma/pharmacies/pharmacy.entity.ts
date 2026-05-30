@@ -85,6 +85,9 @@ export class Pharmacy {
   @Column({ name: 'is_open', default: true })
   isOpen: boolean; // Operational status
 
+  @Column({ name: 'has_cold_chain_support', default: false })
+  hasColdChainSupport: boolean; // Support for refrigerated medicines (Insulin, Vaccines)
+
   // ── Vendor Link ───────────────────────────────────────────────
 
   @Column({ name: 'vendor_id', nullable: true })

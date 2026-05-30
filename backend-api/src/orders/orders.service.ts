@@ -481,7 +481,7 @@ export class OrdersService {
   async processDispatch(orderId: string) {
     const order = await this.ordersRepository.findOne({
       where: { id: orderId },
-      relations: ['items', 'items.product', 'items.menuItem', 'address', 'user', 'subOrders', 'subOrders.restaurant', 'subOrders.vendor']
+      relations: ['items', 'items.product', 'items.menuItem', 'items.medicine', 'address', 'user', 'subOrders', 'subOrders.restaurant', 'subOrders.vendor', 'subOrders.pharmacy']
     }) as any;
 
     if (!order) return;
@@ -497,7 +497,7 @@ export class OrdersService {
     await this.startSmartDispatch(order);
   }
 
-  private async startSmartDispatch(order: any) {
+  async startSmartDispatch(order: any) {
     console.log(`[Smart Dispatch] Starting targeted dispatch for Order #${order.id}`);
     
     // 1. Get best riders
@@ -561,8 +561,12 @@ export class OrdersService {
 
   private async notifyOnlineRiders(order: Order) {
     try {
+      const whereClause: any = { isOnline: true, isActive: true };
+      if (order.orderType === 'pharma') {
+        whereClause.isPharmaApproved = true;
+      }
       const onlineRiders = await this.ridersRepository.find({
-        where: { isOnline: true, isActive: true },
+        where: whereClause,
         select: ['id', 'fcmToken'],
       });
       const sendJobs = onlineRiders
@@ -581,8 +585,8 @@ export class OrdersService {
     }
   }
 
-  async getPendingOrders(): Promise<Order[]> {
-    return this.ordersRepository.createQueryBuilder('order')
+  async getPendingOrders(riderId?: string): Promise<Order[]> {
+    const query = this.ordersRepository.createQueryBuilder('order')
       .leftJoinAndSelect('order.items', 'items')
       .leftJoinAndSelect('items.product', 'product')
       .leftJoinAndSelect('items.menuItem', 'menuItem')
@@ -591,9 +595,17 @@ export class OrdersService {
       .leftJoinAndSelect('order.restaurant', 'restaurant')
       .leftJoinAndSelect('order.subOrders', 'subOrders')
       .leftJoinAndSelect('subOrders.restaurant', 'subOrderRestaurant')
-      .where('order.status = :status', { status: 'pending' })
-      .orderBy('order.createdAt', 'DESC')
-      .getMany();
+      .where('order.status = :status', { status: 'pending' });
+
+    if (riderId) {
+       const riderRepo = this.ordersRepository.manager.getRepository('Rider');
+       const rider = await riderRepo.findOne({ where: { id: riderId } }) as any;
+       if (!rider?.isPharmaApproved) {
+         query.andWhere('order.orderType != :pharmaType', { pharmaType: 'pharma' });
+       }
+    }
+
+    return query.orderBy('order.createdAt', 'DESC').getMany();
   }
 
   async getAllOrdersForAdmin(page = 1, limit = 20, startDate?: string, endDate?: string): Promise<{ data: Order[], total: number, page: number, limit: number }> {
@@ -608,7 +620,7 @@ export class OrdersService {
 
     const [data, total] = await this.ordersRepository.findAndCount({
       where,
-      relations: ['items', 'items.product', 'address', 'user', 'rider', 'subOrders', 'subOrders.restaurant', 'subOrders.vendor', 'orderHistory'],
+      relations: ['items', 'items.product', 'items.medicine', 'address', 'user', 'rider', 'subOrders', 'subOrders.restaurant', 'subOrders.vendor', 'subOrders.pharmacy', 'orderHistory'],
       order: { createdAt: 'DESC' },
       skip: (page - 1) * limit,
       take: limit,
@@ -654,11 +666,14 @@ export class OrdersService {
 
     if (!order) throw new NotFoundException('Order not found');
 
-    // Check if rider is blocked or out of zone
     const riderRepo = this.ordersRepository.manager.getRepository('Rider');
     const rider = await riderRepo.findOne({ where: { id: riderId } }) as any;
     if (!rider || rider.isActive === false) {
       throw new ForbiddenException('Your account has been blocked. Please contact support.');
+    }
+
+    if (order.orderType === 'pharma' && !rider.isPharmaApproved) {
+      throw new ForbiddenException('You are not authorized to accept pharma orders. Please contact admin.');
     }
 
     // Zone Enforcement
@@ -742,6 +757,8 @@ export class OrdersService {
     return this.ordersRepository.createQueryBuilder('order')
       .leftJoinAndSelect('order.items', 'items')
       .leftJoinAndSelect('items.product', 'product')
+      .leftJoinAndSelect('items.medicine', 'medicine')
+
       .leftJoinAndSelect('items.menuItem', 'menuItem')
       .leftJoinAndSelect('order.address', 'address')
       .leftJoinAndSelect('order.user', 'user')
@@ -756,7 +773,7 @@ export class OrdersService {
       .getMany();
   }
 
-  async getOrderHistory(userId: string, page = 1, limit = 20, startDate?: string, endDate?: string): Promise<{ data: Order[], total: number, page: number, limit: number }> {
+  async getOrderHistory(userId: string, page = 1, limit = 20, startDate?: string, endDate?: string, orderType?: string): Promise<{ data: Order[], total: number, page: number, limit: number }> {
     const query = this.ordersRepository.createQueryBuilder('order')
       .leftJoinAndSelect('order.items', 'items')
       .leftJoinAndSelect('items.product', 'product')
@@ -764,6 +781,14 @@ export class OrdersService {
       .leftJoinAndSelect('order.subOrders', 'subOrders')
       .leftJoinAndSelect('subOrders.restaurant', 'subOrderRestaurant')
       .where('order.userId = :userId', { userId });
+
+    if (orderType) {
+      if (orderType === 'mart_food') {
+        query.andWhere('order.orderType IN (:...types)', { types: ['mart', 'food'] });
+      } else {
+        query.andWhere('order.orderType = :orderType', { orderType });
+      }
+    }
 
     if (startDate) {
       const start = new Date(startDate);
@@ -787,6 +812,8 @@ export class OrdersService {
     const order = await this.ordersRepository.createQueryBuilder('order')
       .leftJoinAndSelect('order.items', 'items')
       .leftJoinAndSelect('items.product', 'product')
+      .leftJoinAndSelect('items.medicine', 'medicine')
+
       .leftJoinAndSelect('items.menuItem', 'menuItem')
       .leftJoinAndSelect('menuItem.restaurant', 'menuItemRestaurant')
       .leftJoinAndSelect('order.address', 'address')
@@ -796,11 +823,21 @@ export class OrdersService {
       .leftJoinAndSelect('order.subOrders', 'subOrders')
       .leftJoinAndSelect('subOrders.restaurant', 'subOrderRestaurant')
       .leftJoinAndSelect('subOrders.vendor', 'subOrderVendor')
+      .leftJoinAndSelect('subOrders.pharmacy', 'subOrderPharmacy')
       .where('order.id = :id', { id })
       .withDeleted()
       .getOne();
 
     if (!order) throw new NotFoundException('Order not found');
+
+    if (order.prescriptionId) {
+      try {
+        const rxRepo = this.ordersRepository.manager.getRepository('Prescription');
+        (order as any).prescription = await rxRepo.findOne({ where: { id: order.prescriptionId } });
+      } catch (err) {
+        console.warn('Failed to load prescription relation for order', err);
+      }
+    }
 
     // Access Control:
     // 1. Owner of the order can see it.
@@ -839,7 +876,7 @@ export class OrdersService {
     if (status === 'delivered' && oldStatus !== 'delivered') {
       const orderToSettle = await this.ordersRepository.findOne({
         where: { id },
-        relations: ['items', 'items.product', 'items.menuItem', 'subOrders', 'subOrders.vendor', 'subOrders.restaurant', 'restaurant']
+        relations: ['items', 'items.product', 'items.menuItem', 'items.medicine', 'subOrders', 'subOrders.vendor', 'subOrders.restaurant', 'subOrders.pharmacy', 'restaurant', 'pharmacy']
       });
       if (orderToSettle) {
         // We do this in a transaction to ensure atomic wallet updates
@@ -979,17 +1016,31 @@ export class OrdersService {
     });
     const savedOrder = await this.ordersRepository.save(newOrder);
 
-    // Copy items
+    // Map to keep track of created items to avoid duplicates
+    const itemMap = new Map<string, string>();
+
+    // Copy items (Primary source: order.items)
     if (order.items && order.items.length > 0) {
-      const newItems = order.items.map(item => this.orderItemsRepository.create({
-        orderId: savedOrder.id,
-        productId: item.productId,
-        menuItemId: item.menuItemId,
-        quantity: item.quantity,
-        priceAtTime: item.priceAtTime,
-        status: 'active'
-      }));
-      await this.orderItemsRepository.save(newItems);
+      const newItems = order.items.map(item => {
+        const newItem = this.orderItemsRepository.create({
+          orderId: savedOrder.id,
+          productId: item.productId,
+          menuItemId: item.menuItemId,
+          medicineId: item.medicineId,
+          quantity: item.quantity,
+          priceAtTime: item.priceAtTime,
+          productName: item.productName, // CRITICAL: Preserve name
+          imageUrl: item.imageUrl,       // CRITICAL: Preserve image
+          status: 'active'
+        });
+        return newItem;
+      });
+      const savedItems = await this.orderItemsRepository.save(newItems);
+      
+      // Build map to link sub-orders to these new items if needed
+      order.items.forEach((oldItem, idx) => {
+        itemMap.set(oldItem.id, savedItems[idx].id);
+      });
     }
 
     // Copy subOrders
@@ -999,25 +1050,43 @@ export class OrdersService {
           orderId: savedOrder.id,
           restaurantId: sub.restaurantId,
           vendorId: sub.vendorId,
+          pharmacyId: (sub as any).pharmacyId,
           status: 'pending',
           subtotal: sub.subtotal
         });
         const savedSubOrder = await this.subOrdersRepository.save(newSubOrder);
 
+        // Update items that belong to this sub-order
         if (sub.items && sub.items.length > 0) {
-          const newSubItems = sub.items.map(item => this.orderItemsRepository.create({
-            orderId: savedOrder.id,
-            subOrderId: savedSubOrder.id,
-            productId: item.productId,
-            menuItemId: item.menuItemId,
-            quantity: item.quantity,
-            priceAtTime: item.priceAtTime,
-            status: 'active'
-          }));
-          await this.orderItemsRepository.save(newSubItems);
+          for (const oldSubItem of sub.items) {
+            const newItemId = itemMap.get(oldSubItem.id);
+            if (newItemId) {
+              await this.orderItemsRepository.update(newItemId, { subOrderId: savedSubOrder.id });
+            } else {
+              // Fallback: If for some reason item wasn't in order.items but is in subOrder.items
+              const newItem = this.orderItemsRepository.create({
+                orderId: savedOrder.id,
+                subOrderId: savedSubOrder.id,
+                productId: oldSubItem.productId,
+                menuItemId: oldSubItem.menuItemId,
+                medicineId: oldSubItem.medicineId,
+                quantity: oldSubItem.quantity,
+                priceAtTime: oldSubItem.priceAtTime,
+                productName: oldSubItem.productName,
+                imageUrl: oldSubItem.imageUrl,
+                status: 'active'
+              });
+              await this.orderItemsRepository.save(newItem);
+            }
+          }
         }
       }
     }
+
+    // Record History
+    await this.orderHistoryRepository.save(
+      this.orderHistoryRepository.create({ orderId: savedOrder.id, status: 'pending', notes: `Reordered from #${id.slice(0, 8)}` })
+    );
 
     // Emit real-time update
     this.ordersGateway.emitOrderStatusUpdate(savedOrder.id, 'pending', userId);
@@ -1258,60 +1327,81 @@ export class OrdersService {
         throw new BadRequestException('Items can only be added while the order is pending or confirmed.');
       }
 
-      // Fetch product to get current price and check stock & business hours
-      const product = await manager.getRepository('Product').findOne({ 
-        where: { id: productId },
-        relations: ['brand', 'category']
-      }) as any;
-      if (!product) throw new NotFoundException('Product not found');
-
-      // Hierarchical Business Hour Check
-      const brand = product.brand;
-      const category = product.category;
-
-      if (category && !this.isBusinessOpen(category.openingTime, category.closingTime)) {
-        throw new BadRequestException(`Category '${category.name}' is currently closed.`);
+      // Fetch product/medicine to get current price and check stock & business hours
+      let product: any;
+      if (order.orderType === 'pharma') {
+        product = await manager.getRepository('Medicine').findOne({ where: { id: productId } });
+      } else {
+        product = await manager.getRepository('Product').findOne({ 
+          where: { id: productId },
+          relations: ['brand', 'category']
+        });
       }
-      if (brand && !this.isBusinessOpen(brand.openingTime, brand.closingTime)) {
-        throw new BadRequestException(`Brand '${brand.name}' is currently closed.`);
+
+      if (!product) throw new NotFoundException(`${order.orderType === 'pharma' ? 'Medicine' : 'Product'} not found`);
+
+      // Hierarchical Business Hour Check (for Mart items)
+      if (order.orderType === 'mart') {
+        const brand = (product as any).brand;
+        const category = (product as any).category;
+
+        if (category && !this.isBusinessOpen(category.openingTime, category.closingTime)) {
+          throw new BadRequestException(`Category '${category.name}' is currently closed.`);
+        }
+        if (brand && !this.isBusinessOpen(brand.openingTime, brand.closingTime)) {
+          throw new BadRequestException(`Brand '${brand.name}' is currently closed.`);
+        }
       }
+
       if (!this.isBusinessOpen(product.openingTime, product.closingTime)) {
-        throw new BadRequestException(`Product '${product.name}' is currently unavailable.`);
+        throw new BadRequestException(`${order.orderType === 'pharma' ? 'Medicine' : 'Product'} '${product.name}' is currently unavailable.`);
       }
 
       // Quantity Limit Check
-      const existingItem = order.items.find(i => i.productId === productId);
+      const existingItem = order.items.find(i => i.productId === productId || i.medicineId === productId);
       const currentQty = existingItem ? existingItem.quantity : 0;
       const totalNewQty = currentQty + quantity;
 
-      if (product.maxQuantityPerOrder > 0 && totalNewQty > product.maxQuantityPerOrder) {
+      const maxQty = Number(product.maxQuantityPerOrder || 0);
+      if (maxQty > 0 && totalNewQty > maxQty) {
         throw new BadRequestException(
-          `Quantity limit exceeded for ${product.name}. Maximum allowed per order is ${product.maxQuantityPerOrder}.`
+          `Quantity limit exceeded for ${product.name}. Maximum allowed per order is ${maxQty}.`
         );
       }
 
-      if (product.stockQuantity < quantity) {
-        throw new BadRequestException(`Only ${product.stockQuantity} units available in stock.`);
+      const stockQty = Number(product.stockQuantity ?? 999); // Medicines might not have strict stock in catalog (checked at fulfillment)
+      if (stockQty < quantity && order.orderType !== 'pharma') {
+        throw new BadRequestException(`Only ${stockQty} units available in stock.`);
       }
 
-      const unitPrice = Number(product.price) - Number(product.discount || 0);
+      const price = Number(product.price || product.mrp || 0);
+      const discount = Number(product.discount || 0);
+      const unitPrice = price - discount;
 
       // Check if product already exists in this order
-      let item = order.items.find(i => i.productId === productId);
+      let item = order.items.find(i => (i.productId === productId || i.medicineId === productId));
 
       if (item) {
         item.quantity += quantity;
         await manager.save(OrderItem, item);
       } else {
         // Explicitly create with IDs to avoid relation sync issues
-        item = manager.create(OrderItem, {
-          order: { id: orderId } as any, // Use relation object for TypeORM preference
+        const itemData: any = {
           orderId: orderId,
-          product: { id: productId } as any,
-          productId: productId,
           quantity,
           priceAtTime: unitPrice,
-        });
+          productName: product.name,
+          imageUrl: product.imageUrl,
+          status: 'active'
+        };
+
+        if (order.orderType === 'pharma') {
+          itemData.medicineId = productId;
+        } else {
+          itemData.productId = productId;
+        }
+
+        item = manager.create(OrderItem, itemData);
         await manager.save(OrderItem, item);
       }
 
@@ -1346,7 +1436,7 @@ export class OrdersService {
     });
   }
 
-  async calculateDeliveryFee(addressId: string, restaurantId?: string, orderType: string = 'mart') {
+  async calculateDeliveryFee(addressId: string, restaurantId?: string, orderType: string = 'mart', items?: any[]) {
     const address = await this.addressesService.findOne(addressId) as any;
     if (!address) {
       return {
@@ -1369,6 +1459,40 @@ export class OrdersService {
       }
     } else if (orderType === 'pharma') {
       try {
+        // Stock-Aware Zone Validation (Architectural Improvement)
+        const zoneRes = await this.deliveryZonesService.validateAddressInZone(
+          Number(address.latitude), 
+          Number(address.longitude)
+        );
+        
+        if (!zoneRes.isValid || !zoneRes.zone) {
+          return {
+            isValid: false,
+            deliveryFee: 0,
+            message: 'Baldia Pharma services are not currently available in your delivery area.',
+          };
+        }
+
+        // If items are provided, check stock in the zone
+        if (items && items.length > 0) {
+          for (const item of items) {
+            const bestPharma = await this.pharmaciesService.findBestPharmacy(
+              item.medicineId || item.id, 
+              item.quantity || 1,
+              zoneRes.zone.id
+            );
+            if (!bestPharma) {
+              const medicineRepo = this.ordersRepository.manager.getRepository('Medicine');
+              const med = await medicineRepo.findOne({ where: { id: item.medicineId || item.id } });
+              return {
+                isValid: false,
+                deliveryFee: 0,
+                message: `No pharmacy nearby has stock for ${med?.name || 'one of your items'}.`,
+              };
+            }
+          }
+        }
+
         const nearby = await this.pharmaciesService.findNearby(Number(address.latitude), Number(address.longitude), 15);
         if (nearby && nearby.length > 0) {
           pickupLat = Number(nearby[0].latitude);
@@ -1404,21 +1528,25 @@ export class OrdersService {
 
     const validation = await this.deliveryZonesService.validateAddressInZone(custLat, custLng);
 
-    // Pharma has a broader radius (15km default) than Mart (10km default)
     const maxRadiusKey = orderType === 'pharma' ? 'pharma_delivery_max_radius_km' : 'delivery_max_radius_km';
     const maxRad = await this.settingsService.getNumber(maxRadiusKey, orderType === 'pharma' ? 15 : 10);
 
-    if (!validation.isValid && validation.distance > maxRad) {
+    // Calculate actual distance from pickup point
+    const realDistance = this.deliveryZonesService.calculateDistance(custLat, custLng, pickupLat, pickupLng);
+
+    // Strict Enforcement: If NOT in a zone OR distance exceeds max radius
+    if (!validation.isValid || realDistance > maxRad) {
+      const reason = !validation.isValid 
+        ? 'Location not in any active delivery zone.' 
+        : `Distance (${realDistance.toFixed(1)}km) exceeds maximum service radius of ${maxRad}km.`;
+      
       return {
         isValid: false,
         deliveryFee: 0,
-        distance: validation.distance,
-        message: `Delivery not available for this location. You might be outside our ${maxRad}km service zone.`,
+        distance: realDistance,
+        message: `Delivery not available: ${reason}`,
       };
     }
-
-    // Calculate actual distance from pickup point instead of just zone center
-    const realDistance = this.deliveryZonesService.calculateDistance(custLat, custLng, pickupLat, pickupLng);
 
     const baseFeeKey = orderType === 'pharma' ? 'pharma_delivery_base_fee' : 'delivery_base_fee';
     const thresholdKey = orderType === 'pharma' ? 'pharma_delivery_threshold_km' : 'delivery_threshold_km';
@@ -1446,7 +1574,7 @@ export class OrdersService {
   private async syncSubOrdersInternal(manager: any, orderId: string) {
     const order = await manager.findOne(Order, {
       where: { id: orderId },
-      relations: ['items', 'items.product', 'items.menuItem', 'items.menuItem.restaurant', 'address'],
+      relations: ['items', 'items.product', 'items.menuItem', 'items.medicine', 'items.menuItem.restaurant', 'address'],
     });
     if (!order) return;
 
@@ -1456,7 +1584,7 @@ export class OrdersService {
     const existingSubOrders = await manager.find(SubOrder, { where: { orderId } });
     const existingMap = new Map();
     existingSubOrders.forEach(s => {
-      const key = order.orderType === 'food' ? s.restaurantId : s.vendorId;
+      const key = order.orderType === 'food' ? s.restaurantId : (order.orderType === 'pharma' ? s.pharmacyId : s.vendorId);
       existingMap.set(key, s);
     });
 
@@ -1487,12 +1615,18 @@ export class OrdersService {
           vLat = Number(item.menuItem.restaurant?.latitude || 0);
           vLng = Number(item.menuItem.restaurant?.longitude || 0);
         }
-      } else {
+      } else if (order.orderType === 'mart') {
         const vp = martVendorMap.get(item.productId);
         if (vp) {
           key = vp.vendorId;
           vLat = Number(vp.vendor?.lat || 0);
           vLng = Number(vp.vendor?.lng || 0);
+        }
+      } else if (order.orderType === 'pharma') {
+        key = order.pharmacyId;
+        if (order.pharmacy) {
+          vLat = Number(order.pharmacy.latitude || 0);
+          vLng = Number(order.pharmacy.longitude || 0);
         }
       }
 
@@ -1517,7 +1651,7 @@ export class OrdersService {
 
     // 1. Delete sub-orders that are no longer needed (have ZERO items associated)
     for (const sub of existingSubOrders) {
-      const key = order.orderType === 'food' ? sub.restaurantId : sub.vendorId;
+      const key = order.orderType === 'food' ? sub.restaurantId : (order.orderType === 'pharma' ? sub.pharmacyId : sub.vendorId);
       if (!neededKeys.has(key)) {
         await manager.delete(SubOrder, sub.id);
       }
@@ -1540,7 +1674,8 @@ export class OrdersService {
         subOrder = manager.create(SubOrder, {
           orderId,
           restaurantId: order.orderType === 'food' ? key : undefined,
-          vendorId: order.orderType !== 'food' ? key : undefined,
+          vendorId: order.orderType === 'mart' ? key : undefined,
+          pharmacyId: order.orderType === 'pharma' ? key : undefined,
           status: 'pending',
           subtotal,
           pickupSequence: sequence

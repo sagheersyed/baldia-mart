@@ -6,7 +6,7 @@ export class Banner {
   id: string;
 
   @Column({ default: 'mart' })
-  section: string; // 'mart' | 'food' | 'all'
+  section: string; // 'mart' | 'food' | 'pharma' | 'all'
 
   @Column()
   title: string;

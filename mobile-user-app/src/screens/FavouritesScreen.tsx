@@ -11,6 +11,7 @@ import { restaurantsApi, productsApi } from '../api/api';
 import { useCart } from '../context/CartContext';
 import { useSettings } from '../context/SettingsContext';
 import { isBusinessOpen } from '../utils/helpers';
+import { useCartStore } from '../store/cartStore';
 
 import {
   AppText, AppIconButton, EmptyState,
@@ -19,19 +20,26 @@ import StoreCard from '../components/home/StoreCard';
 import ProductCard from '../components/home/ProductCard';
 import { theme } from '../theme/theme';
 
-const TABS = ['Restaurants', 'Products'] as const;
+const TABS = ['Restaurants', 'Products', 'Medicines'] as const;
 type TabKey = typeof TABS[number];
 
 export default function FavouritesScreen({ navigation }: any) {
+  const { activeMode } = useCartStore();
   const { settings } = useSettings();
   const showMart = settings?.feature_show_mart !== false;
   const showFood = settings?.feature_show_restaurants !== false;
+  const showPharma = settings?.feature_show_pharma !== false;
 
-  const initialTab: TabKey = showFood ? 'Restaurants' : 'Products';
+  const initialTab: TabKey = showFood ? 'Restaurants' : showMart ? 'Products' : 'Medicines';
   const [activeTab, setActiveTab] = useState<TabKey>(initialTab);
   const [syncing, setSyncing] = useState(false);
   const { restaurants, products, brands, toggleFavourite, reload, syncFromApi } = useFavourites();
-  const { foodCart, martCart, addToCart, updateQuantity } = useCart();
+  const { foodCart, martCart, pharmaCart, addToCart, updateQuantity } = useCart();
+
+  // Unique Favourites theme — Indigo (independent of modules)
+  const favAccent = '#6366F1';
+  const favAccentLight = '#EEF2FF';
+  const favAccentBorder = '#C7D2FE';
 
   useFocusEffect(useCallback(() => {
     let active = true;
@@ -60,15 +68,32 @@ export default function FavouritesScreen({ navigation }: any) {
   }, [reload, syncFromApi]));
 
   const combinedShops = useMemo(() => [...restaurants, ...brands], [restaurants, brands]);
-  const isEmpty = activeTab === 'Restaurants' ? combinedShops.length === 0 : products.length === 0;
+  
+  const martProducts = useMemo(() => products.filter(p => !p.isPharma), [products]);
+  const pharmaProducts = useMemo(() => products.filter(p => p.isPharma), [products]);
+
+  const displayProducts = useMemo(() => {
+    if (activeTab === 'Medicines') return pharmaProducts;
+    return martProducts;
+  }, [activeTab, martProducts, pharmaProducts]);
+
+  const isEmpty = activeTab === 'Restaurants' 
+    ? combinedShops.length === 0 
+    : displayProducts.length === 0;
 
   const visibleTabs = useMemo(() =>
-    TABS.filter(t => (t === 'Restaurants' && showFood) || (t === 'Products' && showMart))
-  , [showFood, showMart]);
+    TABS.filter(t => 
+      (t === 'Restaurants' && showFood) || 
+      (t === 'Products' && showMart) || 
+      (t === 'Medicines' && showPharma)
+    )
+  , [showFood, showMart, showPharma]);
 
   const headerSubtitle = activeTab === 'Restaurants'
     ? `${combinedShops.length} ${combinedShops.length === 1 ? 'place' : 'places'} saved`
-    : `${products.length} ${products.length === 1 ? 'product' : 'products'} saved`;
+    : activeTab === 'Medicines'
+    ? `${pharmaProducts.length} ${pharmaProducts.length === 1 ? 'medicine' : 'medicines'} saved`
+    : `${martProducts.length} ${martProducts.length === 1 ? 'product' : 'products'} saved`;
 
   const renderRestaurantItem = ({ item }: any) => {
     const isBrand = brands.some(b => b.id === item.id);
@@ -86,7 +111,12 @@ export default function FavouritesScreen({ navigation }: any) {
   };
 
   const renderProductItem = ({ item }: any) => {
-    const cartItem = martCart.find((c: any) => c.id === item.id) || foodCart.find((c: any) => c.id === item.id);
+    const isPharmaItem = !!item.isPharma;
+    const cart = isPharmaItem ? pharmaCart : martCart;
+    const sectionName = isPharmaItem ? 'pharma' : 'mart';
+    const accentColor = isPharmaItem ? theme.colors.pharma : theme.colors.primary;
+
+    const cartItem = cart.find((c: any) => c.id === item.id || c.productId === item.id);
     const cartQty = cartItem?.quantity || 0;
 
     const isProductOpen = isBusinessOpen(item.openingTime, item.closingTime);
@@ -100,7 +130,7 @@ export default function FavouritesScreen({ navigation }: any) {
         Alert.alert('Limit reached', `Maximum allowed per order is ${item.maxQuantityPerOrder} for ${item.name}.`);
         return;
       }
-      addToCart(item, 'mart');
+      addToCart(item, sectionName);
     };
 
     return (
@@ -110,10 +140,11 @@ export default function FavouritesScreen({ navigation }: any) {
           cartQty={cartQty}
           variant="grid"
           isFavourite
-          onPress={() => navigation.navigate('Search', { initialQuery: item.name })}
+          tint={accentColor}
+          onPress={isPharmaItem ? () => navigation.navigate('MedicineDetail', { medicineId: item.id }) : () => navigation.navigate('Search', { initialQuery: item.name })}
           onAdd={handleAdd}
-          onIncrement={() => addToCart(item, 'mart')}
-          onDecrement={() => updateQuantity(item.id, Math.max(0, cartQty - 1), 'mart')}
+          onIncrement={() => addToCart(item, sectionName)}
+          onDecrement={() => updateQuantity(item.id, Math.max(0, cartQty - 1), sectionName)}
           onToggleFavourite={() => toggleFavourite(item, 'products')}
         />
       </View>
@@ -130,7 +161,7 @@ export default function FavouritesScreen({ navigation }: any) {
           <AppText variant="h2">My favourites</AppText>
           <AppText variant="caption">{headerSubtitle}</AppText>
         </View>
-        {syncing ? <ActivityIndicator size="small" color={theme.colors.primary} /> : null}
+        {syncing ? <ActivityIndicator size="small" color={favAccent} /> : null}
       </View>
 
       {visibleTabs.length > 1 ? (
@@ -138,16 +169,16 @@ export default function FavouritesScreen({ navigation }: any) {
           {visibleTabs.map((tab) => {
             const active = activeTab === tab;
             const icon: keyof typeof Ionicons.glyphMap =
-              tab === 'Restaurants' ? 'restaurant-outline' : 'basket-outline';
+              tab === 'Restaurants' ? 'restaurant-outline' : tab === 'Medicines' ? 'medical-outline' : 'basket-outline';
             return (
               <Pressable
                 key={tab}
-                style={[styles.tab, active ? styles.tabActive : null]}
+                style={[styles.tab, active ? { backgroundColor: favAccentLight, borderWidth: 1, borderColor: favAccentBorder } : null]}
                 onPress={() => setActiveTab(tab)}
               >
-                <Ionicons name={icon} size={16} color={active ? theme.colors.primary : theme.colors.textSecondary} />
-                <AppText variant={active ? 'bodyStrong' : 'body'} color={active ? theme.colors.primary : theme.colors.textSecondary}>
-                  {tab === 'Restaurants' ? 'Restaurants & shops' : 'Products'}
+                <Ionicons name={icon} size={16} color={active ? favAccent : theme.colors.textSecondary} />
+                <AppText variant={active ? 'bodyStrong' : 'body'} color={active ? favAccent : theme.colors.textSecondary}>
+                  {tab === 'Restaurants' ? 'Restaurants & shops' : tab === 'Medicines' ? 'Medicines' : 'Mart Products'}
                 </AppText>
               </Pressable>
             );
@@ -157,13 +188,15 @@ export default function FavouritesScreen({ navigation }: any) {
 
       {isEmpty ? (
         <EmptyState
-          icon={activeTab === 'Restaurants' ? 'restaurant-outline' : 'basket-outline'}
+          icon={activeTab === 'Restaurants' ? 'restaurant-outline' : activeTab === 'Medicines' ? 'medical-outline' : 'basket-outline'}
           title="No favourites yet"
           subtitle={activeTab === 'Restaurants'
             ? 'Tap the heart on any restaurant or shop to save it here.'
+            : activeTab === 'Medicines'
+            ? 'Tap the heart on any medicine to save it here.'
             : 'Tap the heart on any product to save it here.'}
           actionLabel="Explore"
-          onAction={() => navigation.navigate(activeTab === 'Restaurants' ? 'Food' : 'Home')}
+          onAction={() => navigation.navigate(activeTab === 'Restaurants' ? 'Food' : activeTab === 'Medicines' ? 'Pharma' : 'Home')}
         />
       ) : activeTab === 'Restaurants' ? (
         <FlatList
@@ -176,7 +209,7 @@ export default function FavouritesScreen({ navigation }: any) {
       ) : (
         <FlatList
           key="products-grid"
-          data={products}
+          data={displayProducts}
           keyExtractor={(item) => item.id}
           numColumns={2}
           contentContainerStyle={{ paddingHorizontal: theme.spacing.md, paddingTop: theme.spacing.md, paddingBottom: theme.spacing.xxl }}
@@ -213,5 +246,7 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.pill,
     backgroundColor: theme.colors.surfaceMuted,
   },
-  tabActive: { backgroundColor: theme.colors.primaryLight, borderWidth: 1, borderColor: theme.colors.primaryBorder },
+  tabActive: { 
+    // Set in JSX
+  },
 });

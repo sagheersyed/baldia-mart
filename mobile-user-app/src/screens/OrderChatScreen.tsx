@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 
 import { AppText, AppButton, AppIconButton, EmptyState } from '../components/ui';
+import { useCartStore } from '../store/cartStore';
 import { theme } from '../theme/theme';
 
 export default function OrderChatScreen() {
@@ -21,6 +22,7 @@ export default function OrderChatScreen() {
   const navigation = useNavigation();
   const { userData } = useAuth();
   const { settings } = useSettings();
+  const { activeMode } = useCartStore();
   const { orderId, riderName } = route.params as any;
 
   const chatEnabledReplies = settings?.chat_enable_replies !== false;
@@ -141,6 +143,9 @@ export default function OrderChatScreen() {
   const formatTime = (dateStr: string) =>
     new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
+  const accent = activeMode === 'food' ? theme.colors.food : activeMode === 'pharma' ? theme.colors.pharma : theme.colors.primary;
+  const accentLight = activeMode === 'food' ? theme.colors.foodLight : activeMode === 'pharma' ? theme.colors.pharmaLight : theme.colors.primaryLight;
+
   const renderMessage = ({ item, index }: { item: any; index: number }) => {
     const isMe = item.senderType === 'user';
     const isReplacement = item.type === 'replacement_suggestion';
@@ -152,7 +157,7 @@ export default function OrderChatScreen() {
     const showSenderTag = !isMe && !sameSenderAsPrev;
     const senderLabel = item.senderType === 'rider'
       ? (riderName || 'Rider')
-      : item.senderType === 'admin' ? 'Support' : 'You';
+      : item.senderType === 'admin' ? (riderName || 'Support') : 'You';
 
     return (
       <View style={[styles.msgWrapper, isMe ? styles.myMsgWrapper : styles.theirMsgWrapper]}>
@@ -162,11 +167,11 @@ export default function OrderChatScreen() {
               {senderLabel}
             </AppText>
           ) : null}
-          <Pressable
+            <Pressable
             onLongPress={() => { if (chatEnabledReplies) setReplyingTo(item); }}
             style={[
               styles.bubble,
-              isMe ? styles.myBubble : styles.theirBubble,
+              isMe ? [styles.myBubble, { backgroundColor: accent }] : styles.theirBubble,
             ]}
           >
             {replyToMsg ? (
@@ -174,7 +179,7 @@ export default function OrderChatScreen() {
                 onPress={() => scrollToMessage(replyToMsg.id)}
                 style={[styles.replyQuote, isMe ? styles.myReplyQuote : styles.theirReplyQuote]}
               >
-                <AppText variant="badge" color={isMe ? '#fff' : theme.colors.primary}>
+                <AppText variant="badge" color={isMe ? '#fff' : accent}>
                   {replyToMsg.senderType === 'user' ? 'You' : (riderName || 'Rider')}
                 </AppText>
                 <AppText
@@ -271,8 +276,8 @@ export default function OrderChatScreen() {
         <AppIconButton size={36} bg={theme.colors.surfaceMuted} onPress={() => navigation.goBack()}>
           <Ionicons name="chevron-back" size={20} color={theme.colors.textPrimary} />
         </AppIconButton>
-        <View style={[styles.avatar, { backgroundColor: theme.colors.primaryLight }]}>
-          <AppText variant="bodyStrong" color={theme.colors.primary}>
+        <View style={[styles.avatar, { backgroundColor: accentLight }]}>
+          <AppText variant="bodyStrong" color={accent}>
             {(riderName || 'R')[0].toUpperCase()}
           </AppText>
         </View>
@@ -292,7 +297,7 @@ export default function OrderChatScreen() {
       >
         {loading ? (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-            <ActivityIndicator color={theme.colors.primary} />
+            <ActivityIndicator color={accent} />
           </View>
         ) : messages.length === 0 ? (
           <EmptyState
@@ -314,9 +319,9 @@ export default function OrderChatScreen() {
 
         {replyingTo ? (
           <View style={styles.replyPreviewBar}>
-            <View style={styles.replyAccent} />
+            <View style={[styles.replyAccent, { backgroundColor: accent }]} />
             <View style={{ flex: 1 }}>
-              <AppText variant="captionStrong" color={theme.colors.primary}>
+              <AppText variant="captionStrong" color={accent}>
                 Replying to {replyingTo.senderType === 'user' ? 'yourself' : (riderName || 'Rider')}
               </AppText>
               <AppText variant="caption" numberOfLines={1}>
@@ -349,7 +354,7 @@ export default function OrderChatScreen() {
           />
           <AppIconButton
             size={44}
-            bg={inputText.trim() ? theme.colors.primary : theme.colors.surfaceMuted}
+            bg={inputText.trim() ? accent : theme.colors.surfaceMuted}
             onPress={handleSend}
             disabled={!inputText.trim()}
           >
@@ -413,7 +418,6 @@ const styles = StyleSheet.create({
     ...theme.shadows.sm,
   },
   myBubble: {
-    backgroundColor: theme.colors.primary,
     borderBottomRightRadius: 6,
   },
   theirBubble: {
@@ -435,8 +439,8 @@ const styles = StyleSheet.create({
     borderLeftColor: '#fff',
   },
   theirReplyQuote: {
-    backgroundColor: theme.colors.primaryLight,
-    borderLeftColor: theme.colors.primary,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    borderLeftColor: theme.colors.border,
   },
 
   actionRow: {

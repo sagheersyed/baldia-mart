@@ -1,50 +1,61 @@
-import React, { memo } from 'react';
-import { View, StyleSheet, FlatList, Pressable } from 'react-native';
+import React, { memo, useCallback } from 'react';
+import { View, StyleSheet, FlatList, Pressable, Animated } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import AppText from '../ui/AppText';
+import SectionHeader from '../ui/SectionHeader';
 import { normalizeUrl } from '../../api/api';
 import { theme } from '../../theme/theme';
 
 interface CategoryGridProps {
   categories: any[];
   onCategoryPress: (cat: any) => void;
+  onSeeAll?: () => void;
   variant?: 'mart' | 'food';
 }
 
-const TINTS = [
-  { bg: '#FFF1EA', icon: theme.colors.palette.orange500 },
-  { bg: '#E8F8EE', icon: '#10B981' },
-  { bg: '#FFE7F0', icon: '#E21B70' },
-  { bg: '#E3EBFF', icon: '#3B82F6' },
-  { bg: '#F3E8FF', icon: '#7C3AED' },
-  { bg: '#FFFBEB', icon: '#F59E0B' },
-  { bg: '#FEE2E2', icon: '#EF4444' },
-  { bg: '#E5F3FE', icon: '#0EA5E9' },
+const TINTS: { bg: [string, string]; icon: string; border: string }[] = [
+  { bg: ['#FFF1EA', '#FFE0CF'], icon: theme.colors.palette.orange500, border: '#FFD8C4' },
+  { bg: ['#E8F8EE', '#D1FAE5'], icon: '#10B981', border: '#A7F3D0' },
+  { bg: ['#FFE7F0', '#FECDD3'], icon: '#E21B70', border: '#FCA5C0' },
+  { bg: ['#E3EBFF', '#DBEAFE'], icon: '#3B82F6', border: '#BFDBFE' },
+  { bg: ['#F3E8FF', '#EDE9FE'], icon: '#7C3AED', border: '#DDD6FE' },
+  { bg: ['#FFFBEB', '#FEF3C7'], icon: '#F59E0B', border: '#FDE68A' },
+  { bg: ['#FEE2E2', '#FECACA'], icon: '#EF4444', border: '#FCA5A5' },
+  { bg: ['#E5F3FE', '#DBEAFE'], icon: '#0EA5E9', border: '#BAE6FD' },
 ];
 
 /**
- * Bento-style horizontal category rail (Foodpanda Pandamart inspired).
- * Each card is a colored tile with an emoji/icon and a one/two-line label.
+ * Premium Pandamart-style category rail with gradient circles,
+ * section header, and spring-animated press effects.
  */
 const CategoryGrid = memo(function CategoryGrid({
   categories,
   onCategoryPress,
+  onSeeAll,
 }: CategoryGridProps) {
   if (!categories?.length) return null;
 
   const renderItem = ({ item, index }: { item: any; index: number }) => {
     const tint = TINTS[index % TINTS.length];
     const iconUri = normalizeUrl(item.iconUrl || item.imageUrl);
+    const isNew = item.isNew || item.createdAt && (Date.now() - new Date(item.createdAt).getTime() < 7 * 86400000);
     return (
       <Pressable
         onPress={() => onCategoryPress(item)}
         style={({ pressed }) => [
           styles.tile,
-          pressed ? { opacity: 0.85, transform: [{ scale: 0.97 }] } : null,
+          pressed ? { opacity: 0.85, transform: [{ scale: 0.93 }] } : null,
         ]}
       >
-        <View style={[styles.iconBox, { backgroundColor: tint.bg }]}>
+        <View style={[styles.iconBox]}>
+          <LinearGradient
+            colors={tint.bg}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          />
           {iconUri ? (
             <Image
               source={{ uri: iconUri }}
@@ -54,7 +65,13 @@ const CategoryGrid = memo(function CategoryGrid({
               transition={150}
             />
           ) : (
-            <Ionicons name="grid" size={22} color={tint.icon} />
+            <Ionicons name="grid" size={28} color={tint.icon} />
+          )}
+          {/* New badge */}
+          {isNew && (
+            <View style={styles.newBadge}>
+              <AppText variant="badge" color="#fff" style={{ fontSize: 8 }}>NEW</AppText>
+            </View>
           )}
         </View>
         <AppText
@@ -71,39 +88,66 @@ const CategoryGrid = memo(function CategoryGrid({
   };
 
   return (
-    <FlatList
-      data={categories}
-      keyExtractor={(c) => c.id}
-      renderItem={renderItem}
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.list}
-    />
+    <View style={styles.section}>
+      <SectionHeader
+        title="Shop by Category"
+        subtitle={`${categories.length} categories`}
+        onAction={onSeeAll}
+      />
+      <FlatList
+        data={categories}
+        keyExtractor={(c) => c.id}
+        renderItem={renderItem}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.list}
+      />
+    </View>
   );
 });
 
 const styles = StyleSheet.create({
+  section: {
+    paddingBottom: theme.spacing.sm,
+  },
   list: {
     paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.sm,
-    gap: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs,
+    gap: 4,
   },
   tile: {
-    width: theme.sizes.categoryCardW,
+    width: 96,
     alignItems: 'center',
-    marginRight: theme.spacing.md,
+    marginRight: theme.spacing.sm,
   },
   iconBox: {
-    width: 76,
-    height: 76,
-    borderRadius: theme.radius.lg,
+    width: 68,
+    height: 68,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
     marginBottom: theme.spacing.sm,
+    borderWidth: 2,
+    borderColor: 'transparent',
   },
   icon: { width: '100%', height: '100%' },
-  label: { paddingHorizontal: 2, lineHeight: 14 },
+  newBadge: {
+    position: 'absolute',
+    bottom: 4,
+    right: 2,
+    backgroundColor: theme.colors.success,
+    borderRadius: 8,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderWidth: 1.5,
+    borderColor: '#fff',
+  },
+  label: {
+    paddingHorizontal: 2,
+    lineHeight: 15,
+    fontSize: 12.5,
+  },
 });
 
 export default CategoryGrid;

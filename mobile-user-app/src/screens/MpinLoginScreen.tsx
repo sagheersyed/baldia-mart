@@ -14,6 +14,7 @@ import { auth } from '../firebaseConfig';
 import { GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
 import { authApi } from '../api/api';
 import { useAuth } from '../context/AuthContext';
+import { useCartStore } from '../store/cartStore';
 
 import { AppText, AppButton, AppIconButton } from '../components/ui';
 import { theme } from '../theme/theme';
@@ -24,6 +25,7 @@ const MPIN_LENGTH = 4;
 
 export default function MpinLoginScreen({ navigation, route }: any) {
   const { signIn } = useAuth();
+  const { activeMode } = useCartStore();
   const { phoneNumber } = route.params || {};
   const [mpin, setMpin] = useState<string[]>(Array(MPIN_LENGTH).fill(''));
   const [loading, setLoading] = useState(false);
@@ -139,6 +141,11 @@ export default function MpinLoginScreen({ navigation, route }: any) {
   };
 
   const showGoogle = isLocked || config?.auth_customer_google_enabled;
+  
+  // Revert to primary brand colors for consistency
+  const accent = theme.colors.primary;
+  const accentDark = theme.colors.primaryDark;
+  const accentLight = theme.colors.primaryLight;
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -148,58 +155,71 @@ export default function MpinLoginScreen({ navigation, route }: any) {
       >
         <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <LinearGradient
-            colors={[theme.colors.primary, theme.colors.primaryDark]}
+            colors={[accent, accentDark]} // Using brand colors instead of slate
             style={styles.hero}
           >
             <View style={styles.headerRow}>
-              <AppIconButton size={36} bg="rgba(255,255,255,0.2)" onPress={() => navigation.goBack()}>
+              <AppIconButton size={36} bg="rgba(255,255,255,0.1)" onPress={() => navigation.goBack()}>
                 <Ionicons name="chevron-back" size={20} color="#fff" />
               </AppIconButton>
               <View style={{ flex: 1 }} />
+              <View style={styles.securityBadge}>
+                <Ionicons name="shield-checkmark" size={12} color="#10B981" />
+                <AppText variant="badge" color="#10B981" style={{ fontSize: 9 }}>SECURE</AppText>
+              </View>
             </View>
+            
             <View style={styles.lockBox}>
-              <Ionicons name={isLocked ? 'lock-closed' : 'lock-closed-outline'} size={28} color="#fff" />
+              <View style={styles.lockInner}>
+                 <Ionicons name={isLocked ? 'lock-closed' : 'lock-open-outline'} size={32} color="#fff" />
+              </View>
             </View>
-            <AppText variant="h1" color="#fff" style={{ marginTop: theme.spacing.md }}>Enter your MPIN</AppText>
-            <AppText variant="caption" color="rgba(255,255,255,0.9)" align="center" style={{ marginTop: 4 }}>
-              Welcome back! {phoneNumber ? `(${phoneNumber})` : ''}
+            
+            <AppText variant="h1" color="#fff" style={{ marginTop: theme.spacing.lg }}>Account Security</AppText>
+            <AppText variant="body" color="rgba(255,255,255,0.6)" align="center" style={{ marginTop: 4, paddingHorizontal: 40 }}>
+              Enter your 4-digit PIN to access your {activeMode ? activeMode.toUpperCase() : 'BaldiaMart'} account
             </AppText>
           </LinearGradient>
 
           <View style={styles.formCard}>
             <View style={styles.mpinContainer}>
               {mpin.map((digit, i) => (
-                <TextInput
-                  key={i}
-                  ref={el => { inputRefs.current[i] = el; }}
-                  style={[styles.mpinInput, digit ? styles.mpinInputFilled : null]}
-                  value={digit}
-                  onChangeText={val => handleMpinChange(val, i)}
-                  onKeyPress={e => handleKeyPress(e, i)}
-                  keyboardType="number-pad"
-                  maxLength={1}
-                  secureTextEntry
-                  selectTextOnFocus
-                  editable={!loading && !isLocked}
-                />
+                <View key={i} style={styles.mpinWrapper}>
+                  {/* Hidden TextInput captures input — never shows actual value */}
+                  <TextInput
+                    ref={el => { inputRefs.current[i] = el; }}
+                    style={[styles.mpinInput, digit ? { borderColor: accent } : null]}
+                    value={digit ? '●' : ''}
+                    onChangeText={val => handleMpinChange(val, i)}
+                    onKeyPress={e => handleKeyPress(e, i)}
+                    keyboardType="number-pad"
+                    maxLength={1}
+                    secureTextEntry={false}
+                    selectTextOnFocus
+                    editable={!loading && !isLocked}
+                    placeholder="○"
+                    placeholderTextColor="#CBD5E1"
+                    caretHidden
+                  />
+                </View>
               ))}
             </View>
 
             <AppButton
-              label={loading ? 'Verifying…' : 'Login'}
+              label={loading ? 'Verifying...' : 'Unlock Account'}
               variant="primary"
+              tint={accent}
               size="lg"
               fullWidth
               onPress={handleLogin}
               disabled={loading || isLocked}
               loading={loading}
-              style={{ marginTop: theme.spacing.md }}
-              trailingIcon={!loading ? <Ionicons name="arrow-forward" size={18} color="#fff" /> : undefined}
+              style={styles.loginBtn}
             />
 
             {!isLocked ? (
               <Pressable onPress={handleForgotMpin} disabled={loading} style={styles.forgotRow}>
-                <AppText variant="bodyStrong" color={theme.colors.primary}>Forgot MPIN? Login via OTP</AppText>
+                <AppText variant="bodyStrong" color={accent}>Forgot PIN? <AppText variant="body" color={theme.colors.textSecondary}>Reset via OTP</AppText></AppText>
               </Pressable>
             ) : null}
 
@@ -207,31 +227,38 @@ export default function MpinLoginScreen({ navigation, route }: any) {
               <>
                 <View style={styles.divider}>
                   <View style={styles.line} />
-                  <AppText variant="caption">or</AppText>
+                  <AppText variant="caption" color="#94A3B8">SECURE SIGN-IN</AppText>
                   <View style={styles.line} />
                 </View>
 
                 <AppButton
-                  label={isLocked ? 'Verify with Google to reset' : 'Login with Google'}
+                  label={isLocked ? 'Verify Identity with Google' : 'Sign in with Google'}
                   variant="secondary"
                   size="lg"
                   fullWidth
                   onPress={() => promptAsync()}
                   disabled={loading}
-                  leadingIcon={<Ionicons name="logo-google" size={18} color={theme.colors.textPrimary} />}
-                  textColor={theme.colors.textPrimary}
+                  leadingIcon={<Ionicons name="logo-google" size={18} color="#1E293B" />}
+                  textColor="#1E293B"
+                  style={styles.googleBtn}
                 />
 
-                {isLocked ? (
+                {isLocked && (
                   <View style={styles.lockNotice}>
-                    <Ionicons name="information-circle-outline" size={14} color={theme.colors.warning} />
-                    <AppText variant="caption" color={theme.colors.warning} style={{ flex: 1 }}>
-                      Your account is locked. Verifying with Google will allow you to set a new MPIN.
-                    </AppText>
+                    <Ionicons name="alert-circle" size={18} color={theme.colors.danger} />
+                    <View style={{ flex: 1 }}>
+                      <AppText variant="bodyStrong" color={theme.colors.danger}>Account Temporarily Locked</AppText>
+                      <AppText variant="caption" color={theme.colors.danger}>Too many failed attempts. Please verify with Google to continue.</AppText>
+                    </View>
                   </View>
-                ) : null}
+                )}
               </>
             ) : null}
+          </View>
+          
+          <View style={styles.footer}>
+             <Ionicons name="finger-print-outline" size={24} color="#CBD5E1" />
+             <AppText variant="caption" color="#94A3B8">Biometric login coming soon</AppText>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -240,70 +267,88 @@ export default function MpinLoginScreen({ navigation, route }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.colors.surface },
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
 
   hero: {
-    paddingTop: theme.spacing.md,
-    paddingBottom: theme.spacing.xxl + 16,
+    paddingTop: theme.spacing.lg,
+    paddingBottom: 60,
     paddingHorizontal: theme.spacing.lg,
     alignItems: 'center',
-    borderBottomLeftRadius: theme.radius.xl,
-    borderBottomRightRadius: theme.radius.xl,
+    borderBottomLeftRadius: 40,
+    borderBottomRightRadius: 40,
   },
-  headerRow: { width: '100%', flexDirection: 'row', alignItems: 'center' },
+  headerRow: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  securityBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20,
+  },
   lockBox: {
-    width: 64, height: 64, borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    width: 80, height: 80, borderRadius: 30,
+    backgroundColor: 'rgba(255,255,255,0.05)',
     justifyContent: 'center', alignItems: 'center',
-    marginTop: theme.spacing.md,
-    borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)',
+    marginTop: theme.spacing.xl,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+  },
+  lockInner: {
+    width: 60, height: 60, borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center', alignItems: 'center',
   },
 
   formCard: {
     backgroundColor: theme.colors.surface,
-    marginTop: -theme.spacing.lg,
-    marginHorizontal: theme.spacing.lg,
-    borderRadius: theme.radius.xl,
-    padding: theme.spacing.lg,
-    ...theme.shadows.md,
+    marginTop: -40,
+    marginHorizontal: 24,
+    borderRadius: 32,
+    padding: 32,
+    ...theme.shadows.lg,
   },
 
   mpinContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: theme.spacing.md,
-    paddingVertical: theme.spacing.md,
+    gap: 12,
+    marginBottom: 32,
   },
+  mpinWrapper: { alignItems: 'center' },
   mpinInput: {
-    width: 56,
-    height: 64,
-    borderWidth: 1.5,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surfaceMuted,
-    borderRadius: theme.radius.md,
+    width: 60,
+    height: 72,
+    borderWidth: 2,
+    borderColor: '#F1F5F9',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 20,
     textAlign: 'center',
     fontSize: 28,
     fontWeight: '800',
-    color: theme.colors.primary,
-  },
-  mpinInputFilled: {
-    borderColor: theme.colors.primary,
-    backgroundColor: theme.colors.primaryLight,
+    color: '#1E293B',
   },
 
-  forgotRow: { marginTop: theme.spacing.md, alignItems: 'center' },
+  loginBtn: { 
+    borderRadius: 20, height: 58,
+    shadowColor: theme.colors.primary, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.2, shadowRadius: 20, elevation: 5
+  },
+  googleBtn: { borderRadius: 20, height: 58, borderColor: '#E2E8F0' },
+
+  forgotRow: { marginTop: 24, alignItems: 'center' },
 
   divider: {
-    flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md,
-    marginVertical: theme.spacing.lg,
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    marginVertical: 32,
   },
-  line: { flex: 1, height: 1, backgroundColor: theme.colors.border },
+  line: { flex: 1, height: 1, backgroundColor: '#F1F5F9' },
 
   lockNotice: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    marginTop: theme.spacing.md,
-    backgroundColor: theme.colors.warningLight,
-    borderRadius: theme.radius.md,
-    padding: theme.spacing.sm,
+    flexDirection: 'row', alignItems: 'flex-start', gap: 12,
+    marginTop: 24,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1, borderColor: '#FEE2E2',
   },
+  footer: {
+    alignItems: 'center', gap: 8,
+    marginTop: 'auto', paddingVertical: 32,
+  }
 });

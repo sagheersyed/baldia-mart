@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { MenuItem } from './menu-item.entity';
 
 @Injectable()
@@ -9,6 +9,13 @@ export class MenuItemsService {
     @InjectRepository(MenuItem)
     private menuItemRepository: Repository<MenuItem>,
   ) {}
+
+  async findByIds(ids: string[]): Promise<MenuItem[]> {
+    return this.menuItemRepository.find({
+      where: { id: In(ids) },
+      relations: ['restaurant'],
+    });
+  }
 
   async findByRestaurant(restaurantId: string): Promise<MenuItem[]> {
     return this.menuItemRepository.find({
@@ -44,5 +51,13 @@ export class MenuItemsService {
   async remove(id: string): Promise<void> {
     const item = await this.findOne(id);
     await this.menuItemRepository.remove(item);
+  }
+
+  async search(q: string): Promise<MenuItem[]> {
+    return this.menuItemRepository.createQueryBuilder('item')
+      .leftJoinAndSelect('item.restaurant', 'restaurant')
+      .where('item.name ILIKE :q OR item.description ILIKE :q OR item.category ILIKE :q', { q: `%${q}%` })
+      .orderBy('item.name', 'ASC')
+      .getMany();
   }
 }

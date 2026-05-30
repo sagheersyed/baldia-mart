@@ -5,7 +5,7 @@ import {
   Check, X, Eye, Clock, User, FileText, AlertCircle, 
   ExternalLink, Calendar, Search, Filter
 } from 'lucide-react';
-import { fetchWithAuth, BASE_URL, getErrorMessage, parseApiError } from '@/lib/api';
+import { fetchWithAuth, BASE_URL, getErrorMessage, parseApiError, normalizeUrl } from '@/lib/api';
 import { showToast } from '@/hooks/useToast';
 
 interface Prescription {
@@ -33,10 +33,23 @@ export default function PrescriptionsPage() {
   const [validUntil, setValidUntil] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [filter, setFilter] = useState<'pending' | 'all'>('pending');
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
 
   useEffect(() => {
     fetchQueue();
   }, [filter]);
+
+  useEffect(() => {
+    if (selectedRx) {
+      setReviewNotes(selectedRx.reviewerNotes || '');
+      setValidUntil(selectedRx.validUntil ? new Date(selectedRx.validUntil).toISOString().split('T')[0] : '');
+      setActiveImageIndex(0);
+    } else {
+      setReviewNotes('');
+      setValidUntil('');
+      setActiveImageIndex(0);
+    }
+  }, [selectedRx]);
 
   const fetchQueue = async () => {
     setLoading(true);
@@ -110,6 +123,7 @@ export default function PrescriptionsPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'pending': return 'badge-yellow';
+      case 'consultation_requested': return 'badge-purple';
       case 'approved': return 'badge-green';
       case 'rejected': return 'badge-red';
       case 'in_review': return 'badge-blue';
@@ -161,7 +175,7 @@ export default function PrescriptionsPage() {
               >
                 <div className="flex gap-4">
                   <div className="w-20 h-20 bg-slate-50 rounded-xl overflow-hidden border border-slate-100 shrink-0">
-                    <img src={rx.imageUrl} className="w-full h-full object-cover" alt="Rx" />
+                    <img src={normalizeUrl(rx.imageUrl)} className="w-full h-full object-cover" alt="Rx" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-start">
@@ -199,18 +213,43 @@ export default function PrescriptionsPage() {
                 <button onClick={() => setSelectedRx(null)} className="btn-ghost btn-icon p-1"><X size={18} /></button>
               </div>
 
-              <div className="space-y-4">
-                <div className="aspect-[3/4] bg-slate-100 rounded-2xl overflow-hidden border border-slate-200 relative group">
-                  <img src={selectedRx.imageUrl} className="w-full h-full object-contain" alt="Rx View" />
-                  <a 
-                    href={selectedRx.imageUrl} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="absolute bottom-4 right-4 bg-white/90 backdrop-blur p-2 rounded-xl shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <ExternalLink size={18} className="text-slate-700" />
-                  </a>
-                </div>
+               <div className="space-y-4">
+                 {(() => {
+                   const images = [selectedRx.imageUrl, ...(selectedRx.additionalImageUrls || [])].filter(Boolean);
+                   const activeImg = images[activeImageIndex] || selectedRx.imageUrl;
+                   return (
+                     <>
+                       <div className="aspect-[3/4] bg-slate-100 rounded-2xl overflow-hidden border border-slate-200 relative group">
+                         <img src={normalizeUrl(activeImg)} className="w-full h-full object-contain" alt="Rx View" />
+                         <a 
+                           href={normalizeUrl(activeImg)} 
+                           target="_blank" 
+                           rel="noopener noreferrer"
+                           className="absolute bottom-4 right-4 bg-white/90 backdrop-blur p-2 rounded-xl shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                         >
+                           <ExternalLink size={18} className="text-slate-700" />
+                         </a>
+                       </div>
+                       
+                       {images.length > 1 && (
+                         <div className="flex gap-2 overflow-x-auto py-1">
+                           {images.map((img, idx) => (
+                             <button
+                               key={idx}
+                               type="button"
+                               onClick={() => setActiveImageIndex(idx)}
+                               className={`w-12 h-16 rounded-lg overflow-hidden border-2 shrink-0 transition-all ${
+                                 activeImageIndex === idx ? 'border-primary-500 scale-105' : 'border-slate-200 opacity-60'
+                               }`}
+                             >
+                               <img src={normalizeUrl(img)} className="w-full h-full object-cover" alt={`Thumb ${idx}`} />
+                             </button>
+                           ))}
+                         </div>
+                       )}
+                     </>
+                   );
+                 })()}
 
                 <div className="space-y-3">
                   <div>

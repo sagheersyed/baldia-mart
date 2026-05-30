@@ -9,7 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 
 import {
-  productsApi, restaurantsApi, brandsApi, categoriesApi, homeApi, normalizeUrl,
+  productsApi, restaurantsApi, brandsApi, categoriesApi, homeApi, normalizeUrl, pharmaApi,
 } from '../api/api';
 import ProductCard from '../components/home/ProductCard';
 import StoreCard from '../components/home/StoreCard';
@@ -22,9 +22,10 @@ const RECENT_KEY = '@recent_searches';
 const RECENT_MAX = 10;
 const TRENDING_FALLBACK_MART = ['Milk', 'Eggs', 'Bread', 'Atta', 'Cooking Oil', 'Sugar', 'Chicken', 'Rice'];
 const TRENDING_FALLBACK_FOOD = ['Pizza', 'Biryani', 'Burger', 'Karahi', 'Desserts', 'Drinks'];
+const TRENDING_FALLBACK_PHARMA = ['Panadol', 'Surbex-Z', 'Disprin', 'Augmentin', 'Multivitamins', 'Insulin'];
 
 type Tab = 'all' | 'products' | 'shops' | 'restaurants' | 'categories';
-type Mode = 'mart' | 'food';
+type Mode = 'mart' | 'food' | 'pharma';
 
 const MART_TABS: { id: Tab; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -37,11 +38,25 @@ const FOOD_TABS: { id: Tab; label: string }[] = [
   { id: 'restaurants', label: 'Restaurants' },
 ];
 
+const PHARMA_TABS: { id: Tab; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'products', label: 'Medicines' },
+  { id: 'shops', label: 'Brands' },
+  { id: 'categories', label: 'Conditions' },
+];
+
 export default function SearchScreen({ navigation, route }: any) {
-  const initialMode: Mode = route?.params?.mode === 'food' ? 'food' : 'mart';
+  const initialMode: Mode = route?.params?.mode || 'mart';
   const [mode, setMode] = useState<Mode>(initialMode);
-  const [tab, setTab] = useState<Tab>(initialMode === 'food' ? 'restaurants' : 'all');
-  const TABS = mode === 'food' ? FOOD_TABS : MART_TABS;
+  const [tab, setTab] = useState<Tab>(
+    initialMode === 'food' ? 'restaurants' : 'all'
+  );
+
+  const TABS = useMemo(() => {
+    if (mode === 'food') return FOOD_TABS;
+    if (mode === 'pharma') return PHARMA_TABS;
+    return MART_TABS;
+  }, [mode]);
 
   const [query, setQuery] = useState('');
   const [products, setProducts] = useState<any[]>([]);
@@ -53,20 +68,22 @@ export default function SearchScreen({ navigation, route }: any) {
   const [loadingMeta, setLoadingMeta] = useState(true);
   const [recent, setRecent] = useState<string[]>([]);
   const [trending, setTrending] = useState<string[]>(
-    initialMode === 'food' ? TRENDING_FALLBACK_FOOD : TRENDING_FALLBACK_MART,
+    initialMode === 'food' ? TRENDING_FALLBACK_FOOD 
+    : initialMode === 'pharma' ? TRENDING_FALLBACK_PHARMA 
+    : TRENDING_FALLBACK_MART,
   );
 
   const inputRef = useRef<TextInput>(null);
-  const { martCart, foodCart, addToCart, updateQuantity } = useCart();
+  const { martCart, foodCart, pharmaCart, addToCart, updateQuantity } = useCart();
   const { isFavourite, toggleFavourite } = useFavourites();
   const debounceRef = useRef<any>(null);
 
   const cartQuantities = useMemo(() => {
-    const cart = mode === 'mart' ? martCart : foodCart;
+    const cart = mode === 'pharma' ? pharmaCart : mode === 'food' ? foodCart : martCart;
     const q: Record<string, number> = {};
     cart.forEach((it: any) => { q[it.id] = it.quantity; });
     return q;
-  }, [martCart, foodCart, mode]);
+  }, [martCart, foodCart, pharmaCart, mode]);
 
   useEffect(() => {
     AsyncStorage.getItem(RECENT_KEY).then(raw => {
@@ -78,18 +95,37 @@ export default function SearchScreen({ navigation, route }: any) {
   const loadMeta = useCallback(async () => {
     setLoadingMeta(true);
     try {
-      const [brandsRes, catsRes, homeRes] = await Promise.all([
-        brandsApi.search('', mode === 'food' ? 'restaurant' : 'mart', 1, 12).catch(() => ({ data: { data: [] } })),
-        categoriesApi.getAll(mode === 'food' ? 'food' : 'mart').catch(() => ({ data: [] })),
-        homeApi.getHome(mode).catch(() => null),
-      ]);
-      const brandsData: any = brandsRes.data;
-      const popular = Array.isArray(brandsData) ? brandsData : (brandsData?.data || []);
-      setPopularShops(popular.filter((b: any) => b.isActive !== false));
-      setCategories((catsRes.data || []).filter((c: any) => c.isActive !== false));
-      const t: any = homeRes?.data?.trending;
-      if (Array.isArray(t) && t.length) setTrending(t);
-      else setTrending(mode === 'food' ? TRENDING_FALLBACK_FOOD : TRENDING_FALLBACK_MART);
+      if (mode === 'pharma') {
+        const [brandsRes, catsRes, homeRes] = await Promise.all([
+          brandsApi.search('', 'pharma', 1, 12).catch(() => ({ data: { data: [] } })),
+          categoriesApi.getAll('pharma').catch(() => ({ data: [] })),
+          homeApi.getHome('pharma').catch(() => null),
+        ]);
+        const brandsData: any = brandsRes.data;
+        const popular = Array.isArray(brandsData) ? brandsData : (brandsData?.data || []);
+        setPopularShops(popular.filter((b: any) => b.isActive !== false));
+        setCategories((catsRes.data || []).filter((c: any) => c.isActive !== false));
+        
+        const t: any = homeRes?.data?.trending;
+        if (Array.isArray(t) && t.length) setTrending(t);
+        else setTrending(TRENDING_FALLBACK_PHARMA);
+      } else {
+        const [brandsRes, catsRes, homeRes] = await Promise.all([
+          brandsApi.search('', mode === 'food' ? 'restaurant' : 'mart', 1, 12).catch(() => ({ data: { data: [] } })),
+          categoriesApi.getAll(mode === 'food' ? 'food' : 'mart').catch(() => ({ data: [] })),
+          homeApi.getHome(mode).catch(() => null),
+        ]);
+        const brandsData: any = brandsRes.data;
+        const popular = Array.isArray(brandsData) ? brandsData : (brandsData?.data || []);
+        setPopularShops(popular.filter((b: any) => b.isActive !== false));
+        setCategories((catsRes.data || []).filter((c: any) => c.isActive !== false));
+        
+        const t: any = homeRes?.data?.trending;
+        if (Array.isArray(t) && t.length) setTrending(t);
+        else {
+          setTrending(mode === 'food' ? TRENDING_FALLBACK_FOOD : TRENDING_FALLBACK_MART);
+        }
+      }
     } finally {
       setLoadingMeta(false);
     }
@@ -113,6 +149,17 @@ export default function SearchScreen({ navigation, route }: any) {
           const rData: any = rRes.data || {};
           setRestaurantsResults(Array.isArray(rData) ? rData : (rData.data || []));
           setProducts([]); setShopsResults([]);
+        } else if (mode === 'pharma') {
+          const [mRes, bRes] = await Promise.all([
+            pharmaApi.searchMedicines(trimmed, 1, 30).catch(() => ({ data: { data: [] } })),
+            brandsApi.search(trimmed, 'pharma', 1, 20).catch(() => ({ data: { data: [] } })),
+          ]);
+          const rawArr = Array.isArray(mRes.data) ? mRes.data : (mRes.data?.data || []);
+          const unique = Array.from(new Map(rawArr.map((m: any) => [m.id, m])).values());
+          const bData: any = bRes.data || {};
+          setProducts(unique);
+          setShopsResults(Array.isArray(bData) ? bData : (bData.data || []));
+          setRestaurantsResults([]);
         } else {
           const [pRes, bRes] = await Promise.all([
             productsApi.search(trimmed, 1, 30).catch(() => ({ data: { data: [] } })),
@@ -162,11 +209,12 @@ export default function SearchScreen({ navigation, route }: any) {
 
   const handleFav = useCallback((p: any) => {
     toggleFavourite({
-      id: p.id, name: p.name, imageUrl: p.imageUrl, price: p.price, discount: p.discount,
+      id: p.id, name: p.name, imageUrl: p.imageUrl, price: p.price || p.mrp || 0, discount: p.discount || 0,
       category: p.category, brand: p.brand, openingTime: p.openingTime, closingTime: p.closingTime,
       maxQuantityPerOrder: p.maxQuantityPerOrder, stockQuantity: p.stockQuantity,
+      isPharma: mode === 'pharma',
     }, 'products');
-  }, [toggleFavourite]);
+  }, [toggleFavourite, mode]);
 
   const q = query.trim().toLowerCase();
   const filteredCategories = useMemo(
@@ -175,7 +223,9 @@ export default function SearchScreen({ navigation, route }: any) {
   );
 
   const showSuggestions = query.trim().length < 2;
-  const accent = mode === 'food' ? theme.colors.food : theme.colors.primary;
+  const accent = mode === 'food' ? theme.colors.food : mode === 'pharma' ? theme.colors.pharma : theme.colors.primary;
+  const accentLight = mode === 'food' ? theme.colors.foodLight : mode === 'pharma' ? theme.colors.pharmaLight : theme.colors.primaryLight;
+  const accentBorder = mode === 'food' ? theme.colors.foodBorder : mode === 'pharma' ? theme.colors.pharmaBorder : theme.colors.primaryBorder;
 
   // ── Render helpers ──
   const renderProduct = useCallback(({ item }: { item: any }) => (
@@ -224,7 +274,13 @@ export default function SearchScreen({ navigation, route }: any) {
     const img = normalizeUrl(item.imageUrl || item.iconUrl);
     return (
       <Pressable
-        onPress={() => navigation.navigate('ProductListing', { mode: 'category', id: item.id, title: item.name })}
+        onPress={() => {
+          if (mode === 'pharma') {
+            navigation.navigate('MedicineList', { categoryId: item.id, title: item.name });
+          } else {
+            navigation.navigate('ProductListing', { mode: 'category', id: item.id, title: item.name });
+          }
+        }}
         style={({ pressed }) => [styles.catRow, pressed ? { opacity: 0.8 } : null]}
       >
         <View style={styles.catThumb}>
@@ -281,7 +337,10 @@ export default function SearchScreen({ navigation, route }: any) {
             : trending.map(term => (
               <Pressable
                 key={term}
-                style={[styles.chip, styles.chipTrending]}
+                style={[
+                  styles.chip, 
+                  { backgroundColor: accentLight, borderColor: accentBorder }
+                ]}
                 onPress={() => { setQuery(term); inputRef.current?.blur(); }}
               >
                 <AppText variant="captionStrong" color={accent}>{term}</AppText>
@@ -454,11 +513,15 @@ export default function SearchScreen({ navigation, route }: any) {
         </Pressable>
 
         <View style={[styles.searchBox, { borderColor: accent }]}>
-          <Ionicons name="search" size={18} color={accent} style={{ marginLeft: 12 }} />
+          <Ionicons name="search" size={20} color={theme.colors.textSecondary} style={{ marginRight: 8 }} />
           <TextInput
             ref={inputRef}
             style={styles.searchInput}
-            placeholder={mode === 'mart' ? 'Search groceries, brands & shops' : 'Search restaurants & dishes'}
+            placeholder={
+              mode === 'mart' ? 'Search groceries, brands & shops' 
+              : mode === 'food' ? 'Search restaurants & dishes'
+              : 'Search medicines & health products'
+            }
             placeholderTextColor={theme.colors.textSecondary}
             value={query}
             onChangeText={setQuery}
@@ -475,32 +538,39 @@ export default function SearchScreen({ navigation, route }: any) {
         </View>
       </View>
 
-      {/* ── Mode switch: Mart / Food ── */}
-      <View style={styles.modeBar}>
-        {(['mart', 'food'] as Mode[]).map(m => {
-          const active = mode === m;
-          const mAccent = m === 'food' ? theme.colors.food : theme.colors.primary;
-          return (
-            <Pressable
-              key={m}
-              onPress={() => {
-                setMode(m);
-                setTab(m === 'food' ? 'restaurants' : 'all');
-                setProducts([]); setShopsResults([]); setRestaurantsResults([]);
-              }}
-              style={[
-                styles.modePill,
-                active ? { backgroundColor: mAccent, borderColor: mAccent } : null,
-              ]}
-            >
-              <Ionicons name={m === 'mart' ? 'basket-outline' : 'restaurant-outline'} size={14} color={active ? '#fff' : theme.colors.textSecondary} />
-              <AppText variant="captionStrong" color={active ? '#fff' : theme.colors.textSecondary}>
-                {m === 'mart' ? 'Groceries' : 'Food'}
-              </AppText>
-            </Pressable>
-          );
-        })}
-      </View>
+      {/* ── Mode switch: Mart / Food / Pharma (Dynamic restriction) ── */}
+      {initialMode !== 'pharma' && (
+        <View style={styles.modeBar}>
+          {(['mart', 'food'] as Mode[]).map(m => {
+            const active = mode === m;
+            const mAccent = m === 'food' ? theme.colors.food : theme.colors.primary;
+            
+            let icon: any = 'basket-outline';
+            let label = 'Groceries';
+            if (m === 'food') { icon = 'restaurant-outline'; label = 'Food'; }
+
+            return (
+              <Pressable
+                key={m}
+                onPress={() => {
+                  setMode(m);
+                  setTab(m === 'food' ? 'restaurants' : 'all');
+                  setProducts([]); setShopsResults([]); setRestaurantsResults([]);
+                }}
+                style={[
+                  styles.modePill,
+                  active ? { backgroundColor: mAccent, borderColor: mAccent } : null,
+                ]}
+              >
+                <Ionicons name={icon} size={14} color={active ? '#fff' : theme.colors.textSecondary} />
+                <AppText variant="captionStrong" color={active ? '#fff' : theme.colors.textSecondary}>
+                  {label}
+                </AppText>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
 
       {/* ── Tab chips (shown only when searching) ── */}
       {!showSuggestions && (
@@ -627,10 +697,6 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface,
     borderWidth: 1,
     borderColor: theme.colors.border,
-  },
-  chipTrending: {
-    backgroundColor: theme.colors.primaryLight,
-    borderColor: theme.colors.primaryBorder,
   },
 
   // Results

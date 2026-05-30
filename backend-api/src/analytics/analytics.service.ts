@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, LessThanOrEqual } from 'typeorm';
 import { Order } from '../orders/order.entity';
 import { User } from '../users/user.entity';
 import { Rider } from '../riders/rider.entity';
@@ -137,5 +137,101 @@ export class AnalyticsService {
       console.error('Failed to get dashboard metrics', error);
       throw error;
     }
+  }
+
+  async getPharmaMetrics(range?: string, startDate?: string, endDate?: string) {
+    const { start: periodStart, end: periodEnd } = this.resolveDateRange(range, startDate, endDate);
+
+    try {
+      const [
+        totalPharmaRevenue,
+        topMedicines,
+        prescriptionStats,
+        nearExpiryCount,
+        pharmaIncentives,
+      ] = await Promise.all([
+        // 1. Pharma Revenue
+        this.orderRepository.createQueryBuilder('o')
+          .select('SUM(CAST(o.total AS NUMERIC))', 'total')
+          .where('o.orderType = :type', { type: 'pharma' })
+          .andWhere('o.status = :status', { status: 'delivered' })
+          .andWhere('o.createdAt >= :start', { start: periodStart })
+          .andWhere('o.createdAt <= :end', { end: periodEnd })
+          .getRawOne(),
+
+        // 2. Top Medicines
+        this.orderRepository.manager.getRepository('Medicine').find({
+          order: { soldCount: 'DESC' },
+          take: 10,
+          where: { isActive: true },
+        }),
+
+        // 3. Prescription Conversion
+        this.orderRepository.manager.getRepository('Prescription').createQueryBuilder('rx')
+          .select('status')
+          .addSelect('COUNT(*)', 'count')
+          .groupBy('status')
+          .getRawMany(),
+
+        // 4. Near-Expiry Count
+        this.orderRepository.manager.getRepository('PharmacyInventory').count({
+          where: {
+            expiryDate: LessThanOrEqual(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)),
+            isQuarantined: false,
+          },
+        }),
+
+        // 5. Pharma Rider Incentives (Phase 20 logic)
+        this.orderRepository.createQueryBuilder('o')
+          .select('SUM(CASE WHEN o.priority = \'high\' THEN 50 ELSE 0 END + CASE WHEN o.is_cold_chain = true THEN 30 ELSE 0 END)', 'total')
+          .where('o.orderType = :type', { type: 'pharma' })
+          .andWhere('o.status = :status', { status: 'delivered' })
+          .andWhere('o.createdAt >= :start', { start: periodStart })
+          .andWhere('o.createdAt <= :end', { end: periodEnd })
+          .getRawOne(),
+      ]);
+
+      const rxApproved = Number(prescriptionStats.find(s => s.status === 'approved')?.count || 0);
+      const rxRejected = Number(prescriptionStats.find(s => s.status === 'rejected')?.count || 0);
+      const rxPending = Number(prescriptionStats.find(s => s.status === 'pending')?.count || 0);
+      const totalRx = rxApproved + rxRejected + rxPending;
+
+      return {
+        revenue: Number(totalPharmaRevenue?.total) || 0,
+        topMedicines,
+        prescriptions: {
+          total: totalRx,
+          approved: rxApproved,
+          rejected: rxRejected,
+          pending: rxPending,
+          conversionRate: totalRx > 0 ? (rxApproved / totalRx) * 100 : 0,
+        },
+        nearExpiryCount,
+        riderIncentives: Number(pharmaIncentives?.total) || 0,
+      };
+    } catch (error) {
+      console.error('Failed to get pharma metrics', error);
+      throw error;
+    }
+  }
+
+  async getControlledSubstancesReport() {
+    return this.orderRepository.createQueryBuilder('o')
+      .innerJoinAndSelect('o.items', 'i')
+      .innerJoinAndSelect('i.medicine', 'm')
+      .innerJoinAndSelect('o.user', 'u')
+      .innerJoinAndSelect('o.pharmacy', 'p')
+      .where('o.orderType = :type', { type: 'pharma' })
+      .andWhere('o.status = :status', { status: 'delivered' })
+      .andWhere('m.isControlled = :isControlled', { isControlled: true })
+      .select([
+        'o.id', 'o.createdAt',
+        'u.name', 'u.phoneNumber',
+        'p.name', 'p.licenseNumber',
+        'm.name', 'm.genericName',
+        'i.quantity', 'i.priceAtTime'
+      ])
+      .orderBy('o.createdAt', 'DESC')
+      .getRawMany();
   }
 }

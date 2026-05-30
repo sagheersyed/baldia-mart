@@ -2,6 +2,7 @@ import { Controller, Get, Post, Put, Delete, Param, Query, Body, UseGuards } fro
 import { MedicinesService } from './medicines.service';
 import { PharmaciesService } from '../pharmacies/pharmacies.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { GetUser } from '../../auth/get-user.decorator';
 
 @Controller('pharma/medicines')
 export class MedicinesController {
@@ -19,6 +20,9 @@ export class MedicinesController {
     @Query('isEmergency') isEmergency?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('maxPrice') maxPrice?: string,
+    @Query('itemType') itemType?: string,
+    @Query('ids') ids?: string,
   ) {
     return this.medicinesService.search({
       query,
@@ -28,6 +32,9 @@ export class MedicinesController {
       isEmergency: isEmergency === 'true',
       page: page ? parseInt(page, 10) : 1,
       limit: limit ? Math.min(parseInt(limit, 10), 50) : 20,
+      maxPrice: maxPrice ? parseFloat(maxPrice) : undefined,
+      itemType,
+      ids,
     });
   }
 
@@ -78,6 +85,8 @@ export class MedicinesController {
     const pharmacy = await this.pharmaciesService.findBestPharmacy(
       id, 
       1, 
+      undefined, // zoneId (not known for anonymous check)
+      false,     // requiresColdChain (default for check)
       lat ? parseFloat(lat) : undefined, 
       lng ? parseFloat(lng) : undefined
     );
@@ -109,5 +118,19 @@ export class MedicinesController {
   @UseGuards(JwtAuthGuard)
   deactivate(@Param('id') id: string) {
     return this.medicinesService.deactivate(id);
+  }
+  @Get(':id/reviews')
+  async getReviews(@Param('id') id: string) {
+    return this.medicinesService.getReviews(id);
+  }
+
+  @Post(':id/reviews')
+  @UseGuards(JwtAuthGuard)
+  async submitReview(
+    @Param('id') id: string,
+    @GetUser('id') userId: string,
+    @Body() dto: { rating: number; comment?: string; orderId?: string }
+  ) {
+    return this.medicinesService.submitReview(userId, id, dto);
   }
 }

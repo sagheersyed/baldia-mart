@@ -373,6 +373,7 @@ export default function DashboardScreen({ navigation }: any) {
                         </View>
                         {order.orderType === 'food' && <View style={[styles.badge, { backgroundColor: '#FFF5E0' }]}><Text style={[styles.badgeTxt, { color: '#FF8C00' }]}>🍽️ FOOD</Text></View>}
                         {order.orderType === 'mart' && <View style={[styles.badge, { backgroundColor: '#E8F5E9' }]}><Text style={[styles.badgeTxt, { color: '#2E7D32' }]}>🛒 MART</Text></View>}
+                        {order.orderType === 'pharma' && <View style={[styles.badge, { backgroundColor: '#E0F7FA' }]}><Text style={[styles.badgeTxt, { color: '#00838F' }]}>💊 PHARMA</Text></View>}
                       </View>
                       <Text style={styles.cardAddr} numberOfLines={1}>📍 {order.address?.streetAddress || 'Local Area'}</Text>
                       {order.orderType === 'food' && order.subOrders?.length > 1 && (
@@ -403,6 +404,7 @@ export default function DashboardScreen({ navigation }: any) {
                     <Text style={styles.orderId}>#{(order?.id || '').slice(0, 8).toUpperCase()}</Text>
                     {order.orderType === 'food' && <View style={[styles.badge, { backgroundColor: '#FFF5E0' }]}><Text style={[styles.badgeTxt, { color: '#FF8C00' }]}>🍽️</Text></View>}
                     {order.orderType === 'mart' && <View style={[styles.badge, { backgroundColor: '#E8F5E9' }]}><Text style={[styles.badgeTxt, { color: '#2E7D32' }]}>🛒</Text></View>}
+                    {order.orderType === 'pharma' && <View style={[styles.badge, { backgroundColor: '#E0F7FA' }]}><Text style={[styles.badgeTxt, { color: '#00838F' }]}>💊</Text></View>}
                     <Text style={styles.earnings}>Rs {order.total}</Text>
                   </View>
                   <Text style={styles.cardAddr} numberOfLines={1}>📍 {order.address?.streetAddress || 'Local Area'}</Text>

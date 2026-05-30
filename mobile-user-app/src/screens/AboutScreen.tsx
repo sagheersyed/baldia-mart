@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { settingsApi } from '../api/api';
+import { useCartStore } from '../store/cartStore';
 import { AppText, AppIconButton } from '../components/ui';
 import { theme } from '../theme/theme';
 
@@ -61,6 +62,40 @@ export default function AboutScreen({ navigation }: any) {
     }).catch(() => {});
   }, []));
 
+  const { activeMode } = useCartStore();
+  const accent = activeMode === 'food' ? theme.colors.food : activeMode === 'pharma' ? theme.colors.pharma : theme.colors.primary;
+  const accentDark = activeMode === 'food' ? theme.colors.foodDark : activeMode === 'pharma' ? theme.colors.pharmaDark : theme.colors.primaryDark;
+  const accentLight = activeMode === 'food' ? theme.colors.foodLight : activeMode === 'pharma' ? theme.colors.pharmaLight : theme.colors.primaryLight;
+
+  const brandName = activeMode === 'food' ? 'BaldiaFood' : activeMode === 'pharma' ? 'Baldia Pharma' : 'BaldiaMart';
+  const brandIcon = activeMode === 'food' ? 'restaurant' : activeMode === 'pharma' ? 'medical' : 'basket';
+
+  const features = activeMode === 'pharma' ? [
+    { icon: 'medical-outline', label: 'Wide range of genuine medicines' },
+    { icon: 'videocam-outline', label: 'Online doctor consultations' },
+    { icon: 'flask-outline', label: 'Lab tests with home collection' },
+    { icon: 'repeat-outline', label: 'Monthly medicine refills' },
+    { icon: 'notifications-outline', label: 'Dosage reminders' },
+  ] : activeMode === 'food' ? [
+    { icon: 'restaurant-outline', label: 'Order from top local restaurants' },
+    { icon: 'fast-food-outline', label: 'Fast and fresh food delivery' },
+    { icon: 'star-outline', label: 'Rate your favorite meals' },
+    { icon: 'bicycle-outline', label: 'Real-time rider tracking' },
+    { icon: 'receipt-outline', label: 'Digital receipts' },
+  ] : [
+    { icon: 'basket-outline', label: 'Grocery delivery from local mart' },
+    { icon: 'storefront-outline', label: 'Shop from top brands' },
+    { icon: 'flash-outline', label: 'Same-day express delivery' },
+    { icon: 'heart-outline', label: 'Save your monthly rashan list' },
+    { icon: 'wallet-outline', label: 'Secure digital payments' },
+  ];
+
+  const brandDescription = activeMode === 'pharma' 
+    ? 'Baldia Pharma is your complete digital healthcare partner. We bring genuine medicines, professional doctor consultations, and lab diagnostic services right to your doorstep, ensuring your health is always a priority.'
+    : activeMode === 'food'
+    ? 'BaldiaFood connects you with the best flavors in your city. From local street food to premium restaurants, we ensure your favorite meals reach you fresh and fast, anytime you crave.'
+    : 'BaldiaMart is your neighborhood\'s favorite one-stop shop. We provide a seamless shopping experience for groceries, household essentials, and premium brands with the convenience of lightning-fast delivery.';
+
   const openLink = (url: string) => {
     Linking.openURL(url).catch(() => Alert.alert('Error', 'Could not open link. Please try again.'));
   };
@@ -71,37 +106,39 @@ export default function AboutScreen({ navigation }: any) {
         <AppIconButton size={36} bg={theme.colors.surfaceMuted} onPress={() => navigation.goBack()}>
           <Ionicons name="chevron-back" size={20} color={theme.colors.textPrimary} />
         </AppIconButton>
-        <AppText variant="h2" style={{ flex: 1 }}>About app</AppText>
+        <AppText variant="h2" style={{ flex: 1 }}>About {activeMode === 'pharma' ? 'Healthcare' : activeMode === 'food' ? 'Food' : 'App'}</AppText>
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: theme.spacing.xxl }} showsVerticalScrollIndicator={false}>
         <LinearGradient
-          colors={[theme.colors.primary, theme.colors.primaryDark]}
+          colors={[accent || '#FF5A1F', accentDark || '#E64A19']}
           style={styles.hero}
         >
           <View style={styles.logoCircle}>
-            <Ionicons name="basket" size={36} color={theme.colors.primary} />
+            <Ionicons name={brandIcon as any} size={36} color={accent} />
           </View>
-          <AppText variant="h1" color="#fff" style={{ marginTop: theme.spacing.md }}>BaldiaMart</AppText>
-          <AppText variant="caption" color="rgba(255,255,255,0.9)">Your neighbourhood delivery app</AppText>
+          <AppText variant="h1" color="#fff" style={{ marginTop: theme.spacing.md }}>{brandName}</AppText>
+          <AppText variant="caption" color="rgba(255,255,255,0.9)">
+            {activeMode === 'pharma' ? 'Your health, our priority' : 'Your neighborhood delivery app'}
+          </AppText>
           <View style={styles.versionPill}>
-            <AppText variant="captionStrong" color={theme.colors.primary}>v{APP_VERSION}</AppText>
+            <AppText variant="captionStrong" color={accent}>v{APP_VERSION}</AppText>
           </View>
         </LinearGradient>
 
         <View style={styles.section}>
-          <AppText variant="overline">What is BaldiaMart?</AppText>
+          <AppText variant="overline">What is {brandName}?</AppText>
           <AppText style={{ marginTop: theme.spacing.sm, lineHeight: 22 }}>
-            BaldiaMart is a hyperlocal delivery platform serving your community. Order groceries, meals from top restaurants, and products from your favourite brands — all delivered fast to your doorstep.
+            {brandDescription}
           </AppText>
         </View>
 
         <View style={styles.section}>
-          <AppText variant="overline" style={{ marginBottom: theme.spacing.sm }}>Features</AppText>
-          {FEATURES.map((f, i) => (
+          <AppText variant="overline" style={{ marginBottom: theme.spacing.sm }}>Key Features</AppText>
+          {features.map((f: any, i: number) => (
             <View key={i} style={styles.featureRow}>
-              <View style={styles.featureIcon}>
-                <Ionicons name={f.icon} size={16} color={theme.colors.primary} />
+              <View style={[styles.featureIcon, { backgroundColor: accent + '15' }]}>
+                <Ionicons name={f.icon} size={16} color={accent} />
               </View>
               <AppText variant="body">{f.label}</AppText>
             </View>
@@ -121,7 +158,7 @@ export default function AboutScreen({ navigation }: any) {
               ]}
             >
               <View style={styles.rowIcon}>
-                <Ionicons name={c.icon} size={18} color={theme.colors.primary} />
+                <Ionicons name={c.icon} size={18} color={accent} />
               </View>
               <View style={{ flex: 1, gap: 2 }}>
                 <AppText variant="bodyStrong">{c.label}</AppText>
@@ -231,7 +268,6 @@ const styles = StyleSheet.create({
   },
   featureIcon: {
     width: 32, height: 32, borderRadius: 10,
-    backgroundColor: theme.colors.primaryLight,
     alignItems: 'center', justifyContent: 'center',
   },
 

@@ -14,6 +14,7 @@ interface Props {
   onAction?: () => void;
   style?: StyleProp<ViewStyle>;
   tint?: string;
+  accent?: string;
 }
 
 const EmptyState = memo(function EmptyState({
@@ -25,7 +26,9 @@ const EmptyState = memo(function EmptyState({
   onAction,
   style,
   tint,
+  accent,
 }: Props) {
+  const finalTint = accent || tint;
   return (
     <View style={[styles.wrap, style]}>
       <View style={styles.iconCircle}>
@@ -41,7 +44,7 @@ const EmptyState = memo(function EmptyState({
         <AppButton 
           label={actionLabel} 
           variant="outline" 
-          tint={tint}
+          tint={finalTint}
           onPress={onAction} 
           style={{ marginTop: theme.spacing.lg, alignSelf: 'center', paddingHorizontal: theme.spacing.xxl }} 
         />

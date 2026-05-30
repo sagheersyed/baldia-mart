@@ -62,9 +62,17 @@ export default function ProfileScreen({ navigation }: any) {
           </View>
           <Text style={styles.userName}>{rider?.name || 'Rider'}</Text>
           <Text style={styles.userPhone}>{rider?.phoneNumber}</Text>
-          <View style={styles.statusChip}>
-            <View style={[styles.statusDot, { backgroundColor: isVerified ? '#27ae60' : '#e67e22' }]} />
-            <Text style={styles.statusTxt}>{isVerified ? 'Verified Account' : 'Pending Verification'}</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8 }}>
+            <View style={styles.statusChip}>
+              <View style={[styles.statusDot, { backgroundColor: isVerified ? '#27ae60' : '#e67e22' }]} />
+              <Text style={styles.statusTxt}>{isVerified ? 'Verified Account' : 'Pending Verification'}</Text>
+            </View>
+            {rider?.isPharmaApproved && (
+              <View style={[styles.statusChip, { backgroundColor: '#E0F2FE' }]}>
+                <Ionicons name="medkit" size={12} color="#0284C7" style={{ marginRight: 4 }} />
+                <Text style={[styles.statusTxt, { color: '#0284C7' }]}>Pharma Trusted</Text>
+              </View>
+            )}
           </View>
         </View>
 

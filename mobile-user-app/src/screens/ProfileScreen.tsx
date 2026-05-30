@@ -8,9 +8,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import { authApi, addressesApi, ordersApi } from '../api/api';
+import { authApi, addressesApi, ordersApi, favoritesApi } from '../api/api';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
+import { useCartStore } from '../store/cartStore';
+import { useOrdersStore } from '../store/ordersStore';
+import { useAuthStore } from '../store/authStore';
 import { AppText, AppButton, AppIconButton, AppBadge } from '../components/ui';
 import { theme } from '../theme/theme';
 
@@ -31,10 +34,12 @@ type MenuItem = {
 export default function ProfileScreen({ navigation }: any) {
   const { signOut } = useAuth();
   const { settings } = useSettings();
-  const [user, setUser] = useState<any>(null);
+  const { activeMode } = useCartStore();
+  const { orders, consultations, labBookings, fetchOrders, fetchConsultations, fetchLabBookings } = useOrdersStore();
+  const { userData: user } = useAuthStore();
+
   const [addresses, setAddresses] = useState<any[]>([]);
-  const [orderCount, setOrderCount] = useState(0);
-  const [activeOrderCount, setActiveOrderCount] = useState(0);
+  const [favoritesCount, setFavoritesCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -45,20 +50,20 @@ export default function ProfileScreen({ navigation }: any) {
     if (!force && now - lastFetchTime.current < 30000) return;
     lastFetchTime.current = now;
     try {
-      const [userRes, addrRes, ordersRes] = await Promise.allSettled([
-        authApi.getMe(),
+      if (!force && !navigation.isFocused()) return;
+      const [addrRes, favsRes] = await Promise.allSettled([
         addressesApi.getAll(),
-        ordersApi.getHistory(),
+        favoritesApi.getAll(),
       ]);
-      if (userRes.status === 'fulfilled') setUser(userRes.value.data);
+      
+      // Store fetches
+      fetchOrders(force);
+      fetchConsultations(force);
+      fetchLabBookings(force);
+
       if (addrRes.status === 'fulfilled') setAddresses(addrRes.value.data || []);
-      if (ordersRes.status === 'fulfilled') {
-        const d = ordersRes.value.data || {};
-        const arr = Array.isArray(d) ? d : (d.data || []);
-        setOrderCount(d.total ?? arr.length);
-        const active = arr.filter((o: any) =>
-          ['pending', 'confirmed', 'preparing', 'out_for_delivery'].includes(o.status)).length;
-        setActiveOrderCount(active);
+      if (favsRes.status === 'fulfilled') {
+        setFavoritesCount(favsRes.value.data?.length || 0);
       }
     } catch {
       // noop
@@ -91,10 +96,16 @@ export default function ProfileScreen({ navigation }: any) {
     ]);
   };
 
+  const accent = activeMode === 'food' ? theme.colors.food : activeMode === 'pharma' ? theme.colors.pharma : theme.colors.primary;
+  const accentDark = activeMode === 'food' ? theme.colors.foodDark : activeMode === 'pharma' ? theme.colors.pharmaDark : theme.colors.primaryDark;
+
+  // Safe colors for LinearGradient to prevent NPE
+  const gradientColors: [string, string] = [accent || '#FF5A1F', accentDark || '#E64A19'];
+
   if (loading) {
     return (
       <View style={styles.loaderContainer}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
+        <ActivityIndicator size="large" color={accent} />
         <AppText variant="caption" style={{ marginTop: 12 }}>Loading profile…</AppText>
       </View>
     );
@@ -109,8 +120,16 @@ export default function ProfileScreen({ navigation }: any) {
     { icon: 'card-outline', label: 'Payment methods', desc: 'Cards & wallets', screen: null },
   ];
 
+  const orderCount = orders.length;
+  const activeOrderCount = orders.filter((o: any) =>
+    ['pending', 'confirmed', 'preparing', 'out_for_delivery'].includes(o.status)).length;
+
   const ordersItems: MenuItem[] = [
     { icon: 'cube-outline', label: 'My orders', desc: 'Track and view past orders', screen: 'MyOrders', badge: activeOrderCount > 0 ? activeOrderCount : undefined },
+    { icon: 'videocam-outline', label: 'My consultations', desc: `${consultations.length} Bookings`, screen: 'MyConsultations', tint: theme.colors.pharma, badge: consultations.filter(c => c.status === 'scheduled').length || undefined },
+    { icon: 'flask-outline', label: 'Lab bookings', desc: `${labBookings.length} Reports`, screen: 'MyLabBookings', tint: theme.colors.pharma, badge: labBookings.filter(l => l.status !== 'results_ready' && l.status !== 'cancelled').length || undefined },
+    { icon: 'repeat-outline', label: 'My Subscriptions', desc: 'Manage recurring medicines', screen: 'PharmaSubscriptionList', tint: theme.colors.pharma },
+    { icon: 'document-text-outline', label: 'My Prescriptions', desc: 'Track your uploaded prescriptions', screen: 'MyPrescriptions', tint: theme.colors.pharma },
     { icon: 'heart-outline', label: 'Favourites', desc: 'Your saved items & shops', screen: 'Favourites', tint: theme.colors.danger },
     ...(settings?.feature_rashan_enabled
       ? [{ icon: 'archive-outline' as keyof typeof Ionicons.glyphMap, label: 'Bulk Rashan', desc: 'Upload your monthly grocery list', screen: 'RashanOrder', tint: theme.colors.rashan }]
@@ -123,12 +142,19 @@ export default function ProfileScreen({ navigation }: any) {
     { icon: 'information-circle-outline', label: 'About app', desc: 'Version 1.0.0', screen: 'About' },
   ];
 
+  const filteredOrdersItems = ordersItems.filter(item => {
+    if (item.label === 'My consultations') return settings?.feature_pharma_doctor_consultations_enabled;
+    if (item.label === 'Lab bookings') return settings?.feature_pharma_lab_tests_enabled;
+    if (item.label === 'My Subscriptions') return settings?.feature_pharma_refills_enabled;
+    return true;
+  });
+
   const renderMenuGroup = (title: string, items: MenuItem[]) => (
     <View style={styles.section}>
       <AppText variant="overline" style={styles.sectionLabel}>{title}</AppText>
       <View style={styles.menuCard}>
         {items.map((item, ii) => {
-          const tint = item.tint || theme.colors.primary;
+          const tint = item.tint || accent;
           return (
             <Pressable
               key={`${title}-${ii}`}
@@ -162,11 +188,11 @@ export default function ProfileScreen({ navigation }: any) {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 60 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} colors={[theme.colors.primary]} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={accent} colors={[accent]} />}
       >
         {/* Branded gradient header */}
         <LinearGradient
-          colors={[theme.colors.primary, theme.colors.primaryDark]}
+          colors={gradientColors}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.headerBanner}
@@ -218,28 +244,50 @@ export default function ProfileScreen({ navigation }: any) {
           </View>
         </LinearGradient>
 
-        {/* Stats card */}
-        <View style={styles.statsCard}>
-          <Pressable style={styles.statBox} onPress={() => navigation.navigate('MyOrders')}>
-            <AppText variant="h2">{orderCount}</AppText>
-            <AppText variant="caption">Orders</AppText>
-          </Pressable>
-          <View style={styles.statDivider} />
-          <Pressable style={styles.statBox} onPress={() => navigation.navigate('SavedAddresses')}>
-            <AppText variant="h2">{addresses.length}</AppText>
-            <AppText variant="caption">Addresses</AppText>
-          </Pressable>
-          <View style={styles.statDivider} />
-          <Pressable style={styles.statBox} onPress={() => navigation.navigate('Favourites')}>
-            <AppText variant="h2">
-              <Ionicons name="heart" size={18} color={theme.colors.danger} />
-            </AppText>
-            <AppText variant="caption">Favourites</AppText>
-          </Pressable>
+        {/* Stats Dashboard */}
+        <View style={styles.statsContainer}>
+          <View style={styles.statsCard}>
+            <Pressable
+              style={styles.statItem}
+              onPress={() => navigation.navigate('MyOrders')}
+            >
+              <View style={[styles.statIcon, { backgroundColor: theme.colors.primaryLight }]}>
+                <Ionicons name="cube-outline" size={20} color={theme.colors.primary} />
+              </View>
+              <AppText variant="h3">{orderCount}</AppText>
+              <AppText variant="caption">Orders</AppText>
+            </Pressable>
+
+            <View style={styles.statDivider} />
+
+            <Pressable
+              style={styles.statItem}
+              onPress={() => navigation.navigate('SavedAddresses')}
+            >
+              <View style={[styles.statIcon, { backgroundColor: theme.colors.infoLight }]}>
+                <Ionicons name="location-outline" size={20} color={theme.colors.info} />
+              </View>
+              <AppText variant="h3">{addresses.length}</AppText>
+              <AppText variant="caption">Addresses</AppText>
+            </Pressable>
+
+            <View style={styles.statDivider} />
+
+            <Pressable
+              style={styles.statItem}
+              onPress={() => navigation.navigate('Favourites')}
+            >
+              <View style={[styles.statIcon, { backgroundColor: theme.colors.dangerLight }]}>
+                <Ionicons name="heart-outline" size={20} color={theme.colors.danger} />
+              </View>
+              <AppText variant="h3">{favoritesCount}</AppText>
+              <AppText variant="caption">Favorites</AppText>
+            </Pressable>
+          </View>
         </View>
 
         {/* Wallet/Promo placeholder banner — premium feel */}
-        <View style={{ paddingHorizontal: theme.spacing.lg, marginTop: theme.spacing.md }}>
+        <View style={{ paddingHorizontal: theme.spacing.lg, marginTop: 0 }}>
           <LinearGradient
             colors={[theme.colors.pro, '#5B21B6']}
             start={{ x: 0, y: 0 }}
@@ -264,7 +312,7 @@ export default function ProfileScreen({ navigation }: any) {
 
         {/* Menu groups */}
         {renderMenuGroup('Account', accountItems)}
-        {renderMenuGroup('Orders & saved', ordersItems)}
+        {renderMenuGroup('Orders & saved', filteredOrdersItems)}
         {renderMenuGroup('Support', supportItems)}
 
         {/* Logout */}
@@ -315,18 +363,38 @@ const styles = StyleSheet.create({
   },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
 
-  // Stats
+  statsContainer: {
+    paddingHorizontal: theme.spacing.lg,
+    marginTop: -24,
+    marginBottom: theme.spacing.md,
+  },
   statsCard: {
     flexDirection: 'row',
     backgroundColor: theme.colors.surface,
-    marginHorizontal: theme.spacing.lg,
-    marginTop: -theme.spacing.lg,
     borderRadius: theme.radius.lg,
-    paddingVertical: theme.spacing.md,
+    padding: theme.spacing.md,
     ...theme.shadows.md,
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  statBox: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2 },
-  statDivider: { width: 1, backgroundColor: theme.colors.divider, marginVertical: 4 },
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 2,
+  },
+  statIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  statDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: theme.colors.divider,
+  },
 
   // Wallet
   walletCard: {

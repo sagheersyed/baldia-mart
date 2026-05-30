@@ -267,12 +267,27 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.server.to('admin_room').emit('newOrder', order);
   }
 
+  emitPharmaUpdated() {
+    if (!this.server) return;
+    this.server.emit('pharmaUpdated');
+    this.logger.log('📡 WS emitted: pharmaUpdated');
+  }
+
   emitOrderUpdate(orderId: string, order: any) {
     this.server.to(`order_${orderId}`).emit('orderUpdated', { orderId, fullOrder: order });
   }
 
-  emitNewOrderToRiders(order: any) {
-    this.server.to('riders_room').emit('newOrder', order);
+  async emitNewOrderToRiders(order: any) {
+    if (order.orderType === 'pharma') {
+      try {
+        const riders = await this.ridersService.findAllActivePharmaRiders();
+        riders.forEach(r => this.server.to(`rider_${r.id}`).emit('newOrder', order));
+      } catch (e) {
+        console.error('Failed to fetch pharma riders for broadcasting order', e);
+      }
+    } else {
+      this.server.to('riders_room').emit('newOrder', order);
+    }
   }
 
   emitNewOrderToSpecificRider(order: any, riderId: string) {
