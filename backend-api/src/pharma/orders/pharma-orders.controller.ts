@@ -1,9 +1,11 @@
-import { Controller, Post, Get, Body, UseGuards, Param, Query, Req } from '@nestjs/common';
+import { Controller, Post, Get, Body, UseGuards, Param, Query, Req, UseInterceptors } from '@nestjs/common';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { PharmaOrdersService } from './pharma-orders.service';
+import { ControlledSubstanceInterceptor } from '../compliance/controlled-substance.interceptor';
 
 @Controller('pharma/orders')
 @UseGuards(JwtAuthGuard)
+@UseInterceptors(ControlledSubstanceInterceptor)
 export class PharmaOrdersController {
   constructor(private readonly pharmaOrdersService: PharmaOrdersService) {}
 

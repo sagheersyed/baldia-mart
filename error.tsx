@@ -13,7 +13,7 @@
 2026-05-05 00: 45: 43.975 | (node: 18) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0.Use async / await or an external async flow control mechanism instead.
 2026-05-05 00: 45: 48.822 | Application is running on: http://127.0.0.1:3000
 2026-05-05 00: 45: 48.839 | Swagger Docs available at: http://127.0.0.1:3000/docs
-2026-05-05 00: 45: 48.839 | Allowed CORS origins: http://localhost:3000, http://localhost:3001, https://bb0f-175-107-236-228.ngrok-free.app, http://192.168.100.142:3001
+2026-05-05 00: 45: 48.839 | Allowed CORS origins: http://localhost:3000, http://localhost:3001, https://d796-175-107-236-228.ngrok-free.app, http://192.168.100.142:3001
 2026-05-05 00: 45: 48.931 | [19: 45: 48.761] INFO(18): Starting Nest application...
 2026-05-05 00: 45: 48.931 | context: "NestFactory"
 2026-05-05 00: 45: 49.527 | Unauthenticated client connected: v9aZWOdXZYxWct4zAAAC

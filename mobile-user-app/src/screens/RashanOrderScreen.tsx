@@ -554,6 +554,7 @@ export default function RashanOrderScreen() {
         onSave={handleUpdateAddress}
         initialData={editingAddressData}
         title={editingAddressData ? "Edit Address" : "Add New Address"}
+        accent={theme.colors.rashan}
       />
     </SafeAreaView>
   );

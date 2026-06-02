@@ -87,6 +87,7 @@ export class AuthService {
         role: user.role,
         phoneNumber: user.phoneNumber,
         hasMpin: !!user.mpin,
+        isMpinTemporary: user.isMpinTemporary,
       }
     };
   }
@@ -146,6 +147,7 @@ export class AuthService {
         isProfileComplete: rider.isProfileComplete,
         isActive: rider.isActive,
         hasMpin: !!rider.mpin,
+        isMpinTemporary: rider.isMpinTemporary,
       }
     };
   }
@@ -154,9 +156,9 @@ export class AuthService {
   async setupMpin(userId: string, mpin: string, role: 'customer' | 'rider') {
     const hashedMpin = await bcrypt.hash(mpin, 10);
     if (role === 'customer') {
-      await this.usersService.update(userId, { mpin: hashedMpin, mpinAttempts: 0 });
+      await this.usersService.update(userId, { mpin: hashedMpin, mpinAttempts: 0, isMpinTemporary: false });
     } else {
-      await this.ridersService.update(userId, { mpin: hashedMpin, mpinAttempts: 0 });
+      await this.ridersService.update(userId, { mpin: hashedMpin, mpinAttempts: 0, isMpinTemporary: false });
     }
     return { success: true, message: 'MPIN setup successfully' };
   }

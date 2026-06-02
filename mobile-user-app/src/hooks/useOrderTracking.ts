@@ -33,12 +33,17 @@ const GET_RASHAN_STEPS = (): TrackingStep[] => [
 ];
 
 const GET_PHARMA_STEPS = (): TrackingStep[] => [
-  { key: 'pending', label: 'Review', icon: '🔍', description: 'Pharmacist is reviewing the order/prescription' },
-  { key: 'confirmed', label: 'Approved', icon: '✅', description: 'Order has been approved' },
-  { key: 'preparing', label: 'Ready', icon: '📦', description: 'Medicines are packed and ready' },
-  { key: 'out_for_delivery', label: 'Out for Delivery', icon: '🚴', description: 'Rider is delivering your medicines' },
-  { key: 'delivered', label: 'Delivered', icon: '🎁', description: 'Medicines successfully delivered' },
+  { key: 'pending', label: 'Prescription Under Review', icon: '🔍', description: 'Our pharmacist is verifying your prescription' },
+  { key: 'confirmed', label: 'Prescription Approved', icon: '✅', description: 'Your prescription has been verified and approved' },
+  { key: 'preparing', label: 'Packing Medicines', icon: '💊', description: 'The pharmacy is preparing your medicines' },
+  { key: 'assigned_to_rider', label: 'Rider Assigned', icon: '🏍️', description: 'A delivery rider has been assigned' },
+  { key: 'ready_for_pickup', label: 'Ready for Pickup', icon: '📦', description: 'Medicines are packed and waiting for the rider' },
+  { key: 'picked_up', label: 'Picked Up', icon: '🏥', description: 'Rider has picked up your medicines from the pharmacy' },
+  { key: 'in_transit', label: 'In Transit', icon: '🚀', description: 'Your medicines are on the way to you' },
+  { key: 'out_for_delivery', label: 'Almost There', icon: '📍', description: 'Rider is near your location' },
+  { key: 'delivered', label: 'Delivered', icon: '🎉', description: 'Medicines successfully delivered. Stay healthy! 💚' },
 ];
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Hook

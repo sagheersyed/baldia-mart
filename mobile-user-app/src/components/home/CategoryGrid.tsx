@@ -1,5 +1,5 @@
-import React, { memo, useCallback } from 'react';
-import { View, StyleSheet, FlatList, Pressable, Animated } from 'react-native';
+import React, { memo, useCallback, useState } from 'react';
+import { View, StyleSheet, Pressable, Animated } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -7,6 +7,7 @@ import AppText from '../ui/AppText';
 import SectionHeader from '../ui/SectionHeader';
 import { normalizeUrl } from '../../api/api';
 import { theme } from '../../theme/theme';
+import { DEFAULT_IMAGES } from '../../constants/images';
 
 interface CategoryGridProps {
   categories: any[];
@@ -27,65 +28,22 @@ const TINTS: { bg: [string, string]; icon: string; border: string }[] = [
 ];
 
 /**
- * Premium Pandamart-style category rail with gradient circles,
- * section header, and spring-animated press effects.
+ * Premium category wrap grid, matching the Pharma categories layout.
  */
 const CategoryGrid = memo(function CategoryGrid({
   categories,
   onCategoryPress,
   onSeeAll,
 }: CategoryGridProps) {
+  const [showAll, setShowAll] = useState(false);
+  const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
+
   if (!categories?.length) return null;
 
-  const renderItem = ({ item, index }: { item: any; index: number }) => {
-    const tint = TINTS[index % TINTS.length];
-    const iconUri = normalizeUrl(item.iconUrl || item.imageUrl);
-    const isNew = item.isNew || item.createdAt && (Date.now() - new Date(item.createdAt).getTime() < 7 * 86400000);
-    return (
-      <Pressable
-        onPress={() => onCategoryPress(item)}
-        style={({ pressed }) => [
-          styles.tile,
-          pressed ? { opacity: 0.85, transform: [{ scale: 0.93 }] } : null,
-        ]}
-      >
-        <View style={[styles.iconBox]}>
-          <LinearGradient
-            colors={tint.bg}
-            style={StyleSheet.absoluteFill}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          />
-          {iconUri ? (
-            <Image
-              source={{ uri: iconUri }}
-              style={styles.icon}
-              contentFit="cover"
-              cachePolicy="memory-disk"
-              transition={150}
-            />
-          ) : (
-            <Ionicons name="grid" size={28} color={tint.icon} />
-          )}
-          {/* New badge */}
-          {isNew && (
-            <View style={styles.newBadge}>
-              <AppText variant="badge" color="#fff" style={{ fontSize: 8 }}>NEW</AppText>
-            </View>
-          )}
-        </View>
-        <AppText
-          variant="captionStrong"
-          color={theme.colors.textPrimary}
-          align="center"
-          numberOfLines={2}
-          style={styles.label}
-        >
-          {item.name}
-        </AppText>
-      </Pressable>
-    );
-  };
+  const hasMoreThan7 = categories.length > 7;
+  const displayedCategories = hasMoreThan7 && !showAll
+    ? categories.slice(0, 7)
+    : categories;
 
   return (
     <View style={styles.section}>
@@ -94,14 +52,76 @@ const CategoryGrid = memo(function CategoryGrid({
         subtitle={`${categories.length} categories`}
         onAction={onSeeAll}
       />
-      <FlatList
-        data={categories}
-        keyExtractor={(c) => c.id}
-        renderItem={renderItem}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.list}
-      />
+      <View style={styles.grid}>
+        {displayedCategories.map((item, index) => {
+          const tint = TINTS[index % TINTS.length];
+          const iconUri = normalizeUrl(item.iconUrl || item.imageUrl);
+          const isNew = item.isNew || item.createdAt && (Date.now() - new Date(item.createdAt).getTime() < 7 * 86400000);
+          return (
+            <Pressable
+              key={item.id}
+              onPress={() => onCategoryPress(item)}
+              style={({ pressed }) => [
+                styles.tile,
+                pressed ? { opacity: 0.85, transform: [{ scale: 0.93 }] } : null,
+              ]}
+            >
+              <View style={[styles.iconBox]}>
+                <LinearGradient
+                  colors={tint.bg}
+                  style={StyleSheet.absoluteFill}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                />
+                <Image
+                  source={{ uri: imageErrors[item.id] ? DEFAULT_IMAGES.category : (iconUri || DEFAULT_IMAGES.category) }}
+                  style={styles.icon}
+                  contentFit="cover"
+                  cachePolicy="memory-disk"
+                  transition={150}
+                  onError={() => setImageErrors(prev => ({ ...prev, [item.id]: true }))}
+                />
+                {/* New badge */}
+                {isNew && (
+                  <View style={styles.newBadge}>
+                    <AppText variant="badge" color="#fff" style={{ fontSize: 8 }}>NEW</AppText>
+                  </View>
+                )}
+              </View>
+              <AppText
+                variant="caption"
+                color={theme.colors.textPrimary}
+                align="center"
+                numberOfLines={1}
+                style={styles.label}
+              >
+                {item.name}
+              </AppText>
+            </Pressable>
+          );
+        })}
+
+        {hasMoreThan7 && (
+          <Pressable
+            onPress={() => setShowAll(!showAll)}
+            style={({ pressed }) => [
+              styles.tile,
+              pressed ? { opacity: 0.85, transform: [{ scale: 0.93 }] } : null,
+            ]}
+          >
+            <View style={[styles.iconBox, { backgroundColor: '#F1F5F9' }]}>
+              <Ionicons
+                name={showAll ? 'chevron-up-outline' : 'grid-outline'}
+                size={24}
+                color={theme.colors.textSecondary}
+              />
+            </View>
+            <AppText variant="caption" color={theme.colors.textSecondary} align="center" style={styles.label}>
+              {showAll ? 'Show Less' : 'Show More'}
+            </AppText>
+          </Pressable>
+        )}
+      </View>
     </View>
   );
 });
@@ -110,43 +130,43 @@ const styles = StyleSheet.create({
   section: {
     paddingBottom: theme.spacing.sm,
   },
-  list: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.xs,
-    gap: 4,
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: theme.spacing.md,
+    rowGap: 16,
+    marginTop: theme.spacing.xs,
   },
   tile: {
-    width: 96,
+    width: '25%',
     alignItems: 'center',
-    marginRight: theme.spacing.sm,
+    paddingHorizontal: 4,
   },
   iconBox: {
-    width: 68,
-    height: 68,
-    borderRadius: 12,
+    width: 56,
+    height: 56,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    marginBottom: theme.spacing.sm,
-    borderWidth: 2,
-    borderColor: 'transparent',
+    marginBottom: 8,
   },
   icon: { width: '100%', height: '100%' },
   newBadge: {
     position: 'absolute',
-    bottom: 4,
-    right: 2,
+    bottom: -2,
+    right: -2,
     backgroundColor: theme.colors.success,
     borderRadius: 8,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderWidth: 1.5,
+    paddingHorizontal: 4,
+    paddingVertical: 0.5,
+    borderWidth: 1,
     borderColor: '#fff',
   },
   label: {
     paddingHorizontal: 2,
-    lineHeight: 15,
-    fontSize: 12.5,
+    fontSize: 11,
+    color: theme.colors.textSecondary,
   },
 });
 

@@ -21,6 +21,10 @@ const STEP_ICON_MAP: Record<string, keyof typeof Ionicons.glyphMap> = {
   pending: 'document-text-outline',
   confirmed: 'checkmark-circle-outline',
   preparing: 'restaurant-outline',
+  assigned_to_rider: 'person-outline',
+  ready_for_pickup: 'cube-outline',
+  picked_up: 'bag-check-outline',
+  in_transit: 'navigate-outline',
   out_for_delivery: 'bicycle-outline',
   delivered: 'gift-outline',
   pending_review: 'document-text-outline',
@@ -596,7 +600,7 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
                   </View>
                 ) : null}
 
-                {(status === 'pending' || status === 'confirmed') && order?.orderType !== 'food' ? (
+                {(status === 'pending' || status === 'confirmed') && order?.orderType !== 'food' && !order?.prescriptionId ? (
                   <View style={{ flexDirection: 'row', gap: theme.spacing.sm, marginTop: theme.spacing.md }}>
                     {hasChanges() ? (
                       <AppButton

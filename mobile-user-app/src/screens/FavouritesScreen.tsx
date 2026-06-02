@@ -176,9 +176,14 @@ export default function FavouritesScreen({ navigation }: any) {
                 style={[styles.tab, active ? { backgroundColor: favAccentLight, borderWidth: 1, borderColor: favAccentBorder } : null]}
                 onPress={() => setActiveTab(tab)}
               >
-                <Ionicons name={icon} size={16} color={active ? favAccent : theme.colors.textSecondary} />
-                <AppText variant={active ? 'bodyStrong' : 'body'} color={active ? favAccent : theme.colors.textSecondary}>
-                  {tab === 'Restaurants' ? 'Restaurants & shops' : tab === 'Medicines' ? 'Medicines' : 'Mart Products'}
+                <Ionicons name={icon} size={13} color={active ? favAccent : '#475569'} />
+                <AppText 
+                  variant={active ? 'bodyStrong' : 'body'} 
+                  color={active ? favAccent : '#475569'} 
+                  numberOfLines={1} 
+                  style={{ fontSize: 11.5, fontWeight: active ? '700' : '600' }}
+                >
+                  {tab === 'Restaurants' ? 'Food' : tab === 'Medicines' ? 'Medicines' : 'Products'}
                 </AppText>
               </Pressable>
             );
@@ -234,15 +239,16 @@ const styles = StyleSheet.create({
   tabs: {
     flexDirection: 'row',
     backgroundColor: theme.colors.surface,
-    paddingHorizontal: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.sm,
-    gap: theme.spacing.sm,
+    gap: theme.spacing.xs,
     borderBottomWidth: 1, borderBottomColor: theme.colors.divider,
   },
   tab: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
+    gap: 2,
+    paddingVertical: 8,
+    paddingHorizontal: 2,
     borderRadius: theme.radius.pill,
     backgroundColor: theme.colors.surfaceMuted,
   },

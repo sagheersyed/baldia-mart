@@ -1,5 +1,5 @@
-import React, { memo, useMemo, useState } from 'react';
-import { View, StyleSheet, Pressable, Modal, ScrollView, Dimensions } from 'react-native';
+import React, { memo, useMemo, useState, useRef, useEffect } from 'react';
+import { View, StyleSheet, Pressable, Modal, ScrollView, Dimensions, Animated, PanResponder } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -61,6 +61,75 @@ const ProductCard = memo(function ProductCard({
   tint = theme.colors.primary,
 }: ProductCardProps) {
   const [detailVisible, setDetailVisible] = useState(false);
+  const [isScrollAtTop, setIsScrollAtTop] = useState(true);
+  const [imageError, setImageError] = useState(false);
+
+  const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (detailVisible) {
+      translateY.setValue(SCREEN_HEIGHT);
+      backdropOpacity.setValue(0);
+      Animated.parallel([
+        Animated.timing(backdropOpacity, {
+          toValue: 1,
+          duration: 250,
+          useNativeDriver: true,
+        }),
+        Animated.spring(translateY, {
+          toValue: 0,
+          damping: 18,
+          stiffness: 140,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [detailVisible]);
+
+  const closeModal = () => {
+    Animated.parallel([
+      Animated.timing(backdropOpacity, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: SCREEN_HEIGHT,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setDetailVisible(false);
+    });
+  };
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return isScrollAtTop && gestureState.dy > 5;
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dy > 0) {
+          translateY.setValue(gestureState.dy);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dy > 120 || gestureState.vy > 0.5) {
+          closeModal();
+        } else {
+          Animated.spring(translateY, {
+            toValue: 0,
+            damping: 18,
+            stiffness: 140,
+            useNativeDriver: true,
+          }).start();
+        }
+      },
+    })
+  ).current;
+
 
   const stock = product.stock ?? product.stockQuantity;
   const isOOS = stock !== undefined ? stock <= 0 : false;
@@ -106,11 +175,12 @@ const ProductCard = memo(function ProductCard({
       >
         <View style={styles.imageWrap}>
           <Image
-            source={{ uri: normalizeUrl(product.imageUrl) || DEFAULT_IMAGES.product }}
+            source={{ uri: imageError ? DEFAULT_IMAGES.product : (normalizeUrl(product.imageUrl) || DEFAULT_IMAGES.product) }}
             style={styles.image}
             contentFit="contain"
             cachePolicy="memory-disk"
             transition={200}
+            onError={() => setImageError(true)}
           />
 
           {/* Premium solid discount badge - top left */}
@@ -249,26 +319,42 @@ const ProductCard = memo(function ProductCard({
       {/* Premium FoodPanda-style Product Detail Modal */}
       <Modal
         visible={detailVisible}
-        animationType="slide"
         transparent
         statusBarTranslucent
-        onRequestClose={() => setDetailVisible(false)}
+        onRequestClose={closeModal}
       >
         <View style={styles.modalOverlay}>
           {/* Backdrop Touch Dismiss */}
-          <Pressable
-            style={StyleSheet.absoluteFillObject}
-            onPress={() => setDetailVisible(false)}
-          />
+          <Animated.View
+            style={[
+              StyleSheet.absoluteFillObject,
+              {
+                backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                opacity: backdropOpacity,
+              },
+            ]}
+          >
+            <Pressable
+              style={StyleSheet.absoluteFillObject}
+              onPress={closeModal}
+            />
+          </Animated.View>
 
           {/* Bottom Sheet Modal View Container */}
-          <View style={styles.modalSheet}>
-            {/* Header Handle */}
-            <View style={styles.modalHandle} />
+          <Animated.View
+            style={[
+              styles.modalSheet,
+              { transform: [{ translateY }] }
+            ]}
+          >
+            {/* Header Handle / Drag Area */}
+            <View {...panResponder.panHandlers} style={styles.modalDragArea}>
+              <View style={styles.modalHandle} />
+            </View>
 
             {/* Circular Close Button */}
             <Pressable
-              onPress={() => setDetailVisible(false)}
+              onPress={closeModal}
               style={styles.modalCloseBtn}
               hitSlop={12}
             >
@@ -278,14 +364,19 @@ const ProductCard = memo(function ProductCard({
             <ScrollView
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.modalScrollContent}
+              onScroll={(e) => {
+                setIsScrollAtTop(e.nativeEvent.contentOffset.y <= 0);
+              }}
+              scrollEventThrottle={16}
             >
               {/* Product Large Image Container */}
               <View style={styles.modalImageWrap}>
                 <Image
-                  source={{ uri: normalizeUrl(product.imageUrl) || DEFAULT_IMAGES.product }}
+                  source={{ uri: imageError ? DEFAULT_IMAGES.product : (normalizeUrl(product.imageUrl) || DEFAULT_IMAGES.product) }}
                   style={styles.modalImage}
                   contentFit="contain"
                   cachePolicy="memory-disk"
+                  onError={() => setImageError(true)}
                 />
 
                 {/* Discount Badge */}
@@ -436,7 +527,7 @@ const ProductCard = memo(function ProductCard({
                 </Pressable>
               )}
             </View>
-          </View>
+          </Animated.View>
         </View>
       </Modal>
     </>
@@ -630,7 +721,7 @@ const styles = StyleSheet.create({
   /* Product Details Modal Styles */
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    backgroundColor: 'transparent',
     justifyContent: 'flex-end',
   },
   modalSheet: {
@@ -640,14 +731,17 @@ const styles = StyleSheet.create({
     maxHeight: SCREEN_HEIGHT * 0.88,
     paddingBottom: 24,
   },
+  modalDragArea: {
+    width: '100%',
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   modalHandle: {
     width: 38,
     height: 5,
     borderRadius: 3,
     backgroundColor: '#E2E8F0',
-    alignSelf: 'center',
-    marginTop: 10,
-    marginBottom: 15,
   },
   modalCloseBtn: {
     position: 'absolute',

@@ -33,8 +33,8 @@ export default function AboutScreen({ navigation }: any) {
   const [contactLinks, setContactLinks] = useState<{
     icon: keyof typeof Ionicons.glyphMap; label: string; value: string; action: () => void;
   }[]>([
-    { icon: 'mail-outline', label: 'Email', value: 'support@baldiamart.pk', action: () => Linking.openURL('mailto:support@baldiamart.pk') },
-    { icon: 'call-outline', label: 'Phone', value: '+92 300 0000000', action: () => Linking.openURL('tel:+923000000000') },
+    { icon: 'mail-outline', label: 'Email', value: 'support@baldiamart.com', action: () => Linking.openURL('mailto:support@baldiamart.com') },
+    { icon: 'call-outline', label: 'Phone', value: '+92 300 1234567', action: () => Linking.openURL('tel:+923001234567') },
   ]);
   const [socialLinks, setSocialLinks] = useState<{
     icon: keyof typeof Ionicons.glyphMap; label: string; url: string; color: string;
@@ -47,8 +47,8 @@ export default function AboutScreen({ navigation }: any) {
     settingsApi.getPublicSettings().then(res => {
       const data = res.data;
       if (!data) return;
-      const email = data.contact_email || 'support@baldiamart.pk';
-      const phone = data.contact_phone || '+92 300 0000000';
+      const email = data.contact_email || 'support@baldiamart.com';
+      const phone = data.contact_phone || '+92 300 1234567';
       const fb = data.social_facebook || 'https://facebook.com/baldiamart';
       const insta = data.social_instagram || 'https://instagram.com/baldiamart';
       setContactLinks([

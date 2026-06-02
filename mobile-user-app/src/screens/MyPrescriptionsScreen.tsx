@@ -67,6 +67,7 @@ export default function MyPrescriptionsScreen({ navigation }: any) {
       case 'pending': return <AppBadge label="Pending" variant="warning" />;
       case 'in_review': return <AppBadge label="In Review" variant="info" />;
       case 'approved': return <AppBadge label="Approved" variant="success" />;
+      case 'quoted': return <AppBadge label="Quoted" variant="info" />;
       case 'rejected': return <AppBadge label="Rejected" variant="danger" />;
       case 'expired': return <AppBadge label="Expired" variant="neutral" />;
       default: return <AppBadge label={status} variant="neutral" />;
@@ -112,6 +113,18 @@ export default function MyPrescriptionsScreen({ navigation }: any) {
               <Ionicons name="medkit-outline" size={14} color={theme.colors.textMuted} />
               <AppText variant="caption">Dr. {item.doctorName}</AppText>
             </View>
+          )}
+          {(item.status === 'approved' || item.status === 'quoted') && (
+            <Pressable
+              style={styles.viewQuoteLink}
+              onPress={() => navigation.navigate('PrescriptionQuotation', {
+                prescriptionId: item.id,
+                prescriptionImageUrl: item.imageUrl,
+              })}
+            >
+              <Ionicons name="receipt" size={14} color={theme.colors.pharma} />
+              <AppText variant="caption" color={theme.colors.pharma}> View Quotation →</AppText>
+            </Pressable>
           )}
         </View>
       </View>
@@ -257,6 +270,23 @@ export default function MyPrescriptionsScreen({ navigation }: any) {
                     </View>
                   </View>
                 )}
+
+                {/* View Quotation CTA */}
+                {(selectedPrescription.status === 'approved' || selectedPrescription.status === 'quoted') && (
+                  <Pressable
+                    style={styles.quotationCta}
+                    onPress={() => {
+                      setSelectedPrescription(null);
+                      navigation.navigate('PrescriptionQuotation', {
+                        prescriptionId: selectedPrescription.id,
+                        prescriptionImageUrl: selectedPrescription.imageUrl,
+                      });
+                    }}
+                  >
+                    <Ionicons name="receipt" size={22} color="#fff" />
+                    <AppText variant="bodyStrong" color="#fff" style={{ marginLeft: 8 }}>View Quotation & Place Order</AppText>
+                  </Pressable>
+                )}
               </View>
             </ScrollView>
           </SafeAreaView>
@@ -376,5 +406,20 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.danger,
     borderRadius: theme.radius.md,
     marginTop: theme.spacing.sm,
+  },
+  viewQuoteLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+    paddingVertical: 4,
+  },
+  quotationCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: theme.radius.lg,
+    backgroundColor: theme.colors.pharma,
+    marginTop: theme.spacing.md,
   },
 });

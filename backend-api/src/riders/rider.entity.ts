@@ -26,6 +26,9 @@ export class Rider {
   @Column({ name: 'mpin_attempts', default: 0 })
   mpinAttempts: number;
 
+  @Column({ name: 'is_mpin_temporary', default: false })
+  isMpinTemporary: boolean;
+
   @Column({ name: 'vehicle_type', nullable: true })
   vehicleType: string;
 

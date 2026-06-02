@@ -767,7 +767,7 @@ export class OrdersService {
       .leftJoinAndSelect('subOrders.restaurant', 'subOrderRestaurant')
       .leftJoinAndSelect('subOrders.vendor', 'subOrderVendor')
       .where('order.riderId = :riderId', { riderId })
-      .andWhere('order.status IN (:...statuses)', { statuses: ['confirmed', 'preparing', 'out_for_delivery'] })
+      .andWhere('order.status IN (:...statuses)', { statuses: ['confirmed', 'preparing', 'assigned_to_rider', 'ready_for_pickup', 'picked_up', 'in_transit', 'out_for_delivery'] })
       .orderBy('order.updatedAt', 'DESC')
       .withDeleted()
       .getMany();
@@ -856,7 +856,7 @@ export class OrdersService {
     return order;
   }
 
-  async updateStatus(id: string, status: string): Promise<Order> {
+  async updateStatus(id: string, status: string, coldChainPhotoUrl?: string): Promise<Order> {
     const order = await this.ordersRepository.findOne({ where: { id } });
     if (!order) throw new NotFoundException('Order not found');
 
@@ -865,6 +865,12 @@ export class OrdersService {
       throw new BadRequestException('Cannot update status of a cancelled order');
     }
     order.status = status;
+
+    if (coldChainPhotoUrl) {
+      order.coldChainPhotoUrl = coldChainPhotoUrl;
+      order.coldChainVerifiedAt = new Date();
+    }
+
     const updatedOrder = await this.ordersRepository.save(order);
 
     // Record History
@@ -898,6 +904,43 @@ export class OrdersService {
 
     // Emit real-time update — notify both user AND rider
     this.ordersGateway.emitOrderStatusUpdate(id, status, order.userId, order.riderId);
+
+    // Send push notification to user on order status change
+    try {
+      const user = await this.usersService.findById(order.userId);
+      if (user && user.fcmToken) {
+        const orderRef = order.id.slice(0, 8).toUpperCase();
+        let title = '';
+        let body = '';
+
+        if (order.orderType === 'pharma') {
+          // Pharma-specific notification messages
+          const pharmaMessages: Record<string, { title: string; body: string }> = {
+            confirmed: { title: '✅ Prescription Confirmed', body: `Your prescription order #${orderRef} has been confirmed. A rider will be assigned shortly.` },
+            preparing: { title: '💊 Medicines Being Packed', body: `Your medicines for order #${orderRef} are being packed at the pharmacy.` },
+            assigned_to_rider: { title: '🏍️ Rider Assigned', body: `A rider has been assigned to pick up your medicines for order #${orderRef}.` },
+            ready_for_pickup: { title: '📦 Ready for Pickup', body: `Your medicines for order #${orderRef} are packed and ready for rider pickup.` },
+            picked_up: { title: '🏥 Medicines Picked Up', body: `Your medicines for order #${orderRef} have been picked up from the pharmacy.` },
+            in_transit: { title: '🚀 On the Way!', body: `Your medicines for order #${orderRef} are on the way to you.` },
+            out_for_delivery: { title: '📍 Almost There!', body: `Your rider is near your location with order #${orderRef}.` },
+            delivered: { title: '🎉 Delivered!', body: `Your medicines for order #${orderRef} have been delivered. Stay healthy! 💚` },
+            cancelled: { title: '❌ Order Cancelled', body: `Your prescription order #${orderRef} has been cancelled.` },
+          };
+          const msg = pharmaMessages[status] || { title: `Order Update 📦`, body: `Order #${orderRef}: ${status.replace(/_/g, ' ')}` };
+          title = msg.title;
+          body = msg.body;
+        } else {
+          const readableStatus = status.replace(/_/g, ' ');
+          const capStatus = readableStatus.charAt(0).toUpperCase() + readableStatus.slice(1);
+          title = `Order Update: ${capStatus} 📦`;
+          body = `Your order #${orderRef} status is now: ${readableStatus}.`;
+        }
+
+        await this.notificationsService.sendToUser(user.id, user.fcmToken, title, body);
+      }
+    } catch (e) {
+      console.error('Failed to send order status notification:', e);
+    }
 
     return updatedOrder;
   }

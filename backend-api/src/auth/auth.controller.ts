@@ -27,6 +27,8 @@ export class AuthController {
       auth_customer_google_enabled: pub.auth_customer_google_enabled,
       auth_rider_mpin_enabled: pub.auth_rider_mpin_enabled,
       auth_rider_otp_enabled: pub.auth_rider_otp_enabled,
+      contact_phone: pub.contact_phone,
+      contact_email: pub.contact_email,
     };
   }
 

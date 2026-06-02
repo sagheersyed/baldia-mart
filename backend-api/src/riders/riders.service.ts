@@ -53,7 +53,7 @@ export class RidersService {
     });
 
     const activeOrders = await this.ordersRepository.find({
-      where: { status: In(['confirmed', 'preparing', 'out_for_delivery']) },
+      where: { status: In(['confirmed', 'preparing', 'assigned_to_rider', 'ready_for_pickup', 'picked_up', 'in_transit', 'out_for_delivery']) },
       select: ['id', 'riderId', 'status', 'total']
     });
 
@@ -236,7 +236,7 @@ export class RidersService {
 
     // 3. Preload active orders once (avoid per-rider queries)
     const activeOrders = await this.ordersRepository.manager.getRepository(Order).find({
-      where: { status: In(['confirmed', 'preparing', 'out_for_delivery']) },
+      where: { status: In(['confirmed', 'preparing', 'assigned_to_rider', 'ready_for_pickup', 'picked_up', 'in_transit', 'out_for_delivery']) },
       relations: ['address'],
       select: ['id', 'riderId', 'status'],
     });

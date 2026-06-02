@@ -47,8 +47,8 @@ export default function HelpScreen({ navigation }: any) {
       .finally(() => setIsLoading(false));
   }, []);
 
-  const contactPhone = settings?.contact_phone || '+92 341 2248616';
-  const contactEmail = settings?.contact_email || 'support@baldiamart.pk';
+  const contactPhone = settings?.contact_phone || '+92 300 1234567';
+  const contactEmail = settings?.contact_email || 'support@baldiamart.com';
 
   type Contact = {
     icon: keyof typeof Ionicons.glyphMap;

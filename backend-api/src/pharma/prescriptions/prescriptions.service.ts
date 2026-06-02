@@ -5,15 +5,20 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { Prescription } from './prescription.entity';
 import { ComplianceService } from '../compliance/compliance.service';
+import { User } from '../../users/user.entity';
+import { NotificationsService } from '../../notifications/notifications.service';
 
 @Injectable()
 export class PrescriptionsService {
   constructor(
     @InjectRepository(Prescription)
     private readonly prescriptionRepo: Repository<Prescription>,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
     @InjectQueue('prescription-verification')
     private readonly verificationQueue: Queue,
     private readonly complianceService: ComplianceService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   /**
@@ -138,7 +143,18 @@ export class PrescriptionsService {
     return saved;
   }
 
-  async approve(id: string, reviewedBy: string, notes?: string, medicineIds?: string[], validUntil?: string) {
+  async approve(
+    id: string,
+    reviewedBy: string,
+    notes?: string,
+    medicineIds?: string[],
+    validUntil?: string,
+    doctorName?: string,
+    doctorPmdcReg?: string,
+    maxRefills?: number,
+    isFlagged?: boolean,
+    flagReason?: string,
+  ) {
     const rx = await this.findById(id);
     if (rx.status !== 'pending' && rx.status !== 'in_review' && rx.status !== 'consultation_requested') {
       throw new BadRequestException(`Cannot approve prescription in status: ${rx.status}`);
@@ -150,6 +166,11 @@ export class PrescriptionsService {
     rx.reviewedAt = new Date();
     if (medicineIds?.length) rx.medicineIds = medicineIds;
     if (validUntil) rx.validUntil = new Date(validUntil);
+    if (doctorName) rx.doctorName = doctorName;
+    if (doctorPmdcReg) rx.doctorPmdcReg = doctorPmdcReg;
+    if (maxRefills !== undefined) rx.maxRefills = maxRefills;
+    if (isFlagged !== undefined) rx.isFlagged = isFlagged;
+    if (flagReason) rx.flagReason = flagReason;
 
     const saved = await this.prescriptionRepo.save(rx);
 
@@ -161,6 +182,21 @@ export class PrescriptionsService {
       actorType: 'admin',
       details: `Approved with ${medicineIds?.length || 0} medicines`,
     });
+
+    // Send push notification
+    try {
+      const user = await this.userRepo.findOne({ where: { id: rx.userId }, select: ['id', 'fcmToken'] });
+      if (user?.fcmToken) {
+        await this.notificationsService.sendToUser(
+          user.id,
+          user.fcmToken,
+          'Prescription Approved! ✅',
+          'Your prescription has been approved by our pharmacist. A quotation is being prepared.',
+        );
+      }
+    } catch (e) {
+      console.error('Failed to send prescription approval notification:', e);
+    }
 
     return saved;
   }
@@ -186,6 +222,21 @@ export class PrescriptionsService {
       actorType: 'admin',
       details: `Rejected: ${reason}`,
     });
+
+    // Send push notification
+    try {
+      const user = await this.userRepo.findOne({ where: { id: rx.userId }, select: ['id', 'fcmToken'] });
+      if (user?.fcmToken) {
+        await this.notificationsService.sendToUser(
+          user.id,
+          user.fcmToken,
+          'Prescription Rejected ❌',
+          `Your prescription review was unsuccessful. Reason: ${reason}`,
+        );
+      }
+    } catch (e) {
+      console.error('Failed to send prescription rejection notification:', e);
+    }
 
     return saved;
   }

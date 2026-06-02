@@ -49,7 +49,15 @@ export class PharmaOrdersService {
 
   async placeOrder(userId: string, dto: {
     addressId: string;
-    items: { medicineId: string; quantity: number }[];
+    items: { 
+      medicineId: string; 
+      quantity: number; 
+      name?: string; 
+      mrp?: number; 
+      brand?: string; 
+      strength?: string; 
+      isManual?: boolean; 
+    }[];
     prescriptionId?: string;
     paymentMethod: string;
     notes?: string;
@@ -60,10 +68,18 @@ export class PharmaOrdersService {
     const address = await this.addressRepo.findOne({ where: { id: dto.addressId, userId } });
     if (!address) throw new BadRequestException('Invalid delivery address');
 
-    // 2. Fetch Medicines
-    const medicineIds = dto.items.map(i => i.medicineId);
-    const medicines = await this.medicineRepo.find({ where: { id: In(medicineIds) } });
-    if (medicines.length !== medicineIds.length) throw new BadRequestException('Some medicines not found');
+    // 2. Fetch Medicines (filter out manual items starting with 'manual-')
+    const standardItems = dto.items.filter(i => i.medicineId && !i.medicineId.startsWith('manual-'));
+    const manualItems = dto.items.filter(i => !i.medicineId || i.medicineId.startsWith('manual-'));
+
+    const standardMedicineIds = standardItems.map(i => i.medicineId);
+    const medicines = standardMedicineIds.length > 0
+      ? await this.medicineRepo.find({ where: { id: In(standardMedicineIds) } })
+      : [];
+
+    if (medicines.length !== standardMedicineIds.length) {
+      throw new BadRequestException('Some medicines not found');
+    }
 
     // 2.2 Quantity Limit Validation (Senior Pharmacist Requirement)
     for (const item of dto.items) {
@@ -85,7 +101,7 @@ export class PharmaOrdersService {
 
     // 3. Rx Validation
     const rxRequired = medicines.some(m => m.requiresPrescription);
-    if (rxRequired) {
+    if (rxRequired || dto.prescriptionId) {
       // Expert Mode: Allow bypassing manual verification if configured
       const skipVerification = await this.settingsService.getBoolean('pharma_skip_prescription_verification', false);
       
@@ -93,16 +109,16 @@ export class PharmaOrdersService {
         if (!dto.prescriptionId) throw new BadRequestException('Prescription required for this order');
         
         const prescription = await this.prescriptionRepo.findOne({ 
-          where: { id: dto.prescriptionId, userId, status: 'approved' } 
+          where: { id: dto.prescriptionId, userId, status: In(['approved', 'partially_approved']) } 
         });
         if (!prescription) throw new BadRequestException('Valid approved prescription not found');
       }
     }
 
     // 3.5 Find Best Pharmacies for Fulfillment (Phase 16: Multi-Pharma Splitting)
-    const pharmaMap = new Map<string, { pharmacy: Pharmacy, items: { medicineId: string; quantity: number }[] }>();
+    const pharmaMap = new Map<string, { pharmacy: Pharmacy, items: typeof dto.items }>();
 
-    for (const item of dto.items) {
+    for (const item of standardItems) {
       const med = medicines.find(m => m.id === item.medicineId);
       const bestPharma = await this.pharmaciesService.findBestPharmacy(
         item.medicineId, 
@@ -123,32 +139,37 @@ export class PharmaOrdersService {
       pharmaMap.get(bestPharma.id)!.items.push(item);
     }
 
+    // If there are only manual items, we need a fallback pharmacy in that zone
+    if (pharmaMap.size === 0 && manualItems.length > 0) {
+      const defaultPharma = await this.pharmacyRepo.findOne({
+        where: { zoneId, isActive: true, isVerified: true, isOpen: true }
+      });
+      if (!defaultPharma) {
+        throw new BadRequestException('No pharmacy available in your delivery area to fulfill this prescription.');
+      }
+      pharmaMap.set(defaultPharma.id, { pharmacy: defaultPharma, items: [] });
+    }
+
+    // Assign all manual items to the first available pharmacy in the map
+    if (manualItems.length > 0) {
+      const firstPharmaId = Array.from(pharmaMap.keys())[0];
+      if (firstPharmaId) {
+        pharmaMap.get(firstPharmaId)!.items.push(...manualItems);
+      }
+    }
+
     const selectedPharmacies = Array.from(pharmaMap.values());
     const primaryPharma = selectedPharmacies[0].pharmacy;
 
     // 4. Calculate Totals & Fees
     let subtotal = 0;
-    const orderItems: OrderItem[] = [];
 
     for (const item of dto.items) {
       const med = medicines.find(m => m.id === item.medicineId);
-      if (!med) continue;
-
-      const mrp = Number(med.mrp);
-      const discount = Number(med.discount || 0);
-      const price = mrp - discount;
-      
+      const price = med 
+        ? (Number(med.mrp) - Number(med.discount || 0))
+        : Number(item.mrp || 0);
       subtotal += price * item.quantity;
-      
-      const orderItem = this.orderItemRepo.create({
-        medicineId: med.id, 
-        productName: med.name,
-        priceAtTime: price,
-        quantity: item.quantity,
-        imageUrl: med.imageUrl,
-        status: 'active'
-      });
-      orderItems.push(orderItem);
     }
 
     // Dynamic Delivery Fee based on multi-stop distance (Phase 16)
@@ -207,7 +228,10 @@ export class PharmaOrdersService {
       // Calculate sub-total for this pharmacy's items
       const pSubtotal = pData.items.reduce((sum, item) => {
         const med = medicines.find(m => m.id === item.medicineId);
-        return sum + (Number(med?.mrp || 0) - Number(med?.discount || 0)) * item.quantity;
+        const price = med 
+          ? (Number(med.mrp) - Number(med.discount || 0)) 
+          : Number(item.mrp || 0);
+        return sum + price * item.quantity;
       }, 0);
 
       const subOrder = this.subOrderRepo.create({
@@ -223,28 +247,37 @@ export class PharmaOrdersService {
       // Link items and Reserve Stock
       for (const item of pData.items) {
         const med = medicines.find(m => m.id === item.medicineId);
-        if (!med) continue;
+        
+        let price = 0;
+        let name = '';
+        let imageUrl: string | undefined = undefined;
+        let isManual = false;
 
-        // Reserve Stock
-        const reserved = await this.pharmaciesService.reserveStock(pId, item.medicineId, item.quantity);
-        if (!reserved) {
-          // Note: In production, we'd implement a full transactional rollback here
-          throw new BadRequestException(`Failed to reserve stock for ${med.name} at pharmacy ${pId}.`);
+        if (med) {
+          // Reserve Stock (Only for standard medicines)
+          const reserved = await this.pharmaciesService.reserveStock(pId, item.medicineId, item.quantity);
+          if (!reserved) {
+            // Note: In production, we'd implement a full transactional rollback here
+            throw new BadRequestException(`Failed to reserve stock for ${med.name} at pharmacy ${pId}.`);
+          }
+          price = Number(med.mrp) - Number(med.discount || 0);
+          name = med.name;
+          imageUrl = med.imageUrl || undefined;
+        } else {
+          price = Number(item.mrp || 0);
+          name = item.name || 'Custom Medicine';
+          isManual = true;
         }
 
         // Create Order Item linked to this sub-order
-        const mrp = Number(med.mrp);
-        const discount = Number(med.discount || 0);
-        const price = mrp - discount;
-
         const orderItem = this.orderItemRepo.create({
           orderId: savedOrder.id,
           subOrderId: savedSub.id,
-          medicineId: med.id, 
-          productName: med.name,
+          medicineId: isManual ? undefined : item.medicineId, 
+          productName: name,
           priceAtTime: price,
           quantity: item.quantity,
-          imageUrl: med.imageUrl,
+          imageUrl: imageUrl,
           status: 'active'
         });
         await this.orderItemRepo.save(orderItem);

@@ -60,6 +60,7 @@ import RefillRemindersScreen from './src/screens/RefillRemindersScreen';
 import MedicineReviewsScreen from './src/screens/MedicineReviewsScreen';
 import LabBookingDetailsScreen from './src/screens/LabBookingDetailsScreen';
 import MyPrescriptionsScreen from './src/screens/MyPrescriptionsScreen';
+import PrescriptionQuotationScreen from './src/screens/PrescriptionQuotationScreen';
 import PharmaSearchScreen from './src/screens/PharmaSearchScreen';
 import EventDetailsScreen from './src/screens/EventDetailsScreen';
 import FloatingTabBar from './src/components/FloatingTabBar';
@@ -203,6 +204,7 @@ function Navigation() {
             <Stack.Screen name="MedicineList" component={MedicineListScreen} />
             <Stack.Screen name="PrescriptionUpload" component={PrescriptionUploadScreen} />
             <Stack.Screen name="MyPrescriptions" component={MyPrescriptionsScreen} />
+            <Stack.Screen name="PrescriptionQuotation" component={PrescriptionQuotationScreen} />
             <Stack.Screen name="PharmaSearch" component={PharmaSearchScreen} />
           <Stack.Screen name="PharmaCart" component={CartScreen} />
           <Stack.Screen name="PharmaCheckout" component={CheckoutScreen} />

@@ -4,6 +4,7 @@ import { Repository, LessThanOrEqual } from 'typeorm';
 import { Order } from '../orders/order.entity';
 import { User } from '../users/user.entity';
 import { Rider } from '../riders/rider.entity';
+import { Prescription } from '../pharma/prescriptions/prescription.entity';
 
 @Injectable()
 export class AnalyticsService {
@@ -196,6 +197,58 @@ export class AnalyticsService {
       const rxPending = Number(prescriptionStats.find(s => s.status === 'pending')?.count || 0);
       const totalRx = rxApproved + rxRejected + rxPending;
 
+      // 6. Daily pharma order trend (last 14 days)
+      let dailyTrend: any[] = [];
+      try {
+        dailyTrend = await this.orderRepository.createQueryBuilder('o')
+          .select("TO_CHAR(o.createdAt, 'YYYY-MM-DD')", 'date')
+          .addSelect('COUNT(*)', 'orders')
+          .addSelect('SUM(CAST(o.total AS NUMERIC))', 'revenue')
+          .where('o.orderType = :type', { type: 'pharma' })
+          .andWhere('o.createdAt >= :start', { start: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) })
+          .groupBy("TO_CHAR(o.createdAt, 'YYYY-MM-DD')")
+          .orderBy("TO_CHAR(o.createdAt, 'YYYY-MM-DD')", 'ASC')
+          .getRawMany();
+      } catch (e) { console.warn('Daily trend query failed (non-critical):', e); }
+
+      // 7. Quotation stats
+      let quotationStats: any = { total: 0, accepted: 0, rejected: 0, expired: 0, conversionRate: 0 };
+      try {
+        const qStats = await this.orderRepository.manager.getRepository('PrescriptionQuotation')
+          .createQueryBuilder('q')
+          .select('q.status', 'status')
+          .addSelect('COUNT(*)', 'count')
+          .groupBy('q.status')
+          .getRawMany();
+        
+        const qAccepted = Number(qStats.find((s: any) => s.status === 'accepted')?.count || 0);
+        const qRejected = Number(qStats.find((s: any) => s.status === 'rejected')?.count || 0);
+        const qExpired = Number(qStats.find((s: any) => s.status === 'expired')?.count || 0);
+        const qPending = Number(qStats.find((s: any) => s.status === 'pending')?.count || 0);
+        const qTotal = qAccepted + qRejected + qExpired + qPending;
+        quotationStats = {
+          total: qTotal,
+          accepted: qAccepted,
+          rejected: qRejected,
+          expired: qExpired,
+          pending: qPending,
+          conversionRate: qTotal > 0 ? (qAccepted / qTotal) * 100 : 0,
+        };
+      } catch (e) { console.warn('Quotation stats query failed (non-critical):', e); }
+
+      // 8. Average delivery time for pharma orders
+      let avgDeliveryMinutes = 0;
+      try {
+        const avgResult = await this.orderRepository.createQueryBuilder('o')
+          .select("AVG(EXTRACT(EPOCH FROM (o.updatedAt - o.createdAt)) / 60)", 'avgMinutes')
+          .where('o.orderType = :type', { type: 'pharma' })
+          .andWhere('o.status = :status', { status: 'delivered' })
+          .andWhere('o.createdAt >= :start', { start: periodStart })
+          .andWhere('o.createdAt <= :end', { end: periodEnd })
+          .getRawOne();
+        avgDeliveryMinutes = Math.round(Number(avgResult?.avgMinutes) || 0);
+      } catch (e) { console.warn('Avg delivery time query failed (non-critical):', e); }
+
       return {
         revenue: Number(totalPharmaRevenue?.total) || 0,
         topMedicines,
@@ -208,6 +261,9 @@ export class AnalyticsService {
         },
         nearExpiryCount,
         riderIncentives: Number(pharmaIncentives?.total) || 0,
+        dailyTrend: dailyTrend.map(d => ({ date: d.date, orders: Number(d.orders), revenue: Number(d.revenue) || 0 })),
+        quotationStats,
+        avgDeliveryMinutes,
       };
     } catch (error) {
       console.error('Failed to get pharma metrics', error);
@@ -215,21 +271,52 @@ export class AnalyticsService {
     }
   }
 
-  async getControlledSubstancesReport() {
-    return this.orderRepository.createQueryBuilder('o')
-      .innerJoinAndSelect('o.items', 'i')
-      .innerJoinAndSelect('i.medicine', 'm')
-      .innerJoinAndSelect('o.user', 'u')
-      .innerJoinAndSelect('o.pharmacy', 'p')
+  async getControlledSubstancesReport(filters?: {
+    startDate?: string;
+    endDate?: string;
+    pharmacyId?: string;
+  }) {
+    const qb = this.orderRepository.createQueryBuilder('o')
+      .innerJoin('o.items', 'i')
+      .innerJoin('i.medicine', 'm')
+      .innerJoin('o.user', 'u')
+      .innerJoin('o.pharmacy', 'p')
+      .leftJoin(Prescription, 'pr', 'CAST(pr.id AS varchar) = o.prescriptionId')
       .where('o.orderType = :type', { type: 'pharma' })
       .andWhere('o.status = :status', { status: 'delivered' })
-      .andWhere('m.isControlled = :isControlled', { isControlled: true })
+      .andWhere('m.isControlled = :isControlled', { isControlled: true });
+
+    if (filters?.pharmacyId) {
+      qb.andWhere('o.pharmacyId = :pharmacyId', { pharmacyId: filters.pharmacyId });
+    }
+
+    if (filters?.startDate) {
+      qb.andWhere('o.createdAt >= :startDate', { startDate: new Date(filters.startDate) });
+    }
+
+    if (filters?.endDate) {
+      const end = new Date(filters.endDate);
+      end.setHours(23, 59, 59, 999);
+      qb.andWhere('o.createdAt <= :endDate', { endDate: end });
+    }
+
+    return qb
       .select([
-        'o.id', 'o.createdAt',
-        'u.name', 'u.phoneNumber',
-        'p.name', 'p.licenseNumber',
-        'm.name', 'm.genericName',
-        'i.quantity', 'i.priceAtTime'
+        'o.id as "orderId"',
+        'o.createdAt as "orderDate"',
+        'u.name as "customerName"',
+        'u.phoneNumber as "customerPhone"',
+        'p.name as "pharmacyName"',
+        'p.licenseNumber as "pharmacyLicense"',
+        'm.name as "medicineName"',
+        'm.genericName as "genericName"',
+        'i.quantity as "quantity"',
+        'i.priceAtTime as "price"',
+        'pr.id as "prescriptionId"',
+        'pr.doctorName as "doctorName"',
+        'pr.doctorPmdcReg as "doctorPmdcReg"',
+        'pr.patientName as "patientName"',
+        'pr.prescriptionDate as "prescriptionDate"'
       ])
       .orderBy('o.createdAt', 'DESC')
       .getRawMany();

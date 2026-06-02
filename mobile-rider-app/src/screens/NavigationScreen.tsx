@@ -92,12 +92,25 @@ function StopPin({ number, emoji }: { number: number; emoji: string }) {
 const getStatusLabel = (status: string, orderType: string, paymentMethod: string) => {
   const isFood = orderType === 'food';
   const isPharma = orderType === 'pharma';
-  const isRashan = orderType === 'rashan';
   const isCOD = paymentMethod === 'cod';
   
+  if (isPharma) {
+    const pharmaLabels: Record<string, string> = {
+      confirmed: 'Swipe — Arrived at Pharmacy',
+      preparing: 'Swipe — Awaiting Packing',
+      assigned_to_rider: 'Swipe — Awaiting Packing',
+      ready_for_pickup: 'Swipe — Pick Up Medicines',
+      picked_up: 'Swipe — Start Delivery Route',
+      in_transit: 'Swipe — Arrived at Customer',
+      out_for_delivery: isCOD ? 'Swipe — Collect Cash & Deliver' : 'Swipe — Mark as Delivered',
+      delivered: '✅  Order Delivered',
+    };
+    return pharmaLabels[status] || 'Swipe to Update';
+  }
+
   const labels: Record<string, string> = {
-    confirmed: isFood ? 'Swipe — Arrived at Restaurant' : isPharma ? 'Swipe — Arrived at Pharmacy' : 'Swipe — Arrived at Mart',
-    preparing: isFood ? 'Swipe — Food Ready, Pick Up' : isPharma ? 'Swipe — Meds Ready, Pick Up' : 'Swipe — Order Packed, Pick Up',
+    confirmed: isFood ? 'Swipe — Arrived at Restaurant' : 'Swipe — Arrived at Mart',
+    preparing: isFood ? 'Swipe — Food Ready, Pick Up' : 'Swipe — Order Packed, Pick Up',
     out_for_delivery: isCOD ? 'Swipe — Collect Cash & Deliver' : 'Swipe — Mark as Delivered',
     delivered: '✅  Order Delivered',
   };
@@ -362,12 +375,25 @@ export default function NavigationScreen({ navigation, route }: any) {
       }
     }
 
-    const next: Record<string, string> = {
-      confirmed: 'preparing',
-      preparing: 'out_for_delivery',
-      out_for_delivery: 'delivered',
-    };
-    const nextStatus = next[status];
+    let nextStatus = '';
+    if (order?.orderType === 'pharma') {
+      const pharmaNext: Record<string, string> = {
+        confirmed: 'preparing',
+        preparing: 'ready_for_pickup',
+        ready_for_pickup: 'picked_up',
+        picked_up: 'in_transit',
+        in_transit: 'out_for_delivery',
+        out_for_delivery: 'delivered',
+      };
+      nextStatus = pharmaNext[status];
+    } else {
+      const normalNext: Record<string, string> = {
+        confirmed: 'preparing',
+        preparing: 'out_for_delivery',
+        out_for_delivery: 'delivered',
+      };
+      nextStatus = normalNext[status];
+    }
     if (!nextStatus) return;
 
     // --- COD CASH COLLECTION WORKFLOW ---

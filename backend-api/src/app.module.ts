@@ -76,6 +76,9 @@ import { Pharmacy } from './pharma/pharmacies/pharmacy.entity';
 import { PharmacyInventory } from './pharma/pharmacies/pharmacy-inventory.entity';
 import { Prescription } from './pharma/prescriptions/prescription.entity';
 import { MedicineSubstitution } from './pharma/substitutions/medicine-substitution.entity';
+import { PrescriptionQuotation } from './pharma/prescriptions/prescription-quotation.entity';
+import { PharmacyMedicine } from './pharma/pharmacies/pharmacy-medicine.entity';
+import { MedicineReview } from './pharma/medicines/medicine-review.entity';
 import { PharmaComplianceLog } from './pharma/compliance/pharma-compliance-log.entity';
 import { PharmaRecurringOrder } from './pharma/recurring/pharma-recurring-order.entity';
 import { MedicineReminder } from './pharma/reminders/medicine-reminder.entity';
@@ -125,7 +128,7 @@ import { AvailabilityTemplate } from './pharma/telemedicine/availability-templat
         Vendor, VendorProduct, Favorite, OrderChatMessage,
         Wallet, WalletTransaction, WalletSettlement, WithdrawalRequest,
         // Pharma domain
-        Medicine, Pharmacy, PharmacyInventory, Prescription,
+        Medicine, MedicineReview, Pharmacy, PharmacyMedicine, PharmacyInventory, Prescription, PrescriptionQuotation,
         MedicineSubstitution, PharmaComplianceLog, PharmaRecurringOrder,
         MedicineReminder, RefillReminder,
         Doctor, Consultation, LabTest, LabBooking,

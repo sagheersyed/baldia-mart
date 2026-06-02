@@ -2,7 +2,7 @@ const axios = require('axios');
 
 async function testOtp() {
   const phone = '03412248616';
-  const baseUrl = 'https://bb0f-175-107-236-228.ngrok-free.app/api/v1';
+  const baseUrl = 'https://d796-175-107-236-228.ngrok-free.app/api/v1';
 
   try {
     console.log('Sending OTP...');

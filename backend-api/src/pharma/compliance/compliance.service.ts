@@ -70,4 +70,56 @@ export class ComplianceService {
     });
     return { data, total, page, limit };
   }
+
+  async getAll(page = 1, limit = 50) {
+    const [data, total] = await this.logRepo.findAndCount({
+      order: { createdAt: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+    return { data, total, page, limit };
+  }
+
+  async getByPrescription(prescriptionId: string, page = 1, limit = 50) {
+    const [data, total] = await this.logRepo.findAndCount({
+      where: { prescriptionId },
+      order: { createdAt: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+    return { data, total, page, limit };
+  }
+
+  async getStats() {
+    const qb = this.logRepo.createQueryBuilder('log');
+
+    const [totalLogs, criticalCount, eventBreakdown, recentCritical] = await Promise.all([
+      qb.getCount(),
+
+      this.logRepo.count({ where: { severity: 'critical' } }),
+
+      this.logRepo.createQueryBuilder('l')
+        .select('l.eventType', 'eventType')
+        .addSelect('COUNT(*)', 'count')
+        .groupBy('l.eventType')
+        .orderBy('count', 'DESC')
+        .getRawMany(),
+
+      this.logRepo.find({
+        where: { severity: 'critical' },
+        order: { createdAt: 'DESC' },
+        take: 5,
+      }),
+    ]);
+
+    return {
+      totalLogs,
+      criticalCount,
+      eventBreakdown: eventBreakdown.map((e: any) => ({
+        eventType: e.eventType,
+        count: Number(e.count),
+      })),
+      recentCritical,
+    };
+  }
 }

@@ -40,7 +40,8 @@ export const normalizeUrl = (url: string | null | undefined): string | null => {
   if (!url) return null;
   const serverBase = ENV.SOCKET_URL;
   if (url.startsWith('http')) {
-    return url.replace('http://localhost', serverBase).replace('https://localhost', serverBase);
+    // Replace any localhost variant (with or without port) with the real server base
+    return url.replace(/https?:\/\/localhost(:\d+)?/i, serverBase);
   }
   if (url.startsWith('/')) {
     return `${serverBase}${url}`;
@@ -504,6 +505,15 @@ export const prescriptionsApi = {
   getById: (id: string) => api.get(`/pharma/prescriptions/${id}`),
   requestConsultation: (data: { medicineIds: string[]; notes?: string }) =>
     api.post('/pharma/prescriptions/consultation', data),
+};
+
+export const quotationsApi = {
+  getByPrescription: (prescriptionId: string) =>
+    api.get(`/pharma/quotations/prescription/${prescriptionId}`),
+  getById: (id: string) => api.get(`/pharma/quotations/${id}`),
+  accept: (id: string, data: { addressId: string; paymentMethod: string; notes?: string }) =>
+    api.post(`/pharma/quotations/${id}/accept`, data),
+  reject: (id: string) => api.post(`/pharma/quotations/${id}/reject`),
 };
 
 export const recurringOrdersApi = {

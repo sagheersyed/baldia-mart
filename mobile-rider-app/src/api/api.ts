@@ -104,8 +104,8 @@ export const ordersApi = {
   getActive: () => api.get('/orders/active'),
   acceptOrder: (orderId: string) => api.post(`/orders/${orderId}/accept`),
   getById: (orderId: string) => api.get(`/orders/${orderId}`),
-  updateStatus: (orderId: string, status: string) =>
-    api.patch(`/orders/${orderId}/rider-status`, { status }),
+  updateStatus: (orderId: string, status: string, coldChainPhotoUrl?: string) =>
+    api.patch(`/orders/${orderId}/rider-status`, { status, coldChainPhotoUrl }),
   updateSubOrderStatus: (subOrderId: string, status: string) =>
     api.patch(`/orders/sub-orders/${subOrderId}/status`, { status }),
   removeItem: (orderId: string, itemId: string, reason?: string) => 

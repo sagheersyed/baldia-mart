@@ -36,6 +36,9 @@ export class User {
   @Column({ name: 'mpin_attempts', default: 0 })
   mpinAttempts: number;
 
+  @Column({ name: 'is_mpin_temporary', default: false })
+  isMpinTemporary: boolean;
+
   @Column({ name: 'phone_number', nullable: true, unique: true })
   phoneNumber: string;
 

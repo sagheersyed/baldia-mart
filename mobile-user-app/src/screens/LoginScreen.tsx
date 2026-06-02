@@ -75,8 +75,10 @@ export default function LoginScreen({ navigation }: any) {
   /** Normalize Pakistani phone number to +92XXXXXXXXXX format */
   const normalizePhone = (raw: string): string | null => {
     const digits = raw.replace(/\D/g, '');
+    // 3XXXXXXXXX (10 digits, e.g. user skipped leading 0)
+    if (digits.length === 10 && digits.startsWith('3')) return `+92${digits}`;
     // +923XXXXXXXXX → 923XXXXXXXXX (12 digits)
-    if (raw.startsWith('+92') && digits.length === 12) return `+${digits}`;
+    if (raw.trim().startsWith('+92') && digits.length === 12) return `+${digits}`;
     // 923XXXXXXXXX (12 digits without +)
     if (digits.length === 12 && digits.startsWith('92')) return `+${digits}`;
     // 03XXXXXXXXX (11 digits)

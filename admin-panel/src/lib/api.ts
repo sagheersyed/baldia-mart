@@ -64,8 +64,12 @@ export const getErrorMessage = (error: unknown, fallback: string): string => {
 
 export const normalizeUrl = (path: string | undefined | null) => {
   if (!path) return '';
-  if (path.startsWith('http')) return path;
   if (path.startsWith('blob:')) return path;
+  // Replace any localhost variant (with or without port) with the backend root
+  if (path.startsWith('http')) {
+    const backendRoot = BASE_URL.replace('/api/v1', '');
+    return path.replace(/https?:\/\/localhost(:\d+)?/i, backendRoot);
+  }
   const cleanPath = path.startsWith('/') ? path.substring(1) : path;
   // Point to backend root for uploads
   const backendRoot = BASE_URL.replace('/api/v1', '');

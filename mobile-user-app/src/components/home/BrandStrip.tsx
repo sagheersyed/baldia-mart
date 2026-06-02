@@ -1,4 +1,4 @@
-import React, { memo, useCallback } from 'react';
+import React, { memo, useCallback, useState } from 'react';
 import { View, StyleSheet, FlatList, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,6 +9,7 @@ import FavouriteButton from '../ui/FavouriteButton';
 import { normalizeUrl } from '../../api/api';
 import { isBusinessOpen } from '../../utils/helpers';
 import { theme } from '../../theme/theme';
+import { DEFAULT_IMAGES } from '../../constants/images';
 
 interface BrandStripProps {
   brands: any[];
@@ -33,8 +34,11 @@ const BrandStrip = memo(function BrandStrip({
   title = 'Popular Brands',
   subtitle,
 }: BrandStripProps) {
+  const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
+
   const renderItem = useCallback(({ item }: { item: any }) => {
-    const uri = normalizeUrl(item.logoUrl || item.imageUrl);
+    const originalUri = normalizeUrl(item.logoUrl || item.imageUrl);
+    const uri = imageErrors[item.id] ? DEFAULT_IMAGES.brand : (originalUri || DEFAULT_IMAGES.brand);
     const isOpen = isBusinessOpen(item.openingTime, item.closingTime);
     const fav = isFavourite?.(item.id) ?? false;
     const eta = item.deliveryTime || (item.productCount ? `${item.productCount} items` : '15-40 min');
@@ -55,6 +59,7 @@ const BrandStrip = memo(function BrandStrip({
               contentFit="contain"
               cachePolicy="memory-disk"
               transition={150}
+              onError={() => setImageErrors(prev => ({ ...prev, [item.id]: true }))}
             />
           ) : (
             <View style={styles.imgPlaceholder}>
@@ -95,7 +100,7 @@ const BrandStrip = memo(function BrandStrip({
         </AppText>
       </Pressable>
     );
-  }, [onBrandPress, isFavourite, onToggleFavourite]);
+  }, [onBrandPress, isFavourite, onToggleFavourite, imageErrors]);
 
   if (!brands?.length) return null;
 

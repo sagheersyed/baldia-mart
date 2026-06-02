@@ -10,7 +10,7 @@ import { Pharmacy } from './pharmacy.entity';
  * stock, pricing, and expiry tracking per medicine.
  * This enables the multi-pharmacy marketplace model.
  */
-@Unique('UQ_PHARMACY_MEDICINE', ['pharmacyId', 'medicineId'])
+@Unique('UQ_PHARMACY_INVENTORY_MEDICINE', ['pharmacyId', 'medicineId'])
 @Check('CHK_PHARMA_STOCK', '"stock_quantity" >= 0')
 @Check('CHK_PHARMA_RESERVED', '"reserved_quantity" >= 0')
 @Index('IDX_PHARMA_INV_PHARMACY', ['pharmacyId'])

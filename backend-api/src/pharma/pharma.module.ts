@@ -9,6 +9,7 @@ import { Pharmacy } from './pharmacies/pharmacy.entity';
 import { PharmacyMedicine } from './pharmacies/pharmacy-medicine.entity';
 import { PharmacyInventory } from './pharmacies/pharmacy-inventory.entity';
 import { Prescription } from './prescriptions/prescription.entity';
+import { PrescriptionQuotation } from './prescriptions/prescription-quotation.entity';
 import { MedicineSubstitution } from './substitutions/medicine-substitution.entity';
 import { PharmaComplianceLog } from './compliance/pharma-compliance-log.entity';
 import { PharmaRecurringOrder } from './recurring/pharma-recurring-order.entity';
@@ -43,6 +44,7 @@ import { MedicinesService } from './medicines/medicines.service';
 import { PharmaciesService } from './pharmacies/pharmacies.service';
 import { PharmacyInventoryService } from './pharmacies/pharmacy-inventory.service';
 import { PrescriptionsService } from './prescriptions/prescriptions.service';
+import { QuotationsService } from './prescriptions/quotations.service';
 import { SubstitutionsService } from './substitutions/substitutions.service';
 import { ComplianceService } from './compliance/compliance.service';
 import { RecurringOrdersService } from './recurring/recurring-orders.service';
@@ -57,15 +59,19 @@ import { MedicinesController } from './medicines/medicines.controller';
 import { PharmaciesController } from './pharmacies/pharmacies.controller';
 import { PharmacyB2BController } from './pharmacies/pharmacy-b2b.controller';
 import { PrescriptionsController } from './prescriptions/prescriptions.controller';
+import { QuotationsController } from './prescriptions/quotations.controller';
 import { SubstitutionsController } from './substitutions/substitutions.controller';
 import { RecurringOrdersController } from './recurring/recurring-orders.controller';
 import { PharmaOrdersController } from './orders/pharma-orders.controller';
 import { LabController } from './lab/lab.controller';
 import { TelemedicineController } from './telemedicine/telemedicine.controller';
 import { RemindersController } from './reminders/reminders.controller';
+import { ComplianceController } from './compliance/compliance.controller';
 
 // ── Queue Processors ────────────────────────────────────────────
 import { PrescriptionProcessor } from './prescriptions/prescription.processor';
+import { PrescriptionExpiryScheduler } from './prescriptions/prescription-expiry.scheduler';
+import { ControlledSubstanceInterceptor } from './compliance/controlled-substance.interceptor';
 
 /**
  * PharmaModule — first-class domain module for healthcare commerce.
@@ -89,6 +95,7 @@ import { PrescriptionProcessor } from './prescriptions/prescription.processor';
       PharmacyMedicine,
       PharmacyInventory,
       Prescription,
+      PrescriptionQuotation,
       MedicineSubstitution,
       PharmaComplianceLog,
       PharmaRecurringOrder,
@@ -124,18 +131,21 @@ import { PrescriptionProcessor } from './prescriptions/prescription.processor';
     PharmaciesController,
     PharmacyB2BController,
     PrescriptionsController,
+    QuotationsController,
     SubstitutionsController,
     RecurringOrdersController,
     PharmaOrdersController,
     LabController,
     TelemedicineController,
     RemindersController,
+    ComplianceController,
   ],
   providers: [
     MedicinesService,
     PharmaciesService,
     PharmacyInventoryService,
     PrescriptionsService,
+    QuotationsService,
     SubstitutionsService,
     ComplianceService,
     RecurringOrdersService,
@@ -145,6 +155,8 @@ import { PrescriptionProcessor } from './prescriptions/prescription.processor';
     RemindersService,
     ReminderScheduler,
     PrescriptionProcessor,
+    PrescriptionExpiryScheduler,
+    ControlledSubstanceInterceptor,
   ],
   exports: [
     MedicinesService,

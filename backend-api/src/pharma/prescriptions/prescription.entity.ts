@@ -33,6 +33,9 @@ export class Prescription {
   @Column({ name: 'doctor_name', nullable: true })
   doctorName: string;
 
+  @Column({ name: 'doctor_pmdc_reg', nullable: true })
+  doctorPmdcReg: string;
+
   @Column({ name: 'doctor_notes', type: 'text', nullable: true })
   doctorNotes: string;
 

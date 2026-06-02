@@ -184,17 +184,18 @@ export class OrdersController {
     @Req() req: Request,
     @Param('id', ParseUUIDPipe) id: string,
     @Body('status') status: string,
+    @Body('coldChainPhotoUrl') coldChainPhotoUrl?: string,
   ) {
     const user = req.user as any;
     if (user.role !== 'rider') {
       throw new ForbiddenException('Only riders can use this endpoint.');
     }
-    // Allowed rider transitions: preparing → out_for_delivery → delivered
-    const riderAllowedStatuses = ['confirmed', 'preparing', 'out_for_delivery', 'delivered'];
+    // Allowed rider transitions: confirmed → preparing → assigned_to_rider → ready_for_pickup → picked_up → in_transit → out_for_delivery → delivered
+    const riderAllowedStatuses = ['confirmed', 'preparing', 'assigned_to_rider', 'ready_for_pickup', 'picked_up', 'in_transit', 'out_for_delivery', 'delivered'];
     if (!riderAllowedStatuses.includes(status)) {
       throw new BadRequestException(`Riders cannot set status to "${status}". Allowed: ${riderAllowedStatuses.join(', ')}`);
     }
-    return this.ordersService.updateStatus(id, status);
+    return this.ordersService.updateStatus(id, status, coldChainPhotoUrl);
   }
 
   @Post(':id/reorder')

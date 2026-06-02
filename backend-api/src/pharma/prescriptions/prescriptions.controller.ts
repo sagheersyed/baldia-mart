@@ -55,7 +55,16 @@ export class PrescriptionsController {
   approve(
     @Param('id') id: string,
     @Request() req: any,
-    @Body() dto: { notes?: string; medicineIds?: string[]; validUntil?: string },
+    @Body() dto: { 
+      notes?: string; 
+      medicineIds?: string[]; 
+      validUntil?: string;
+      doctorName?: string;
+      doctorPmdcReg?: string;
+      maxRefills?: number;
+      isFlagged?: boolean;
+      flagReason?: string;
+    },
   ) {
     return this.prescriptionsService.approve(
       id,
@@ -63,6 +72,11 @@ export class PrescriptionsController {
       dto.notes,
       dto.medicineIds,
       dto.validUntil,
+      dto.doctorName,
+      dto.doctorPmdcReg,
+      dto.maxRefills,
+      dto.isFlagged,
+      dto.flagReason,
     );
   }
 

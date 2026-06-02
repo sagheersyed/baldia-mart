@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import {
   View, StyleSheet, TextInput, KeyboardAvoidingView, Platform,
-  Alert, Pressable, ScrollView,
+  Alert, Pressable, ScrollView, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
@@ -104,7 +104,26 @@ export default function MpinLoginScreen({ navigation, route }: any) {
     try {
       const res = await authApi.loginMpin(phoneNumber, mpinCode);
       if (res.data.access_token) {
-        await signIn(res.data.access_token, res.data.user);
+        if (res.data.user?.isMpinTemporary) {
+          Alert.alert(
+            'Temporary PIN',
+            'You have logged in using a temporary PIN. Please set a new secure 4-digit MPIN to continue.',
+            [
+              {
+                text: 'Setup New PIN',
+                onPress: () => {
+                  navigation.navigate('MpinSetup', {
+                    access_token: res.data.access_token,
+                    user: res.data.user,
+                  });
+                }
+              }
+            ],
+            { cancelable: false }
+          );
+        } else {
+          await signIn(res.data.access_token, res.data.user);
+        }
       }
     } catch (error: any) {
       const status = error.response?.status;
@@ -123,21 +142,52 @@ export default function MpinLoginScreen({ navigation, route }: any) {
   };
 
   const handleForgotMpin = async () => {
-    setLoading(true);
-    try {
-      const configRes = await authApi.getConfig();
-      if (!configRes.data.auth_customer_otp_enabled) {
-        Alert.alert('Unavailable', 'OTP login is disabled. Please contact support to reset your account.');
-        setLoading(false);
-        return;
-      }
-      await authApi.sendOtp(phoneNumber);
-      navigation.navigate('Otp', { phoneNumber });
-    } catch {
-      Alert.alert('Error', 'Could not send OTP. Please try again later.');
-    } finally {
-      setLoading(false);
-    }
+    Alert.alert(
+      'Forgot MPIN?',
+      'Choose how you want to reset your 4-digit PIN:',
+      [
+        {
+          text: 'Reset via SMS OTP',
+          onPress: async () => {
+            setLoading(true);
+            try {
+              const configRes = await authApi.getConfig();
+              if (!configRes.data.auth_customer_otp_enabled) {
+                Alert.alert('Unavailable', 'OTP login is disabled. Please contact support to reset your account.');
+                return;
+              }
+              await authApi.sendOtp(phoneNumber);
+              navigation.navigate('Otp', { phoneNumber });
+            } catch {
+              Alert.alert('Error', 'Could not send OTP. Please try again later.');
+            } finally {
+              setLoading(false);
+            }
+          }
+        },
+        {
+          text: 'Contact Admin Support',
+          onPress: () => {
+            const adminPhone = config?.contact_phone || '+92 300 1234567'; // Configurable support number
+            const adminEmail = config?.contact_email || 'support@baldiamart.com'; // Configurable support email
+            const message = `Hi, I forgot my BaldiaMart MPIN for my number ${phoneNumber}. Please reset my PIN.`;
+            const cleanPhone = adminPhone.replace(/[^\d+]/g, '');
+            const url = `whatsapp://send?phone=${cleanPhone}&text=${encodeURIComponent(message)}`;
+            
+            Linking.canOpenURL(url).then(supported => {
+              if (supported) {
+                Linking.openURL(url);
+              } else {
+                Linking.openURL(`https://wa.me/${cleanPhone.replace('+', '')}?text=${encodeURIComponent(message)}`);
+              }
+            }).catch(() => {
+              Alert.alert('Support Contact', `WhatsApp us at ${adminPhone} or email ${adminEmail}`);
+            });
+          }
+        },
+        { text: 'Cancel', style: 'cancel' }
+      ]
+    );
   };
 
   const showGoogle = isLocked || config?.auth_customer_google_enabled;
@@ -177,7 +227,7 @@ export default function MpinLoginScreen({ navigation, route }: any) {
             
             <AppText variant="h1" color="#fff" style={{ marginTop: theme.spacing.lg }}>Account Security</AppText>
             <AppText variant="body" color="rgba(255,255,255,0.6)" align="center" style={{ marginTop: 4, paddingHorizontal: 40 }}>
-              Enter your 4-digit PIN to access your {activeMode ? activeMode.toUpperCase() : 'BaldiaMart'} account
+              Enter your 4-digit PIN to access your BaldiaMart account
             </AppText>
           </LinearGradient>
 
@@ -301,26 +351,27 @@ const styles = StyleSheet.create({
     marginTop: -40,
     marginHorizontal: 24,
     borderRadius: 32,
-    padding: 32,
+    paddingHorizontal: 20,
+    paddingVertical: 24,
     ...theme.shadows.lg,
   },
 
   mpinContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 12,
+    gap: 10,
     marginBottom: 32,
   },
   mpinWrapper: { alignItems: 'center' },
   mpinInput: {
-    width: 60,
-    height: 72,
+    width: 52,
+    height: 64,
     borderWidth: 2,
     borderColor: '#F1F5F9',
     backgroundColor: '#F8FAFC',
-    borderRadius: 20,
+    borderRadius: 16,
     textAlign: 'center',
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '800',
     color: '#1E293B',
   },

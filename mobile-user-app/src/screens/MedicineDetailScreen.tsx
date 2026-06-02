@@ -17,9 +17,10 @@ export default function MedicineDetailScreen({ route, navigation }: any) {
   const { medicineId } = route.params;
   
   // ── Hooks ─────────────────────────────────────────────
-  const { getCartCount, addToCart, setActiveMode } = useCartStore();
+  const { getCartCount, addToCart, updateQuantity, getItemCount, setActiveMode } = useCartStore();
   const { isFavourite, toggleFavourite } = useFavourites();
   const cartCount = getCartCount('pharma');
+  const itemQty = getItemCount(medicineId, 'pharma');
 
   const [medicine, setMedicine] = useState<any>(null);
   const [addedToCart, setAddedToCart] = useState(false);
@@ -332,17 +333,16 @@ export default function MedicineDetailScreen({ route, navigation }: any) {
             navigation.navigate('Cart');
           }}
         >
-          <View style={styles.cartIconBadge}>
-            <Ionicons name="cart" size={24} color="#fff" />
-            <View style={styles.badge}>
-              <AppText variant="badge" color={ACCENT}>
-                {cartCount}
-              </AppText>
-            </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Ionicons name="cart" size={20} color="#fff" />
+            <AppText variant="bodyStrong" color="#fff">
+              {cartCount} item{cartCount > 1 ? 's' : ''} in cart
+            </AppText>
           </View>
-          <AppText variant="bodyStrong" color="#fff" style={{ marginLeft: 12 }}>
-            View pharma cart
-          </AppText>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <AppText variant="bodyStrong" color="#fff">View Cart</AppText>
+            <Ionicons name="chevron-forward" size={16} color="#fff" />
+          </View>
         </Pressable>
       )}
 
@@ -362,31 +362,60 @@ export default function MedicineDetailScreen({ route, navigation }: any) {
           <AppText variant="captionStrong" color={ACCENT} style={{ marginLeft: 6 }}>Subscribe</AppText>
         </Pressable>
 
-        <Pressable 
-          style={[styles.addBtn, !availability?.available ? { backgroundColor: theme.colors.surfaceMuted, borderWidth: 1, borderColor: theme.colors.border } : null]} 
-          onPress={() => {
-            if (!availability?.available && substitutes.length > 0) {
-              scrollRef.current?.scrollTo({ y: subSectionY, animated: true });
-            } else {
-              handleAddToCart();
-            }
-          }}
-        >
-          <Ionicons 
-            name={availability?.available ? "cart-outline" : "swap-horizontal"} 
-            size={20} 
-            color={availability?.available ? "#fff" : theme.colors.textSecondary} 
-          />
-          <AppText 
-            variant="bodyStrong" 
-            color={availability?.available ? "#fff" : theme.colors.textSecondary} 
-            style={{ marginLeft: 8 }}
+        {availability?.available && itemQty > 0 ? (
+          <View style={styles.stepperContainer}>
+            <Pressable 
+              style={styles.stepperBtn} 
+              onPress={() => updateQuantity(medicine.id, itemQty - 1, 'pharma')}
+              hitSlop={8}
+            >
+              <Ionicons name="remove" size={18} color="#fff" />
+            </Pressable>
+            <AppText variant="bodyStrong" color={theme.colors.textPrimary} style={styles.stepperQty}>
+              {itemQty}
+            </AppText>
+            <Pressable 
+              style={styles.stepperBtn} 
+              onPress={() => {
+                const limit = Number(medicine.maxQuantityPerOrder) || 0;
+                if (limit > 0 && itemQty >= limit) {
+                  Alert.alert('Limit Reached ✋', `Maximum allowed per order is ${limit} units.`);
+                } else {
+                  updateQuantity(medicine.id, itemQty + 1, 'pharma');
+                }
+              }}
+              hitSlop={8}
+            >
+              <Ionicons name="add" size={18} color="#fff" />
+            </Pressable>
+          </View>
+        ) : (
+          <Pressable 
+            style={[styles.addBtn, !availability?.available ? { backgroundColor: theme.colors.surfaceMuted, borderWidth: 1, borderColor: theme.colors.border } : null]} 
+            onPress={() => {
+              if (!availability?.available && substitutes.length > 0) {
+                scrollRef.current?.scrollTo({ y: subSectionY, animated: true });
+              } else {
+                handleAddToCart();
+              }
+            }}
           >
-            {availability?.available 
-              ? (rxRequired ? 'Upload Rx & Order' : 'Add to Cart')
-              : (substitutes.length > 0 ? 'View Alternatives' : 'Out of Stock')}
-          </AppText>
-        </Pressable>
+            <Ionicons 
+              name={availability?.available ? "cart-outline" : "swap-horizontal"} 
+              size={20} 
+              color={availability?.available ? "#fff" : theme.colors.textSecondary} 
+            />
+            <AppText 
+              variant="bodyStrong" 
+              color={availability?.available ? "#fff" : theme.colors.textSecondary} 
+              style={{ marginLeft: 8 }}
+            >
+              {availability?.available 
+                ? (rxRequired ? 'Upload Rx & Order' : 'Add to Cart')
+                : (substitutes.length > 0 ? 'View Alternatives' : 'Out of Stock')}
+            </AppText>
+          </Pressable>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -513,39 +542,46 @@ const styles = StyleSheet.create({
   },
   floatingCart: {
     position: 'absolute',
-    bottom: 100,
+    bottom: 85,
     left: 16,
     right: 16,
     backgroundColor: ACCENT,
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    borderRadius: 20,
-    shadowColor: ACCENT,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 10,
-    zIndex: 100,
-  },
-  cartIconBadge: {
-    width: 44,
-    height: 44,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 4,
+    zIndex: 99,
   },
-  badge: {
-    position: 'absolute',
-    top: -5,
-    right: -5,
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    width: 20,
-    height: 20,
-    justifyContent: 'center',
+  stepperContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: theme.colors.surfaceMuted,
+    borderRadius: theme.radius.lg,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  stepperBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: ACCENT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepperQty: {
+    minWidth: 36,
+    textAlign: 'center',
+    fontSize: 14,
+    marginHorizontal: 4,
   },
   altHintBtn: {
     flexDirection: 'row',

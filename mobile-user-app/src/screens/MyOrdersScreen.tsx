@@ -74,6 +74,16 @@ function OrderCard({ order, onTrack, onCancel, onReorder, onChat, onShare, onPri
                 {isRashan ? 'RASHAN' : isFood ? 'FOOD' : order.orderType === 'pharma' ? 'PHARMA' : 'MART'}
               </AppText>
             </View>
+            {order.prescriptionId ? (
+              <View style={[styles.typeChip, {
+                backgroundColor: theme.colors.infoLight,
+              }]}>
+                <Ionicons name="document-text-outline" size={10} color={theme.colors.info} />
+                <AppText variant="badge" color={theme.colors.info}>
+                  Rx ORDER
+                </AppText>
+              </View>
+            ) : null}
           </View>
           <AppText variant="caption" style={{ marginTop: 2 }}>
             {formatDate(order.createdAt)}
@@ -349,12 +359,20 @@ export default function MyOrdersScreen({ navigation, route }: any) {
     setStatusFilter('all');
   }, [activeTab]);
 
-  const counts = useMemo(() => ({
-    active: orders.filter(o => ACTIVE_STATUSES.has(o.status)).length,
-    past: orders.filter(o => PAST_STATUSES.has(o.status)).length,
-    pharma: orders.length, // already module-scoped from cache
-    rashan: orders.length,
-  }), [orders]);
+  const { moduleCache } = useOrdersStore();
+
+  const counts = useMemo(() => {
+    // For active/past tabs, count from current mart_food cache
+    const martFoodOrders = moduleCache?.mart_food?.orders || [];
+    const pharmaOrders = moduleCache?.pharma?.orders || [];
+    const rashanOrders = moduleCache?.rashan?.orders || [];
+    return {
+      active: martFoodOrders.filter((o: any) => ACTIVE_STATUSES.has(o.status)).length,
+      past: martFoodOrders.filter((o: any) => PAST_STATUSES.has(o.status)).length,
+      pharma: pharmaOrders.length,
+      rashan: rashanOrders.length,
+    };
+  }, [moduleCache]);
 
   const tabs: { key: TabKey; label: string; count: number; icon: keyof typeof Ionicons.glyphMap }[] = [
     { key: 'active', label: 'Active', count: counts.active, icon: 'navigate-outline' },

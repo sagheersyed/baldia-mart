@@ -66,10 +66,12 @@ export default function PrescriptionUploadScreen({ navigation }: any) {
 
     setUploading(true);
     try {
-      // 1. Upload all images to the server
-      const uploadPromises = images.map((uri) => uploadApi.uploadFile(uri));
-      const uploadResults = await Promise.all(uploadPromises);
-      const serverUrls = uploadResults.map((res) => res.data.url);
+      // 1. Upload all images to the server sequentially
+      const serverUrls: string[] = [];
+      for (const uri of images) {
+        const res = await uploadApi.uploadFile(uri);
+        serverUrls.push(res.data.url);
+      }
 
       // 2. Submit the prescription with server URLs
       await prescriptionsApi.upload({
