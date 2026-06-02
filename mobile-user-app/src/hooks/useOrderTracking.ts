@@ -1,0 +1,397 @@
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { Alert } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { connectSocket, ordersApi, ridersApi, businessReviewsApi, productsApi, menuItemsApi, socket } from '../api/api';
+import { ENV } from '../config/env';
+import { isBusinessOpen } from '../utils/helpers';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────────────────────
+export interface TrackingStep {
+  key: string;
+  label: string;
+  icon: string;
+  description: string;
+}
+
+const GET_STATUS_STEPS = (orderType: string = 'mart'): TrackingStep[] => [
+  { key: 'pending', label: 'Order Placed', icon: '📝', description: orderType === 'food' ? 'Restaurant has received your order' : 'We have received your order' },
+  { key: 'confirmed', label: 'Confirmed', icon: '✅', description: orderType === 'food' ? 'Restaurant has confirmed your order' : 'The store has confirmed your order' },
+  { key: 'preparing', label: 'Preparing', icon: orderType === 'food' ? '👨‍🍳' : '📦', description: orderType === 'food' ? 'Your food is being prepared' : 'Your items are being packed' },
+  { key: 'out_for_delivery', label: 'Out for Delivery', icon: '🚴', description: 'Our rider is on the way' },
+  { key: 'delivered', label: 'Delivered', icon: '🎁', description: orderType === 'food' ? 'Enjoy your meal!' : 'Your package has been delivered' },
+];
+
+const GET_RASHAN_STEPS = (): TrackingStep[] => [
+  { key: 'pending_review', label: 'Request Sent', icon: '📝', description: 'Admin is reviewing your list' },
+  { key: 'quoted', label: 'Price Quoted', icon: '💰', description: 'Review and approve the estimate' },
+  { key: 'approved', label: 'Approved', icon: '✅', description: 'Awaiting procurement start' },
+  { key: 'sourcing', label: 'Sourcing', icon: '📦', description: 'We are buying items from market' },
+  { key: 'out_for_delivery', label: 'Out for Delivery', icon: '🚚', description: 'Suzuki/Rickshaw is on the way' },
+  { key: 'delivered', label: 'Delivered', icon: '🎁', description: 'Your stash has arrived!' },
+];
+
+const GET_PHARMA_STEPS = (): TrackingStep[] => [
+  { key: 'pending', label: 'Prescription Under Review', icon: '🔍', description: 'Our pharmacist is verifying your prescription' },
+  { key: 'confirmed', label: 'Prescription Approved', icon: '✅', description: 'Your prescription has been verified and approved' },
+  { key: 'preparing', label: 'Packing Medicines', icon: '💊', description: 'The pharmacy is preparing your medicines' },
+  { key: 'assigned_to_rider', label: 'Rider Assigned', icon: '🏍️', description: 'A delivery rider has been assigned' },
+  { key: 'ready_for_pickup', label: 'Ready for Pickup', icon: '📦', description: 'Medicines are packed and waiting for the rider' },
+  { key: 'picked_up', label: 'Picked Up', icon: '🏥', description: 'Rider has picked up your medicines from the pharmacy' },
+  { key: 'in_transit', label: 'In Transit', icon: '🚀', description: 'Your medicines are on the way to you' },
+  { key: 'out_for_delivery', label: 'Almost There', icon: '📍', description: 'Rider is near your location' },
+  { key: 'delivered', label: 'Delivered', icon: '🎉', description: 'Medicines successfully delivered. Stay healthy! 💚' },
+];
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Hook
+// ─────────────────────────────────────────────────────────────────────────────
+export function useOrderTracking(orderId: string, navigation: any) {
+  const [order, setOrder] = useState<any>(null);
+  const [status, setStatus] = useState('pending');
+  const [loading, setLoading] = useState(true);
+  const [rider, setRider] = useState<any>(null);
+  const [riderLocation, setRiderLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [localItems, setLocalItems] = useState<any[]>([]);
+  const [timeline, setTimeline] = useState<any[]>([]);
+
+  // Rating flow state
+  const [showRating, setShowRating] = useState(false);
+  const [ratingStep, setRatingStep] = useState(1);
+  const [businessesToRate, setBusinessesToRate] = useState<any[]>([]);
+  const [currentBusinessIndex, setCurrentBusinessIndex] = useState(0);
+  const [rating, setRating] = useState(5);
+  const [comment, setComment] = useState('');
+  const [businessRating, setBusinessRating] = useState(5);
+  const [businessComment, setBusinessComment] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
+
+  // Add-product state
+  const [showAddProduct, setShowAddProduct] = useState(false);
+  const [allProducts, setAllProducts] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [addingProductId, setAddingProductId] = useState<string | null>(null);
+
+  // ── Fetch helpers ────────────────────────────────────────────────────────
+  const performSearch = useCallback(async (q: string) => {
+    if (!order) return;
+    const isFood = order?.orderType === 'food';
+    const isPharma = order?.orderType === 'pharma';
+    const isMart = !isFood && !isPharma;
+
+    setSearching(true);
+    try {
+      if (isFood && order.restaurantId) {
+        // Food: always load full menu (filter client-side)
+        const res = await menuItemsApi.getByRestaurant(order.restaurantId);
+        setAllProducts(res.data);
+      } else if (isPharma) {
+        // Pharma: load first page of all medicines, or search if query provided
+        const { pharmaApi } = require('../api/api');
+        const res = await pharmaApi.searchMedicines(q.trim() || '', 1, 50);
+        setAllProducts(Array.isArray(res.data) ? res.data : (res.data?.data || []));
+      } else if (isMart) {
+        // Mart: load first page of all products, or search if query provided
+        const res = await productsApi.search(q.trim() || '', 1, 50);
+        setAllProducts(Array.isArray(res.data) ? res.data : (res.data?.data || []));
+      }
+    } catch (e) {
+      console.error('Search failed:', e);
+    } finally {
+      setSearching(false);
+    }
+    // We only depend on the orderType and restaurantId, not the whole order object
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order?.orderType, order?.restaurantId]);
+
+  useEffect(() => {
+    if (!showAddProduct) return;
+    const timeout = setTimeout(() => {
+      performSearch(searchQuery);
+    }, 400);
+    return () => clearTimeout(timeout);
+  }, [searchQuery, showAddProduct, performSearch]);
+
+  // Auto-load items immediately when modal opens
+  useEffect(() => {
+    if (showAddProduct && order) {
+      performSearch('');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showAddProduct]);
+
+  const fetchOrderDetails = useCallback(async () => {
+    try {
+      const [orderRes, timelineRes] = await Promise.all([
+        ordersApi.getById(orderId),
+        ordersApi.getTimeline(orderId),
+      ]);
+      const data = orderRes.data;
+      setOrder(data);
+      setLocalItems(data.items || []);
+      setTimeline(timelineRes.data);
+      setStatus(data.status || 'pending');
+      if (data.rider) setRider(data.rider);
+
+      // Trigger rating modal for delivered orders
+      if (data.status === 'delivered') {
+        const dismissed = await AsyncStorage.getItem(`ratingDismissed_${orderId}`);
+        if (!dismissed && (!data.isRated || !data.isBusinessRated)) {
+          const toRate: any[] = [];
+          if (data.orderType === 'food' && data.subOrders?.length > 0) {
+            data.subOrders.forEach((so: any) => {
+              toRate.push({ id: so.restaurantId, name: so.restaurant?.name || 'Restaurant', type: 'restaurant', subOrderId: so.id });
+            });
+          } else if (data.restaurantId) {
+            toRate.push({ id: data.restaurantId, name: data.restaurant?.name || 'Restaurant', type: 'restaurant' });
+          } else if (data.brandId) {
+            toRate.push({ id: data.brandId, name: data.brand?.name || 'Brand', type: 'brand' });
+          }
+          setBusinessesToRate(toRate);
+          setShowRating(true);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to fetch order details:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, [orderId]);
+
+  useEffect(() => {
+    fetchOrderDetails();
+  }, [orderId, fetchOrderDetails]);
+
+  // ── Socket listeners ──────────────────────────────────────────────────────
+  const lastSocketFetchRef = useRef(0);
+
+  useEffect(() => {
+    connectSocket();
+
+    const joinRoom = () => socket.emit('joinOrder', orderId);
+    if (socket.connected) joinRoom();
+    socket.on('connect', joinRoom);
+
+    const throttledRefresh = () => {
+      const now = Date.now();
+      if (now - lastSocketFetchRef.current < 2000) return; // 2s throttle
+      lastSocketFetchRef.current = now;
+      fetchOrderDetails();
+    };
+
+    const onStatusUpdate = async (data: any) => {
+      if (data.orderId === orderId) { 
+        setStatus(prev => {
+          if (prev !== data.status) throttledRefresh();
+          return data.status;
+        });
+      }
+    };
+
+    const onOrderUpdate = async (data: any) => {
+      if (data.orderId === orderId) throttledRefresh();
+    };
+
+    const onRiderLocation = (data: any) => {
+      if (data.orderId === orderId && data.latitude && data.longitude) {
+        setRiderLocation({ latitude: Number(data.latitude), longitude: Number(data.longitude) });
+      }
+    };
+
+    socket.on('orderStatusUpdated', onStatusUpdate);
+    socket.on('orderUpdated', onOrderUpdate);
+    socket.on('riderLocationUpdate', onRiderLocation);
+
+    return () => {
+      socket.off('connect', joinRoom);
+      socket.off('orderStatusUpdated', onStatusUpdate);
+      socket.off('orderUpdated', onOrderUpdate);
+      socket.off('riderLocationUpdate', onRiderLocation);
+    };
+  }, [orderId, fetchOrderDetails]);
+
+  // ── Derived values ────────────────────────────────────────────────────────
+  const steps = useMemo(() => {
+    if (order?.orderType === 'rashan') return GET_RASHAN_STEPS();
+    if (order?.orderType === 'pharma') return GET_PHARMA_STEPS();
+    return GET_STATUS_STEPS(order?.orderType);
+  }, [order?.orderType]);
+
+  const currentStepIndex = useMemo(() => {
+    if (status === 'cancelled') return -1;
+    if (order?.orderType === 'rashan') {
+      const rStatus = order.rashanStatus || 'pending_review';
+      return steps.findIndex(s => s.key === rStatus);
+    }
+    return steps.findIndex(s => s.key === status);
+  }, [status, order?.orderType, order?.rashanStatus, steps]);
+
+  const filteredProducts = useMemo(() => {
+    return allProducts;
+  }, [allProducts]);
+
+  const hasChanges = useCallback(() => {
+    if (!order?.items) return false;
+    return JSON.stringify(localItems.map(i => ({ id: i.id, q: i.quantity }))) !==
+      JSON.stringify(order.items.map((i: any) => ({ id: i.id, q: i.quantity })));
+  }, [localItems, order]);
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
+  const handleReorder = async () => {
+    try {
+      await ordersApi.reorderOrder(orderId);
+      Alert.alert('Order Placed', 'Your reorder has been placed successfully!', [
+        { text: 'View Orders', onPress: () => navigation.navigate('MyOrders') },
+      ]);
+    } catch (e: any) {
+      const msg = e?.response?.data?.message || 'Failed to reorder. Please try again.';
+      Alert.alert('Reorder Failed', msg);
+    }
+  };
+
+  const handleUpdateQuantityLocal = (itemId: string, newQuantity: number) => {
+    if (newQuantity < 0) return;
+    const item = localItems.find(i => i.id === itemId);
+    if (item && newQuantity > item.quantity) {
+      if (item.product?.maxQuantityPerOrder > 0 && newQuantity > item.product.maxQuantityPerOrder) {
+        Alert.alert('Limit Reached ✋', `Maximum allowed per order is ${item.product.maxQuantityPerOrder} units for ${item.product.name}.`);
+        return;
+      }
+      if (newQuantity > (item.product?.stockQuantity || 0)) {
+        Alert.alert('Out of Stock', 'Sorry, no more stock available for this product.');
+        return;
+      }
+    }
+    setLocalItems(prev => prev.map(i => i.id === itemId ? { ...i, quantity: newQuantity } : i));
+  };
+
+  const handleConfirmBatchUpdates = async () => {
+    setLoading(true);
+    try {
+      const updates = localItems.map(item => ({ itemId: item.id, quantity: item.quantity }));
+      const res = await ordersApi.updateOrderItems(orderId, updates);
+      if (res.data?.deleted) {
+        navigation.navigate('MyOrders');
+      } else {
+        setOrder(res.data);
+        setLocalItems(res.data.items || []);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRemoveItem = async (itemId: string) => {
+    const res = await ordersApi.removeItem(orderId, itemId);
+    if (res.data?.deleted) navigation.navigate('MyOrders');
+    else fetchOrderDetails();
+  };
+
+  const handleAddNewProductToOrder = async (productId: string) => {
+    setAddingProductId(productId);
+    try {
+      await ordersApi.addItem(orderId, productId, 1);
+      await fetchOrderDetails();
+      setShowAddProduct(false);
+    } finally {
+      setAddingProductId(null);
+    }
+  };
+
+  const handleDismissRating = async () => {
+    await AsyncStorage.setItem(`ratingDismissed_${orderId}`, 'true');
+    setShowRating(false);
+  };
+
+  const handleSubmitReview = async () => {
+    setSubmittingReview(true);
+    try {
+      if (ratingStep === 1) {
+        if (rider) await ridersApi.postReview(rider.id, { rating, comment, orderId });
+        if (businessesToRate.length > 0) { setRatingStep(2); setCurrentBusinessIndex(0); }
+        else {
+          await AsyncStorage.setItem(`ratingDismissed_${orderId}`, 'true');
+          setShowRating(false);
+          await fetchOrderDetails(); // Refresh isRated flags
+        }
+      } else {
+        const currentBiz = businessesToRate[currentBusinessIndex];
+        if (currentBiz) {
+          await businessReviewsApi.create({ orderId, subOrderId: currentBiz.subOrderId, businessId: currentBiz.id, businessType: currentBiz.type, rating: businessRating, comment: businessComment });
+        }
+        if (currentBusinessIndex < businessesToRate.length - 1) {
+          setCurrentBusinessIndex(prev => prev + 1);
+          setBusinessRating(5);
+          setBusinessComment('');
+        } else {
+          await AsyncStorage.setItem(`ratingDismissed_${orderId}`, 'true');
+          setShowRating(false);
+          await fetchOrderDetails(); // Refresh isBusinessRated flags
+        }
+      }
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
+  const handleApproveQuotation = async () => {
+    setLoading(true);
+    try {
+      const { rashanApi } = require('../api/api');
+      await rashanApi.approveQuotation(orderId);
+      await fetchOrderDetails();
+      Alert.alert('Success', 'Quotation approved! We will start sourcing shortly.');
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.message || 'Failed to approve quotation.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancelRashanRequest = async () => {
+    Alert.alert(
+      'Cancel Request?',
+      'Are you sure you want to cancel this Rashan order request?',
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Yes, Cancel',
+          style: 'destructive',
+          onPress: async () => {
+            setLoading(true);
+            try {
+              const { rashanApi } = require('../api/api');
+              await rashanApi.cancelRequest(orderId);
+              navigation.navigate('MyOrders');
+            } catch (err: any) {
+              Alert.alert('Error', err.response?.data?.message || 'Failed to cancel request.');
+              setLoading(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  return {
+    // State
+    order, status, loading, rider, riderLocation, localItems, timeline,
+    // Rating
+    showRating, setShowRating, ratingStep, businessesToRate, currentBusinessIndex,
+    rating, setRating, comment, setComment,
+    businessRating, setBusinessRating, businessComment, setBusinessComment,
+    submittingReview,
+    // Add product
+    showAddProduct, setShowAddProduct, filteredProducts, searchQuery, setSearchQuery, addingProductId,
+    // Derived
+    steps, currentStepIndex,
+    // Handlers
+    fetchOrderDetails, hasChanges,
+    handleReorder, handleUpdateQuantityLocal, handleConfirmBatchUpdates, handleRemoveItem,
+    handleAddNewProductToOrder, handleDismissRating, handleSubmitReview, handleApproveQuotation,
+    handleCancelRashanRequest,
+  };
+}

@@ -30,6 +30,9 @@ export class Notification {
   @Column({ name: 'is_read', default: false })
   isRead: boolean;
 
+  @Column({ name: 'image_url', nullable: true })
+  imageUrl: string;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

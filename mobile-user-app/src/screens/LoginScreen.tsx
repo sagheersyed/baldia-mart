@@ -1,127 +1,292 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, KeyboardAvoidingView, Platform, Alert, ActivityIndicator } from 'react-native';
-import { authApi, setAuthToken } from '../api/api';
+import React, { useState, useEffect } from 'react';
+import {
+  View, StyleSheet, TextInput, KeyboardAvoidingView, Platform,
+  Alert, ScrollView, Pressable,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import * as WebBrowser from 'expo-web-browser';
+import * as Google from 'expo-auth-session/providers/google';
+import * as AuthSession from 'expo-auth-session';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+
+import { authApi } from '../api/api';
+import { useAuth } from '../context/AuthContext';
+import { useCartStore } from '../store/cartStore';
 import { auth } from '../firebaseConfig';
-import { GoogleAuthProvider, signInWithCredential, signInWithPhoneNumber, RecaptchaVerifier } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
+
+import { AppText, AppButton } from '../components/ui';
+import { theme } from '../theme/theme';
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen({ navigation }: any) {
+  const { signIn } = useAuth();
+  const { activeMode } = useCartStore();
   const [phone, setPhone] = useState('');
+  const [phoneError, setPhoneError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [config, setConfig] = useState<any>({
+    auth_customer_mpin_enabled: true,
+    auth_customer_otp_enabled: true,
+    auth_customer_google_enabled: true,
+  });
+
+  useEffect(() => {
+    authApi.getConfig().then(res => setConfig(res.data)).catch(() => {});
+  }, []);
+
+  const [, response, promptAsync] = Google.useAuthRequest({
+    androidClientId: '293399332795-tqfg57qr3qsu4l2a3gl97stssbic9k76.apps.googleusercontent.com',
+    iosClientId: '293399332795-tqfg57qr3qsu4l2a3gl97stssbic9k76.apps.googleusercontent.com',
+    webClientId: '293399332795-tqfg57qr3qsu4l2a3gl97stssbic9k76.apps.googleusercontent.com',
+    responseType: 'id_token',
+    scopes: ['openid', 'profile', 'email'],
+    redirectUri: AuthSession.makeRedirectUri({
+      scheme: 'baldia-mart-user',
+      path: 'google-auth',
+    }),
+  });
+
+  useEffect(() => {
+    if (response?.type === 'success') {
+      handleGoogleAuthSuccess(response.params.id_token);
+    }
+  }, [response]);
+
+  const handleGoogleAuthSuccess = async (idToken: string) => {
+    setLoading(true);
+    try {
+      const credential = GoogleAuthProvider.credential(idToken);
+      const userCredential = await signInWithCredential(auth, credential);
+      const firebaseToken = await userCredential.user.getIdToken();
+      const res = await authApi.login(firebaseToken);
+      if (res.data.access_token) {
+        await signIn(res.data.access_token, res.data.user);
+      }
+    } catch {
+      Alert.alert('Login failed', 'Unable to complete Google authentication. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /** Normalize Pakistani phone number to +92XXXXXXXXXX format */
+  const normalizePhone = (raw: string): string | null => {
+    const digits = raw.replace(/\D/g, '');
+    // 3XXXXXXXXX (10 digits, e.g. user skipped leading 0)
+    if (digits.length === 10 && digits.startsWith('3')) return `+92${digits}`;
+    // +923XXXXXXXXX → 923XXXXXXXXX (12 digits)
+    if (raw.trim().startsWith('+92') && digits.length === 12) return `+${digits}`;
+    // 923XXXXXXXXX (12 digits without +)
+    if (digits.length === 12 && digits.startsWith('92')) return `+${digits}`;
+    // 03XXXXXXXXX (11 digits)
+    if (digits.length === 11 && digits.startsWith('0')) return `+92${digits.slice(1)}`;
+    return null;
+  };
+
+  const handlePhoneChange = (val: string) => {
+    setPhone(val);
+    setPhoneError(null);
+  };
 
   const handleLogin = async () => {
-    if (phone.length < 10) {
-      Alert.alert('Error', 'Please enter a valid phone number');
+    const normalized = normalizePhone(phone.trim());
+    if (!normalized) {
+      setPhoneError('Enter a valid Pakistani number: 03XXXXXXXXX or +923XXXXXXXXX');
       return;
     }
 
     setLoading(true);
     try {
-      // For persistent dev testing, we still support mock tokens if the backend allows it
-      // or if we haven't implemented the ReCaptcha UI yet.
-      // To use REAL phone auth, you need a RecaptchaVerifier which requires a DOM element.
-      
-      const mockFirebaseToken = `fake-token-for-${phone}`;
-      
-      // Exchange token for Backend JWT
-      const res = await authApi.login(mockFirebaseToken);
-      
-      if (res.data.access_token) {
-        setAuthToken(res.data.access_token);
-        navigation.replace('Main');
+      const statusRes = await authApi.checkStatus(normalized, 'customer');
+      const { hasMpin } = statusRes.data;
+
+      if (config.auth_customer_mpin_enabled && hasMpin) {
+        navigation.navigate('MpinLogin', { phoneNumber: normalized });
+      } else if (config.auth_customer_otp_enabled) {
+        await authApi.sendOtp(normalized);
+        navigation.navigate('Otp', { phoneNumber: normalized });
+      } else if (config.auth_customer_mpin_enabled) {
+        navigation.navigate('MpinSetupDirect', { phoneNumber: normalized });
+      } else {
+        Alert.alert('Unavailable', 'No authentication methods available. Please contact support.');
       }
-    } catch (error) {
-      console.error('Login failed:', error);
-      Alert.alert('Login Failed', 'Unable to authenticate. Please try again.');
+    } catch (error: any) {
+      const msg = error.response?.data?.message || 'Unable to process login. Please try again.';
+      Alert.alert('Error', msg);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleGoogleLogin = async () => {
-    setLoading(true);
-    try {
-      // Exchange (Mock or Real) Google Auth Token for Backend JWT
-      const mockGoogleToken = "fake-google-token";
-      const res = await authApi.login(mockGoogleToken);
-      
-      if (res.data.access_token) {
-        setAuthToken(res.data.access_token);
-        navigation.replace('Main');
-      }
-    } catch (error) {
-       console.error('Google login failed:', error);
-       Alert.alert('Google Login Failed');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const accent = theme.colors.primary;
+  const accentDark = theme.colors.primaryDark;
+  const gradientColors: [string, string] = [accent, accentDark];
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <View style={styles.logoContainer}>
-        <View style={styles.logoBox}>
-          <Text style={styles.logoText}>B</Text>
-        </View>
-        <Text style={styles.title}>Baldia Mart</Text>
-        <Text style={styles.subtitle}>Hyperlocal Grocery Delivery</Text>
-      </View>
-
-      <View style={styles.formContainer}>
-        <Text style={styles.label}>Phone Number</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="+92 300 1234567"
-          keyboardType="phone-pad"
-          value={phone}
-          onChangeText={setPhone}
-          editable={!loading}
-        />
-
-        <TouchableOpacity 
-          style={[styles.button, loading && styles.disabledBtn]} 
-          onPress={handleLogin}
-          disabled={loading}
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1 }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Continue with Phone</Text>}
-        </TouchableOpacity>
+          <LinearGradient
+            colors={gradientColors}
+            style={styles.hero}
+          >
+            <View style={styles.logoBox}>
+              <Ionicons name="basket" size={36} color={accent} />
+            </View>
+            <AppText variant="h1" color="#fff" style={{ marginTop: theme.spacing.md }}>
+              BaldiaMart
+            </AppText>
+            <AppText variant="caption" color="rgba(255,255,255,0.9)" style={{ marginTop: 4 }}>
+              One App, Every Need • Groceries, Food & Pharma
+            </AppText>
+          </LinearGradient>
 
-        <View style={styles.divider}>
-          <View style={styles.line} />
-          <Text style={styles.orText}>OR</Text>
-          <View style={styles.line} />
-        </View>
+          <View style={styles.formCard}>
+            <AppText variant="h2">Welcome back</AppText>
+            <AppText variant="caption" style={{ marginTop: 4, marginBottom: theme.spacing.lg }}>
+              Sign in or create your account in seconds.
+            </AppText>
 
-        <TouchableOpacity 
-          style={[styles.button, styles.googleButton, loading && styles.disabledBtn]} 
-          onPress={handleGoogleLogin}
-          disabled={loading}
-        >
-          <Text style={styles.googleText}>Continue with Google</Text>
-        </TouchableOpacity>
-      </View>
-    </KeyboardAvoidingView>
+            <AppText variant="captionStrong" style={{ marginBottom: 8 }}>Phone number</AppText>
+            <View style={styles.inputRow}>
+              <View style={styles.flagBox}>
+                <AppText variant="bodyStrong">PK</AppText>
+                <AppText variant="caption">+92</AppText>
+              </View>
+              <TextInput
+                style={[styles.input, phoneError ? { color: theme.colors.danger } : null]}
+                placeholder="03001234567"
+                placeholderTextColor={theme.colors.textMuted}
+                keyboardType="phone-pad"
+                value={phone}
+                onChangeText={handlePhoneChange}
+                editable={!loading}
+                autoComplete="tel"
+                maxLength={14}
+              />
+            </View>
+            {phoneError ? (
+              <AppText variant="caption" color={theme.colors.danger} style={{ marginTop: 6, marginLeft: 4 }}>
+                {phoneError}
+              </AppText>
+            ) : null}
+
+            <AppButton
+              label={loading ? 'Please wait…' : 'Continue'}
+              variant="primary"
+              tint={accent}
+              size="lg"
+              fullWidth
+              onPress={handleLogin}
+              disabled={loading}
+              loading={loading}
+              style={{ marginTop: theme.spacing.lg }}
+              trailingIcon={!loading ? <Ionicons name="arrow-forward" size={18} color="#fff" /> : undefined}
+            />
+
+            {config.auth_customer_google_enabled ? (
+              <>
+                <View style={styles.divider}>
+                  <View style={styles.line} />
+                  <AppText variant="caption">or continue with</AppText>
+                  <View style={styles.line} />
+                </View>
+
+                <AppButton
+                  label="Continue with Google"
+                  variant="secondary"
+                  size="lg"
+                  fullWidth
+                  onPress={() => promptAsync()}
+                  disabled={loading}
+                  leadingIcon={<Ionicons name="logo-google" size={18} color={theme.colors.textPrimary} />}
+                  textColor={theme.colors.textPrimary}
+                />
+              </>
+            ) : null}
+
+            <View style={styles.footer}>
+              <Ionicons name="shield-checkmark-outline" size={14} color={theme.colors.success} />
+              <AppText variant="caption" align="center" style={{ flex: 1 }}>
+                Your number is secure. By continuing you agree to our Terms & Privacy.
+              </AppText>
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff', justifyContent: 'center' },
-  logoContainer: { alignItems: 'center', marginBottom: 50 },
-  logoBox: { width: 80, height: 80, backgroundColor: '#FF4500', borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 15 },
-  logoText: { fontSize: 40, fontWeight: 'bold', color: '#fff' },
-  title: { fontSize: 28, fontWeight: 'bold', color: '#1E1E1E' },
-  subtitle: { fontSize: 16, color: '#666', marginTop: 5 },
-  formContainer: { paddingHorizontal: 30 },
-  label: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 8 },
-  input: { height: 50, borderWidth: 1, borderColor: '#ddd', borderRadius: 10, paddingHorizontal: 15, fontSize: 16, marginBottom: 20 },
-  button: { height: 50, backgroundColor: '#FF4500', borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-  buttonText: { fontSize: 16, fontWeight: 'bold', color: '#fff' },
-  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 30 },
-  line: { flex: 1, height: 1, backgroundColor: '#eee' },
-  orText: { marginHorizontal: 15, color: '#999', fontSize: 14 },
-  googleButton: { backgroundColor: '#f5f5f5', borderWidth: 1, borderColor: '#ddd' },
-  googleText: { fontSize: 16, fontWeight: 'bold', color: '#333' },
-  disabledBtn: { opacity: 0.6 }
+  container: { flex: 1, backgroundColor: theme.colors.surface },
+
+  hero: {
+    paddingTop: theme.spacing.xl,
+    paddingBottom: theme.spacing.xxl + 16,
+    paddingHorizontal: theme.spacing.xl,
+    alignItems: 'center',
+    borderBottomLeftRadius: theme.radius.xl,
+    borderBottomRightRadius: theme.radius.xl,
+  },
+  logoBox: {
+    width: 72, height: 72, borderRadius: 24,
+    backgroundColor: '#fff',
+    justifyContent: 'center', alignItems: 'center',
+    ...theme.shadows.md,
+  },
+
+  formCard: {
+    backgroundColor: theme.colors.surface,
+    marginTop: -theme.spacing.lg,
+    marginHorizontal: theme.spacing.lg,
+    borderRadius: theme.radius.xl,
+    padding: theme.spacing.lg,
+    ...theme.shadows.md,
+  },
+
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: theme.radius.lg,
+    borderWidth: 1.5, borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+    overflow: 'hidden',
+  },
+  flagBox: {
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 10,
+    backgroundColor: theme.colors.surfaceMuted,
+    alignItems: 'center', justifyContent: 'center',
+    minWidth: 64,
+    borderRightWidth: 1, borderRightColor: theme.colors.border,
+  },
+  input: {
+    flex: 1,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: theme.colors.textPrimary,
+  },
+
+  divider: {
+    flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md,
+    marginVertical: theme.spacing.lg,
+  },
+  line: { flex: 1, height: 1, backgroundColor: theme.colors.border },
+
+  footer: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    marginTop: theme.spacing.lg,
+  },
 });

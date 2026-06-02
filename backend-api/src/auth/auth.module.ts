@@ -6,13 +6,20 @@ import { AuthController } from './auth.controller';
 import { UsersModule } from '../users/users.module';
 import { JwtStrategy } from './jwt.strategy';
 import { FirebaseStrategy } from './firebase.strategy';
+import { OtpModule } from '../otp/otp.module';
+import { RidersModule } from '../riders/riders.module';
+import { SettingsModule } from '../settings/settings.module';
+import { getJwtSecretOrThrow } from './jwt-secret';
 
 @Module({
   imports: [
     UsersModule,
+    OtpModule,
+    RidersModule,
+    SettingsModule,
     PassportModule,
     JwtModule.register({
-      secret: process.env.JWT_SECRET || 'super_secret_jwt_key',
+      secret: getJwtSecretOrThrow(),
       signOptions: { expiresIn: process.env.JWT_EXPIRATION || '7d' },
     }),
   ],

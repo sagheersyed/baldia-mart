@@ -1,0 +1,44 @@
+config:
+  target: "http://127.0.0.1:3000"
+  phases:
+    - duration: 1200
+      arrivalRate: 20
+      name: "Phase 1: 20 RPS Endurance (Baseline)"
+    - duration: 1200
+      arrivalRate: 50
+      name: "Phase 2: 50 RPS Endurance"
+    - duration: 1200
+      arrivalRate: 100
+      name: "Phase 3: 100 RPS Endurance"
+  defaults:
+    headers:
+      Content-Type: "application/json"
+      Authorization: "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2ODQzNDE4OC0zZTc5LTRkMjYtYmNkNC1jMTEwOWQ2OWVhODQiLCJlbWFpbCI6InNhZ2hlZXJzeWVkMzMzQGdtYWlsLmNvbSIsInJvbGUiOiJjdXN0b21lciIsImlhdCI6MTc3Nzc2NDYzNCwiZXhwIjoxODA5MzAwNjM0fQ.EwnOVDyT1Qfq5HibipAN8vl5fkh67YRtgw6GgzGL8Tk"
+
+scenarios:
+  - name: "Browsing"
+    weight: 70
+    flow:
+      - get:
+          url: "/api/v1/categories"
+      - get:
+          url: "/api/v1/products?limit=20"
+  - name: "Shopping"
+    weight: 20
+    flow:
+      - get:
+          url: "/api/v1/products?limit=10"
+      - post:
+          url: "/api/v1/cart/add"
+          json:
+            productId: "b5f32d91-8f6b-46c0-aad9-84a20dd19be5"
+            quantity: 1
+  - name: "Ordering"
+    weight: 10
+    flow:
+      - post:
+          url: "/api/v1/orders/checkout"
+          json:
+            addressId: "24ad71e9-1a6c-48ad-9cf2-c30985d5137a"
+            paymentMethod: "cash_on_delivery"
+            notes: "Endurance Test"

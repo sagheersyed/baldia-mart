@@ -5,34 +5,102 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import { Ionicons } from '@expo/vector-icons';
 
 import LoginScreen from './src/screens/LoginScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import NavigationScreen from './src/screens/NavigationScreen';
+import OtpScreen from './src/screens/OtpScreen';
+import CompleteProfileScreen from './src/screens/CompleteProfileScreen';
+import MpinLoginScreen from './src/screens/MpinLoginScreen';
+import MpinSetupScreen from './src/screens/MpinSetupScreen';
+import MpinSetupDirectScreen from './src/screens/MpinSetupDirectScreen';
+import OrderDetailsScreen from './src/screens/OrderDetailsScreen';
+import OrderHistoryScreen from './src/screens/OrderHistoryScreen';
+import WalletScreen from './src/screens/WalletScreen';
+import OrderChatScreen from './src/screens/OrderChatScreen';
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { setAuthToken, authApi } from './src/api/api';
+import { ActivityIndicator, View } from 'react-native';
+
+import { AuthProvider, useAuth } from './src/context/AuthContext';
+import { SettingsProvider } from './src/context/SettingsContext';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
 function RiderTabs() {
   return (
-    <Tab.Navigator screenOptions={{ headerShown: false, tabBarActiveTintColor: '#1E1E1E' }}>
+    <Tab.Navigator 
+      screenOptions={({ route }) => ({
+        headerShown: false,
+        tabBarActiveTintColor: '#FF4500',
+        tabBarInactiveTintColor: '#888',
+        tabBarStyle: { backgroundColor: '#1E1E1E', borderTopWidth: 0, height: 60, paddingBottom: 10 },
+        tabBarIcon: ({ color, size }) => {
+          let iconName: any;
+          if (route.name === 'Dashboard') iconName = 'speedometer-outline';
+          else if (route.name === 'Wallet') iconName = 'wallet-outline';
+          else if (route.name === 'Profile') iconName = 'person-outline';
+          return <Ionicons name={iconName} size={size} color={color} />;
+        },
+      })}
+    >
       <Tab.Screen name="Dashboard" component={DashboardScreen} />
+      <Tab.Screen name="Wallet" component={WalletScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
+  );
+}
+
+function AppInner() {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#1E1E1E' }}>
+        <ActivityIndicator size="large" color="#FF4500" />
+      </View>
+    );
+  }
+
+  return (
+    <NavigationContainer>
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        {!isAuthenticated ? (
+          <>
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="Otp" component={OtpScreen} />
+            <Stack.Screen name="MpinLogin" component={MpinLoginScreen} />
+            <Stack.Screen name="MpinSetup" component={MpinSetupScreen} />
+            <Stack.Screen name="MpinSetupDirect" component={MpinSetupDirectScreen} />
+            <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen} />
+          </>
+        ) : (
+          <>
+            <Stack.Screen name="Main" component={RiderTabs} />
+            <Stack.Screen name="OrderDetails" component={OrderDetailsScreen} />
+            <Stack.Screen name="Navigation" component={NavigationScreen} />
+            <Stack.Screen name="OrderHistory" component={OrderHistoryScreen} />
+            <Stack.Screen name="WalletDetail" component={WalletScreen} />
+            <Stack.Screen name="OrderChat" component={OrderChatScreen} options={{ headerShown: true, headerStyle: { backgroundColor: '#1E1E1E' }, headerTintColor: '#fff' }} />
+          </>
+        )}
+      </Stack.Navigator>
+    </NavigationContainer>
   );
 }
 
 export default function App() {
   return (
     <SafeAreaProvider>
-      <NavigationContainer>
-        <Stack.Navigator initialRouteName="Login" screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="Login" component={LoginScreen} />
-          <Stack.Screen name="Main" component={RiderTabs} />
-          <Stack.Screen name="Navigation" component={NavigationScreen} />
-        </Stack.Navigator>
-      </NavigationContainer>
+      <AuthProvider>
+        <SettingsProvider>
+          <AppInner />
+        </SettingsProvider>
+      </AuthProvider>
       <StatusBar style="auto" />
     </SafeAreaProvider>
   );

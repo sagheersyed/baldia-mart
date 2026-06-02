@@ -1,16 +1,53 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Alert, ActivityIndicator } from 'react-native';
+import { authApi } from '../api/api';
 
 export default function LoginScreen({ navigation }: any) {
   const [phone, setPhone] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [config, setConfig] = useState<any>({
+    auth_rider_mpin_enabled: true,
+    auth_rider_otp_enabled: true,
+  });
 
-  const handleLogin = () => {
+  React.useEffect(() => {
+    fetchConfig();
+  }, []);
+
+  const fetchConfig = async () => {
+    try {
+      const res = await authApi.getConfig();
+      setConfig(res.data);
+    } catch (e) {
+      console.log('Failed to load auth config', e);
+    }
+  };
+
+  const handleLogin = async () => {
     if (phone.length < 10) {
       Alert.alert('Error', 'Please enter a valid phone number');
       return;
     }
-    // Mock login success
-    navigation.replace('Main');
+    setLoading(true);
+    try {
+      const statusRes = await authApi.checkStatus(phone, 'rider');
+      const { exists, hasMpin } = statusRes.data;
+
+      if (config.auth_rider_mpin_enabled && hasMpin) {
+        navigation.navigate('MpinLogin', { phoneNumber: phone });
+      } else if (config.auth_rider_otp_enabled) {
+        await authApi.sendOtp(phone);
+        navigation.navigate('Otp', { phoneNumber: phone });
+      } else if (config.auth_rider_mpin_enabled) {
+        navigation.navigate('MpinSetupDirect', { phoneNumber: phone });
+      } else {
+        Alert.alert('Error', 'No login methods enabled for riders. Contact admin.');
+      }
+    } catch (e: any) {
+      Alert.alert('Error', e.response?.data?.message || 'Login attempt failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -36,8 +73,16 @@ export default function LoginScreen({ navigation }: any) {
           onChangeText={setPhone}
         />
 
-        <TouchableOpacity style={styles.button} onPress={handleLogin}>
-          <Text style={styles.buttonText}>Login to Dashboard</Text>
+        <TouchableOpacity 
+          style={[styles.button, loading && { backgroundColor: '#FF4500bb' }]} 
+          onPress={handleLogin}
+          disabled={loading}
+        >
+          {loading ? (
+             <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.buttonText}>Login to Dashboard</Text>
+          )}
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>

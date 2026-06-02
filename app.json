@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "52813271-02bd-45ee-9464-9b463571bf15"
+      }
+    },
+    "android": {
+      "package": "com.sagheer.syed.baldiamart"
+    }
+  }
+}

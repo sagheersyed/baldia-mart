@@ -2,53 +2,150 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Notification } from './notification.entity';
+import { User } from '../users/user.entity';
+import { Rider } from '../riders/rider.entity';
 import * as firebaseAdmin from 'firebase-admin';
+import axios from 'axios';
 
 @Injectable()
 export class NotificationsService {
   constructor(
     @InjectRepository(Notification)
     private notificationsRepository: Repository<Notification>,
+    @InjectRepository(User)
+    private usersRepository: Repository<User>,
+    @InjectRepository(Rider)
+    private ridersRepository: Repository<Rider>,
   ) {}
 
-  async sendToUser(userId: string, fcmToken: string, title: string, body: string) {
-    // Save to DB
+  private async saveNotification(title: string, body: string, userId?: string, riderId?: string, imageUrl?: string) {
     const notification = this.notificationsRepository.create({
       userId,
+      riderId,
       title,
       body,
+      imageUrl,
     });
-    await this.notificationsRepository.save(notification);
+    return this.notificationsRepository.save(notification);
+  }
 
-    // Send via FCM if token exists
+  async sendToUser(userId: string, fcmToken: string, title: string, body: string, imageUrl?: string) {
+    await this.saveNotification(title, body, userId, undefined, imageUrl);
+
     if (fcmToken) {
       try {
         await firebaseAdmin.messaging().send({
           token: fcmToken,
-          notification: { title, body },
+          notification: { title, body, imageUrl },
+          data: { imageUrl: imageUrl || '' } // Also send in data for some background handlers
         });
       } catch (error) {
-        console.error('FCM Error:', error);
+        console.error('FCM Error (User):', error);
       }
     }
   }
 
-  async sendToRider(riderId: string, fcmToken: string, title: string, body: string) {
-    const notification = this.notificationsRepository.create({
-      riderId,
-      title,
-      body,
-    });
-    await this.notificationsRepository.save(notification);
+  async sendToRider(riderId: string, fcmToken: string, title: string, body: string, imageUrl?: string) {
+    await this.saveNotification(title, body, undefined, riderId, imageUrl);
 
     if (fcmToken) {
       try {
         await firebaseAdmin.messaging().send({
           token: fcmToken,
-          notification: { title, body },
+          notification: { title, body, imageUrl },
+          data: { imageUrl: imageUrl || '' }
         });
       } catch (error) {
-        console.error('FCM Error:', error);
+        console.error('FCM Error (Rider):', error);
+      }
+    }
+  }
+
+  async sendToAllUsers(title: string, body: string, imageUrl?: string) {
+    const users = await this.usersRepository.find({
+      where: { role: 'customer' },
+      select: ['id', 'fcmToken'],
+    });
+
+    const tokens = users.map(u => u.fcmToken).filter(token => !!token);
+
+    if (tokens.length > 0) {
+      try {
+        // Send in batches of 500 (Firebase limit)
+        for (let i = 0; i < tokens.length; i += 500) {
+          const batch = tokens.slice(i, i + 500);
+          await firebaseAdmin.messaging().sendEachForMulticast({
+            tokens: batch,
+            notification: { title, body, imageUrl },
+          });
+        }
+      } catch (error) {
+        console.error('FCM Broadcast Error:', error);
+      }
+    }
+
+    // Save in DB for each user
+    const notifications = users.map(user => this.notificationsRepository.create({
+      userId: user.id,
+      title,
+      body,
+      imageUrl,
+    }));
+    await this.notificationsRepository.save(notifications);
+    return {
+      targetedUsers: users.length,
+      deliveredTokenCount: tokens.length,
+    };
+  }
+
+  async getRecentBroadcasts(limit = 10) {
+    const rows = await this.notificationsRepository
+      .createQueryBuilder('n')
+      .select('n.title', 'title')
+      .addSelect('n.body', 'body')
+      .addSelect('n.imageUrl', 'imageUrl')
+      .addSelect('n.createdAt', 'createdAt')
+      .addSelect('COUNT(n.id)', 'recipientCount')
+      .where('n.userId IS NOT NULL')
+      .andWhere('n.riderId IS NULL')
+      .groupBy('n.title, n.body, n.imageUrl, n.createdAt')
+      .orderBy('n.createdAt', 'DESC')
+      .limit(limit)
+      .getRawMany();
+
+    return rows.map((item) => ({
+      title: item.title,
+      body: item.body,
+      imageUrl: item.imageUrl,
+      createdAt: item.createdAt,
+      recipientCount: Number(item.recipientCount) || 0,
+    }));
+  }
+
+  async sendAdminAlert(title: string, body: string, priority: 'low' | 'high' = 'low') {
+    console.log(`[ADMIN ALERT] ${priority.toUpperCase()}: ${title} - ${body}`);
+    
+    // Save in DB for all admins
+    const admins = await this.usersRepository.find({ where: { role: 'admin' } });
+    if (admins.length > 0) {
+      const notes = admins.map(admin => this.notificationsRepository.create({
+        userId: admin.id,
+        title: `⚠️ ${title}`,
+        body,
+      }));
+      await this.notificationsRepository.save(notes);
+    }
+
+    // Optional: Webhook (Slack/Discord/Teams)
+    // We can fetch this from settings in the caller or here if we inject SettingsService
+    const webhookUrl = process.env.ADMIN_ALERT_WEBHOOK_URL;
+    if (webhookUrl) {
+      try {
+        await axios.post(webhookUrl, {
+          text: `*${priority === 'high' ? '🚨 HIGH PRIORITY ALERT' : '⚠️ ADMIN ALERT'}*\n*${title}*\n${body}`,
+        });
+      } catch (e) {
+        console.error('Failed to send admin webhook alert:', e.message);
       }
     }
   }

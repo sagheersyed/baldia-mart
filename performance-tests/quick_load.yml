@@ -1,0 +1,22 @@
+config:
+  target: "http://127.0.0.1:3000/api/v1"
+  phases:
+    - duration: 10
+      arrivalRate: 10
+      name: "Quick Load Test"
+  defaults:
+    headers:
+      Content-Type: "application/json"
+
+scenarios:
+  - name: "App Open and Browse"
+    flow:
+      - get:
+          url: "/categories"
+      - get:
+          url: "/products"
+          capture:
+            json: "$[0].id"
+            as: "productId"
+      - get:
+          url: "/products/{{ productId }}"

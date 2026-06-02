@@ -1,14 +1,27 @@
 -- Users Table
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    firebase_uid VARCHAR(255) UNIQUE NOT NULL,
-    name VARCHAR(255) NOT NULL,
-    email VARCHAR(255) UNIQUE NOT NULL,
-    phone_number VARCHAR(20),
-    role VARCHAR(50) DEFAULT 'user', -- user, admin
+    firebase_uid VARCHAR(255) UNIQUE, -- Nullable for phone-only users
+    name VARCHAR(255),
+    email VARCHAR(255) UNIQUE,
+    phone_number VARCHAR(20) UNIQUE,
+    is_phone_verified BOOLEAN DEFAULT FALSE,
+    role VARCHAR(50) DEFAULT 'customer', -- user, admin, rider
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+-- OTP Table
+CREATE TABLE otps (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    phone_number VARCHAR(20) NOT NULL,
+    otp_hash VARCHAR(255) NOT NULL,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    is_used BOOLEAN DEFAULT FALSE,
+    attempts INTEGER DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_otps_phone ON otps(phone_number);
 
 -- Delivery Zones Table
 CREATE TABLE delivery_zones (
@@ -28,6 +41,8 @@ CREATE TABLE addresses (
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     label VARCHAR(100), -- Home, Work, etc.
     street_address TEXT NOT NULL,
+    city VARCHAR(100),
+    postal_code VARCHAR(20),
     latitude DECIMAL(10, 8) NOT NULL,
     longitude DECIMAL(11, 8) NOT NULL,
     is_default BOOLEAN DEFAULT FALSE,

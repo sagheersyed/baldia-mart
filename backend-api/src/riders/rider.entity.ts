@@ -1,21 +1,33 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 
 @Entity('riders')
 export class Rider {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'firebase_uid', unique: true })
+  @Column({ name: 'firebase_uid', unique: true, nullable: true })
   firebaseUid: string;
 
-  @Column()
+  @Column({ name: 'fcm_token', nullable: true })
+  fcmToken: string;
+
+  @Column({ nullable: true })
   name: string;
 
-  @Column({ unique: true })
+  @Column({ unique: true, nullable: true })
   email: string;
 
-  @Column({ name: 'phone_number' })
+  @Column({ name: 'phone_number', unique: true })
   phoneNumber: string;
+
+  @Column({ nullable: true })
+  mpin?: string;
+
+  @Column({ name: 'mpin_attempts', default: 0 })
+  mpinAttempts: number;
+
+  @Column({ name: 'is_mpin_temporary', default: false })
+  isMpinTemporary: boolean;
 
   @Column({ name: 'vehicle_type', nullable: true })
   vehicleType: string;
@@ -23,6 +35,22 @@ export class Rider {
   @Column({ name: 'vehicle_number', nullable: true })
   vehicleNumber: string;
 
+  @Column({ name: 'cnic_front_url', nullable: true })
+  cnicFrontUrl: string;
+
+  @Column({ name: 'cnic_back_url', nullable: true })
+  cnicBackUrl: string;
+
+  @Column({ name: 'selfie_url', nullable: true })
+  selfieUrl: string;
+
+  @Column({ name: 'is_profile_complete', default: false })
+  isProfileComplete: boolean;
+
+  @Column({ name: 'is_pharma_approved', default: false })
+  isPharmaApproved: boolean;
+
+  @Index()
   @Column({ name: 'is_online', default: false })
   isOnline: boolean;
 
@@ -34,6 +62,22 @@ export class Rider {
 
   @Column('decimal', { name: 'total_earnings', precision: 10, scale: 2, default: 0 })
   totalEarnings: number;
+
+  @Column('decimal', { name: 'lifetime_commission', precision: 10, scale: 2, default: 0 })
+  lifetimeCommission: number;
+
+  @Column('decimal', { name: 'performance_bonus', precision: 10, scale: 2, default: 0 })
+  performanceBonus: number;
+
+  @Column('decimal', { name: 'average_rating', precision: 3, scale: 2, default: 5.0 })
+  averageRating: number;
+
+  @Column({ name: 'total_reviews', default: 0 })
+  totalReviews: number;
+
+  @Index()
+  @Column({ name: 'is_active', default: false })
+  isActive: boolean;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

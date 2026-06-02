@@ -1,13 +1,22 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, OneToMany, Index } from 'typeorm';
 import { User } from '../users/user.entity';
 import { Address } from '../addresses/address.entity';
+import { Rider } from '../riders/rider.entity';
 import { OrderItem } from './order-item.entity';
+import { Restaurant } from '../restaurants/restaurant.entity';
+import { SubOrder } from './sub-order.entity';
+import { Brand } from '../brands/brand.entity';
+import { OrderHistory } from './order-history.entity';
+import { Pharmacy } from '../pharma/pharmacies/pharmacy.entity';
 
+@Index('IDX_ORDERS_USER_CREATED_AT', ['userId', 'createdAt'])
+@Index('IDX_ORDERS_RIDER_STATUS_UPDATED_AT', ['riderId', 'status', 'updatedAt'])
 @Entity('orders')
 export class Order {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Index()
   @Column({ name: 'user_id' })
   userId: string;
 
@@ -15,16 +24,49 @@ export class Order {
   @JoinColumn({ name: 'user_id' })
   user: User;
 
+  @Index()
   @Column({ name: 'rider_id', nullable: true })
   riderId: string;
 
-  @Column({ name: 'address_id' })
+  @ManyToOne(() => Rider)
+  @JoinColumn({ name: 'rider_id' })
+  rider: Rider;
+
+  @Column({ name: 'address_id', nullable: true })
   addressId: string;
 
   @ManyToOne(() => Address)
   @JoinColumn({ name: 'address_id' })
   address: Address;
 
+  @Column({ name: 'mart_id', nullable: true })
+  martId: string;
+
+  @Column({ name: 'restaurant_id', nullable: true })
+  restaurantId: string;
+
+  @Column({ name: 'brand_id', nullable: true })
+  brandId: string;
+
+  @ManyToOne(() => Restaurant)
+  @JoinColumn({ name: 'restaurant_id' })
+  restaurant: Restaurant;
+
+  @ManyToOne(() => Brand)
+  @JoinColumn({ name: 'brand_id' })
+  brand: Brand;
+
+  @Column({ name: 'pharmacy_id', nullable: true })
+  pharmacyId: string;
+
+  @ManyToOne(() => Pharmacy)
+  @JoinColumn({ name: 'pharmacy_id' })
+  pharmacy: Pharmacy;
+
+  @Column({ name: 'prescription_id', nullable: true })
+  prescriptionId: string;
+
+  @Index()
   @Column({ default: 'pending' })
   status: string; // pending, confirmed, out_for_delivery, delivered, cancelled
 
@@ -46,14 +88,94 @@ export class Order {
   @Column({ name: 'payment_status', default: 'pending' })
   paymentStatus: string; // pending, paid, failed
 
+  @Column('decimal', { name: 'rider_commission', precision: 10, scale: 2, default: 0 })
+  riderCommission: number;
+
   @Column('decimal', { name: 'delivery_distance_km', precision: 5, scale: 2, nullable: true })
   deliveryDistanceKm: number;
 
   @Column({ type: 'text', nullable: true })
   notes: string;
 
+  @Column({ name: 'order_type', default: 'mart' })
+  orderType: string; // mart, food, rashan, pharma
+
+  // ── Monthly Rashan Bulk Order Fields ──────────────────────────────────────
+  @Column({ name: 'bulk_list_text', type: 'text', nullable: true })
+  bulkListText: string;
+
+  @Column({ name: 'bulk_list_photo_url', nullable: true })
+  bulkListPhotoUrl: string;
+
+  @Column('simple-array', { name: 'bulk_list_photo_urls', nullable: true })
+  bulkListPhotoUrls: string[];
+
+  @Column({ name: 'bulk_mobile_number', nullable: true })
+  bulkMobileNumber: string;
+
+  @Column({ name: 'bulk_street_address', nullable: true })
+  bulkStreetAddress: string;
+
+  @Column({ name: 'bulk_city', nullable: true })
+  bulkCity: string;
+
+  @Column({ name: 'bulk_landmark', nullable: true })
+  bulkLandmark: string;
+
+  @Column({ name: 'bulk_floor', type: 'int', nullable: true })
+  bulkFloor: number;
+
+  @Column({ name: 'bulk_placement', nullable: true })
+  bulkPlacement: string; // gate, doorstep, inside
+
+  @Column({ name: 'bulk_weight_tier', nullable: true })
+  bulkWeightTier: string; // light (<20kg), medium (20-50kg), heavy (50kg+)
+
+  @Column({ name: 'bulk_additional_notes', type: 'text', nullable: true })
+  bulkAdditionalNotes: string;
+
+  @Column({ name: 'rashan_status', default: 'pending_review' })
+  rashanStatus: string; // pending_review, quoted, approved, sourcing, delivered, rejected
+
+  @Column({ name: 'estimated_total', type: 'decimal', precision: 10, scale: 2, nullable: true })
+  estimatedTotal: number;
+
+  @Column({ name: 'is_estimate_approved', default: false })
+  isEstimateApproved: boolean;
+
+  @Column({ name: 'admin_rejection_reason', type: 'text', nullable: true })
+  adminRejectionReason: string;
+
   @OneToMany(() => OrderItem, item => item.order)
   items: OrderItem[];
+
+  @OneToMany(() => SubOrder, subOrder => subOrder.order)
+  subOrders: SubOrder[];
+
+  @OneToMany(() => OrderHistory, history => history.order)
+  orderHistory: OrderHistory[];
+
+  @Column({ name: 'is_rated', default: false })
+  isRated: boolean;
+
+  @Column({ name: 'is_business_rated', default: false })
+  isBusinessRated: boolean;
+
+  @Column({ name: 'release_count', default: 0 })
+  releaseCount: number;
+
+  // ── Pharma Intelligence Fields ──────────────────────────────────────────
+  @Column({ default: 'standard' })
+  priority: string; // standard, high (for emergency pharma)
+
+  @Column({ name: 'is_cold_chain', default: false })
+  isColdChain: boolean;
+
+  @Column({ name: 'cold_chain_verified_at', type: 'timestamp', nullable: true })
+  coldChainVerifiedAt: Date;
+
+  @Column({ name: 'cold_chain_photo_url', nullable: true })
+  coldChainPhotoUrl: string;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

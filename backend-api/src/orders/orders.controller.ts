@@ -1,33 +1,248 @@
-import { Controller, Post, Get, Put, Body, Req, Param, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Put, Body, Req, Param, UseGuards, BadRequestException, ParseUUIDPipe, Delete, Patch, ForbiddenException, Query } from '@nestjs/common';
 import { OrdersService } from './orders.service';
 import { AuthGuard } from '@nestjs/passport';
+import { AdminRoleGuard } from '../auth/admin-role.guard';
+import { PlaceOrderDto } from './dto/place-order.dto';
+import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
+import { AssignRiderDto } from './dto/assign-rider.dto';
+import { AddItemToOrderDto } from './dto/add-item-to-order.dto';
 import { Request } from 'express';
+
+import { CleanupService } from './cleanup.service';
 
 @Controller('orders')
 @UseGuards(AuthGuard('jwt'))
 export class OrdersController {
-  constructor(private readonly ordersService: OrdersService) {}
+  constructor(
+    private readonly ordersService: OrdersService,
+    private readonly cleanupService: CleanupService,
+  ) {}
+
+  @Post('cleanup')
+  @UseGuards(AdminRoleGuard)
+  async triggerCleanup() {
+    return this.cleanupService.triggerManualCleanup();
+  }
+
+  @Get('all')
+  @UseGuards(AdminRoleGuard)
+  async getAllOrders(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string
+  ) {
+    return this.ordersService.getAllOrdersForAdmin(
+      page ? parseInt(page, 10) : 1,
+      limit ? parseInt(limit, 10) : 20,
+      startDate,
+      endDate
+    );
+  }
+
+  @Get('pending')
+  async getPendingOrders(@Req() req: Request) {
+    const user = req.user as any;
+    return this.ordersService.getPendingOrders(user.role === 'rider' ? user.id : undefined);
+  }
+
+  @Get('active')
+  async getActiveOrders(@Req() req: Request) {
+    const user = req.user as any;
+    if (user.role !== 'rider') throw new BadRequestException('Only riders can access active orders');
+    return this.ordersService.getActiveOrdersForRider(user.id);
+  }
+
+  @Get('history')
+  async getHistory(
+    @Req() req: Request,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('orderType') orderType?: string
+  ) {
+    const user = req.user as any;
+    return this.ordersService.getOrderHistory(
+      user.id,
+      page ? parseInt(page, 10) : 1,
+      limit ? parseInt(limit, 10) : 20,
+      startDate,
+      endDate,
+      orderType
+    );
+  }
+
+  @Get('history/rider')
+  async getRiderHistory(
+    @Req() req: Request,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string
+  ) {
+    const user = req.user as any;
+    if (user.role !== 'rider') throw new BadRequestException('Only riders can access rider history');
+    return this.ordersService.getRiderOrderHistory(
+      user.id,
+      page ? parseInt(page, 10) : 1,
+      limit ? parseInt(limit, 10) : 20,
+      startDate,
+      endDate
+    );
+  }
 
   @Post('checkout')
-  async placeOrder(@Req() req: Request, @Body() body: any) {
+  async placeOrder(@Req() req: Request, @Body() body: PlaceOrderDto) {
     const user = req.user as any;
     return this.ordersService.placeOrder(
       user.id,
       body.addressId,
       body.paymentMethod,
       body.notes,
-      body.items
+      body.items,
+      body.orderType,
+      body.restaurantId
     );
   }
 
-  @Get('history')
-  async getHistory(@Req() req: Request) {
+  @Get('preview-fee/:addressId')
+  async previewFee(
+    @Param('addressId', ParseUUIDPipe) addressId: string,
+    @Query('restaurantId') restaurantId?: string,
+    @Query('orderType') orderType?: string,
+    @Query('items') itemsJson?: string
+  ) {
+    let items = undefined;
+    if (itemsJson) {
+      try {
+        items = JSON.parse(itemsJson);
+      } catch (e) {
+        console.warn('Failed to parse items for fee calculation', e);
+      }
+    }
+    return this.ordersService.calculateDeliveryFee(addressId, restaurantId, orderType, items);
+  }
+
+  @Post(':id/accept')
+  async acceptOrder(@Req() req: Request, @Param('id', ParseUUIDPipe) id: string) {
     const user = req.user as any;
-    return this.ordersService.getOrderHistory(user.id);
+    if (user.role !== 'rider') throw new BadRequestException('Only riders can accept orders');
+    return this.ordersService.acceptOrder(id, user.id);
+  }
+
+  @Get(':id')
+  async getOrder(@Req() req: Request, @Param('id', ParseUUIDPipe) id: string) {
+    const user = req.user as any;
+    return this.ordersService.getOrderById(id, user.id, user.role);
+  }
+
+  @Get(':id/timeline')
+  async getOrderTimeline(@Param('id', ParseUUIDPipe) id: string) {
+    return this.ordersService.getOrderStatusTimeline(id);
   }
 
   @Put(':id/status')
-  async updateStatus(@Param('id') id: string, @Body('status') status: string) {
-    return this.ordersService.updateStatus(id, status);
+  @UseGuards(AdminRoleGuard)
+  async updateStatus(@Param('id', ParseUUIDPipe) id: string, @Body() body: UpdateOrderStatusDto) {
+    return this.ordersService.updateStatus(id, body.status);
+  }
+
+  @Put(':id/assign')
+  @UseGuards(AdminRoleGuard)
+  async assignRider(
+    @Param('id', ParseUUIDPipe) id: string, 
+    @Body() body: AssignRiderDto
+  ) {
+    return this.ordersService.assignRider(id, body.riderId);
+  }
+
+  @Post(':id/cancel')
+  async cancelOrder(@Req() req: Request, @Param('id', ParseUUIDPipe) id: string) {
+    const user = req.user as any;
+    return this.ordersService.cancelOrder(id, user.id);
+  }
+
+  @Post(':id/release')
+  async releaseOrder(
+    @Req() req: Request,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body('reason') reason: string
+  ) {
+    const user = req.user as any;
+    console.log(`[DEBUG] Release Order Request: orderId=${id}, riderId=${user.id}, reason=${reason}`);
+    if (user.role !== 'rider') throw new BadRequestException('Only riders can release orders');
+    return this.ordersService.releaseOrder(id, user.id, reason);
+  }
+
+  /**
+   * Rider-only: progress an order through rider-controlled statuses.
+   * Admins use PUT /:id/status for full control.
+   */
+  @Patch(':id/rider-status')
+  async updateRiderStatus(
+    @Req() req: Request,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body('status') status: string,
+    @Body('coldChainPhotoUrl') coldChainPhotoUrl?: string,
+  ) {
+    const user = req.user as any;
+    if (user.role !== 'rider') {
+      throw new ForbiddenException('Only riders can use this endpoint.');
+    }
+    // Allowed rider transitions: confirmed → preparing → assigned_to_rider → ready_for_pickup → picked_up → in_transit → out_for_delivery → delivered
+    const riderAllowedStatuses = ['confirmed', 'preparing', 'assigned_to_rider', 'ready_for_pickup', 'picked_up', 'in_transit', 'out_for_delivery', 'delivered'];
+    if (!riderAllowedStatuses.includes(status)) {
+      throw new BadRequestException(`Riders cannot set status to "${status}". Allowed: ${riderAllowedStatuses.join(', ')}`);
+    }
+    return this.ordersService.updateStatus(id, status, coldChainPhotoUrl);
+  }
+
+  @Post(':id/reorder')
+  async reorderOrder(@Req() req: Request, @Param('id', ParseUUIDPipe) id: string) {
+    const user = req.user as any;
+    return this.ordersService.reorderOrder(id, user.id);
+  }
+
+  @Delete(':id/items/:itemId')
+  async removeItem(
+    @Req() req: Request,
+    @Param('id', ParseUUIDPipe) orderId: string,
+    @Param('itemId', ParseUUIDPipe) itemId: string,
+    @Body('reason') reason?: string
+  ) {
+    const user = req.user as any;
+    console.log(`[DEBUG] Remove Item Request: orderId=${orderId}, itemId=${itemId}, requesterId=${user.id}, role=${user.role}, reason=${reason}`);
+    return this.ordersService.removeOrderItem(orderId, itemId, user.id, user.role, reason);
+  }
+
+  @Patch(':id/items')
+  async batchUpdateItems(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body('items') items: { itemId: string; quantity: number }[],
+  ) {
+    return this.ordersService.batchUpdateItems(id, items);
+  }
+
+  @Post(':id/items')
+  async addItemToOrder(
+    @Req() req: Request,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: AddItemToOrderDto
+  ) {
+    const user = req.user as any;
+    return this.ordersService.addItemToOrder(id, user.id, body.productId, body.quantity);
+  }
+  @Patch('sub-orders/:subOrderId/status')
+  async updateSubOrderStatus(
+    @Param('subOrderId', ParseUUIDPipe) subOrderId: string,
+    @Body('status') status: string,
+  ) {
+    return this.ordersService.updateSubOrderStatus(subOrderId, status);
+  }
+
+  @Get(':id/chat')
+  async getChatHistory(@Param('id', ParseUUIDPipe) id: string) {
+    return this.ordersService.getChatHistory(id);
   }
 }

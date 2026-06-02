@@ -10,8 +10,29 @@ export class DeliveryZonesService {
     private zonesRepository: Repository<DeliveryZone>,
   ) {}
 
+  async findAll(): Promise<DeliveryZone[]> {
+    return this.zonesRepository.find({ order: { createdAt: 'DESC' } });
+  }
+
   async findAllActive(): Promise<DeliveryZone[]> {
     return this.zonesRepository.find({ where: { isActive: true } });
+  }
+
+  async create(zoneData: Partial<DeliveryZone>): Promise<DeliveryZone> {
+    const zone = this.zonesRepository.create(zoneData);
+    return this.zonesRepository.save(zone);
+  }
+
+  async update(id: string, updateData: Partial<DeliveryZone>): Promise<DeliveryZone> {
+    await this.zonesRepository.update(id, updateData);
+    return this.zonesRepository.findOne({ where: { id } }) as Promise<DeliveryZone>;
+  }
+
+  async toggleActive(id: string): Promise<DeliveryZone> {
+    const zone = await this.zonesRepository.findOne({ where: { id } });
+    if (!zone) throw new Error('Zone not found');
+    zone.isActive = !zone.isActive;
+    return this.zonesRepository.save(zone);
   }
 
   // Haversine formula
@@ -28,18 +49,35 @@ export class DeliveryZonesService {
     return distance;
   }
 
-  async validateAddressInZone(lat: number, lng: number): Promise<{ isValid: boolean, distance: number, zone?: DeliveryZone }> {
+  // GPS drift tolerance — accounts for GPS inaccuracy in dense/indoor areas
+  private readonly GPS_DRIFT_BUFFER_KM = 0.5;
+
+  async validateAddressInZone(lat: number, lng: number): Promise<{ isValid: boolean, distance: number, zone?: DeliveryZone, maxRadius?: number }> {
     const activeZones = await this.findAllActive();
-    
-    // For Baldia Town standard setup, we want max 50km
+
+    console.log(`Validating coordinates (${lat}, ${lng}) against ${activeZones.length} active zones`);
+
+    if (activeZones.length === 0) {
+      console.warn('NO ACTIVE DELIVERY ZONES FOUND IN DATABASE — all orders will be blocked');
+      return { isValid: false, distance: -1, maxRadius: 0 };
+    }
+
+    let maxRadius = 0;
     for (const zone of activeZones) {
-      const distance = this.calculateDistance(lat, lng, zone.centerLat, zone.centerLng);
-      // Hard cap or DB configured
-      if (distance <= zone.radiusKm) {
+      const effectiveRadius = Number(zone.radiusKm) + this.GPS_DRIFT_BUFFER_KM;
+      if (effectiveRadius > maxRadius) maxRadius = effectiveRadius;
+
+      const distance = this.calculateDistance(lat, lng, Number(zone.centerLat), Number(zone.centerLng));
+      console.log(
+        `Zone "${zone.name}": distance=${distance.toFixed(2)}km, ` +
+        `radius=${zone.radiusKm}km (+${this.GPS_DRIFT_BUFFER_KM}km buffer = ${effectiveRadius}km)`
+      );
+
+      if (distance <= effectiveRadius) {
         return { isValid: true, distance, zone };
       }
     }
-    
-    return { isValid: false, distance: -1 };
+
+    return { isValid: false, distance: -1, maxRadius };
   }
 }
