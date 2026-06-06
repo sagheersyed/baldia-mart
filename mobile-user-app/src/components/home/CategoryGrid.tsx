@@ -1,12 +1,15 @@
-import React, { memo, useCallback, useState } from 'react';
-import { View, StyleSheet, Pressable, Animated } from 'react-native';
+// CategoryGrid.tsx — Redesigned v4 (Borderless, full category image)
+// Features: Full image background/content, borderless layout, dark mode aware
+
+import React, { memo, useState } from 'react';
+import { View, StyleSheet, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import AppText from '../ui/AppText';
 import SectionHeader from '../ui/SectionHeader';
 import { normalizeUrl } from '../../api/api';
-import { theme } from '../../theme/theme';
+import { useTheme } from '../../context/ThemeContext';
 import { DEFAULT_IMAGES } from '../../constants/images';
 
 interface CategoryGridProps {
@@ -16,34 +19,31 @@ interface CategoryGridProps {
   variant?: 'mart' | 'food';
 }
 
-const TINTS: { bg: [string, string]; icon: string; border: string }[] = [
-  { bg: ['#FFF1EA', '#FFE0CF'], icon: theme.colors.palette.orange500, border: '#FFD8C4' },
-  { bg: ['#E8F8EE', '#D1FAE5'], icon: '#10B981', border: '#A7F3D0' },
-  { bg: ['#FFE7F0', '#FECDD3'], icon: '#E21B70', border: '#FCA5C0' },
-  { bg: ['#E3EBFF', '#DBEAFE'], icon: '#3B82F6', border: '#BFDBFE' },
-  { bg: ['#F3E8FF', '#EDE9FE'], icon: '#7C3AED', border: '#DDD6FE' },
-  { bg: ['#FFFBEB', '#FEF3C7'], icon: '#F59E0B', border: '#FDE68A' },
-  { bg: ['#FEE2E2', '#FECACA'], icon: '#EF4444', border: '#FCA5A5' },
-  { bg: ['#E5F3FE', '#DBEAFE'], icon: '#0EA5E9', border: '#BAE6FD' },
+// Background tints (no borders)
+const TINTS: { bg: [string, string]; glow: string }[] = [
+  { bg: ['#FFF7ED', '#FFE8D6'], glow: '#FF8C5415' },
+  { bg: ['#F0FDF4', '#D1FAE5'], glow: '#10B98115' },
+  { bg: ['#FDF2F8', '#FCE7F3'], glow: '#EC489915' },
+  { bg: ['#EFF6FF', '#DBEAFE'], glow: '#3B82F615' },
+  { bg: ['#F5F3FF', '#EDE9FE'], glow: '#7C3AED15' },
+  { bg: ['#FEFCE8', '#FEF9C3'], glow: '#EAB30815' },
+  { bg: ['#FEF2F2', '#FEE2E2'], glow: '#EF444415' },
+  { bg: ['#F0FDFA', '#CCFBF1'], glow: '#0D948815' },
 ];
 
-/**
- * Premium category wrap grid, matching the Pharma categories layout.
- */
 const CategoryGrid = memo(function CategoryGrid({
   categories,
   onCategoryPress,
   onSeeAll,
 }: CategoryGridProps) {
+  const { theme } = useTheme();
   const [showAll, setShowAll] = useState(false);
   const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
 
   if (!categories?.length) return null;
 
-  const hasMoreThan7 = categories.length > 7;
-  const displayedCategories = hasMoreThan7 && !showAll
-    ? categories.slice(0, 7)
-    : categories;
+  const hasMore = categories.length > 7;
+  const displayed = hasMore && !showAll ? categories.slice(0, 7) : categories;
 
   return (
     <View style={styles.section}>
@@ -53,20 +53,22 @@ const CategoryGrid = memo(function CategoryGrid({
         onAction={onSeeAll}
       />
       <View style={styles.grid}>
-        {displayedCategories.map((item, index) => {
+        {displayed.map((item, index) => {
           const tint = TINTS[index % TINTS.length];
           const iconUri = normalizeUrl(item.iconUrl || item.imageUrl);
-          const isNew = item.isNew || item.createdAt && (Date.now() - new Date(item.createdAt).getTime() < 7 * 86400000);
+          const isNew = item.isNew || (item.createdAt && Date.now() - new Date(item.createdAt).getTime() < 7 * 86400000);
+
           return (
             <Pressable
               key={item.id}
               onPress={() => onCategoryPress(item)}
               style={({ pressed }) => [
                 styles.tile,
-                pressed ? { opacity: 0.85, transform: [{ scale: 0.93 }] } : null,
+                pressed ? { opacity: 0.85, transform: [{ scale: 0.92 }] } : null,
               ]}
             >
-              <View style={[styles.iconBox]}>
+              {/* Box (No borders) */}
+              <View style={styles.iconBox}>
                 <LinearGradient
                   colors={tint.bg}
                   style={StyleSheet.absoluteFill}
@@ -76,15 +78,14 @@ const CategoryGrid = memo(function CategoryGrid({
                 <Image
                   source={{ uri: imageErrors[item.id] ? DEFAULT_IMAGES.category : (iconUri || DEFAULT_IMAGES.category) }}
                   style={styles.icon}
-                  contentFit="cover"
+                  contentFit="cover" // Full category image
                   cachePolicy="memory-disk"
                   transition={150}
                   onError={() => setImageErrors(prev => ({ ...prev, [item.id]: true }))}
                 />
-                {/* New badge */}
                 {isNew && (
-                  <View style={styles.newBadge}>
-                    <AppText variant="badge" color="#fff" style={{ fontSize: 8 }}>NEW</AppText>
+                  <View style={[styles.newBadge, { backgroundColor: theme.colors.success }]}>
+                    <AppText variant="badge" color="#fff" style={{ fontSize: 7, fontWeight: '800' }}>NEW</AppText>
                   </View>
                 )}
               </View>
@@ -101,23 +102,24 @@ const CategoryGrid = memo(function CategoryGrid({
           );
         })}
 
-        {hasMoreThan7 && (
+        {/* Show More / Show Less tile */}
+        {hasMore && (
           <Pressable
             onPress={() => setShowAll(!showAll)}
             style={({ pressed }) => [
               styles.tile,
-              pressed ? { opacity: 0.85, transform: [{ scale: 0.93 }] } : null,
+              pressed ? { opacity: 0.85, transform: [{ scale: 0.92 }] } : null,
             ]}
           >
-            <View style={[styles.iconBox, { backgroundColor: '#F1F5F9' }]}>
+            <View style={[styles.iconBox, { backgroundColor: theme.colors.surfaceMuted }]}>
               <Ionicons
                 name={showAll ? 'chevron-up-outline' : 'grid-outline'}
-                size={24}
+                size={26}
                 color={theme.colors.textSecondary}
               />
             </View>
             <AppText variant="caption" color={theme.colors.textSecondary} align="center" style={styles.label}>
-              {showAll ? 'Show Less' : 'Show More'}
+              {showAll ? 'Less' : `+${categories.length - 7}`}
             </AppText>
           </Pressable>
         )}
@@ -128,48 +130,49 @@ const CategoryGrid = memo(function CategoryGrid({
 
 const styles = StyleSheet.create({
   section: {
-    paddingBottom: theme.spacing.sm,
+    paddingBottom: 8,
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    paddingHorizontal: theme.spacing.lg,
-    rowGap: 20,
-    marginTop: theme.spacing.sm,
+    paddingHorizontal: 12,
+    rowGap: 14,
+    marginTop: 8,
   },
   tile: {
     width: '25%',
     alignItems: 'center',
-    paddingHorizontal: 6,
+    paddingHorizontal: 5,
   },
   iconBox: {
-    width: 64,
-    height: 64,
-    borderRadius: 22,
+    width: 74,
+    height: 74,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    marginBottom: 10,
-    ...theme.shadows.sm,
+    marginBottom: 8,
+    shadowColor: '#0A0F1E',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
   },
-  icon: { width: '100%', height: '100%' },
+  icon: { width: '100%', height: '100%' }, // Full category image filling container
   newBadge: {
     position: 'absolute',
-    bottom: -2,
-    right: -2,
-    backgroundColor: theme.colors.success,
-    borderRadius: 10,
-    paddingHorizontal: 6,
+    bottom: -3,
+    right: -3,
+    borderRadius: 8,
+    paddingHorizontal: 5,
     paddingVertical: 2,
     borderWidth: 2,
     borderColor: '#fff',
-    ...theme.shadows.sm,
   },
   label: {
-    paddingHorizontal: 4,
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '600',
-    color: theme.colors.textPrimary,
+    lineHeight: 15,
   },
 });
 

@@ -1,5 +1,12 @@
+// ProductCard.tsx — Redesigned v4 (Minimalist premium aesthetic)
+// Features: Clean white card, flat tag discount badge, white '+ ADD' action pill,
+//           improved detail sheet modal, dark mode via ThemeContext
+
 import React, { memo, useMemo, useState, useRef, useEffect } from 'react';
-import { View, StyleSheet, Pressable, Modal, ScrollView, Dimensions, Animated, PanResponder } from 'react-native';
+import {
+  View, StyleSheet, Pressable, Modal,
+  ScrollView, Dimensions, Animated, PanResponder, Text,
+} from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -7,10 +14,10 @@ import AppText from '../ui/AppText';
 import FavouriteButton from '../ui/FavouriteButton';
 import { isBusinessOpen } from '../../utils/helpers';
 import { normalizeUrl } from '../../api/api';
-import { theme } from '../../theme/theme';
+import { useTheme } from '../../context/ThemeContext';
 import { DEFAULT_IMAGES } from '../../constants/images';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { height: SCREEN_H } = Dimensions.get('window');
 
 export interface ProductCardProduct {
   id: string;
@@ -58,78 +65,47 @@ const ProductCard = memo(function ProductCard({
   onIncrement,
   onDecrement,
   onToggleFavourite,
-  tint = theme.colors.primary,
+  tint: tintProp,
 }: ProductCardProps) {
+  const { theme } = useTheme();
+  const tint = tintProp ?? theme.colors.primary;
+
   const [detailVisible, setDetailVisible] = useState(false);
   const [isScrollAtTop, setIsScrollAtTop] = useState(true);
   const [imageError, setImageError] = useState(false);
 
-  const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const translateY = useRef(new Animated.Value(SCREEN_H)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (detailVisible) {
-      translateY.setValue(SCREEN_HEIGHT);
+      translateY.setValue(SCREEN_H);
       backdropOpacity.setValue(0);
       Animated.parallel([
-        Animated.timing(backdropOpacity, {
-          toValue: 1,
-          duration: 250,
-          useNativeDriver: true,
-        }),
-        Animated.spring(translateY, {
-          toValue: 0,
-          damping: 18,
-          stiffness: 140,
-          useNativeDriver: true,
-        }),
+        Animated.timing(backdropOpacity, { toValue: 1, duration: 240, useNativeDriver: true }),
+        Animated.spring(translateY, { toValue: 0, damping: 18, stiffness: 140, useNativeDriver: true }),
       ]).start();
     }
   }, [detailVisible]);
 
   const closeModal = () => {
     Animated.parallel([
-      Animated.timing(backdropOpacity, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateY, {
-        toValue: SCREEN_HEIGHT,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setDetailVisible(false);
-    });
+      Animated.timing(backdropOpacity, { toValue: 0, duration: 190, useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: SCREEN_H, duration: 190, useNativeDriver: true }),
+    ]).start(() => setDetailVisible(false));
   };
 
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        return isScrollAtTop && gestureState.dy > 5;
-      },
-      onPanResponderMove: (_, gestureState) => {
-        if (gestureState.dy > 0) {
-          translateY.setValue(gestureState.dy);
-        }
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dy > 120 || gestureState.vy > 0.5) {
-          closeModal();
-        } else {
-          Animated.spring(translateY, {
-            toValue: 0,
-            damping: 18,
-            stiffness: 140,
-            useNativeDriver: true,
-          }).start();
-        }
+      onMoveShouldSetPanResponder: (_, gs) => isScrollAtTop && gs.dy > 5,
+      onPanResponderMove: (_, gs) => { if (gs.dy > 0) translateY.setValue(gs.dy); },
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dy > 120 || gs.vy > 0.5) closeModal();
+        else Animated.spring(translateY, { toValue: 0, damping: 18, stiffness: 140, useNativeDriver: true }).start();
       },
     })
   ).current;
-
 
   const stock = product.stock ?? product.stockQuantity;
   const isOOS = stock !== undefined ? stock <= 0 : false;
@@ -138,8 +114,8 @@ const ProductCard = memo(function ProductCard({
   const businessClosed = useMemo(() => {
     const productOpen = isBusinessOpen(product.openingTime, product.closingTime);
     const brandOpen = !product.brand || isBusinessOpen(product.brand?.openingTime, product.brand?.closingTime);
-    const categoryOpen = !product.category || isBusinessOpen(product.category?.openingTime, product.category?.closingTime);
-    return !productOpen || !brandOpen || !categoryOpen;
+    const catOpen = !product.category || isBusinessOpen(product.category?.openingTime, product.category?.closingTime);
+    return !productOpen || !brandOpen || !catOpen;
   }, [product]);
 
   const blocked = isOOS || businessClosed;
@@ -147,35 +123,39 @@ const ProductCard = memo(function ProductCard({
   const numericDiscount = Number(product.discount || 0);
   const finalPrice = numericPrice - numericDiscount;
   const hasDiscount = numericDiscount > 0;
-  const computedPercent = hasDiscount && numericPrice > 0
+  const computedPct = hasDiscount && numericPrice > 0
     ? Math.max(1, Math.round((numericDiscount / numericPrice) * 100))
     : 0;
-  const discountPercent = product.discountPercent || computedPercent;
+  const discountPercent = product.discountPercent || computedPct;
 
-  const containerStyle = variant === 'horizontal' ? styles.horizontal : styles.grid;
   const subline = product.weight || product.unit || product.brand?.name || product.category?.name;
   const maxedOut = product.maxQuantityPerOrder ? cartQty >= product.maxQuantityPerOrder : false;
 
+  const imgUri = imageError
+    ? DEFAULT_IMAGES.product
+    : (normalizeUrl(product.imageUrl) || DEFAULT_IMAGES.product);
+
   const handleCardPress = () => {
-    if (onPress) {
-      onPress();
-    } else {
-      setDetailVisible(true);
-    }
+    if (onPress) onPress();
+    else setDetailVisible(true);
   };
+
+  const isGrid = variant === 'grid';
 
   return (
     <>
       <Pressable
         onPress={handleCardPress}
         style={({ pressed }) => [
-          containerStyle,
+          isGrid ? styles.grid : styles.horizontal,
+          { backgroundColor: theme.colors.surface, borderColor: theme.colors.border },
           pressed ? { transform: [{ scale: 0.97 }] } : null,
         ]}
       >
-        <View style={styles.imageWrap}>
+        {/* Image Box */}
+        <View style={[styles.imageWrap, { backgroundColor: theme.colors.isDark ? theme.colors.surfaceMuted : '#F8FAFC' }]}>
           <Image
-            source={{ uri: imageError ? DEFAULT_IMAGES.product : (normalizeUrl(product.imageUrl) || DEFAULT_IMAGES.product) }}
+            source={{ uri: imgUri }}
             style={styles.image}
             contentFit="contain"
             cachePolicy="memory-disk"
@@ -183,131 +163,98 @@ const ProductCard = memo(function ProductCard({
             onError={() => setImageError(true)}
           />
 
-          {/* Premium solid discount badge - top left */}
+          {/* Flat Tag discount badge (looks much cleaner) */}
           {discountPercent > 0 && !blocked && (
-            <View style={styles.discountBadge}>
-              <AppText variant="badge" color="#fff" style={styles.discountText}>
-                {discountPercent}% OFF
-              </AppText>
+            <View style={[styles.discountTag, { backgroundColor: theme.colors.danger }]}>
+              <Text style={styles.discountTagText}>{discountPercent}% OFF</Text>
             </View>
           )}
 
-          {/* Low stock warning */}
+          {/* Low stock tag */}
           {isLowStock && !blocked && (
-            <View style={styles.lowStockBadge}>
-              <AppText variant="badge" color={theme.colors.warning} style={{ fontSize: 9, fontWeight: '800' }}>
-                Only {stock} left
-              </AppText>
+            <View style={[styles.lowStockBadge, { backgroundColor: theme.colors.warningLight, borderColor: theme.colors.warningBorder }]}>
+              <Text style={[styles.lowStockText, { color: theme.colors.warning }]}>{stock} left</Text>
             </View>
           )}
 
-          {/* OOS / Closed overlay */}
+          {/* Blocked overlay */}
           {blocked && (
             <View style={styles.blockedOverlay}>
               <View style={styles.blockedPill}>
-                <Ionicons
-                  name={businessClosed ? 'time-outline' : 'alert-circle-outline'}
-                  size={12}
-                  color="#fff"
-                />
-                <AppText variant="badge" color="#fff" style={{ fontSize: 9, fontWeight: '700' }}>
-                  {businessClosed ? 'CLOSED' : 'OUT OF STOCK'}
-                </AppText>
+                <Text style={styles.blockedText}>
+                  {businessClosed ? 'CLOSED' : 'OOS'}
+                </Text>
               </View>
             </View>
           )}
 
-          {/* Favourite heart overlay */}
+          {/* Favourite button */}
           {onToggleFavourite ? (
             <FavouriteButton
               active={!!isFavourite}
               onPress={onToggleFavourite}
-              size={28}
+              size={26}
               style={styles.heartBtn}
             />
           ) : null}
         </View>
 
+        {/* Body info */}
         <View style={styles.body}>
-          {/* Product Name */}
           <AppText
-            variant="body"
-            color="#1E293B"
+            variant="bodyStrong"
+            color={theme.colors.textPrimary}
             numberOfLines={2}
             style={styles.name}
           >
             {product.name}
           </AppText>
 
-          {/* Elegant clean weight/unit text */}
           {subline ? (
-            <AppText
-              variant="caption"
-              color="#64748B"
-              style={styles.weightText}
-              numberOfLines={1}
-            >
+            <AppText variant="caption" color={theme.colors.textSecondary} style={styles.subline} numberOfLines={1}>
               {subline}
             </AppText>
           ) : (
-            <View style={{ height: 16 }} />
+            <View style={{ height: 14 }} />
           )}
 
-          {/* Bottom row: Price + Add Button / Stepper */}
+          {/* Price + Add Row */}
           <View style={styles.bottomRow}>
-            <View style={styles.priceContainer}>
-              <AppText variant="price" color="#0F172A" style={styles.finalPrice}>
-                Rs. {Math.round(finalPrice).toLocaleString()}
+            <View style={styles.priceCol}>
+              <AppText variant="price" color={theme.colors.textHeader} style={styles.finalPrice}>
+                Rs.{Math.round(finalPrice).toLocaleString()}
               </AppText>
               {hasDiscount && (
                 <AppText variant="pricePrev" style={styles.oldPrice}>
-                  Rs. {Math.round(numericPrice).toLocaleString()}
+                  Rs.{Math.round(numericPrice).toLocaleString()}
                 </AppText>
               )}
             </View>
 
-            {/* Premium FoodPanda-style Circular Add/Stepper */}
             {!blocked && (
-              <View style={styles.actionContainer}>
+              <View style={styles.actionCol}>
                 {cartQty > 0 && onIncrement && onDecrement ? (
-                  <View style={[styles.stepperPill, { backgroundColor: tint }]}>
-                    <Pressable
-                      onPress={onDecrement}
-                      style={styles.stepperAction}
-                      hitSlop={8}
-                    >
-                      <Ionicons name="remove" size={14} color="#fff" />
+                  <View style={[styles.stepper, { backgroundColor: tint }]}>
+                    <Pressable onPress={onDecrement} style={styles.stepperBtn} hitSlop={8}>
+                      <Ionicons name="remove" size={13} color="#fff" />
                     </Pressable>
-                    <AppText
-                      variant="captionStrong"
-                      color="#fff"
-                      style={styles.stepperQty}
-                    >
-                      {cartQty}
-                    </AppText>
-                    <Pressable
-                      onPress={onIncrement}
-                      style={styles.stepperAction}
-                      disabled={maxedOut}
-                      hitSlop={8}
-                    >
-                      <Ionicons name="add" size={14} color="#fff" />
+                    <Text style={styles.stepperQty}>{cartQty}</Text>
+                    <Pressable onPress={onIncrement} style={styles.stepperBtn} disabled={maxedOut} hitSlop={8}>
+                      <Ionicons name="add" size={13} color="#fff" />
                     </Pressable>
                   </View>
                 ) : (
+                  // Minimalist additive button (White outline with primary color text)
                   <Pressable
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      onAdd();
-                    }}
+                    onPress={(e) => { e.stopPropagation(); onAdd(); }}
                     style={({ pressed }) => [
-                      styles.circleAddBtn,
-                      { backgroundColor: tint },
-                      pressed ? { transform: [{ scale: 0.9 }] } : null,
+                      styles.addPill,
+                      { borderColor: tint },
+                      pressed ? { backgroundColor: tint + '12' } : null,
                     ]}
-                    hitSlop={8}
+                    hitSlop={6}
                   >
-                    <Ionicons name="add" size={20} color="#fff" />
+                    <Text style={[styles.addText, { color: tint }]}>ADD</Text>
                   </Pressable>
                 )}
               </View>
@@ -316,103 +263,69 @@ const ProductCard = memo(function ProductCard({
         </View>
       </Pressable>
 
-      {/* Premium FoodPanda-style Product Detail Modal */}
-      <Modal
-        visible={detailVisible}
-        transparent
-        statusBarTranslucent
-        onRequestClose={closeModal}
-      >
+      {/* Product Detail Modal */}
+      <Modal visible={detailVisible} transparent statusBarTranslucent onRequestClose={closeModal}>
         <View style={styles.modalOverlay}>
-          {/* Backdrop Touch Dismiss */}
           <Animated.View
-            style={[
-              StyleSheet.absoluteFillObject,
-              {
-                backgroundColor: 'rgba(15, 23, 42, 0.65)',
-                opacity: backdropOpacity,
-              },
-            ]}
+            style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(10, 15, 30, 0.65)', opacity: backdropOpacity }]}
           >
-            <Pressable
-              style={StyleSheet.absoluteFillObject}
-              onPress={closeModal}
-            />
+            <Pressable style={StyleSheet.absoluteFillObject} onPress={closeModal} />
           </Animated.View>
 
-          {/* Bottom Sheet Modal View Container */}
           <Animated.View
             style={[
               styles.modalSheet,
-              { transform: [{ translateY }] }
+              { backgroundColor: theme.colors.surface },
+              { transform: [{ translateY }] },
             ]}
           >
-            {/* Header Handle / Drag Area */}
-            <View {...panResponder.panHandlers} style={styles.modalDragArea}>
-              <View style={styles.modalHandle} />
+            {/* Drag handle */}
+            <View {...panResponder.panHandlers} style={styles.dragArea}>
+              <View style={[styles.handle, { backgroundColor: theme.colors.border }]} />
             </View>
 
-            {/* Circular Close Button */}
-            <Pressable
-              onPress={closeModal}
-              style={styles.modalCloseBtn}
-              hitSlop={12}
-            >
-              <Ionicons name="close" size={20} color="#334155" />
+            <Pressable onPress={closeModal} style={[styles.closeBtn, { backgroundColor: theme.colors.surfaceMuted }]} hitSlop={12}>
+              <Ionicons name="close" size={20} color={theme.colors.textPrimary} />
             </Pressable>
 
             <ScrollView
               showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.modalScrollContent}
-              onScroll={(e) => {
-                setIsScrollAtTop(e.nativeEvent.contentOffset.y <= 0);
-              }}
+              contentContainerStyle={styles.modalContent}
+              onScroll={(e) => setIsScrollAtTop(e.nativeEvent.contentOffset.y <= 0)}
               scrollEventThrottle={16}
             >
-              {/* Product Large Image Container */}
-              <View style={styles.modalImageWrap}>
+              <View style={[styles.modalImageWrap, { backgroundColor: theme.colors.isDark ? theme.colors.surfaceMuted : '#EFF3FF' }]}>
                 <Image
-                  source={{ uri: imageError ? DEFAULT_IMAGES.product : (normalizeUrl(product.imageUrl) || DEFAULT_IMAGES.product) }}
+                  source={{ uri: imgUri }}
                   style={styles.modalImage}
                   contentFit="contain"
                   cachePolicy="memory-disk"
                   onError={() => setImageError(true)}
                 />
-
-                {/* Discount Badge */}
                 {discountPercent > 0 && !blocked && (
-                  <View style={styles.modalDiscountBadge}>
-                    <AppText variant="badge" color="#fff" style={{ fontSize: 11, fontWeight: '900' }}>
-                      {discountPercent}% OFF
-                    </AppText>
+                  <View style={[styles.discountTag, { backgroundColor: theme.colors.danger, position: 'absolute', top: 12, left: 12 }]}>
+                    <Text style={styles.discountTagText}>{discountPercent}% OFF</Text>
                   </View>
                 )}
               </View>
 
-              {/* Product Info Block */}
-              <View style={styles.modalInfoBlock}>
-                {/* Brand Name */}
+              <View style={styles.modalInfo}>
                 {product.brand?.name && (
                   <AppText variant="overline" color={tint} style={{ marginBottom: 4 }}>
                     {product.brand.name}
                   </AppText>
                 )}
-
-                {/* Product Name */}
-                <AppText variant="h2" color="#0F172A" style={styles.modalName}>
+                <AppText variant="h2" color={theme.colors.textHeader} style={styles.modalName}>
                   {product.name}
                 </AppText>
-
-                {/* Weight / Unit */}
                 {subline && (
-                  <AppText variant="body" color="#64748B" style={styles.modalWeight}>
+                  <AppText variant="body" color={theme.colors.textSecondary} style={{ marginTop: 4 }}>
                     {subline}
                   </AppText>
                 )}
 
-                {/* Price Display */}
                 <View style={styles.modalPriceRow}>
-                  <AppText variant="display" color="#0F172A" style={{ fontSize: 24, fontWeight: '900' }}>
+                  <AppText variant="display" color={tint} style={styles.modalPrice}>
                     Rs. {Math.round(finalPrice).toLocaleString()}
                   </AppText>
                   {hasDiscount && (
@@ -422,98 +335,62 @@ const ProductCard = memo(function ProductCard({
                   )}
                 </View>
 
-                {/* Delivery Guarantee Flag */}
-                <View style={styles.guaranteeRow}>
-                  <View style={[styles.guaranteeIconCircle, { backgroundColor: tint + '15' }]}>
-                    <Ionicons name="bicycle" size={16} color={tint} />
-                  </View>
-                  <View>
-                    <AppText variant="bodyStrong" color="#1E293B" style={{ fontSize: 13 }}>
-                      Express Delivery in 20-35 mins
-                    </AppText>
-                    <AppText variant="caption" color="#64748B">
-                      Guaranteed fresh and safe arrival to your door
-                    </AppText>
-                  </View>
+                <View style={styles.trustRow}>
+                  <TrustChip icon="bicycle" label="30 min" tint={tint} theme={theme} />
+                  <TrustChip icon="shield-checkmark" label="Verified" tint={tint} theme={theme} />
+                  <TrustChip icon="refresh" label="Easy Returns" tint={tint} theme={theme} />
                 </View>
 
-                {/* Divider */}
-                <View style={styles.modalDivider} />
+                <View style={[styles.modalDivider, { backgroundColor: theme.colors.divider }]} />
 
-                {/* Description Section */}
                 <View style={styles.modalSection}>
-                  <AppText variant="title" color="#0F172A" style={{ marginBottom: 8, fontSize: 16 }}>
+                  <AppText variant="title" color={theme.colors.textHeader} style={{ marginBottom: 8 }}>
                     Product Details
                   </AppText>
-                  <AppText variant="body" color="#475569" style={styles.modalDescText}>
+                  <AppText variant="body" color={theme.colors.textSecondary} style={styles.modalDesc}>
                     {product.description ||
-                      `Premium quality selected product. Carefully sourced and packed to meet the highest safety and hygiene standards. Enjoy fresh and authentic taste with BaldiaMart's 100% satisfaction guarantee.`
-                    }
+                      'Premium quality product. Carefully sourced and packed to meet the highest safety and hygiene standards. Enjoy with BaldiaMart\'s 100% satisfaction guarantee.'}
                   </AppText>
                 </View>
 
-                {/* Details Table */}
                 <View style={[styles.modalSection, { marginTop: 16 }]}>
-                  <AppText variant="title" color="#0F172A" style={{ marginBottom: 12, fontSize: 16 }}>
+                  <AppText variant="title" color={theme.colors.textHeader} style={{ marginBottom: 12 }}>
                     Specifications
                   </AppText>
-                  <View style={styles.specTable}>
-                    <View style={styles.specRow}>
-                      <AppText variant="captionStrong" color="#64748B" style={{ width: 100 }}>Category</AppText>
-                      <AppText variant="caption" color="#334155" style={{ flex: 1 }}>
-                        {product.category?.name || 'Groceries'}
-                      </AppText>
-                    </View>
+                  <View style={[styles.specTable, { backgroundColor: theme.colors.surfaceMuted, borderColor: theme.colors.border }]}>
+                    <SpecRow label="Category" value={product.category?.name || 'Groceries'} theme={theme} last={false} />
                     {product.brand?.name && (
-                      <View style={styles.specRow}>
-                        <AppText variant="captionStrong" color="#64748B" style={{ width: 100 }}>Brand</AppText>
-                        <AppText variant="caption" color="#334155" style={{ flex: 1 }}>{product.brand.name}</AppText>
-                      </View>
+                      <SpecRow label="Brand" value={product.brand.name} theme={theme} last={false} />
                     )}
-                    <View style={[styles.specRow, { borderBottomWidth: 0 }]}>
-                      <AppText variant="captionStrong" color="#64748B" style={{ width: 100 }}>Quality</AppText>
-                      <AppText variant="caption" color="#10B981" style={{ flex: 1, fontWeight: '700' }}>Verified Fresh</AppText>
-                    </View>
+                    <SpecRow label="Quality" value="Verified Fresh ✓" theme={theme} last valueColor={theme.colors.success} />
                   </View>
                 </View>
               </View>
             </ScrollView>
 
-            {/* Sticky Action Footer */}
-            <View style={styles.modalFooter}>
+            <View style={[styles.modalFooter, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border }]}>
               {blocked ? (
-                <View style={styles.modalBlockedBtn}>
-                  <Ionicons name="time" size={18} color="#fff" />
-                  <AppText variant="bodyStrong" color="#fff" style={{ marginLeft: 8 }}>
+                <View style={[styles.blockedFooterBtn, { backgroundColor: theme.colors.surfaceMuted }]}>
+                  <Ionicons name="time" size={18} color={theme.colors.textSecondary} />
+                  <AppText variant="bodyStrong" color={theme.colors.textSecondary} style={{ marginLeft: 8 }}>
                     {businessClosed ? 'Store Currently Closed' : 'Out of Stock'}
                   </AppText>
                 </View>
               ) : cartQty > 0 && onIncrement && onDecrement ? (
-                <View style={[styles.modalStepperContainer, { backgroundColor: tint }]}>
-                  <Pressable
-                    onPress={onDecrement}
-                    style={styles.modalStepperBtn}
-                    hitSlop={12}
-                  >
-                    <Ionicons name="remove" size={20} color="#fff" />
+                <View style={[styles.modalStepper, { backgroundColor: tint }]}>
+                  <Pressable onPress={onDecrement} style={styles.modalStepperBtn} hitSlop={12}>
+                    <Ionicons name="remove" size={22} color="#fff" />
                   </Pressable>
                   <AppText variant="h3" color="#fff" style={styles.modalStepperQty}>
-                    {cartQty} item{cartQty === 1 ? '' : 's'} in basket
+                    {cartQty} in basket
                   </AppText>
-                  <Pressable
-                    onPress={onIncrement}
-                    style={styles.modalStepperBtn}
-                    disabled={maxedOut}
-                    hitSlop={12}
-                  >
-                    <Ionicons name="add" size={20} color="#fff" />
+                  <Pressable onPress={onIncrement} style={styles.modalStepperBtn} disabled={maxedOut} hitSlop={12}>
+                    <Ionicons name="add" size={22} color="#fff" />
                   </Pressable>
                 </View>
               ) : (
                 <Pressable
-                  onPress={() => {
-                    onAdd();
-                  }}
+                  onPress={() => onAdd()}
                   style={({ pressed }) => [
                     styles.modalAddBtn,
                     { backgroundColor: tint },
@@ -522,7 +399,7 @@ const ProductCard = memo(function ProductCard({
                 >
                   <Ionicons name="basket" size={20} color="#fff" />
                   <AppText variant="bodyStrong" color="#fff" style={{ marginLeft: 10, fontSize: 15 }}>
-                    Add to Basket — Rs. {Math.round(finalPrice).toLocaleString()}
+                    Add to Basket — Rs.{Math.round(finalPrice).toLocaleString()}
                   </AppText>
                 </Pressable>
               )}
@@ -534,392 +411,239 @@ const ProductCard = memo(function ProductCard({
   );
 });
 
-const CARD_PADDING = 12;
-const IMG_HEIGHT = 120;
+// ── Sub-components ──────────────────────────────────────────────
+const TrustChip = memo(({ icon, label, tint, theme }: any) => (
+  <View style={[trustStyles.chip, { backgroundColor: tint + '12', borderColor: tint + '30' }]}>
+    <Ionicons name={icon} size={12} color={tint} />
+    <Text style={[trustStyles.label, { color: tint }]}>{label}</Text>
+  </View>
+));
+
+const SpecRow = memo(({ label, value, theme, last, valueColor }: any) => (
+  <View style={[specStyles.row, !last && { borderBottomWidth: 1, borderBottomColor: theme.colors.border }]}>
+    <AppText variant="captionStrong" color={theme.colors.textSecondary} style={{ width: 90 }}>{label}</AppText>
+    <AppText variant="caption" color={valueColor || theme.colors.textPrimary} style={{ flex: 1 }}>{value}</AppText>
+  </View>
+));
+
+const trustStyles = StyleSheet.create({
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  label: { fontSize: 11, fontWeight: '600' },
+});
+
+const specStyles = StyleSheet.create({
+  row: { flexDirection: 'row', paddingVertical: 9 },
+});
+
+// ── Styles ──────────────────────────────────────────────────────
+const IMG_H = 120;
 
 const styles = StyleSheet.create({
   grid: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: CARD_PADDING,
-    margin: 6,
+    borderRadius: 14,
+    padding: 10,
+    margin: 5,
     flex: 1,
     minWidth: 0,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 4 },
+    shadowColor: '#0A0F1E',
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
-    shadowRadius: 10,
+    shadowRadius: 6,
     elevation: 2,
   },
   horizontal: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: CARD_PADDING,
-    width: 146,
-    marginRight: 12,
+    borderRadius: 14,
+    padding: 10,
+    width: 140,
+    marginRight: 10,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 4 },
+    shadowColor: '#0A0F1E',
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
-    shadowRadius: 10,
+    shadowRadius: 6,
     elevation: 2,
   },
   imageWrap: {
     width: '100%',
-    height: IMG_HEIGHT,
-    borderRadius: 12,
+    height: IMG_H,
+    borderRadius: 10,
     overflow: 'hidden',
-    backgroundColor: '#F8F9FA',
     marginBottom: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 6,
+    padding: 8,
+    position: 'relative',
   },
-  image: {
-    width: '100%',
-    height: '100%',
-  },
-  discountBadge: {
+  image: { width: '90%', height: '90%' },
+
+  // Flat cleaner tag
+  discountTag: {
     position: 'absolute',
-    top: 8,
-    left: 8,
-    backgroundColor: '#E21B70', // Hot foodpanda pink for high-conversion discount appeal
-    borderRadius: 6,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
+    top: 6,
+    left: 6,
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
     zIndex: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 1,
   },
-  discountText: {
-    fontSize: 9.5,
-    fontWeight: '900',
+  discountTagText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '800',
     letterSpacing: 0.2,
   },
+
   lowStockBadge: {
     position: 'absolute',
     bottom: 6,
     left: 6,
-    backgroundColor: '#FFFBEB',
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
     borderWidth: 1,
-    borderColor: '#FDE68A',
     zIndex: 2,
   },
+  lowStockText: { fontSize: 8.5, fontWeight: '700' },
+
   blockedOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(15,23,42,0.4)',
+    backgroundColor: 'rgba(255,255,255,0.7)',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 3,
   },
   blockedPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(15,23,42,0.85)',
+    backgroundColor: '#0F172A',
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: 6,
   },
-  heartBtn: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    zIndex: 4,
-  },
+  blockedText: { color: '#fff', fontSize: 9, fontWeight: '800' },
 
-  body: {
-    gap: 4,
-  },
-  name: {
-    fontSize: 13,
-    lineHeight: 17,
-    fontWeight: '600',
-    minHeight: 34, // keep constant height for alignment in grids
-  },
-  weightText: {
-    fontSize: 11,
-    fontWeight: '500',
-    height: 16,
-  },
+  heartBtn: { position: 'absolute', top: 4, right: 4, zIndex: 4 },
+
+  body: { gap: 2 },
+  name: { fontSize: 12.5, lineHeight: 17, fontWeight: '600', minHeight: 34 },
+  subline: { fontSize: 11, height: 14 },
 
   bottomRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: 4,
-    height: 32,
+    minHeight: 28,
   },
-  priceContainer: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  finalPrice: {
-    fontSize: 14.5,
-    fontWeight: '800',
-    lineHeight: 18,
-  },
-  oldPrice: {
-    fontSize: 11,
-    color: '#94A3B8',
-    textDecorationLine: 'line-through',
-    marginTop: 1,
-  },
+  priceCol: { flex: 1, justifyContent: 'center' },
+  finalPrice: { fontSize: 13.5, fontWeight: '800', lineHeight: 16 },
+  oldPrice: { fontSize: 10, textDecorationLine: 'line-through' },
 
-  actionContainer: {
-    justifyContent: 'center',
-    alignItems: 'flex-end',
-  },
-  circleAddBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+  actionCol: { alignItems: 'flex-end' },
+  addPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+    borderRadius: 6,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 2,
   },
-  stepperPill: {
+  addText: { fontSize: 11.5, fontWeight: '800' },
+  stepper: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 15,
-    height: 30,
+    borderRadius: 6,
+    height: 26,
     paddingHorizontal: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 2,
   },
-  stepperAction: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
+  stepperBtn: {
+    width: 20, height: 20, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center',
   },
   stepperQty: {
-    minWidth: 16,
-    textAlign: 'center',
-    fontSize: 12,
-    fontWeight: '800',
-    marginHorizontal: 3,
+    minWidth: 14, textAlign: 'center', fontSize: 11.5,
+    fontWeight: '800', color: '#fff', marginHorizontal: 2,
   },
 
-  /* Product Details Modal Styles */
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'transparent',
-    justifyContent: 'flex-end',
-  },
+  /* Modal */
+  modalOverlay: { flex: 1, justifyContent: 'flex-end' },
   modalSheet: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    maxHeight: SCREEN_HEIGHT * 0.88,
+    borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    maxHeight: SCREEN_H * 0.9,
     paddingBottom: 24,
   },
-  modalDragArea: {
-    width: '100%',
-    height: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
+  dragArea: { width: '100%', height: 28, alignItems: 'center', justifyContent: 'center' },
+  handle: { width: 40, height: 5, borderRadius: 3 },
+  closeBtn: {
+    position: 'absolute', top: 10, right: 14,
+    width: 34, height: 34, borderRadius: 17,
+    alignItems: 'center', justifyContent: 'center', zIndex: 10,
   },
-  modalHandle: {
-    width: 38,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: '#E2E8F0',
-  },
-  modalCloseBtn: {
-    position: 'absolute',
-    top: 12,
-    right: 16,
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 10,
-  },
-  modalScrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 110, // space for sticky footer
-  },
+  modalContent: { paddingHorizontal: 20, paddingBottom: 120 },
   modalImageWrap: {
-    width: '100%',
-    height: 240,
-    backgroundColor: '#F8F9FA',
+    width: '100%', aspectRatio: 1,
     borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-    marginBottom: 16,
-    position: 'relative',
+    alignItems: 'center', justifyContent: 'center',
+    padding: 16, marginBottom: 16, position: 'relative',
   },
-  modalImage: {
-    width: '100%',
-    height: '100%',
-  },
-  modalDiscountBadge: {
-    position: 'absolute',
-    top: 12,
-    left: 12,
-    backgroundColor: '#E21B70',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  modalInfoBlock: {
-    marginTop: 4,
-  },
-  modalName: {
-    fontSize: 20,
-    lineHeight: 26,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  modalWeight: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#64748B',
-    marginTop: 4,
-  },
+  modalImage: { width: '100%', height: '100%' },
+  modalInfo: { marginTop: 4 },
+  modalName: { fontSize: 21, lineHeight: 28, fontWeight: '800' },
   modalPriceRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 8,
-    marginTop: 12,
-    marginBottom: 18,
+    flexDirection: 'row', alignItems: 'baseline', gap: 10,
+    marginTop: 10, marginBottom: 14,
   },
-  modalOldPrice: {
-    fontSize: 15,
-    color: '#94A3B8',
-    textDecorationLine: 'line-through',
-  },
-  guaranteeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    padding: 12,
-    gap: 12,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-  },
-  guaranteeIconCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalDivider: {
-    height: 1,
-    backgroundColor: '#F1F5F9',
-    marginBottom: 16,
-  },
-  modalSection: {
-    marginBottom: 4,
-  },
-  modalDescText: {
-    fontSize: 13.5,
-    lineHeight: 20,
-    fontWeight: '500',
-  },
-  specTable: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-    padding: 12,
-  },
-  specRow: {
-    flexDirection: 'row',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
+  modalPrice: { fontSize: 26, fontWeight: '900' },
+  modalOldPrice: { fontSize: 15 },
+  trustRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 18 },
+  modalDivider: { height: 1, marginBottom: 16 },
+  modalSection: { marginBottom: 4 },
+  modalDesc: { fontSize: 13.5, lineHeight: 20 },
+  specTable: { borderRadius: 12, borderWidth: 1, padding: 12 },
+
   modalFooter: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#FFFFFF',
+    position: 'absolute', bottom: 0, left: 0, right: 0,
     borderTopWidth: 1,
-    borderColor: '#F1F5F9',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: 20, paddingVertical: 14,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.06,
     shadowRadius: 10,
     elevation: 8,
   },
-  modalAddBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 48,
-    borderRadius: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 3,
+  blockedFooterBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    height: 52, borderRadius: 26,
   },
-  modalStepperContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    height: 48,
-    borderRadius: 24,
-    paddingHorizontal: 8,
-    shadowColor: '#000',
+  modalAddBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    height: 52, borderRadius: 26,
+    shadowColor: '#FF5A1F',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowOpacity: 0.28,
+    shadowRadius: 10, elevation: 4,
+  },
+  modalStepper: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    height: 52, borderRadius: 26, paddingHorizontal: 8,
+    shadowColor: '#FF5A1F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10, elevation: 4,
   },
   modalStepperBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 38, height: 38, borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    alignItems: 'center', justifyContent: 'center',
   },
-  modalStepperQty: {
-    fontSize: 14.5,
-    fontWeight: '800',
-  },
-  modalBlockedBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#94A3B8',
-  },
+  modalStepperQty: { fontSize: 14, fontWeight: '800' },
 });
 
 export default ProductCard;

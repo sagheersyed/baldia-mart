@@ -1,10 +1,14 @@
-import React, { memo } from 'react';
-import { View, StyleSheet, Pressable, Animated } from 'react-native';
+// HomeHeader.tsx — Premium redesign v3
+// Features: Time-based greeting, richer 3-stop gradient, glassmorphic location pill,
+//           larger action buttons, dark mode aware via ThemeContext
+
+import React, { memo, useMemo } from 'react';
+import { View, StyleSheet, Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import AppText from '../ui/AppText';
 import AppIconButton from '../ui/AppIconButton';
-import { sizes, theme } from '../../theme/theme';
+import { useTheme } from '../../context/ThemeContext';
 
 interface HomeHeaderProps {
   locationLabel: string;
@@ -13,10 +17,18 @@ interface HomeHeaderProps {
   onNotificationsPress: () => void;
   onCartPress: () => void;
   onFavouritesPress?: () => void;
-  scrollY?: Animated.Value;
-  greeting?: string;
   variant?: 'mart' | 'food';
   etaLabel?: string;
+  greeting?: string;
+  children?: React.ReactNode;
+}
+
+function getGreeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good Morning';
+  if (h < 17) return 'Good Afternoon';
+  if (h < 21) return 'Good Evening';
+  return 'Good Night';
 }
 
 const HomeHeader = memo(function HomeHeader({
@@ -26,50 +38,62 @@ const HomeHeader = memo(function HomeHeader({
   onNotificationsPress,
   onCartPress,
   onFavouritesPress,
-  greeting,
   variant = 'mart',
   etaLabel,
+  greeting,
+  children,
 }: HomeHeaderProps) {
+  const { theme } = useTheme();
   const isFood = variant === 'food';
-  const colors: [string, string, string] = isFood
-    ? [theme.colors.palette.pink500, theme.colors.palette.pink400, theme.colors.palette.pink300]
-    : [theme.colors.palette.orange600, theme.colors.palette.orange500, theme.colors.palette.orange400];
+
+  const gradColors = useMemo((): [string, string, string] =>
+    isFood
+      ? ['#A31F1F', '#C62828', '#E03030']
+      : [theme.colors.gradStart, theme.colors.gradMid, theme.colors.gradEnd],
+    [isFood, theme],
+  );
+
+  const brandName = isFood ? 'BaldiaFood' : 'BaldiaMart';
+  const greetText = greeting ?? getGreeting();
 
   return (
-    <LinearGradient colors={colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.wrap}>
-      {/* Top row: Brand + Action buttons */}
+    <LinearGradient
+      colors={gradColors}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={[styles.wrap, children ? { paddingBottom: 14 } : null]}
+    >
+      {/* Top row: Greeting + Action buttons */}
       <View style={styles.topRow}>
-        <AppText variant="overline" color="rgba(255,255,255,0.7)" style={styles.brand}>
-          {isFood ? 'BALDIAFOOD' : 'BALDIAMART'}
-        </AppText>
+        <View style={{ flex: 1 }}>
+          <AppText variant="overline" color="rgba(255,255,255,0.7)" style={styles.brand}>
+            {brandName}
+          </AppText>
+          <AppText variant="bodyStrong" color="#fff" style={styles.greeting} numberOfLines={1}>
+            {greetText} 👋
+          </AppText>
+        </View>
+
         <View style={styles.actions}>
           {onFavouritesPress ? (
-            <AppIconButton
-              size={38}
-              bg="rgba(255,255,255,0.15)"
-              onPress={onFavouritesPress}
-            >
-              <Ionicons name="heart-outline" size={20} color="#fff" />
+            <AppIconButton size={42} bg="rgba(255,255,255,0.18)" onPress={onFavouritesPress}>
+              <Ionicons name="heart-outline" size={21} color="#fff" />
             </AppIconButton>
           ) : null}
-          <AppIconButton
-            size={38}
-            bg="rgba(255,255,255,0.15)"
-            onPress={onNotificationsPress}
-          >
-            <Ionicons name="notifications-outline" size={20} color="#fff" />
+          <AppIconButton size={42} bg="rgba(255,255,255,0.18)" onPress={onNotificationsPress}>
+            <Ionicons name="notifications-outline" size={21} color="#fff" />
           </AppIconButton>
           <View>
-            <AppIconButton
-              size={38}
-              bg="rgba(255,255,255,0.15)"
-              onPress={onCartPress}
-            >
-              <Ionicons name="bag-handle-outline" size={20} color="#fff" />
+            <AppIconButton size={42} bg="rgba(255,255,255,0.18)" onPress={onCartPress}>
+              <Ionicons name="bag-handle-outline" size={21} color="#fff" />
             </AppIconButton>
             {cartCount > 0 && (
               <View style={styles.cartBadge}>
-                <AppText variant="badge" color={isFood ? theme.colors.food : theme.colors.primary} style={{ fontSize: 10 }}>
+                <AppText
+                  variant="badge"
+                  color={isFood ? theme.colors.food : theme.colors.primary}
+                  style={{ fontSize: 10, fontWeight: '800' }}
+                >
                   {cartCount > 9 ? '9+' : String(cartCount)}
                 </AppText>
               </View>
@@ -78,13 +102,19 @@ const HomeHeader = memo(function HomeHeader({
         </View>
       </View>
 
-      {/* Location row with "Delivering to" prefix */}
-      <Pressable onPress={onLocationPress} style={styles.locationBtn} hitSlop={6}>
-        <View style={styles.locationIconWrap}>
-          <Ionicons name="location" size={18} color="#fff" />
+      {/* Location pill */}
+      <Pressable onPress={onLocationPress} style={styles.locationPill} hitSlop={6}>
+        {/* Pulsing live dot */}
+        <View style={styles.liveDotWrap}>
+          <View style={styles.liveDot} />
         </View>
+
+        <View style={styles.locationIcon}>
+          <Ionicons name="location" size={16} color="#fff" />
+        </View>
+
         <View style={styles.locationCol}>
-          <AppText variant="caption" color="rgba(255,255,255,0.75)" style={{ fontSize: 11 }}>
+          <AppText variant="caption" color="rgba(255,255,255,0.75)" style={{ fontSize: 10.5 }}>
             Delivering to
           </AppText>
           <View style={styles.locationLine}>
@@ -96,90 +126,124 @@ const HomeHeader = memo(function HomeHeader({
             >
               {locationLabel}
             </AppText>
-            <Ionicons name="chevron-down" size={14} color="rgba(255,255,255,0.8)" />
+            <Ionicons name="chevron-down" size={13} color="rgba(255,255,255,0.85)" />
           </View>
         </View>
+
         {/* ETA chip */}
         {etaLabel ? (
           <View style={styles.etaChip}>
-            <Ionicons name="bicycle-outline" size={13} color="#fff" />
+            <Ionicons name="bicycle-outline" size={12} color="#fff" />
             <AppText variant="badge" color="#fff" style={{ fontSize: 10 }}>
               {etaLabel}
             </AppText>
           </View>
         ) : null}
       </Pressable>
+
+      {children}
     </LinearGradient>
   );
 });
 
 const styles = StyleSheet.create({
   wrap: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.xs,
-    paddingBottom: theme.spacing.xxxl,
+    paddingHorizontal: 16,
+    paddingTop: 6,
+    paddingBottom: 36,
   },
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: theme.spacing.md,
-    minHeight: 42,
+    marginBottom: 14,
+    minHeight: 48,
   },
   brand: {
-    letterSpacing: 2,
-    fontSize: 12,
-    fontWeight: '900',
+    letterSpacing: 1.5,
+    fontSize: 10,
+    fontWeight: '800',
     textTransform: 'uppercase',
+    marginBottom: 1,
   },
-  actions: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm },
+  greeting: {
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+  },
+  actions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   cartBadge: {
     position: 'absolute',
-    top: -4,
-    right: -4,
-    minWidth: 22,
-    height: 22,
-    borderRadius: 11,
-    paddingHorizontal: 6,
+    top: -5,
+    right: -5,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    paddingHorizontal: 5,
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.4)',
-    ...theme.shadows.sm,
+    borderColor: 'rgba(255,255,255,0.35)',
   },
-  locationBtn: {
+  locationPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.md,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: theme.radius.lg,
-    paddingVertical: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.md,
+    gap: 10,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.22)',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
   },
-  locationIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+  liveDotWrap: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.3)',
     alignItems: 'center',
     justifyContent: 'center',
-    ...theme.shadows.sm,
+  },
+  liveDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: '#4ADE80',
+  },
+  locationIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   locationCol: { flex: 1 },
-  locationLine: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  locationLabel: { maxWidth: '75%', fontSize: 15, fontWeight: '700' },
+  locationLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  locationLabel: {
+    maxWidth: '75%',
+    fontSize: 14,
+    fontWeight: '700',
+  },
   etaChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: theme.radius.pill,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.3)',
-    ...theme.shadows.sm,
   },
 });
 

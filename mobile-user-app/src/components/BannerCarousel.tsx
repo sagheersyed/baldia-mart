@@ -1,17 +1,32 @@
+// BannerCarousel.tsx — Redesigned v6 (Full Width Full Background Image & Spacing Gap)
+// Features: Full screen-width edge-to-edge banners, full background cover images,
+//           left-to-right contrast shadow overlays, glass deal tags, and premium paginators.
+
 import React, { useState, useEffect, useRef, memo, useCallback } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet,
-  ScrollView, Dimensions, Animated,
+  View, StyleSheet, FlatList, Dimensions, Pressable, Text
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { normalizeUrl } from '../api/api';
-import { theme } from '../theme/theme';
+import { useTheme } from '../context/ThemeContext';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const BANNER_W = SCREEN_WIDTH;
-const BANNER_H = 200;
+const { width: SCREEN_W } = Dimensions.get('window');
+
+// Banners are full width (edge-to-edge)
+const SIDE_PADDING = 0;
+const SLIDE_GAP    = 0;
+const SLIDE_W      = SCREEN_W;
+const SLIDE_H      = Math.round(SLIDE_W * (9 / 21)); // Elegant thin aspect ratio
+const SNAP_INTERVAL = SCREEN_W;
+
+const GRADIENTS: readonly [string, string, ...string[]][] = [
+  ['#FF5F6D', '#FF8F70', '#FFAF7B'], // Coral Sunset
+  ['#4facfe', '#00f2fe', '#00e1fd'], // Sapphire Wave
+  ['#11998e', '#38ef7d', '#5af493'], // Emerald Grass
+  ['#7F00FF', '#E100FF', '#f552ff'], // Neon Purple
+];
 
 interface Banner {
   id: string;
@@ -34,172 +49,154 @@ interface BannerCarouselProps {
   fallbackBanner?: Banner;
 }
 
-const DOT_SIZE = 6;
-const DOT_ACTIVE_W = 20;
-
-const BannerCarousel = memo(({ banners, onPress, autoScrollInterval = 4500, fallbackBanner }: BannerCarouselProps) => {
-  const scrollRef = useRef<ScrollView>(null);
+const BannerCarousel = memo(function BannerCarousel({
+  banners,
+  onPress,
+  autoScrollInterval = 5000,
+  fallbackBanner,
+}: BannerCarouselProps) {
+  const { theme } = useTheme();
+  const listRef = useRef<FlatList>(null);
   const [activeIndex, setActiveIndex] = useState(0);
-  const displayBanners = banners.length > 0 ? banners : (fallbackBanner ? [fallbackBanner] : []);
 
-  // Animated dot widths
-  const dotAnims = useRef(
-    displayBanners.map((_, i) => new Animated.Value(i === 0 ? DOT_ACTIVE_W : DOT_SIZE))
-  ).current;
+  const displayBanners = banners.length > 0
+    ? banners
+    : (fallbackBanner ? [fallbackBanner] : []);
 
-  // Animate dots when activeIndex changes
-  useEffect(() => {
-    dotAnims.forEach((anim, i) => {
-      Animated.spring(anim, {
-        toValue: i === activeIndex ? DOT_ACTIVE_W : DOT_SIZE,
-        friction: 8,
-        tension: 100,
-        useNativeDriver: false,
-      }).start();
-    });
-  }, [activeIndex, dotAnims]);
-
+  // Auto-scroll
   useEffect(() => {
     if (displayBanners.length <= 1) return;
     const timer = setInterval(() => {
       setActiveIndex(prev => {
         const next = (prev + 1) % displayBanners.length;
-        scrollRef.current?.scrollTo({ x: next * BANNER_W, animated: true });
+        listRef.current?.scrollToIndex({ index: next, animated: true });
         return next;
       });
     }, autoScrollInterval);
     return () => clearInterval(timer);
   }, [displayBanners.length, autoScrollInterval]);
 
-  const handleScroll = useCallback((e: any) => {
-    const idx = Math.round(e.nativeEvent.contentOffset.x / BANNER_W);
-    if (idx >= 0 && idx < displayBanners.length) {
-      setActiveIndex(idx);
+  const handleViewableItemsChanged = useCallback(({ viewableItems }: any) => {
+    if (viewableItems?.[0]?.index != null) {
+      setActiveIndex(viewableItems[0].index);
     }
-  }, [displayBanners.length]);
+  }, []);
+
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
+
+  const renderItem = useCallback(({ item, index }: { item: Banner; index: number }) => {
+    const hasImage = !!item.imageUrl;
+    const gradientColors = GRADIENTS[index % GRADIENTS.length];
+    const textThemeColor = '#FFFFFF'; // Force clean high-contrast white text on overlay
+
+    return (
+      <Pressable
+        onPress={() => onPress?.(item)}
+        style={({ pressed }) => [
+          styles.slide,
+          pressed ? { opacity: 0.98 } : null,
+        ]}
+      >
+        {/* Fallback solid gradient color */}
+        <LinearGradient
+          colors={gradientColors}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+
+        {/* Full background cover image */}
+        {hasImage && (
+          <Image
+            source={{ uri: normalizeUrl(item.imageUrl!)! }}
+            style={StyleSheet.absoluteFillObject}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            transition={200}
+          />
+        )}
+
+        {/* Premium left-to-right dimming overlay to make text highly readable */}
+        <LinearGradient
+          colors={['rgba(15, 23, 42, 0.72)', 'rgba(15, 23, 42, 0.35)', 'rgba(15, 23, 42, 0.0)']}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+
+        {/* Banner Content Layout */}
+        <View style={styles.cardContent}>
+          <View style={styles.leftCol}>
+            {item.tagLabel ? (
+              <View style={styles.glassTag}>
+                <Text style={styles.tagText}>{item.tagLabel.toUpperCase()}</Text>
+              </View>
+            ) : null}
+
+            <Text style={[styles.title, { color: textThemeColor }]} numberOfLines={2}>
+              {item.title}
+            </Text>
+
+            {item.subtitle ? (
+              <Text style={[styles.subtitle, { color: textThemeColor + 'CC' }]} numberOfLines={1}>
+                {item.subtitle}
+              </Text>
+            ) : null}
+          </View>
+
+          <View style={styles.rightCol}>
+            <View style={styles.ctaCircle}>
+              <Ionicons name="arrow-forward" size={18} color="#0F172A" />
+            </View>
+          </View>
+        </View>
+      </Pressable>
+    );
+  }, []);
 
   if (displayBanners.length === 0) return null;
 
   return (
     <View style={styles.wrap}>
-      <ScrollView
-        ref={scrollRef}
+      <FlatList
+        ref={listRef}
+        data={displayBanners}
+        keyExtractor={(b, i) => b.id || String(i)}
+        renderItem={renderItem}
         horizontal
         pagingEnabled
-        snapToInterval={BANNER_W}
+        snapToInterval={SNAP_INTERVAL}
         snapToAlignment="start"
         decelerationRate="fast"
         showsHorizontalScrollIndicator={false}
-        scrollEventThrottle={16}
-        onMomentumScrollEnd={handleScroll}
-        contentContainerStyle={{ paddingRight: 0 }}
-      >
-        {displayBanners.map((banner, i) => {
-          const bg = banner.backgroundColor || theme.colors.primary;
-          const hasImage = !!banner.imageUrl;
-          const isImageOnly = banner.bannerType === 'image' || !banner.title;
-
-          return (
-            <TouchableOpacity
-              key={banner.id || i}
-              activeOpacity={0.95}
-              onPress={() => onPress?.(banner)}
-              style={[styles.slide, { backgroundColor: bg }]}
-            >
-              {/* Background image: blurred backdrop */}
-              {hasImage && (
-                <>
-                  <Image
-                    source={{ uri: normalizeUrl(banner.imageUrl!) }}
-                    style={StyleSheet.absoluteFill}
-                    contentFit="cover"
-                    blurRadius={24}
-                    cachePolicy="memory-disk"
-                  />
-                  <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.15)' }]} />
-                  <Image
-                    source={{ uri: normalizeUrl(banner.imageUrl!) }}
-                    style={StyleSheet.absoluteFill}
-                    contentFit="cover"
-                    cachePolicy="memory-disk"
-                    transition={250}
-                  />
-                </>
-              )}
-
-              {/* Text overlays (only for non-image-only banners) */}
-              {!isImageOnly ? (
-                <>
-                  {/* Gradient overlay for readability */}
-                  <LinearGradient
-                    colors={['transparent', 'rgba(0,0,0,0.15)', 'rgba(0,0,0,0.75)']}
-                    locations={[0, 0.4, 1]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 0, y: 1 }}
-                    style={StyleSheet.absoluteFill}
-                  />
-
-                  {/* Tag chip top-left — gradient pill */}
-                  {banner.tagLabel ? (
-                    <View style={styles.tag}>
-                      <LinearGradient
-                        colors={['rgba(255,255,255,0.3)', 'rgba(255,255,255,0.15)']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={StyleSheet.absoluteFill}
-                      />
-                      <Text style={styles.tagText}>{banner.tagLabel}</Text>
-                    </View>
-                  ) : null}
-
-                  {/* Text at bottom */}
-                  <View style={styles.textArea}>
-                    <View style={styles.textRow}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.title, { color: banner.textColor || '#fff' }]} numberOfLines={2}>
-                          {banner.title}
-                        </Text>
-                        {banner.subtitle ? (
-                          <Text style={styles.subtitle} numberOfLines={1}>
-                            {banner.subtitle}
-                          </Text>
-                        ) : null}
-                      </View>
-                      {/* CTA button — glassmorphism */}
-                      <View style={styles.ctaBtn}>
-                        <LinearGradient
-                          colors={['rgba(255,255,255,0.32)', 'rgba(255,255,255,0.16)']}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 1 }}
-                          style={StyleSheet.absoluteFill}
-                        />
-                        <Text style={styles.ctaText}>Shop Now</Text>
-                        <Ionicons name="chevron-forward" size={12} color="#fff" />
-                      </View>
-                    </View>
-                  </View>
-                </>
-              ) : null}
-            </TouchableOpacity>
-          );
+        contentContainerStyle={styles.listContent}
+        onViewableItemsChanged={handleViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
+        getItemLayout={(_, index) => ({
+          length: SNAP_INTERVAL,
+          offset: SNAP_INTERVAL * index,
+          index,
         })}
-      </ScrollView>
+      />
 
-      {/* Animated pill dots floating on top of banner */}
+      {/* Pagination indicators */}
       {displayBanners.length > 1 && (
-        <View style={styles.dotRow}>
-          {displayBanners.map((_, i) => (
-            <Animated.View
-              key={i}
-              style={[
-                styles.dot,
-                {
-                  width: dotAnims[i],
-                  backgroundColor: i === activeIndex ? '#FFFFFF' : 'rgba(255,255,255,0.45)',
-                },
-              ]}
-            />
-          ))}
+        <View style={styles.indicatorContainer}>
+          {displayBanners.map((_, i) => {
+            const active = i === activeIndex;
+            return (
+              <View
+                key={i}
+                style={[
+                  styles.dot,
+                  {
+                    width: active ? 18 : 6,
+                    backgroundColor: active ? theme.colors.primary : 'rgba(255,255,255,0.4)',
+                  },
+                ]}
+              />
+            );
+          })}
         </View>
       )}
     </View>
@@ -210,89 +207,91 @@ export default BannerCarousel;
 
 const styles = StyleSheet.create({
   wrap: {
-    marginHorizontal: 0,
-    marginTop: 0,
-    marginBottom: 4,
+    marginTop: 10, // Little gap between header and banner
+    marginBottom: 8,
     position: 'relative',
   },
-  slide: {
-    width: BANNER_W,
-    height: BANNER_H,
-    borderTopLeftRadius: 0,
-    borderTopRightRadius: 0,
-    borderBottomLeftRadius: 0,
-    borderBottomRightRadius: 0,
-    overflow: 'hidden',
-    justifyContent: 'flex-end',
+  listContent: {
+    paddingHorizontal: SIDE_PADDING,
+    paddingBottom: 0,
   },
-  tag: {
-    position: 'absolute',
-    top: 14,
-    left: 16,
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+  slide: {
+    width: SLIDE_W,
+    height: SLIDE_H,
+    position: 'relative',
     overflow: 'hidden',
+  },
+  cardContent: {
+    ...StyleSheet.absoluteFillObject,
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    alignItems: 'center',
+    zIndex: 2,
+  },
+  leftCol: {
+    flex: 1,
+    justifyContent: 'center',
+    gap: 4,
+  },
+  rightCol: {
+    width: 50,
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  glassTag: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+    marginBottom: 4,
   },
   tagText: {
-    color: '#fff',
-    fontSize: 10,
+    color: '#FFF',
+    fontSize: 9,
     fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  textArea: {
-    padding: 16,
-    paddingBottom: 24, // extra padding for absolute dots floating
-  },
-  textRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 12,
+    letterSpacing: 0.6,
   },
   title: {
-    fontSize: 22,
+    fontSize: 19,
     fontWeight: '800',
-    lineHeight: 27,
-    letterSpacing: -0.4,
+    lineHeight: 24,
+    letterSpacing: -0.3,
   },
   subtitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
-    color: 'rgba(255,255,255,0.85)',
-    marginTop: 3,
+    marginTop: 2,
   },
-  ctaBtn: {
-    flexDirection: 'row',
+  ctaCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-    overflow: 'hidden',
-  },
-  ctaText: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.3,
-  },
-  dotRow: {
-    position: 'absolute',
-    bottom: 8,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  indicatorContainer: {
+    position: 'absolute',
+    bottom: 12,
+    right: 20,
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 4,
+    height: 8,
     zIndex: 10,
   },
   dot: {
-    height: DOT_SIZE,
-    borderRadius: DOT_SIZE / 2,
+    height: 5,
+    borderRadius: 3,
   },
 });

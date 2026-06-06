@@ -1,9 +1,12 @@
+// HomeSearchBar.tsx — Premium redesign v3
+// Features: Floating card style, branded search icon with tint bg,
+//           orange glow ring inside header, dark mode via ThemeContext
+
 import React, { memo } from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AppText from '../ui/AppText';
-import { theme } from '../../theme/theme';
-import { LinearGradient } from 'expo-linear-gradient';
+import { useTheme } from '../../context/ThemeContext';
 
 interface Props {
   placeholder?: string;
@@ -11,171 +14,138 @@ interface Props {
   onFilter?: () => void;
   variant?: 'mart' | 'food';
   floating?: boolean;
+  inHeader?: boolean;
 }
 
-/**
- * Premium Foodpanda-style search bar with:
- * - Elevated card design with soft shadows
- * - Gradient accent border
- * - Animated press feedback
- * - Filter button integration
- * - Modern iconography
- */
 const HomeSearchBar = memo(function HomeSearchBar({
   placeholder,
   onPress,
   onFilter,
   variant = 'mart',
   floating = true,
+  inHeader = false,
 }: Props) {
-  const ph = placeholder
-    || (variant === 'food' ? '🍔  Search restaurants and dishes' : '🛒  Search groceries, brands & more...');
-  
+  const { theme } = useTheme();
   const isFood = variant === 'food';
-  const gradientColors: [string, string] = isFood
-    ? [theme.colors.palette.pink500, theme.colors.palette.pink400]
-    : [theme.colors.palette.orange500, theme.colors.palette.orange400];
+  const tint = isFood ? theme.colors.food : theme.colors.primary;
+
+  const ph = placeholder
+    || (isFood ? 'Search restaurants & dishes…' : 'Search groceries, brands & more…');
 
   return (
-    <View style={[styles.container, floating ? styles.floating : null]}>
-      {/* Gradient border wrapper */}
-      <LinearGradient
-        colors={gradientColors}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.gradientBorder}
+    <View style={[
+      styles.container,
+      { backgroundColor: inHeader ? 'transparent' : theme.colors.background },
+      floating && !inHeader ? styles.floating : null,
+      inHeader ? styles.inHeader : null,
+    ]}>
+      <Pressable
+        onPress={onPress}
+        style={({ pressed }) => [
+          styles.bar,
+          {
+            backgroundColor: theme.colors.surface,
+            borderColor: inHeader ? 'rgba(255,255,255,0.35)' : theme.colors.border,
+          },
+          pressed ? { transform: [{ scale: 0.98 }], opacity: 0.92 } : null,
+          !inHeader ? {
+            shadowColor: theme.colors.isDark ? '#000' : '#0A0F1E',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: theme.colors.isDark ? 0.3 : 0.07,
+            shadowRadius: 12,
+            elevation: 5,
+          } : null,
+        ]}
+        android_ripple={{ color: theme.colors.primaryLight, borderless: false }}
       >
-        <Pressable
-          onPress={onPress}
-          style={({ pressed }) => [
-            styles.searchBar,
-            pressed ? styles.searchBarPressed : null,
-          ]}
-          android_ripple={{ color: theme.colors.primaryLight, borderless: false }}
-        >
-          {/* Search Icon with gradient background */}
-          <View style={styles.iconContainer}>
-            <Ionicons name="search" size={20} color={theme.colors.textSecondary} />
-          </View>
-          
-          {/* Placeholder text */}
-          <AppText
-            variant="body"
-            color={theme.colors.textMuted}
-            style={styles.placeholder}
-            numberOfLines={1}
-          >
-            {ph}
-          </AppText>
+        {/* Branded icon circle */}
+        <View style={[styles.iconCircle, { backgroundColor: tint + '18' }]}>
+          <Ionicons name="search" size={18} color={tint} />
+        </View>
 
-          {/* Action buttons */}
-          <View style={styles.actions}>
-            {onFilter && (
-              <Pressable
-                onPress={(e) => {
-                  e.stopPropagation();
-                  onFilter();
-                }}
-                style={({ pressed }) => [
-                  styles.filterBtn,
-                  pressed ? styles.filterBtnPressed : null,
-                ]}
-                hitSlop={8}
-              >
-                <Ionicons name="filter" size={18} color={theme.colors.primary} />
-              </Pressable>
-            )}
+        <AppText
+          variant="body"
+          color={inHeader ? 'rgba(255,255,255,0.7)' : theme.colors.textMuted}
+          style={styles.placeholder}
+          numberOfLines={1}
+        >
+          {ph}
+        </AppText>
+
+        <View style={styles.rightActions}>
+          {onFilter && (
             <Pressable
-              onPress={(e) => {
-                e.stopPropagation();
-                // Voice search placeholder
-              }}
+              onPress={(e) => { e.stopPropagation(); onFilter(); }}
               style={({ pressed }) => [
-                styles.voiceBtn,
-                pressed ? styles.voiceBtnPressed : null,
+                styles.actionBtn,
+                { backgroundColor: theme.colors.surfaceMuted },
+                pressed ? { transform: [{ scale: 0.9 }] } : null,
               ]}
               hitSlop={8}
             >
-              <Ionicons name="mic-outline" size={18} color={theme.colors.textSecondary} />
+              <Ionicons name="options-outline" size={17} color={tint} />
             </Pressable>
+          )}
+          <View style={[styles.actionBtn, { backgroundColor: theme.colors.surfaceMuted }]}>
+            <Ionicons name="mic-outline" size={17} color={theme.colors.textSecondary} />
           </View>
-        </Pressable>
-      </LinearGradient>
+        </View>
+      </Pressable>
     </View>
   );
 });
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.md,
-    paddingBottom: theme.spacing.none,
-    backgroundColor: theme.colors.background,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 0,
   },
   floating: {
     marginTop: -24,
     zIndex: 5,
   },
-  gradientBorder: {
-    borderRadius: theme.radius.xl,
-    padding: 2,
+  inHeader: {
+    paddingHorizontal: 0,
+    paddingTop: 10,
+    paddingBottom: 4,
+    marginTop: 0,
+    zIndex: 1,
   },
-  searchBar: {
+  bar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radius.lg,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.md,
-    minHeight: 52,
-    ...theme.shadows.md,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    minHeight: 50,
+    gap: 10,
   },
-  searchBarPressed: {
-    transform: [{ scale: 0.98 }],
-    shadowOpacity: 0.15,
-  },
-  iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: theme.colors.primaryLight,
+  iconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: theme.spacing.sm,
+    flexShrink: 0,
   },
   placeholder: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 13.5,
     fontWeight: '500',
   },
-  actions: {
+  rightActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
+    gap: 6,
   },
-  filterBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: theme.colors.surfaceMuted,
+  actionBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  filterBtnPressed: {
-    transform: [{ scale: 0.9 }],
-    backgroundColor: theme.colors.primaryLight,
-  },
-  voiceBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: theme.colors.surfaceMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  voiceBtnPressed: {
-    transform: [{ scale: 0.9 }],
-    backgroundColor: theme.colors.surface,
   },
 });
 

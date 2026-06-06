@@ -6,6 +6,16 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import {
+  useFonts,
+  Poppins_400Regular,
+  Poppins_500Medium,
+  Poppins_600SemiBold,
+  Poppins_700Bold,
+  Poppins_800ExtraBold,
+} from '@expo-google-fonts/poppins';
+import * as SplashScreen from 'expo-splash-screen';
+import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 
 import { useCart } from './src/context/CartContext';
 import { useAuth } from './src/context/AuthContext';
@@ -66,6 +76,8 @@ import EventDetailsScreen from './src/screens/EventDetailsScreen';
 import FloatingTabBar from './src/components/FloatingTabBar';
 import AppLoader from './src/components/AppLoader';
 import { usePushNotifications } from './src/hooks/usePushNotifications';
+
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -231,6 +243,14 @@ function Navigation() {
 }
 
 export default function App() {
+  const [fontsLoaded] = useFonts({
+    Poppins_400Regular,
+    Poppins_500Medium,
+    Poppins_600SemiBold,
+    Poppins_700Bold,
+    Poppins_800ExtraBold,
+  });
+
   useEffect(() => {
     useAuthStore.getState().loadStorageData();
     useSettingsStore.getState().refreshSettings();
@@ -238,12 +258,24 @@ export default function App() {
     useCartStore.getState().rehydrate();
   }, []);
 
+  useEffect(() => {
+    if (fontsLoaded) {
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [fontsLoaded]);
+
+  if (!fontsLoaded) {
+    return <AppLoader label="" />;
+  }
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        <Navigation />
-        <StatusBar style="auto" />
-      </SafeAreaProvider>
+      <ThemeProvider>
+        <SafeAreaProvider>
+          <Navigation />
+          <StatusBar style="auto" />
+        </SafeAreaProvider>
+      </ThemeProvider>
     </GestureHandlerRootView>
   );
 }

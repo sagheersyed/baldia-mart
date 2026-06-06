@@ -18,7 +18,7 @@ import HomeSkeleton from '../components/home/HomeSkeleton';
 import {
   AppText, AppBadge, AppIconButton, EmptyState, ErrorState, FavouriteButton,
 } from '../components/ui';
-import { theme } from '../theme/theme';
+import { useTheme } from '../context/ThemeContext';
 
 type Row =
   | { kind: 'hero' }
@@ -27,6 +27,7 @@ type Row =
 
 export default function BrandDetailScreen({ navigation, route }: any) {
   const { brandId } = route.params;
+  const { theme } = useTheme();
   const { martCart, pharmaCart, addToCart, updateQuantity, getCartCount, setActiveMode } = useCart();
   const { isFavourite, toggleFavourite } = useFavourites();
 
@@ -51,7 +52,7 @@ export default function BrandDetailScreen({ navigation, route }: any) {
       const isPharmaMode = route.params?.section === 'pharma';
       const [brandRes, prodsRes, catsRes] = await Promise.all([
         brandsApi.getById(brandId),
-        isPharmaMode 
+        isPharmaMode
           ? pharmaApi.searchMedicines('', 1, 50, { brandId })
           : productsApi.getByBrand(brandId),
         isPharmaMode
@@ -104,7 +105,7 @@ export default function BrandDetailScreen({ navigation, route }: any) {
 
   const brandClosed = brand && !isBusinessOpen(brand.openingTime, brand.closingTime);
   const cover = normalizeUrl(brand?.coverUrl || brand?.imageUrl);
-  const logo  = normalizeUrl(brand?.logoUrl || brand?.imageUrl);
+  const logo = normalizeUrl(brand?.logoUrl || brand?.imageUrl);
   const isFav = isFavourite(brandId, 'restaurants');
 
   const renderRow: ListRenderItem<Row> = useCallback(({ item }) => {
@@ -184,14 +185,15 @@ export default function BrandDetailScreen({ navigation, route }: any) {
     }
 
     if (item.kind === 'tabs') {
+      const activeAccent = isPharma ? theme.colors.pharma : theme.colors.primary;
       return (
-        <View style={styles.tabsWrap}>
+        <View style={[styles.tabsWrap, { backgroundColor: theme.colors.surface, borderColor: theme.colors.divider }]}>
           <FlatList
             data={[{ id: null, name: 'All' }, ...categories]}
             keyExtractor={(c) => c.id || 'all'}
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: theme.spacing.lg, gap: 8 }}
+            contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
             renderItem={({ item: cat }) => {
               const active = selectedCatId === cat.id || (!selectedCatId && cat.id === null);
               return (
@@ -199,7 +201,10 @@ export default function BrandDetailScreen({ navigation, route }: any) {
                   onPress={() => setSelectedCatId(cat.id)}
                   style={[
                     styles.chip,
-                    active ? { backgroundColor: accentColor, borderColor: accentColor } : null,
+                    {
+                      backgroundColor: active ? activeAccent : theme.colors.surfaceMuted,
+                      borderColor: active ? activeAccent : theme.colors.border,
+                    },
                   ]}
                 >
                   <AppText
@@ -320,10 +325,10 @@ export default function BrandDetailScreen({ navigation, route }: any) {
 
       {cartTotalQty > 0 ? (
         <View style={styles.stickyCta}>
-          <Pressable 
-            onPress={() => navigation.navigate(isPharma ? 'PharmaCart' : 'Cart')} 
+          <Pressable
+            onPress={() => navigation.navigate(isPharma ? 'PharmaCart' : 'Cart')}
             style={({ pressed }) => [
-              styles.stickyBtn, 
+              styles.stickyBtn,
               { backgroundColor: isPharma ? theme.colors.pharma : theme.colors.primary },
               pressed ? { opacity: 0.9 } : null,
             ]}
@@ -341,20 +346,20 @@ export default function BrandDetailScreen({ navigation, route }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.colors.background },
+  container: { flex: 1, backgroundColor: '#F4F6FB' },
   listContent: { paddingBottom: 120 },
 
-  hero: { backgroundColor: theme.colors.surface, marginBottom: theme.spacing.huge },
+  hero: { backgroundColor: '#FFFFFF', marginBottom: 24 },
   heroImg: {
     width: '100%',
     height: 220,
-    backgroundColor: theme.colors.primary,
+    backgroundColor: '#FF5A1F',
     overflow: 'hidden',
   },
-  heroPlaceholder: { alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.primary },
+  heroPlaceholder: { alignItems: 'center', justifyContent: 'center', backgroundColor: '#FF5A1F' },
   heroTopBar: {
     position: 'absolute',
-    top: theme.spacing.md, left: theme.spacing.md, right: theme.spacing.md,
+    top: 12, left: 12, right: 12,
     flexDirection: 'row', justifyContent: 'space-between',
   },
   closedPill: {
@@ -363,55 +368,54 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     backgroundColor: 'rgba(15,23,42,0.85)',
     paddingHorizontal: 14, paddingVertical: 6,
-    borderRadius: theme.radius.pill,
+    borderRadius: 999,
   },
   brandInfo: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.lg,
-    gap: theme.spacing.sm,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    gap: 8,
   },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm },
-  metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.md },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
 
   tabsWrap: {
-    paddingVertical: theme.spacing.sm,
-    backgroundColor: theme.colors.surface,
-    marginBottom: theme.spacing.sm,
+    paddingVertical: 8,
+    marginBottom: 8,
     borderTopWidth: 1, borderBottomWidth: 1,
-    borderColor: theme.colors.divider,
   },
   chip: {
-    paddingHorizontal: theme.spacing.md,
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: theme.radius.pill,
-    backgroundColor: theme.colors.surfaceMuted,
+    borderRadius: 999,
     borderWidth: 1,
-    borderColor: theme.colors.border,
   },
 
   gridRow: {
     flexDirection: 'row',
-    paddingHorizontal: theme.spacing.sm,
+    paddingHorizontal: 8,
   },
   gridCol: { flex: 1 },
 
   // Sticky cart CTA
   stickyCta: {
     position: 'absolute',
-    left: theme.spacing.lg, right: theme.spacing.lg,
-    bottom: theme.spacing.lg,
+    left: 16, right: 16,
+    bottom: 16,
   },
   stickyBtn: {
-    backgroundColor: theme.colors.primary,
-    borderRadius: theme.radius.pill,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: theme.spacing.md,
-    ...theme.shadows.brand,
+    gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 4,
   },
   stickyBadge: {
     minWidth: 28, height: 28, borderRadius: 14,

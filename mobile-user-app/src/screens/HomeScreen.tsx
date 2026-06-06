@@ -202,7 +202,7 @@ export default function HomeScreen({ navigation }: any) {
         id: 'deals',
         title: 'Deals & Offers',
         icon: 'pricetag',
-        bg: '#FFE4E1', fg: theme.colors.discount,
+        bg: ['#FFE4E1', '#FFD1D1'], fg: theme.colors.discount,
         badge: 'HOT',
         onPress: () => navigation.navigate('ProductListing', { type: 'deals', title: 'Deals & Offers' }),
       },
@@ -210,28 +210,28 @@ export default function HomeScreen({ navigation }: any) {
         id: 'best',
         title: 'Best Sellers',
         icon: 'trophy',
-        bg: '#FFF1EA', fg: theme.colors.primary,
+        bg: ['#FFF1EA', '#FFE0CF'], fg: theme.colors.primary,
         onPress: () => navigation.navigate('ProductListing', { type: 'best_sellers', title: 'Best Sellers' }),
       },
       {
         id: 'fresh',
         title: 'Fresh Bazaar',
         icon: 'leaf',
-        bg: '#E8F8EE', fg: '#10B981',
+        bg: ['#E8F8EE', '#D1FAE5'], fg: '#10B981',
         onPress: () => navigation.navigate('ProductListing', { type: 'newest', title: 'Fresh Bazaar' }),
       },
       {
         id: 'budget',
         title: 'Under Rs.100',
         icon: 'cash',
-        bg: '#E3EBFF', fg: '#3B82F6',
+        bg: ['#E3EBFF', '#C4D6FF'], fg: '#3B82F6',
         onPress: () => navigation.navigate('ProductListing', { type: 'budget', maxPrice: 100, title: 'Under Rs.100' }),
       },
       {
         id: 'featured',
         title: 'Featured',
         icon: 'sparkles',
-        bg: '#F3E8FF', fg: '#7C3AED',
+        bg: ['#F3E8FF', '#E9D5FF'], fg: '#7C3AED',
         onPress: () => navigation.navigate('ProductListing', { type: 'featured', title: 'Featured' }),
       },
     ];
@@ -240,7 +240,7 @@ export default function HomeScreen({ navigation }: any) {
         id: 'rashan',
         title: 'Monthly Rashan',
         icon: 'cube',
-        bg: '#7267e9ff', fg: '#fff',
+        bg: ['#818CF8', '#4F46E5'], fg: '#fff',
         onPress: () => navigation.navigate('RashanOrder'),
       });
     }
@@ -334,8 +334,13 @@ export default function HomeScreen({ navigation }: any) {
           onFavouritesPress={() => navigation.navigate('Favourites')}
           variant="mart"
           greeting={greeting}
-        />
-        <HomeSearchBar onPress={() => navigation.navigate('Search', { mode: 'mart' })} />
+        >
+          <HomeSearchBar
+            onPress={() => navigation.navigate('Search', { mode: 'mart' })}
+            floating={false}
+            inHeader={true}
+          />
+        </HomeHeader>
         <HomeSkeleton />
       </SafeAreaView>
     );
@@ -367,14 +372,16 @@ export default function HomeScreen({ navigation }: any) {
         onNotificationsPress={() => navigation.navigate('Notifications')}
         onCartPress={() => navigation.navigate('Cart')}
         onFavouritesPress={() => navigation.navigate('Favourites')}
-        scrollY={scrollY}
         variant="mart"
         greeting={greeting}
-      />
-      <HomeSearchBar
-        onPress={() => navigation.navigate('Search', { mode: 'mart' })}
-        onFilter={() => navigation.navigate('ProductListing', { type: 'newest', title: 'All Products' })}
-      />
+      >
+        <HomeSearchBar
+          onPress={() => navigation.navigate('Search', { mode: 'mart' })}
+          onFilter={() => navigation.navigate('ProductListing', { type: 'newest', title: 'All Products' })}
+          floating={false}
+          inHeader={true}
+        />
+      </HomeHeader>
 
       <Animated.FlatList
         data={listData}

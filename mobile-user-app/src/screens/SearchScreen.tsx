@@ -13,6 +13,7 @@ import {
 } from '../api/api';
 import ProductCard from '../components/home/ProductCard';
 import StoreCard from '../components/home/StoreCard';
+import BrandCard from '../components/home/BrandCard';
 import { AppText, AppIconButton, EmptyState, SkeletonBlock } from '../components/ui';
 import { useCart } from '../context/CartContext';
 import { useFavourites } from '../hooks/useFavourites';
@@ -245,8 +246,8 @@ export default function SearchScreen({ navigation, route }: any) {
   ), [cartQuantities, isFavourite, handleAdd, handleIncrement, handleDecrement, handleFav, accent]);
 
   const renderShop = useCallback(({ item }: { item: any }) => (
-    <StoreCard
-      store={item}
+    <BrandCard
+      brand={item}
       variant="list"
       onPress={() => navigation.navigate('BrandDetail', { brandId: item.id })}
       isFavourite={isFavourite(item.id, 'brands')}
@@ -366,14 +367,19 @@ export default function SearchScreen({ navigation, route }: any) {
             contentContainerStyle={{ paddingTop: 8, gap: 12 }}
             keyboardShouldPersistTaps="handled"
             renderItem={({ item }) => (
-              <StoreCard
-                store={item}
-                variant="wide"
-                onPress={() => {
-                  if (mode === 'food') navigation.navigate('RestaurantDetail', { restaurantId: item.id });
-                  else navigation.navigate('BrandDetail', { brandId: item.id });
-                }}
-              />
+              mode === 'food' ? (
+                <StoreCard
+                  store={item}
+                  variant="wide"
+                  onPress={() => navigation.navigate('RestaurantDetail', { restaurantId: item.id })}
+                />
+              ) : (
+                <BrandCard
+                  brand={item}
+                  variant="wide"
+                  onPress={() => navigation.navigate('BrandDetail', { brandId: item.id })}
+                />
+              )
             )}
           />
         </View>

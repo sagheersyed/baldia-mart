@@ -468,12 +468,15 @@ export default function FoodScreen({ navigation }: any) {
           onNotificationsPress={() => navigation.navigate('Notifications')}
           onCartPress={() => navigation.navigate('Cart')}
           onFavouritesPress={() => navigation.navigate('Favourites')}
-        />
-        <HomeSearchBar
-          variant="food"
-          onPress={() => navigation.navigate('Search', { mode: 'food' })}
-          onFilter={() => {}}
-        />
+        >
+          <HomeSearchBar
+            variant="food"
+            onPress={() => navigation.navigate('Search', { mode: 'food' })}
+            onFilter={() => {}}
+            floating={false}
+            inHeader={true}
+          />
+        </HomeHeader>
         <HomeSkeleton />
       </SafeAreaView>
     );
@@ -507,13 +510,15 @@ export default function FoodScreen({ navigation }: any) {
         onNotificationsPress={() => navigation.navigate('Notifications')}
         onCartPress={() => navigation.navigate('Cart')}
         onFavouritesPress={() => navigation.navigate('Favourites')}
-        scrollY={scrollY}
-      />
-      <HomeSearchBar
-        variant="food"
-        onPress={() => navigation.navigate('Search', { mode: 'food' })}
-        onFilter={cycleSort}
-      />
+      >
+        <HomeSearchBar
+          variant="food"
+          onPress={() => navigation.navigate('Search', { mode: 'food' })}
+          onFilter={cycleSort}
+          floating={false}
+          inHeader={true}
+        />
+      </HomeHeader>
 
       <Animated.FlatList
         data={data}

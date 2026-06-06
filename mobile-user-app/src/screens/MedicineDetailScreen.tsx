@@ -6,17 +6,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { pharmaApi, normalizeUrl } from '../api/api';
 import AppText from '../components/ui/AppText';
-import { theme } from '../theme/theme';
+import { useTheme } from '../context/ThemeContext';
 import { useCartStore } from '../store/cartStore';
-
 import { useFavourites } from '../hooks/useFavourites';
-
-const ACCENT = theme.colors.pharma;
 
 export default function MedicineDetailScreen({ route, navigation }: any) {
   const { medicineId } = route.params;
   
   // ── Hooks ─────────────────────────────────────────────
+  const { theme } = useTheme();
+  const ACCENT = theme.colors.pharma;
   const { getCartCount, addToCart, updateQuantity, getItemCount, setActiveMode } = useCartStore();
   const { isFavourite, toggleFavourite } = useFavourites();
   const cartCount = getCartCount('pharma');
@@ -121,20 +120,28 @@ export default function MedicineDetailScreen({ route, navigation }: any) {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      {/* ── Header ─────────────────────────────────────────── */}
-      <View style={styles.header}>
-        <Pressable onPress={() => navigation.goBack()} hitSlop={12}>
-          <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
+    <SafeAreaView style={[styles.safe, { backgroundColor: theme.colors.background }]} edges={['top']}>
+      {/* Premium header */}
+      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
+        <Pressable
+          onPress={() => navigation.goBack()}
+          hitSlop={12}
+          style={[styles.backBtn, { backgroundColor: theme.colors.surfaceMuted }]}
+        >
+          <Ionicons name="chevron-back" size={22} color={theme.colors.textPrimary} />
         </Pressable>
         <AppText variant="title" numberOfLines={1} style={{ flex: 1, marginHorizontal: 12 }}>
           Medicine Details
         </AppText>
-        <Pressable onPress={handleToggleFav} hitSlop={12} style={{ marginRight: 4 }}>
-          <Ionicons 
-            name={isFav ? "heart" : "heart-outline"} 
-            size={24} 
-            color={isFav ? "#EF4444" : theme.colors.textPrimary} 
+        <Pressable
+          onPress={handleToggleFav}
+          hitSlop={12}
+          style={[styles.backBtn, { backgroundColor: theme.colors.surfaceMuted }]}
+        >
+          <Ionicons
+            name={isFav ? 'heart' : 'heart-outline'}
+            size={20}
+            color={isFav ? '#EF4444' : theme.colors.textPrimary}
           />
         </Pressable>
       </View>
@@ -144,8 +151,8 @@ export default function MedicineDetailScreen({ route, navigation }: any) {
         style={{ flex: 1 }} 
         contentContainerStyle={{ paddingBottom: 100 }}
       >
-        {/* ── Image ───────────────────────────────────────── */}
-        <View style={styles.imgWrap}>
+        {/* Image */}
+        <View style={[styles.imgWrap, { backgroundColor: theme.colors.isDark ? theme.colors.surfaceMuted : '#EFF3FF' }]}>
           {img ? (
             <Image source={{ uri: img }} style={styles.img} resizeMode="contain" />
           ) : (
@@ -154,8 +161,8 @@ export default function MedicineDetailScreen({ route, navigation }: any) {
             </View>
           )}
           {rxRequired && (
-            <View style={styles.rxBadgeLg}>
-              <Ionicons name="document-text" size={14} color="#fff" />
+            <View style={[styles.rxBadgeLg, { backgroundColor: ACCENT }]}>
+              <Ionicons name="document-text" size={13} color="#fff" />
               <AppText variant="badge" color="#fff" style={{ fontSize: 10, marginLeft: 4 }}>
                 Prescription Required
               </AppText>
@@ -163,7 +170,7 @@ export default function MedicineDetailScreen({ route, navigation }: any) {
           )}
           {medicine.isEmergency && (
             <View style={[styles.rxBadgeLg, { backgroundColor: '#EF4444', left: 16, right: undefined }]}>
-              <Ionicons name="flash" size={14} color="#fff" />
+              <Ionicons name="flash" size={13} color="#fff" />
               <AppText variant="badge" color="#fff" style={{ fontSize: 10, marginLeft: 4 }}>
                 Emergency
               </AppText>
@@ -422,31 +429,41 @@ export default function MedicineDetailScreen({ route, navigation }: any) {
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {
+  const { theme } = useTheme();
   return (
-    <View style={styles.detailRow}>
+    <View style={[styles.detailRow, { borderBottomColor: theme.colors.divider }]}>
       <AppText variant="caption" color={theme.colors.textSecondary} style={{ width: 100 }}>{label}</AppText>
-      <AppText variant="body" style={{ flex: 1 }}>{value}</AppText>
+      <AppText variant="body" color={theme.colors.textPrimary} style={{ flex: 1 }}>{value}</AppText>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.colors.background },
+  safe: { flex: 1, backgroundColor: '#F4F6FB' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: theme.colors.surface,
+    paddingVertical: 10,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    borderBottomColor: '#E2E8F0',
+  },
+  backBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   imgWrap: {
     width: '100%',
     height: 260,
-    backgroundColor: theme.colors.surfaceMuted,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
   },
   img: { width: '100%', height: '100%' },
   rxBadgeLg: {
@@ -455,14 +472,14 @@ const styles = StyleSheet.create({
     right: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: ACCENT,
+    backgroundColor: '#0D9488',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 6,
   },
   infoBlock: {
     padding: 16,
-    backgroundColor: theme.colors.surface,
+    backgroundColor: '#FFFFFF',
   },
   priceRow: {
     flexDirection: 'row',
@@ -478,7 +495,7 @@ const styles = StyleSheet.create({
   },
   detailsBlock: {
     padding: 16,
-    backgroundColor: theme.colors.surface,
+    backgroundColor: '#FFFFFF',
     marginTop: 8,
   },
   availabilityBox: {
@@ -486,7 +503,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 12,
     padding: 10,
-    backgroundColor: theme.colors.surfaceMuted,
+    backgroundColor: '#F1F5F9',
     borderRadius: 12,
   },
   dot: {
@@ -499,53 +516,56 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.divider,
   },
   subCard: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
-    backgroundColor: theme.colors.pharmaLight,
-    borderRadius: theme.radius.md,
+    backgroundColor: '#CCFBF1',
+    borderRadius: 14,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: theme.colors.pharmaBorder,
+    borderColor: '#99F6E4',
   },
   bottomBar: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: theme.colors.surface,
+    backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
-    ...theme.shadows.lg,
+    borderTopColor: '#E2E8F0',
+    shadowColor: '#0A0F1E',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 8,
   },
   recurringBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 14,
-    borderRadius: theme.radius.lg,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: theme.colors.pharmaBorder,
+    borderColor: '#99F6E4',
     marginRight: 10,
-    backgroundColor: theme.colors.pharmaLight,
+    backgroundColor: '#CCFBF1',
   },
   addBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: ACCENT,
+    backgroundColor: '#0D9488',
     paddingHorizontal: 24,
     paddingVertical: 14,
-    borderRadius: theme.radius.lg,
+    borderRadius: 18,
   },
   floatingCart: {
     position: 'absolute',
     bottom: 85,
     left: 16,
     right: 16,
-    backgroundColor: ACCENT,
+    backgroundColor: '#0D9488',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -563,17 +583,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: theme.colors.surfaceMuted,
-    borderRadius: theme.radius.lg,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 18,
     padding: 4,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: '#E2E8F0',
   },
   stepperBtn: {
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: ACCENT,
+    backgroundColor: '#0D9488',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -591,9 +611,10 @@ const styles = StyleSheet.create({
   altDisclaimer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.colors.successLight,
+    backgroundColor: '#ECFDF5',
     padding: 10,
     borderRadius: 10,
     marginBottom: 16,
   },
 });
+

@@ -9,7 +9,7 @@ export interface QuickService {
   id: string;
   title: string;
   icon: keyof typeof Ionicons.glyphMap;
-  bg: string;
+  bg: string | [string, string];
   fg: string;
   onPress: () => void;
   badge?: string;
@@ -32,11 +32,19 @@ const QuickServicesGrid = memo(function QuickServicesGrid({
     return ({ item }: { item: QuickService }) => {
       if (!item) return null;
 
-      // Derive a slightly darker shade for gradient
-      const darkerBg = item.bg.replace(/([0-9A-F]{2})$/i, (match) => {
-        const val = Math.max(0, parseInt(match, 16) - 30);
-        return val.toString(16).padStart(2, '0');
-      });
+      const gradientColors = Array.isArray(item.bg)
+        ? (item.bg as [string, string])
+        : (() => {
+            const baseBg = item.bg as string;
+            let darkerBg = baseBg;
+            if (baseBg.startsWith('#') && baseBg.length === 7) {
+              darkerBg = baseBg.replace(/([0-9A-F]{2})$/i, (match) => {
+                const val = Math.max(0, parseInt(match, 16) - 30);
+                return val.toString(16).padStart(2, '0');
+              });
+            }
+            return [baseBg, darkerBg] as [string, string];
+          })();
 
       return (
         <Pressable
@@ -48,7 +56,7 @@ const QuickServicesGrid = memo(function QuickServicesGrid({
           ]}
         >
           <LinearGradient
-            colors={[item.bg, darkerBg]}
+            colors={gradientColors}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={StyleSheet.absoluteFill}

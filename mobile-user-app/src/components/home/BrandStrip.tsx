@@ -1,14 +1,15 @@
+// BrandStrip.tsx — Premium redesign v3
+// Circular bubble brand avatars, dark mode via ThemeContext
+
 import React, { memo, useCallback, useState } from 'react';
 import { View, StyleSheet, FlatList, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import AppText from '../ui/AppText';
 import SectionHeader from '../ui/SectionHeader';
 import FavouriteButton from '../ui/FavouriteButton';
 import { normalizeUrl } from '../../api/api';
-import { isBusinessOpen } from '../../utils/helpers';
-import { theme } from '../../theme/theme';
+import { useTheme } from '../../context/ThemeContext';
 import { DEFAULT_IMAGES } from '../../constants/images';
 
 interface BrandStripProps {
@@ -21,10 +22,6 @@ interface BrandStripProps {
   subtitle?: string;
 }
 
-/**
- * Premium brand rail with gradient overlay, delivery time pill, and
- * FoodPanda-style "Popular Shops" visual density.
- */
 const BrandStrip = memo(function BrandStrip({
   brands,
   onBrandPress,
@@ -34,24 +31,34 @@ const BrandStrip = memo(function BrandStrip({
   title = 'Popular Brands',
   subtitle,
 }: BrandStripProps) {
+  const { theme } = useTheme();
   const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
 
   const renderItem = useCallback(({ item }: { item: any }) => {
     const originalUri = normalizeUrl(item.logoUrl || item.imageUrl);
-    const uri = imageErrors[item.id] ? DEFAULT_IMAGES.brand : (originalUri || DEFAULT_IMAGES.brand);
-    const isOpen = isBusinessOpen(item.openingTime, item.closingTime);
+    const uri = imageErrors[item.id]
+      ? DEFAULT_IMAGES.brand
+      : (originalUri || DEFAULT_IMAGES.brand);
     const fav = isFavourite?.(item.id) ?? false;
-    const eta = item.deliveryTime || (item.productCount ? `${item.productCount} items` : '15-40 min');
+    const countText = item.productCount ? `${item.productCount} items` : null;
 
     return (
       <Pressable
         onPress={() => onBrandPress(item)}
         style={({ pressed }) => [
           styles.card,
-          pressed ? { opacity: 0.92, transform: [{ scale: 0.97 }] } : null,
+          pressed ? { opacity: 0.9, transform: [{ scale: 0.95 }] } : null,
         ]}
       >
-        <View style={styles.imgWrap}>
+        {/* Circular avatar */}
+        <View style={[
+          styles.circle,
+          {
+            backgroundColor: theme.colors.surface,
+            borderColor: theme.colors.border,
+            shadowColor: theme.colors.isDark ? '#000' : '#0A0F1E',
+          }
+        ]}>
           {uri ? (
             <Image
               source={{ uri }}
@@ -62,45 +69,41 @@ const BrandStrip = memo(function BrandStrip({
               onError={() => setImageErrors(prev => ({ ...prev, [item.id]: true }))}
             />
           ) : (
-            <View style={styles.imgPlaceholder}>
-              <Ionicons name="storefront" size={30} color={theme.colors.textSecondary} />
-            </View>
-          )}
-
-          {/* Bottom gradient overlay */}
-          <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.5)']}
-            start={{ x: 0, y: 0.4 }}
-            end={{ x: 0, y: 1 }}
-            style={styles.imgGradient}
-          />
-
-          {/* Delivery time pill on image */}
-          <View style={styles.etaPill}>
-            <Ionicons name="bicycle-outline" size={11} color="#fff" />
-            <AppText variant="badge" color="#fff" style={{ fontSize: 9 }}>{eta}</AppText>
-          </View>
-
-          {!isOpen && (
-            <View style={styles.closedOverlay}>
-              <AppText variant="badge" color="#fff">CLOSED</AppText>
-            </View>
+            <Ionicons name="storefront" size={22} color={theme.colors.textSecondary} />
           )}
           {onToggleFavourite ? (
             <FavouriteButton
               active={fav}
               onPress={() => onToggleFavourite(item)}
-              size={26}
+              size={22}
               style={styles.favBtn}
             />
           ) : null}
         </View>
-        <AppText variant="bodyStrong" numberOfLines={2} style={styles.name}>
+
+        <AppText
+          variant="caption"
+          color={theme.colors.textPrimary}
+          align="center"
+          numberOfLines={1}
+          style={styles.name}
+        >
           {item.name}
         </AppText>
+        {countText && (
+          <AppText
+            variant="caption"
+            color={theme.colors.textSecondary}
+            align="center"
+            numberOfLines={1}
+            style={styles.count}
+          >
+            {countText}
+          </AppText>
+        )}
       </Pressable>
     );
-  }, [onBrandPress, isFavourite, onToggleFavourite, imageErrors]);
+  }, [onBrandPress, isFavourite, onToggleFavourite, imageErrors, theme]);
 
   if (!brands?.length) return null;
 
@@ -121,55 +124,28 @@ const BrandStrip = memo(function BrandStrip({
 });
 
 const styles = StyleSheet.create({
-  wrap: { paddingBottom: theme.spacing.lg },
-  list: { paddingHorizontal: theme.spacing.lg, gap: theme.spacing.sm },
-  card: { width: 136, marginRight: theme.spacing.sm },
-  imgWrap: {
-    width: 136,
-    height: 136,
-    borderRadius: theme.radius.lg,
-    backgroundColor: theme.colors.surface,
+  wrap: { paddingBottom: 16 },
+  list: { paddingHorizontal: 16, gap: 16, paddingBottom: 4 },
+  card: { width: 88, alignItems: 'center' },
+  circle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
-    ...theme.shadows.md,
-    marginBottom: theme.spacing.sm,
+    overflow: 'visible',
+    borderWidth: 1.5,
+    marginBottom: 7,
+    position: 'relative',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  img: { width: '100%', height: '100%' },
-  imgPlaceholder: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.colors.surfaceMuted,
-  },
-  imgGradient: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 60,
-  },
-  etaPill: {
-    position: 'absolute',
-    bottom: 8,
-    left: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderRadius: theme.radius.pill,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  closedOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(15,23,42,0.55)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  favBtn: { position: 'absolute', top: 6, right: 6 },
-  name: { marginBottom: 2 },
+  img: { width: '80%', height: '80%', borderRadius: 32 },
+  favBtn: { position: 'absolute', bottom: -4, right: -4 },
+  name: { fontSize: 11, fontWeight: '600', width: '100%' },
+  count: { fontSize: 9.5, width: '100%', marginTop: 1 },
 });
 
 export default BrandStrip;

@@ -4,8 +4,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
-import { brandsApi, productsApi, normalizeUrl } from '../api/api';
+import { brandsApi, productsApi } from '../api/api';
 import { useCart } from '../context/CartContext';
 import { useFavourites } from '../hooks/useFavourites';
 import { isBusinessOpen } from '../utils/helpers';
@@ -13,11 +12,11 @@ import { isBusinessOpen } from '../utils/helpers';
 import HomeHeader from '../components/home/HomeHeader';
 import HomeSearchBar from '../components/home/HomeSearchBar';
 import HomeSkeleton from '../components/home/HomeSkeleton';
-import StoreCard from '../components/home/StoreCard';
+import BrandCard from '../components/home/BrandCard';
 import {
-  AppText, AppBadge, EmptyState, ErrorState, SectionHeader,
+  AppText, EmptyState, ErrorState, SectionHeader,
 } from '../components/ui';
-import { theme } from '../theme/theme';
+import { useTheme } from '../context/ThemeContext';
 
 type ListRow =
   | { kind: 'chips' }
@@ -26,6 +25,7 @@ type ListRow =
   | { kind: 'brand'; brand: any };
 
 export default function BrandsScreen({ navigation }: any) {
+  const { theme } = useTheme();
   const { getCartCount, setActiveMode } = useCart();
   const { isFavourite, toggleFavourite, reload: reloadFavs } = useFavourites();
 
@@ -96,8 +96,8 @@ export default function BrandsScreen({ navigation }: any) {
     }
     rows.push({
       kind: 'sectionHeader',
-      title: activeCategory === 'All' ? 'All shops' : activeCategory,
-      subtitle: `${filteredBrands.length} ${filteredBrands.length === 1 ? 'shop' : 'shops'} available`,
+      title: activeCategory === 'All' ? 'All Brands' : activeCategory,
+      subtitle: `${filteredBrands.length} ${filteredBrands.length === 1 ? 'brand' : 'brands'} available`,
     });
     filteredBrands.forEach(b => rows.push({ kind: 'brand', brand: b }));
     return rows;
@@ -114,7 +114,7 @@ export default function BrandsScreen({ navigation }: any) {
               keyExtractor={(c) => c}
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingHorizontal: theme.spacing.lg, gap: 8 }}
+              contentContainerStyle={{ paddingHorizontal: theme.spacing.lg, gap: 8, paddingVertical: 4 }}
               renderItem={({ item: c }) => {
                 const active = activeCategory === c;
                 return (
@@ -122,7 +122,10 @@ export default function BrandsScreen({ navigation }: any) {
                     onPress={() => setActiveCategory(c)}
                     style={[
                       styles.chip,
-                      active ? { backgroundColor: theme.colors.textPrimary, borderColor: theme.colors.textPrimary } : null,
+                      {
+                        backgroundColor: active ? theme.colors.mart : theme.colors.surface,
+                        borderColor: active ? theme.colors.mart : theme.colors.border,
+                      },
                     ]}
                   >
                     <AppText
@@ -146,10 +149,10 @@ export default function BrandsScreen({ navigation }: any) {
             keyExtractor={(b) => b.id}
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: theme.spacing.lg }}
+            contentContainerStyle={{ paddingHorizontal: theme.spacing.lg, gap: 16, paddingBottom: 8 }}
             renderItem={({ item: b }) => (
-              <StoreCard
-                store={b}
+              <BrandCard
+                brand={b}
                 variant="wide"
                 onPress={() => navigation.navigate('BrandDetail', { brandId: b.id })}
                 isFavourite={isFavourite(b.id, 'restaurants')}
@@ -162,8 +165,8 @@ export default function BrandsScreen({ navigation }: any) {
         );
       case 'brand':
         return (
-          <StoreCard
-            store={item.brand}
+          <BrandCard
+            brand={item.brand}
             variant="list"
             onPress={() => navigation.navigate('BrandDetail', { brandId: item.brand.id })}
             isFavourite={isFavourite(item.brand.id, 'restaurants')}
@@ -195,8 +198,13 @@ export default function BrandsScreen({ navigation }: any) {
           onNotificationsPress={() => navigation.navigate('Notifications')}
           onCartPress={() => navigation.navigate('Cart')}
           onFavouritesPress={() => navigation.navigate('Favourites')}
-        />
-        <HomeSearchBar onPress={() => navigation.navigate('Search', { mode: 'mart' })} />
+        >
+          <HomeSearchBar
+            onPress={() => navigation.navigate('Search', { mode: 'mart' })}
+            floating={false}
+            inHeader={true}
+          />
+        </HomeHeader>
         <HomeSkeleton />
       </SafeAreaView>
     );
@@ -229,8 +237,13 @@ export default function BrandsScreen({ navigation }: any) {
         onNotificationsPress={() => navigation.navigate('Notifications')}
         onCartPress={() => navigation.navigate('Cart')}
         onFavouritesPress={() => navigation.navigate('Favourites')}
-      />
-      <HomeSearchBar onPress={() => navigation.navigate('Search', { mode: 'mart' })} />
+      >
+        <HomeSearchBar
+          onPress={() => navigation.navigate('Search', { mode: 'mart' })}
+          floating={false}
+          inHeader={true}
+        />
+      </HomeHeader>
 
       <FlatList
         data={data}
@@ -241,9 +254,8 @@ export default function BrandsScreen({ navigation }: any) {
         initialNumToRender={6}
         maxToRenderPerBatch={6}
         windowSize={9}
-        ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: theme.colors.divider }} />}
         ListEmptyComponent={
-          <EmptyState icon="storefront-outline" title="No shops yet" subtitle="Check back soon — we're onboarding new partners." />
+          <EmptyState icon="storefront-outline" title="No brands yet" subtitle="Check back soon — we're onboarding new partners." />
         }
         refreshControl={
           <RefreshControl
@@ -259,16 +271,15 @@ export default function BrandsScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.colors.background },
+  container: { flex: 1, backgroundColor: '#F4F6FB' },
   listContent: { paddingBottom: 110 },
-  chipsWrap: { paddingVertical: theme.spacing.sm },
+  chipsWrap: { paddingVertical: 10, paddingTop: 14 },
   chip: {
-    paddingHorizontal: theme.spacing.md,
+    paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: theme.radius.pill,
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    marginRight: 8,
+    borderRadius: 999,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
   },
 });
