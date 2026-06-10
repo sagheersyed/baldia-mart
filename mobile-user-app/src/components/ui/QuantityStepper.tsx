@@ -30,7 +30,7 @@ const QuantityStepper = memo(function QuantityStepper({
           borderRadius: h / 2,
           opacity: disabled ? 0.5 : 1,
           marginBottom: theme.spacing.lg,
-          // marginRight:theme.spacing.lg,
+          marginRight: theme.spacing.lg,
         },
         style,
       ]}

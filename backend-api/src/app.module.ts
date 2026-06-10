@@ -93,6 +93,15 @@ import { Clinic } from './pharma/telemedicine/clinic.entity';
 import { DoctorClinic } from './pharma/telemedicine/doctor-clinic.entity';
 import { AvailabilityTemplate } from './pharma/telemedicine/availability-template.entity';
 
+// CMS domain entities & module
+import { Tenant } from './cms/entities/tenant.entity';
+import { TenantUser } from './cms/entities/tenant-user.entity';
+import { ChangeRequest } from './cms/entities/change-request.entity';
+import { ChangeRequestDiscussion } from './cms/entities/change-request-discussion.entity';
+import { ApprovalRule } from './cms/entities/approval-rule.entity';
+import { AuditLog } from './cms/entities/audit-log.entity';
+import { CmsModule } from './cms/cms.module';
+
 @Module({
   imports: [
     AppCacheModule,
@@ -135,6 +144,8 @@ import { AvailabilityTemplate } from './pharma/telemedicine/availability-templat
         DoctorAvailability, LabAvailability,
         Clinic, DoctorClinic, AvailabilityTemplate,
         ModuleEvent,
+        // CMS entities
+        Tenant, TenantUser, ChangeRequest, ChangeRequestDiscussion, ApprovalRule, AuditLog,
       ],
       logging: false,
       synchronize: process.env.NODE_ENV !== 'production',
@@ -170,6 +181,7 @@ import { AvailabilityTemplate } from './pharma/telemedicine/availability-templat
     HomeModule,
     PharmaModule,
     ModuleEventsModule,
+    CmsModule,
   ],
   controllers: [AppController, HealthController],
   providers: [

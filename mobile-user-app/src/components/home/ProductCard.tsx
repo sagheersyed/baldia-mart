@@ -133,7 +133,7 @@ const ProductCard = memo(function ProductCard({
 
   const imgUri = imageError
     ? DEFAULT_IMAGES.product
-    : (normalizeUrl(product.imageUrl) || DEFAULT_IMAGES.product);
+    : (normalizeUrl(product.imageUrl ?? (product as any).image_url) || DEFAULT_IMAGES.product);
 
   const handleCardPress = () => {
     if (onPress) onPress();
@@ -157,7 +157,7 @@ const ProductCard = memo(function ProductCard({
           <Image
             source={{ uri: imgUri }}
             style={styles.image}
-            contentFit="contain"
+            contentFit="cover"
             cachePolicy="memory-disk"
             transition={200}
             onError={() => setImageError(true)}
@@ -182,7 +182,7 @@ const ProductCard = memo(function ProductCard({
             <View style={styles.blockedOverlay}>
               <View style={styles.blockedPill}>
                 <Text style={styles.blockedText}>
-                  {businessClosed ? 'CLOSED' : 'OOS'}
+                  {businessClosed ? 'CLOSED' : 'Out Of Stock'}
                 </Text>
               </View>
             </View>
@@ -298,7 +298,7 @@ const ProductCard = memo(function ProductCard({
                 <Image
                   source={{ uri: imgUri }}
                   style={styles.modalImage}
-                  contentFit="contain"
+                  contentFit="cover"
                   cachePolicy="memory-disk"
                   onError={() => setImageError(true)}
                 />
@@ -480,10 +480,10 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 8,
+    padding: 0,
     position: 'relative',
   },
-  image: { width: '90%', height: '90%' },
+  image: { width: '100%', height: '100%', overflow: 'hidden' },
 
   // Flat cleaner tag
   discountTag: {
@@ -560,8 +560,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: 6,
-    height: 26,
-    paddingHorizontal: 4,
+    height: 28,
+    paddingHorizontal: 3,
   },
   stepperBtn: {
     width: 20, height: 20, borderRadius: 10,
@@ -591,7 +591,7 @@ const styles = StyleSheet.create({
     width: '100%', aspectRatio: 1,
     borderRadius: 20,
     alignItems: 'center', justifyContent: 'center',
-    padding: 16, marginBottom: 16, position: 'relative',
+    padding: 0, marginBottom: 16, position: 'relative', overflow: 'hidden'
   },
   modalImage: { width: '100%', height: '100%' },
   modalInfo: { marginTop: 4 },

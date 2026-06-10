@@ -1,5 +1,5 @@
 config:
-  target: " https://35d8-175-107-236-228.ngrok-free.app/api/v1"
+  target: " https://b9f2-175-107-236-228.ngrok-free.app/api/v1"
   phases:
     - duration: 60
       arrivalRate: 5

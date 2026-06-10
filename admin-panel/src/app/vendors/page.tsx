@@ -317,7 +317,12 @@ export default function VendorsPage() {
                           <Package size={20} />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="font-bold text-gray-900 text-sm truncate">{vp.product?.name || 'Unknown Product'}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-bold text-gray-900 text-sm truncate">{vp.product?.name || 'Unknown Product'}</p>
+                            {!vp.isAvailable && (
+                              <span className="text-[10px] font-black bg-red-100 text-red-600 px-1.5 py-0.5 rounded uppercase">Hidden</span>
+                            )}
+                          </div>
                           <div className="flex justify-between items-center mt-1">
                             <p className="text-sm font-black text-teal-600">Rs {vp.price}</p>
                             <p className="text-xs font-semibold text-gray-400">Stock: {vp.stockQty}</p>

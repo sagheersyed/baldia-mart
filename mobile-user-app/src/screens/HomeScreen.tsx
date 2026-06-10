@@ -314,12 +314,6 @@ export default function HomeScreen({ navigation }: any) {
   const locationLabel = address
     ? (address.label || (address.streetAddress || '').slice(0, 28) || 'Set delivery address')
     : 'Set delivery address';
-  const greeting = useMemo(() => {
-    const h = new Date().getHours();
-    if (h < 12) return 'Good morning — what are we restocking today?';
-    if (h < 17) return 'Good afternoon — fresh picks ready for you.';
-    return 'Good evening — let\'s grab essentials before bedtime.';
-  }, []);
 
   // ── Render ──
   if (loading && !home) {
@@ -333,7 +327,6 @@ export default function HomeScreen({ navigation }: any) {
           onCartPress={() => navigation.navigate('Cart')}
           onFavouritesPress={() => navigation.navigate('Favourites')}
           variant="mart"
-          greeting={greeting}
         >
           <HomeSearchBar
             onPress={() => navigation.navigate('Search', { mode: 'mart' })}
@@ -373,7 +366,6 @@ export default function HomeScreen({ navigation }: any) {
         onCartPress={() => navigation.navigate('Cart')}
         onFavouritesPress={() => navigation.navigate('Favourites')}
         variant="mart"
-        greeting={greeting}
       >
         <HomeSearchBar
           onPress={() => navigation.navigate('Search', { mode: 'mart' })}

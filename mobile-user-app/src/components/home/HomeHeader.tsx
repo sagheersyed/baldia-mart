@@ -1,14 +1,11 @@
-// HomeHeader.tsx — Premium redesign v3
-// Features: Time-based greeting, richer 3-stop gradient, glassmorphic location pill,
-//           larger action buttons, dark mode aware via ThemeContext
-
-import React, { memo, useMemo } from 'react';
-import { View, StyleSheet, Pressable } from 'react-native';
+import React, { memo } from 'react';
+import { View, StyleSheet, Pressable, Animated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import AppText from '../ui/AppText';
 import AppIconButton from '../ui/AppIconButton';
-import { useTheme } from '../../context/ThemeContext';
+import { theme } from '../../theme/theme';
+import { useAuthStore } from '../../store/authStore';
 
 interface HomeHeaderProps {
   locationLabel: string;
@@ -17,18 +14,11 @@ interface HomeHeaderProps {
   onNotificationsPress: () => void;
   onCartPress: () => void;
   onFavouritesPress?: () => void;
-  variant?: 'mart' | 'food';
-  etaLabel?: string;
+  scrollY?: Animated.Value;
   greeting?: string;
+  variant?: 'mart' | 'food' | 'pharma';
+  etaLabel?: string;
   children?: React.ReactNode;
-}
-
-function getGreeting(): string {
-  const h = new Date().getHours();
-  if (h < 12) return 'Good Morning';
-  if (h < 17) return 'Good Afternoon';
-  if (h < 21) return 'Good Evening';
-  return 'Good Night';
 }
 
 const HomeHeader = memo(function HomeHeader({
@@ -38,62 +28,83 @@ const HomeHeader = memo(function HomeHeader({
   onNotificationsPress,
   onCartPress,
   onFavouritesPress,
+  greeting,
   variant = 'mart',
   etaLabel,
-  greeting,
   children,
 }: HomeHeaderProps) {
-  const { theme } = useTheme();
+  const { userData } = useAuthStore();
   const isFood = variant === 'food';
+  const isPharma = variant === 'pharma';
 
-  const gradColors = useMemo((): [string, string, string] =>
-    isFood
-      ? ['#A31F1F', '#C62828', '#E03030']
-      : [theme.colors.gradStart, theme.colors.gradMid, theme.colors.gradEnd],
-    [isFood, theme],
-  );
+  const colors: [string, string] = isFood
+    ? [theme.colors.food, theme.colors.food + 'CC']
+    : isPharma
+      ? [theme.colors.pharma, theme.colors.pharma + 'CC']
+      : [theme.colors.primary, theme.colors.primary + 'CC'];
 
-  const brandName = isFood ? 'BaldiaFood' : 'BaldiaMart';
-  const greetText = greeting ?? getGreeting();
+  const firstName = userData?.name?.split(' ')[0] || 'Customer';
+  const hours = new Date().getHours();
+  let greetMsg = greeting;
+  if (!greetMsg) {
+    if (hours < 12) greetMsg = `Good Morning, ${firstName}!`;
+    else if (hours < 17) greetMsg = `Good Afternoon, ${firstName}!`;
+    else greetMsg = `Good Evening, ${firstName}!`;
+  }
 
   return (
-    <LinearGradient
-      colors={gradColors}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={[styles.wrap, children ? { paddingBottom: 14 } : null]}
-    >
-      {/* Top row: Greeting + Action buttons */}
-      <View style={styles.topRow}>
-        <View style={{ flex: 1 }}>
-          <AppText variant="overline" color="rgba(255,255,255,0.7)" style={styles.brand}>
-            {brandName}
-          </AppText>
-          <AppText variant="bodyStrong" color="#fff" style={styles.greeting} numberOfLines={1}>
-            {greetText} 👋
-          </AppText>
-        </View>
+    <LinearGradient colors={colors} style={styles.wrap} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+      <View style={styles.row}>
+        <Pressable onPress={onLocationPress} style={styles.locationBtn} hitSlop={6}>
+          <Ionicons name="location" size={16} color="#fff" />
+          <View style={styles.locationCol}>
+            <View style={styles.locationLine}>
+              <AppText
+                variant="bodyStrong"
+                color="#fff"
+                numberOfLines={1}
+                style={styles.locationLabel}
+              >
+                {locationLabel}
+              </AppText>
+              <Ionicons name="chevron-down" size={14} color="#fff" />
+            </View>
+            {etaLabel ? (
+              <AppText variant="caption" color="rgba(255,255,255,0.85)" numberOfLines={1}>
+                {etaLabel}
+              </AppText>
+            ) : null}
+          </View>
+        </Pressable>
 
         <View style={styles.actions}>
           {onFavouritesPress ? (
-            <AppIconButton size={42} bg="rgba(255,255,255,0.18)" onPress={onFavouritesPress}>
-              <Ionicons name="heart-outline" size={21} color="#fff" />
+            <AppIconButton
+              size={36}
+              bg="rgba(255,255,255,0.18)"
+              onPress={onFavouritesPress}
+            >
+              <Ionicons name="heart-outline" size={20} color="#fff" />
             </AppIconButton>
           ) : null}
-          <AppIconButton size={42} bg="rgba(255,255,255,0.18)" onPress={onNotificationsPress}>
-            <Ionicons name="notifications-outline" size={21} color="#fff" />
+          <AppIconButton
+            size={36}
+            bg="rgba(255,255,255,0.18)"
+            onPress={onNotificationsPress}
+          >
+            <Ionicons name="notifications-outline" size={20} color="#fff" />
           </AppIconButton>
           <View>
-            <AppIconButton size={42} bg="rgba(255,255,255,0.18)" onPress={onCartPress}>
-              <Ionicons name="bag-handle-outline" size={21} color="#fff" />
+            <AppIconButton
+              size={36}
+              bg="rgba(255,255,255,0.18)"
+              onPress={onCartPress}
+            >
+              <Ionicons name="bag-handle-outline" size={20} color="#fff" />
             </AppIconButton>
             {cartCount > 0 && (
               <View style={styles.cartBadge}>
-                <AppText
-                  variant="badge"
-                  color={isFood ? theme.colors.food : theme.colors.primary}
-                  style={{ fontSize: 10, fontWeight: '800' }}
-                >
+                <AppText variant="badge" color={colors[0]} style={{ fontSize: 10, fontWeight: 'bold' }}>
                   {cartCount > 9 ? '9+' : String(cartCount)}
                 </AppText>
               </View>
@@ -102,45 +113,11 @@ const HomeHeader = memo(function HomeHeader({
         </View>
       </View>
 
-      {/* Location pill */}
-      <Pressable onPress={onLocationPress} style={styles.locationPill} hitSlop={6}>
-        {/* Pulsing live dot */}
-        <View style={styles.liveDotWrap}>
-          <View style={styles.liveDot} />
-        </View>
-
-        <View style={styles.locationIcon}>
-          <Ionicons name="location" size={16} color="#fff" />
-        </View>
-
-        <View style={styles.locationCol}>
-          <AppText variant="caption" color="rgba(255,255,255,0.75)" style={{ fontSize: 10.5 }}>
-            Delivering to
-          </AppText>
-          <View style={styles.locationLine}>
-            <AppText
-              variant="bodyStrong"
-              color="#fff"
-              numberOfLines={1}
-              style={styles.locationLabel}
-            >
-              {locationLabel}
-            </AppText>
-            <Ionicons name="chevron-down" size={13} color="rgba(255,255,255,0.85)" />
-          </View>
-        </View>
-
-        {/* ETA chip */}
-        {etaLabel ? (
-          <View style={styles.etaChip}>
-            <Ionicons name="bicycle-outline" size={12} color="#fff" />
-            <AppText variant="badge" color="#fff" style={{ fontSize: 10 }}>
-              {etaLabel}
-            </AppText>
-          </View>
-        ) : null}
-      </Pressable>
-
+      {greetMsg && (
+        <AppText variant="caption" color="rgba(255,255,255,0.95)" style={{ marginTop: 8, fontWeight: '600' }}>
+          {greetMsg}
+        </AppText>
+      )}
       {children}
     </LinearGradient>
   );
@@ -149,101 +126,34 @@ const HomeHeader = memo(function HomeHeader({
 const styles = StyleSheet.create({
   wrap: {
     paddingHorizontal: 16,
-    paddingTop: 6,
-    paddingBottom: 36,
+    paddingTop: 8,
+    paddingBottom: 16,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
   },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 14,
-    minHeight: 48,
-  },
-  brand: {
-    letterSpacing: 1.5,
-    fontSize: 10,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    marginBottom: 1,
-  },
-  greeting: {
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: -0.2,
-  },
-  actions: {
+  row: { flexDirection: 'row', alignItems: 'center' },
+  locationBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
+  locationCol: { flex: 1 },
+  locationLine: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  locationLabel: { maxWidth: '78%' },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   cartBadge: {
     position: 'absolute',
-    top: -5,
-    right: -5,
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    paddingHorizontal: 5,
+    top: -4,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.35)',
-  },
-  locationPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.22)',
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-  },
-  liveDotWrap: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  liveDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: '#4ADE80',
-  },
-  locationIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: 'rgba(255,255,255,0.22)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  locationCol: { flex: 1 },
-  locationLine: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-  },
-  locationLabel: {
-    maxWidth: '75%',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  etaChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(255,255,255,0.22)',
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: 'rgba(255,255,255,0.5)',
   },
 });
 

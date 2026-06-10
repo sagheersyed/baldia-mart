@@ -1,7 +1,7 @@
 const DEFAULT_ORIGINS = [
   'http://localhost:3000',
   'http://localhost:3001',
-  ' https://35d8-175-107-236-228.ngrok-free.app',
+  'https://b9f2-175-107-236-228.ngrok-free.app',
   'http://192.168.100.142:3001',
 ];
 

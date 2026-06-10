@@ -16,9 +16,9 @@ const { width: SCREEN_W } = Dimensions.get('window');
 
 // Banners are full width (edge-to-edge)
 const SIDE_PADDING = 0;
-const SLIDE_GAP    = 0;
-const SLIDE_W      = SCREEN_W;
-const SLIDE_H      = Math.round(SLIDE_W * (9 / 21)); // Elegant thin aspect ratio
+const SLIDE_GAP = 0;
+const SLIDE_W = SCREEN_W;
+const SLIDE_H = Math.round(SLIDE_W * (9 / 21)); // Elegant thin aspect ratio
 const SNAP_INTERVAL = SCREEN_W;
 
 const GRADIENTS: readonly [string, string, ...string[]][] = [
@@ -207,7 +207,7 @@ export default BannerCarousel;
 
 const styles = StyleSheet.create({
   wrap: {
-    marginTop: 10, // Little gap between header and banner
+    marginTop: 0, // Little gap between header and banner
     marginBottom: 8,
     position: 'relative',
   },

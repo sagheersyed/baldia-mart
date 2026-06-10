@@ -73,6 +73,14 @@ import MyPrescriptionsScreen from './src/screens/MyPrescriptionsScreen';
 import PrescriptionQuotationScreen from './src/screens/PrescriptionQuotationScreen';
 import PharmaSearchScreen from './src/screens/PharmaSearchScreen';
 import EventDetailsScreen from './src/screens/EventDetailsScreen';
+import MerchantDashboardScreen from './src/screens/cms/MerchantDashboardScreen';
+import ProductCatalogScreen from './src/screens/cms/ProductCatalogScreen';
+import EditProductScreen from './src/screens/cms/EditProductScreen';
+import ChangeRequestQueueScreen from './src/screens/cms/ChangeRequestQueueScreen';
+import ChangeRequestDetailScreen from './src/screens/cms/ChangeRequestDetailScreen';
+import CmsAuthGateScreen from './src/screens/cms/CmsAuthGateScreen';
+import AddItemScreen from './src/screens/cms/AddItemScreen';
+import AddNewItemFormScreen from './src/screens/cms/AddNewItemFormScreen';
 import FloatingTabBar from './src/components/FloatingTabBar';
 import AppLoader from './src/components/AppLoader';
 import { usePushNotifications } from './src/hooks/usePushNotifications';
@@ -235,6 +243,14 @@ function Navigation() {
           <Stack.Screen name="MedicineReviews" component={MedicineReviewsScreen} />
           <Stack.Screen name="LabBookingDetails" component={LabBookingDetailsScreen} />
           <Stack.Screen name="EventDetails" component={EventDetailsScreen} />
+           <Stack.Screen name="MerchantDashboard" component={MerchantDashboardScreen} />
+          <Stack.Screen name="ProductCatalog" component={ProductCatalogScreen} />
+          <Stack.Screen name="EditProduct" component={EditProductScreen} />
+          <Stack.Screen name="ChangeRequestQueue" component={ChangeRequestQueueScreen} />
+          <Stack.Screen name="ChangeRequestDetail" component={ChangeRequestDetailScreen} />
+          <Stack.Screen name="CmsAuthGate" component={CmsAuthGateScreen} />
+          <Stack.Screen name="AddItem" component={AddItemScreen} />
+          <Stack.Screen name="AddNewItemForm" component={AddNewItemFormScreen} />
           </>
         )}
       </Stack.Navigator>

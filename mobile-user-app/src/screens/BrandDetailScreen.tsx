@@ -131,12 +131,12 @@ export default function BrandDetailScreen({ navigation, route }: any) {
                 <Ionicons name="chevron-back" size={20} color={theme.colors.textPrimary} />
               </AppIconButton>
               <View style={{ flexDirection: 'row', gap: 8 }}>
-                <FavouriteButton
+                {/* <FavouriteButton
                   active={isFav}
                   onPress={() => toggleFavourite({
                     id: brandId, name: brand?.name, imageUrl: brand?.imageUrl || brand?.logoUrl,
                   }, 'restaurants')}
-                />
+                /> */}
                 <AppIconButton
                   size={32}
                   bg="rgba(255,255,255,0.9)"

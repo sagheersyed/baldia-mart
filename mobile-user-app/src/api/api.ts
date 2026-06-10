@@ -5,12 +5,12 @@ import { ENV } from '../config/env';
 
 export const socket = io(ENV.SOCKET_URL, {
   autoConnect: false,
-  transports: ['websocket'],
+  transports: ['polling', 'websocket'],
   reconnection: true,
   reconnectionAttempts: Infinity,
   reconnectionDelay: 2000,
   reconnectionDelayMax: 10000,
-  timeout: 10000,
+  timeout: 20000,
   extraHeaders: {
     'ngrok-skip-browser-warning': 'true',
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'
@@ -38,15 +38,17 @@ export const connectSocket = () => {
  */
 export const normalizeUrl = (url: string | null | undefined): string | null => {
   if (!url) return null;
-  const serverBase = ENV.SOCKET_URL;
-  if (url.startsWith('http')) {
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+  const serverBase = ENV.SOCKET_URL.trim();
+  if (trimmed.startsWith('http')) {
     // Replace any localhost variant (with or without port) with the real server base
-    return url.replace(/https?:\/\/localhost(:\d+)?/i, serverBase);
+    return trimmed.replace(/https?:\/\/localhost(:\d+)?/i, serverBase);
   }
-  if (url.startsWith('/')) {
-    return `${serverBase}${url}`;
+  if (trimmed.startsWith('/')) {
+    return `${serverBase}${trimmed}`;
   }
-  return url;
+  return trimmed;
 };
 
 export const normalizePhone = (phone: string): string => {
@@ -529,4 +531,107 @@ export const moduleEventsApi = {
   getAll: (section?: string) =>
     api.get(`/module-events${section ? `?section=${section}` : ''}`),
   getById: (id: string) => api.get(`/module-events/${id}`),
+};
+
+// ── Business CMS ───────────────────────────────────────────────
+/** Header helper for tenant-scoped requests */
+const tenantHeaders = (tenantId: string) => ({ headers: { 'x-tenant-id': tenantId } });
+
+export interface CmsPatchOp {
+  op: 'replace' | 'add' | 'remove';
+  path: string;
+  value: any;
+  oldValue?: any;
+}
+
+export const cmsApi = {
+  // Memberships
+  getMyMemberships: () => api.get('/cms/tenants/my/list'),
+
+  // PIN Management
+  getPinStatus: (tenantId: string) =>
+    api.get(`/cms/tenants/${tenantId}/pin-status`, tenantHeaders(tenantId)),
+
+  setupPin: (tenantId: string, pin: string) =>
+    api.post(`/cms/tenants/${tenantId}/setup-pin`, { pin }, tenantHeaders(tenantId)),
+
+  verifyPin: (tenantId: string, pin: string) =>
+    api.post(`/cms/tenants/${tenantId}/verify-pin`, { pin }, tenantHeaders(tenantId)),
+
+  // Vendor (grocery) products
+  getVendorProducts: (tenantId: string) =>
+    api.get('/cms/vendor/products', tenantHeaders(tenantId)),
+
+  getVendorMasterCatalog: (tenantId: string, search?: string, page?: number) =>
+    api.get('/cms/vendor/catalog', { params: { search, page, limit: 20 }, ...tenantHeaders(tenantId) }),
+
+  addProductFromCatalog: (tenantId: string, productId: string, price: number, stockQty: number) =>
+    api.post('/cms/vendor/products/new', { productId, price, stockQty }, tenantHeaders(tenantId)),
+
+  updateStock: (tenantId: string, productId: string, quantity: number, oldQty: number) =>
+    api.put(`/cms/vendor/products/${productId}/stock`, { quantity }, tenantHeaders(tenantId)),
+
+  requestPriceUpdate: (tenantId: string, productId: string, newPrice: number, oldPrice: number) =>
+    api.post(`/cms/vendor/products/${productId}/update-price`, { newPrice }, tenantHeaders(tenantId)),
+
+  toggleAvailability: (tenantId: string, productId: string, isAvailable: boolean) =>
+    api.put(`/cms/vendor/products/${productId}/availability`, { isAvailable }, tenantHeaders(tenantId)),
+
+  // Restaurant menu items
+  getRestaurantMenu: (tenantId: string) =>
+    api.get('/cms/restaurant/menu-items', tenantHeaders(tenantId)),
+
+  updateMenuItemAvailability: (tenantId: string, menuItemId: string, isAvailable: boolean) =>
+    api.put(`/cms/restaurant/menu-items/${menuItemId}/availability`, { isAvailable }, tenantHeaders(tenantId)),
+
+  requestMenuPriceUpdate: (tenantId: string, menuItemId: string, newPrice: number) =>
+    api.post(`/cms/restaurant/menu-items/${menuItemId}/update-price`, { newPrice }, tenantHeaders(tenantId)),
+
+  requestNewMenuItem: (tenantId: string, data: any) =>
+    api.post('/cms/restaurant/menu-items/new', data, tenantHeaders(tenantId)),
+
+  // Pharmacy medicines
+  getPharmacyMedicines: (tenantId: string) =>
+    api.get('/cms/pharmacy/medicines', tenantHeaders(tenantId)),
+
+  getPharmacyMasterCatalog: (tenantId: string, search?: string, page?: number) =>
+    api.get('/cms/pharmacy/catalog', { params: { search, page, limit: 20 }, ...tenantHeaders(tenantId) }),
+
+  addMedicineFromCatalog: (tenantId: string, medicineId: string, stockQuantity: number, priceOverride?: number, shelfLocation?: string) =>
+    api.post('/cms/pharmacy/medicines/new', { medicineId, stockQuantity, priceOverride, shelfLocation }, tenantHeaders(tenantId)),
+
+  updatePharmacyStock: (tenantId: string, pmId: string, quantity: number) =>
+    api.put(`/cms/pharmacy/medicines/${pmId}/stock`, { quantity }, tenantHeaders(tenantId)),
+
+  requestPharmacyPriceUpdate: (tenantId: string, pmId: string, newPrice: number) =>
+    api.post(`/cms/pharmacy/medicines/${pmId}/update-price`, { newPrice }, tenantHeaders(tenantId)),
+
+  togglePharmacyAvailability: (tenantId: string, pmId: string, isActive: boolean) =>
+    api.put(`/cms/pharmacy/medicines/${pmId}/availability`, { isActive }, tenantHeaders(tenantId)),
+
+  requestBrandNewProduct: (tenantId: string, data: any) =>
+    api.post('/cms/vendor/products/request-new', data, tenantHeaders(tenantId)),
+
+  requestBrandNewMedicine: (tenantId: string, data: any) =>
+    api.post('/cms/pharmacy/medicines/request-new', data, tenantHeaders(tenantId)),
+
+  // Change Requests
+  getChangeRequests: (tenantId: string, params?: { status?: string; entityType?: string; limit?: number; offset?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.status) qs.set('status', params.status);
+    if (params?.entityType) qs.set('entityType', params.entityType);
+    if (params?.limit) qs.set('limit', String(params.limit));
+    if (params?.offset) qs.set('offset', String(params.offset));
+    const str = qs.toString();
+    return api.get(`/cms/change-requests/tenant/${tenantId}${str ? `?${str}` : ''}`, tenantHeaders(tenantId));
+  },
+
+  getChangeRequestDetail: (tenantId: string, crId: string) =>
+    api.get(`/cms/change-requests/${crId}`, tenantHeaders(tenantId)),
+
+  getDiscussions: (tenantId: string, crId: string) =>
+    api.get(`/cms/change-requests/${crId}/discussions`, tenantHeaders(tenantId)),
+
+  postDiscussion: (tenantId: string, crId: string, message: string) =>
+    api.post(`/cms/change-requests/${crId}/discussions`, { message }, tenantHeaders(tenantId)),
 };

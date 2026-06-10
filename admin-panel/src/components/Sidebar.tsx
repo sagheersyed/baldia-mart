@@ -19,6 +19,7 @@ interface SidebarProps {
 
 const NAV = [
   { name: 'Dashboard',        icon: LayoutDashboard, path: '/' },
+  { name: 'Change Requests', icon: RefreshCw,       path: '/change-requests' },
   { name: 'Orders',           icon: ClipboardList,   path: '/orders' },
   { name: 'Products',         icon: ShoppingBag,     path: '/products' },
   { name: 'Medicines',        icon: Pill,            path: '/medicines' },

@@ -26,7 +26,7 @@ function AddressCard({ addr, onDelete, onSetDefault, onEdit, accent }: any) {
 
   return (
     <View style={[
-      styles.addrCard, 
+      styles.addrCard,
       isDefault ? { borderColor: accent, backgroundColor: lightAccent, borderWidth: 1.5 } : null
     ]}>
       <View style={styles.addrTop}>
@@ -46,9 +46,9 @@ function AddressCard({ addr, onDelete, onSetDefault, onEdit, accent }: any) {
             {addr.postalCode ? ` ${addr.postalCode}` : ''}
           </AppText>
         </View>
-        <AppIconButton 
-          size={32} 
-          bg={isDefault ? 'rgba(255,255,255,0.6)' : theme.colors.surfaceMuted} 
+        <AppIconButton
+          size={32}
+          bg={isDefault ? 'rgba(255,255,255,0.6)' : theme.colors.surfaceMuted}
           onPress={() => onEdit(addr)}
         >
           <Ionicons name="create-outline" size={16} color={theme.colors.textPrimary} />
@@ -243,7 +243,7 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.lg,
     padding: theme.spacing.md,
     borderWidth: 1.5, borderColor: theme.colors.divider,
-    ...theme.shadows.sm,
+    // ...theme.shadows.sm,
   },
 
   addrTop: { flexDirection: 'row', alignItems: 'flex-start', gap: theme.spacing.md },

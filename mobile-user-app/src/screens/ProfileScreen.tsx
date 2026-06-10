@@ -14,6 +14,7 @@ import { useSettings } from '../context/SettingsContext';
 import { useCartStore } from '../store/cartStore';
 import { useOrdersStore } from '../store/ordersStore';
 import { useAuthStore } from '../store/authStore';
+import { useCmsStore } from '../store/cmsStore';
 import { AppText, AppButton, AppIconButton, AppBadge } from '../components/ui';
 import { theme } from '../theme/theme';
 
@@ -37,6 +38,7 @@ export default function ProfileScreen({ navigation }: any) {
   const { activeMode } = useCartStore();
   const { orders, consultations, labBookings, fetchOrders, fetchConsultations, fetchLabBookings } = useOrdersStore();
   const { userData: user } = useAuthStore();
+  const { memberships, loadMemberships, enterMerchantMode, isCmsSessionValid } = useCmsStore();
 
   const [addresses, setAddresses] = useState<any[]>([]);
   const [favoritesCount, setFavoritesCount] = useState(0);
@@ -75,7 +77,8 @@ export default function ProfileScreen({ navigation }: any) {
 
   useEffect(() => {
     fetchProfile(true);
-    const unsubscribe = navigation.addListener('focus', () => fetchProfile(false));
+    loadMemberships();
+    const unsubscribe = navigation.addListener('focus', () => { fetchProfile(false); loadMemberships(); });
     return unsubscribe;
   }, [navigation, fetchProfile]);
 
@@ -309,6 +312,52 @@ export default function ProfileScreen({ navigation }: any) {
             </View>
           </LinearGradient>
         </View>
+
+        {/* Merchant CMS Banner */}
+        {memberships.length > 0 && (
+          <View style={{ paddingHorizontal: theme.spacing.lg, marginTop: theme.spacing.lg }}>
+            <AppText variant="overline" style={{ marginBottom: theme.spacing.sm, marginLeft: 4 }}>MY BUSINESS</AppText>
+            {memberships.map((m) => {
+              const typeColor = m.type === 'restaurant' ? '#EA580C' : m.type === 'pharmacy' ? '#7C3AED' : '#16A34A';
+              const typeIcon: keyof typeof Ionicons.glyphMap = m.type === 'restaurant' ? 'restaurant-outline' : m.type === 'pharmacy' ? 'medical-outline' : 'storefront-outline';
+              return (
+                <Pressable
+                  key={m.tenantId}
+                  style={({ pressed }) => [{
+                    flexDirection: 'row', alignItems: 'center', gap: 12,
+                    backgroundColor: theme.colors.surface,
+                    borderRadius: theme.radius.lg,
+                    padding: theme.spacing.md,
+                    marginBottom: 8,
+                    borderWidth: 1.5, borderColor: typeColor + '40',
+                    ...(theme.shadows.sm as any),
+                  }, pressed ? { opacity: 0.85, transform: [{ scale: 0.98 }] } : null]}
+                  onPress={() => {
+                    enterMerchantMode(m.tenantId);
+                    if (isCmsSessionValid(m.tenantId)) {
+                      navigation.navigate('MerchantDashboard');
+                    } else {
+                      navigation.navigate('CmsAuthGate');
+                    }
+                  }}
+                >
+                  <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: typeColor + '18', alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons name={typeIcon} size={22} color={typeColor} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <AppText variant="bodyStrong">{m.name}</AppText>
+                    <AppText variant="caption" color={theme.colors.textMuted}>
+                      {m.type.charAt(0).toUpperCase() + m.type.slice(1)} · {m.role.toUpperCase()}
+                    </AppText>
+                  </View>
+                  <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: typeColor + '15' }}>
+                    <AppText variant="badge" color={typeColor}>Open CMS →</AppText>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
 
         {/* Menu groups */}
         {renderMenuGroup('Account', accountItems)}

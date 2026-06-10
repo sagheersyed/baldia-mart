@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   TrendingUp, Users, ShoppingBag, Bike, DollarSign, Activity,
-  ArrowUpRight, ArrowDownRight, ExternalLink, RefreshCw, CalendarDays,
+  ArrowUpRight, ArrowDownRight, ExternalLink, RefreshCw, CalendarDays, ChevronRight,
 } from 'lucide-react';
 import {
   ComposedChart, Area, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -17,9 +17,11 @@ interface DashboardMetrics {
   totalOrders: number;
   activeUsers: number;
   activeRiders: number;
+  pendingChangeRequests: number;
 }
 interface ChartData { date: string; revenue: number; orders: number }
 interface RecentOrder { id: string; customerName: string; totalAmount: number; status: string; createdAt: string }
+interface PendingCR { id: string; tenantName: string; entityType: string; actionType: string; createdAt: string }
 
 const API_URL = `${BASE_URL}/analytics/dashboard`;
 const RANGE_OPTS = ['weekly', 'monthly', 'yearly', 'custom'] as const;
@@ -38,6 +40,7 @@ export default function Dashboard() {
   const [metrics,      setMetrics]      = useState<DashboardMetrics | null>(null);
   const [chartData,    setChartData]    = useState<ChartData[]>([]);
   const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
+  const [pendingCRs,   setPendingCRs]   = useState<PendingCR[]>([]);
   const [loading,      setLoading]      = useState(true);
   const [error,        setError]        = useState<string | null>(null);
   const [needsReauth,  setNeedsReauth]  = useState(false);
@@ -55,12 +58,24 @@ export default function Dashboard() {
         params.set('startDate', startDate);
         params.set('endDate', endDate);
       }
-      const res = await fetchWithAuth(`${API_URL}?${params}`);
-      if (!res.ok) throw new Error(await parseApiError(res, 'Failed to fetch analytics'));
-      const data = await res.json();
-      setMetrics(data.metrics);
+      const [dashRes, crRes] = await Promise.all([
+        fetchWithAuth(`${API_URL}?${params}`),
+        fetchWithAuth(`${BASE_URL}/cms/change-requests/admin/queue?status=pending&limit=10`)
+      ]);
+
+      if (!dashRes.ok) throw new Error(await parseApiError(dashRes, 'Failed to fetch analytics'));
+      const data = await dashRes.json();
+      setMetrics({
+        ...data.metrics,
+        pendingChangeRequests: data.metrics.pendingChangeRequests || 0
+      });
       setChartData(Array.isArray(data.salesChartData) ? data.salesChartData : []);
       setRecentOrders(Array.isArray(data.recentOrders) ? data.recentOrders : []);
+      if (crRes.ok) {
+        const crData = await crRes.json();
+        setPendingCRs(crData.data ? crData.data : (Array.isArray(crData) ? crData : []));
+      }
+      
       setLastUpdated(new Date());
     } catch (e: any) {
       const msg: string = e?.message ?? '';
@@ -102,8 +117,8 @@ export default function Dashboard() {
   const statCards = [
     { title: 'Total Revenue', value: `Rs. ${metrics.totalRevenue.toLocaleString()}`, icon: DollarSign, trend: '+12.5%', up: true, color: 'bg-emerald-50', text: 'text-emerald-600', accent: 'bg-emerald-100' },
     { title: 'Total Orders',  value: metrics.totalOrders.toLocaleString(), icon: ShoppingBag, trend: '+8.2%', up: true,  color: 'bg-blue-50', text: 'text-blue-600', accent: 'bg-blue-100' },
-    { title: 'Active Users',  value: metrics.activeUsers.toLocaleString(),  icon: Users, trend: '+24.4%', up: true, color: 'bg-violet-50', text: 'text-violet-600', accent: 'bg-violet-100' },
     { title: 'Active Riders', value: metrics.activeRiders.toLocaleString(), icon: Bike,  trend: '-2.1%',  up: false, color: 'bg-amber-50',  text: 'text-amber-600',  accent: 'bg-amber-100' },
+    { title: 'Pending Review', value: metrics.pendingChangeRequests.toLocaleString(), icon: RefreshCw, trend: 'Action Req', up: false, color: 'bg-rose-50', text: 'text-rose-600', accent: 'bg-rose-100' },
   ];
 
   return (
@@ -136,8 +151,7 @@ export default function Dashboard() {
               <div className={`w-11 h-11 rounded-xl ${s.color} flex items-center justify-center`}>
                 <s.icon size={20} className={s.text} />
               </div>
-              <span className={`flex items-center gap-0.5 text-xs font-bold px-2 py-1 rounded-full ${s.up ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>
-                {s.up ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
+              <span className={`flex items-center gap-0.5 text-xs font-bold px-2 py-1 rounded-full ${s.up ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
                 {s.trend}
               </span>
             </div>
@@ -151,7 +165,6 @@ export default function Dashboard() {
 
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Revenue chart */}
         <div className="card p-6 lg:col-span-2">
           <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
             <div>
@@ -170,27 +183,6 @@ export default function Dashboard() {
               ))}
             </div>
           </div>
-
-          {range === 'custom' && (
-            <div className="flex items-center gap-3 mb-5 flex-wrap">
-              <div className="flex items-center gap-2">
-                <CalendarDays size={14} className="text-slate-400" />
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="input py-2 text-xs w-36"
-                />
-              </div>
-              <span className="text-slate-400 text-xs">to</span>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="input py-2 text-xs w-36"
-              />
-            </div>
-          )}
 
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
@@ -225,19 +217,69 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* Change Requests widget */}
+        <div className="card flex flex-col h-[500px]">
+          <div className="px-6 pt-6 pb-4 border-b border-slate-50 flex items-center justify-between shrink-0">
+            <div>
+              <h2 className="font-bold text-slate-800">Pending Reviews</h2>
+              <p className="text-xs text-slate-500 mt-0.5">CMS items awaiting approval</p>
+            </div>
+            {metrics.pendingChangeRequests > 0 && (
+              <span className="w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] flex items-center justify-center font-bold animate-pulse">
+                {metrics.pendingChangeRequests}
+              </span>
+            )}
+          </div>
+          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2 min-h-0">
+            {pendingCRs.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-center p-6 bg-slate-25 rounded-2xl border border-dashed border-slate-200 m-2">
+                <RefreshCw size={32} className="text-slate-300 mb-2" />
+                <p className="text-sm text-slate-400">All clear! No pending requests.</p>
+              </div>
+            ) : pendingCRs.map((cr) => (
+              <div key={cr.id} className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 transition border border-transparent hover:border-slate-100 group cursor-pointer" onClick={() => router.push(`/change-requests/${cr.id}`)}>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="font-bold text-slate-800 text-sm truncate">NEW {cr.entityType}</p>
+                    <span className="px-1.5 py-0.5 rounded bg-slate-100 text-[9px] text-slate-500 font-bold uppercase">{cr.actionType}</span>
+                  </div>
+                  <p className="text-xs text-slate-500 truncate mt-0.5">{cr.tenantName}</p>
+                </div>
+                <button className="p-2 rounded-lg bg-slate-50 text-slate-400 group-hover:bg-primary-50 group-hover:text-primary-600 transition">
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+          <div className="px-5 py-4 border-t border-slate-50 shrink-0">
+            <button
+              onClick={() => router.push('/change-requests')}
+              className="w-full btn-ghost justify-center text-sm"
+            >
+              Manage Requests
+            </button>
+          </div>
+        </div>
+
         {/* Recent orders */}
-        <div className="card flex flex-col">
+        <div className="card flex flex-col lg:col-span-3">
           <div className="px-6 pt-6 pb-4 border-b border-slate-50 flex items-center justify-between shrink-0">
             <div>
               <h2 className="font-bold text-slate-800">Recent Orders</h2>
-              <p className="text-xs text-slate-500 mt-0.5">Latest incoming</p>
+              <p className="text-xs text-slate-500 mt-0.5">Latest incoming Activity</p>
             </div>
+            <button
+               onClick={() => router.push('/orders')}
+               className="text-xs font-bold text-primary-600 hover:underline"
+            >
+              View All
+            </button>
           </div>
-          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2 min-h-0">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-2 p-4">
             {recentOrders.length === 0 ? (
-              <div className="py-10 text-center text-sm text-slate-400">No recent orders.</div>
+              <div className="col-span-full py-10 text-center text-sm text-slate-400">No recent orders.</div>
             ) : recentOrders.map((o) => (
-              <div key={o.id} className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 transition gap-2">
+              <div key={o.id} className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 transition gap-2 border border-slate-50">
                 <div className="min-w-0">
                   <p className="font-semibold text-slate-800 text-sm truncate">{o.customerName}</p>
                   <p className="text-xs text-slate-400">{new Date(o.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
@@ -248,14 +290,6 @@ export default function Dashboard() {
                 </div>
               </div>
             ))}
-          </div>
-          <div className="px-5 py-4 border-t border-slate-50 shrink-0">
-            <button
-              onClick={() => router.push('/orders')}
-              className="w-full btn-ghost justify-center text-sm"
-            >
-              <ExternalLink size={14} /> View All Orders
-            </button>
           </div>
         </div>
       </div>

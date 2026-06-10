@@ -26,10 +26,10 @@ const PAYMENT_OPTIONS: {
   color: string;
   badge?: string;
 }[] = [
-  { id: 'cod', title: 'Cash on Delivery', desc: 'Pay when your order arrives', icon: 'cash-outline', color: theme.colors.success },
-  { id: 'jazzcash', title: 'JazzCash', desc: 'Pay via JazzCash mobile wallet', icon: 'phone-portrait-outline', color: '#E31837', badge: 'JazzCash' },
-  { id: 'easypaisa', title: 'EasyPaisa', desc: 'Pay via EasyPaisa mobile wallet', icon: 'wallet-outline', color: '#4CAF50', badge: 'EasyPaisa' },
-];
+    { id: 'cod', title: 'Cash on Delivery', desc: 'Pay when your order arrives', icon: 'cash-outline', color: theme.colors.success },
+    { id: 'jazzcash', title: 'JazzCash', desc: 'Pay via JazzCash mobile wallet', icon: 'phone-portrait-outline', color: '#E31837', badge: 'JazzCash' },
+    { id: 'easypaisa', title: 'EasyPaisa', desc: 'Pay via EasyPaisa mobile wallet', icon: 'wallet-outline', color: '#4CAF50', badge: 'EasyPaisa' },
+  ];
 
 export default function CheckoutScreen({ navigation, route }: any) {
   const mode: Mode = route.params?.mode || 'mart';
@@ -93,8 +93,8 @@ export default function CheckoutScreen({ navigation, route }: any) {
     }
   }, [requiresRx]);
 
-  useEffect(() => { 
-    fetchAddresses(); 
+  useEffect(() => {
+    fetchAddresses();
     fetchPrescription();
   }, [fetchAddresses, fetchPrescription]);
 
@@ -178,7 +178,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
     }
     if (requiresRx && !approvedPrescriptionId) {
       Alert.alert(
-        'Prescription Required', 
+        'Prescription Required',
         'Your cart contains items that require an approved prescription. Please wait for pharmacist approval.',
         [
           { text: 'Cancel', style: 'cancel' },
@@ -332,25 +332,25 @@ export default function CheckoutScreen({ navigation, route }: any) {
             <>
               <AppText variant="overline" style={styles.sectionLabel}>Prescription status</AppText>
               <View style={[styles.statusBox, approvedPrescriptionId ? styles.statusBoxSuccess : styles.statusBoxWarning]}>
-                <Ionicons 
-                  name={approvedPrescriptionId ? 'checkmark-circle' : 'time'} 
-                  size={20} 
-                  color={approvedPrescriptionId ? theme.colors.success : theme.colors.warning} 
+                <Ionicons
+                  name={approvedPrescriptionId ? 'checkmark-circle' : 'time'}
+                  size={20}
+                  color={approvedPrescriptionId ? theme.colors.success : theme.colors.warning}
                 />
                 <View style={{ flex: 1, marginLeft: 10 }}>
                   <AppText variant="bodyStrong">
                     {approvedPrescriptionId ? 'Verified prescription attached' : 'Verification Pending'}
                   </AppText>
                   <AppText variant="caption">
-                    {approvedPrescriptionId 
-                      ? 'Your prescription has been approved by our pharmacist.' 
+                    {approvedPrescriptionId
+                      ? 'Your prescription has been approved by our pharmacist.'
                       : 'Waiting for pharmacist approval. You can only place order after approval.'}
                   </AppText>
                 </View>
                 {!approvedPrescriptionId && (
-                  <AppIconButton 
-                    size={32} 
-                    bg={theme.colors.surface} 
+                  <AppIconButton
+                    size={32}
+                    bg={theme.colors.surface}
                     onPress={fetchPrescription}
                     disabled={loadingRx}
                   >
@@ -493,9 +493,9 @@ export default function CheckoutScreen({ navigation, route }: any) {
               ? 'Processing…'
               : !isAddressValid && mode !== 'pharma'
                 ? 'Out of service area'
-                : mode === 'pharma' 
-                ? `Confirm Medicine Order • Rs. ${total.toLocaleString()}`
-                : `Place order • Rs. ${total.toLocaleString()}`}
+                : mode === 'pharma'
+                  ? `Confirm Medicine Order • Rs. ${total.toLocaleString()}`
+                  : `Place order • Rs. ${total.toLocaleString()}`}
             variant="primary"
             tint={accent}
             size="lg"

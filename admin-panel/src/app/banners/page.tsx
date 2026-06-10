@@ -100,7 +100,7 @@ export default function BannersPage() {
 
       const payload = {
         ...editingBanner,
-        title: editingBanner.title || (editingBanner.bannerType === 'image' ? 'Image Banner' : 'Untitled Banner')
+        title: editingBanner.title || (editingBanner.bannerType === 'image' ? '' : '')
       };
 
       const res = await fetchWithAuth(url, {
@@ -175,58 +175,58 @@ export default function BannersPage() {
         <div className="flex justify-center p-20"><RefreshCw className="animate-spin text-primary-600" size={40} /></div>
       ) : (
         <>
-        <div className="flex bg-slate-100 p-1 rounded-xl w-fit mb-8">
-          <button onClick={() => setActiveTab('mart')} className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${activeTab === 'mart' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}>Quick Mart (Grocery)</button>
-          <button onClick={() => setActiveTab('food')} className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${activeTab === 'food' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}>Food</button>
-          <button onClick={() => setActiveTab('pharma')} className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${activeTab === 'pharma' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}>Pharma (Medicines)</button>
-          <button onClick={() => setActiveTab('all')} className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${activeTab === 'all' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}>All Sections</button>
-        </div>
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredBanners.map(banner => (
-            <div key={banner.id} className="bg-white rounded-[2rem] border border-gray-100 shadow-xl overflow-hidden group">
-              <div
-                className="h-40 p-6 flex flex-col justify-center relative"
-                style={{
-                  backgroundColor: banner.backgroundColor,
-                  backgroundImage: banner.backgroundImageUrl ? `url(${banner.backgroundImageUrl})` : undefined,
-                  backgroundSize: 'cover',
-                  backgroundPosition: 'center',
-                }}
-              >
-                {banner.bannerType === 'image' && banner.imageUrl ? (
-                  <img src={banner.imageUrl} alt={banner.title} className="absolute inset-0 w-full h-full object-cover" />
-                ) : null}
-                <div className="absolute inset-0 bg-black/10" />
-                <div className="absolute top-4 right-4">
-                  {banner.isActive ? <CheckCircle className="text-white opacity-80" /> : <XCircle className="text-white opacity-40" />}
-                </div>
-                {banner.tagLabel && (
-                  <span className="absolute top-4 left-4 inline-block px-2 py-1 rounded-md text-[8px] font-black uppercase bg-white/20 text-white">
-                    {banner.tagLabel}
-                  </span>
-                )}
-                <div className="relative z-10">
-                  {banner.bannerType !== 'image' && (
-                    <>
-                      <h3 className="text-xl font-black mb-1" style={{ color: banner.textColor }}>{banner.title}</h3>
-                      <p className="text-sm font-bold opacity-90" style={{ color: banner.textColor }}>{banner.subtitle}</p>
-                    </>
+          <div className="flex bg-slate-100 p-1 rounded-xl w-fit mb-8">
+            <button onClick={() => setActiveTab('mart')} className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${activeTab === 'mart' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}>Quick Mart (Grocery)</button>
+            <button onClick={() => setActiveTab('food')} className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${activeTab === 'food' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}>Food</button>
+            <button onClick={() => setActiveTab('pharma')} className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${activeTab === 'pharma' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}>Pharma (Medicines)</button>
+            <button onClick={() => setActiveTab('all')} className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${activeTab === 'all' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}>All Sections</button>
+          </div>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredBanners.map(banner => (
+              <div key={banner.id} className="bg-white rounded-[2rem] border border-gray-100 shadow-xl overflow-hidden group">
+                <div
+                  className="h-40 p-6 flex flex-col justify-center relative"
+                  style={{
+                    backgroundColor: banner.backgroundColor,
+                    backgroundImage: banner.backgroundImageUrl ? `url(${banner.backgroundImageUrl})` : undefined,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                  }}
+                >
+                  {banner.bannerType === 'image' && banner.imageUrl ? (
+                    <img src={banner.imageUrl} alt={banner.title} className="absolute inset-0 w-full h-full object-cover" />
+                  ) : null}
+                  <div className="absolute inset-0 bg-black/10" />
+                  <div className="absolute top-4 right-4">
+                    {banner.isActive ? <CheckCircle className="text-white opacity-80" /> : <XCircle className="text-white opacity-40" />}
+                  </div>
+                  {banner.tagLabel && (
+                    <span className="absolute top-4 left-4 inline-block px-2 py-1 rounded-md text-[8px] font-black uppercase bg-white/20 text-white">
+                      {banner.tagLabel}
+                    </span>
                   )}
-                  <span className="mt-2 inline-block px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-white/20 text-white w-fit">
-                    {banner.section} • {banner.bannerType || 'image'}
-                  </span>
+                  <div className="relative z-10">
+                    {banner.bannerType !== 'image' && (
+                      <>
+                        <h3 className="text-xl font-black mb-1" style={{ color: banner.textColor }}>{banner.title}</h3>
+                        <p className="text-sm font-bold opacity-90" style={{ color: banner.textColor }}>{banner.subtitle}</p>
+                      </>
+                    )}
+                    <span className="mt-2 inline-block px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-white/20 text-white w-fit">
+                      {banner.section} • {banner.bannerType || 'image'}
+                    </span>
+                  </div>
+                </div>
+                <div className="p-4 flex justify-between items-center bg-gray-50">
+                  <span className="text-xs font-black text-gray-400">Order: {banner.sortOrder}</span>
+                  <div className="flex space-x-2">
+                    <button onClick={() => { setEditingBanner(banner); setIsModalOpen(true); }} className="p-2 text-blue-600 hover:bg-blue-50 rounded-xl transition"><Edit2 size={18} /></button>
+                    <button onClick={() => handleDelete(banner.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-xl transition"><Trash2 size={18} /></button>
+                  </div>
                 </div>
               </div>
-              <div className="p-4 flex justify-between items-center bg-gray-50">
-                <span className="text-xs font-black text-gray-400">Order: {banner.sortOrder}</span>
-                <div className="flex space-x-2">
-                  <button onClick={() => { setEditingBanner(banner); setIsModalOpen(true); }} className="p-2 text-blue-600 hover:bg-blue-50 rounded-xl transition"><Edit2 size={18} /></button>
-                  <button onClick={() => handleDelete(banner.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-xl transition"><Trash2 size={18} /></button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
         </>
       )}
 

@@ -58,7 +58,7 @@ const BrandCard = memo(function BrandCard({
             <Image
               source={{ uri }}
               style={styles.wideImg}
-              contentFit="contain"
+              contentFit="cover"
               cachePolicy="memory-disk"
               transition={150}
             />
@@ -67,14 +67,14 @@ const BrandCard = memo(function BrandCard({
               <Ionicons name="storefront" size={24} color={theme.colors.textSecondary} />
             </View>
           )}
-          {onToggleFavourite && (
+          {/* {onToggleFavourite && (
             <FavouriteButton
               active={isFavourite}
               onPress={onToggleFavourite}
               size={22}
               style={styles.wideFav}
             />
-          )}
+          )} */}
         </View>
         <AppText
           variant="caption"
@@ -119,7 +119,7 @@ const BrandCard = memo(function BrandCard({
           <Image
             source={{ uri }}
             style={styles.rowImg}
-            contentFit="contain"
+            contentFit="cover"
             cachePolicy="memory-disk"
             transition={150}
           />
@@ -145,10 +145,10 @@ const BrandCard = memo(function BrandCard({
       </View>
 
       <View style={styles.rowRight}>
-        {onToggleFavourite && (
+        {/* {onToggleFavourite && (
           <FavouriteButton active={isFavourite} onPress={onToggleFavourite} size={22} />
-        )}
-        <Ionicons name="chevron-forward" size={16} color={theme.colors.textMuted} />
+        )} */}
+        {/* <Ionicons name="chevron-forward" size={16} color={theme.colors.textMuted} /> */}
       </View>
     </Pressable>
   );
@@ -175,7 +175,7 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
   },
-  wideImg: { width: '85%', height: '85%', borderRadius: 12 },
+  wideImg: { width: '100%', height: '100%', borderRadius: 12 },
   wideFav: { position: 'absolute', bottom: -4, right: -4 },
   wideName: { fontSize: 11, fontWeight: '600', width: '100%', marginTop: 2 },
   wideMeta: { fontSize: 9.5, width: '100%', marginTop: 1 },
@@ -205,7 +205,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexShrink: 0,
   },
-  rowImg: { width: '90%', height: '90%' },
+  rowImg: { width: '100%', height: '100%' },
   rowMeta: { flex: 1, gap: 2 },
   rowRight: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 },
 

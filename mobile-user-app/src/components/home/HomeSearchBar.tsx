@@ -65,7 +65,7 @@ const HomeSearchBar = memo(function HomeSearchBar({
 
         <AppText
           variant="body"
-          color={inHeader ? 'rgba(255,255,255,0.7)' : theme.colors.textMuted}
+          color={inHeader ? 'rgba(118, 112, 112, 0.7)' : theme.colors.textMuted}
           style={styles.placeholder}
           numberOfLines={1}
         >

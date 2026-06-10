@@ -55,25 +55,37 @@ export default function EditProfileScreen({ navigation }: any) {
       Alert.alert('Validation', 'Please enter your name.');
       return;
     }
+    
+    // Basic phone validation (+92 followed by 10 digits)
+    if (form.phoneNumber && !/^\+92\d{10}$/.test(form.phoneNumber)) {
+       Alert.alert('Validation', 'Please enter a valid phone number (e.g. +923XXXXXXXXX)');
+       return;
+    }
+
     setSaving(true);
     try {
-      const updateDto = {
+      // Build clean DTO - avoid sending empty strings for nullable unique fields
+      const updateDto: any = {
         name: form.name.trim(),
-        phoneNumber: form.phoneNumber.trim(),
-        email: form.email.trim(),
+        email: form.email.trim() || undefined,
+        phoneNumber: form.phoneNumber.trim() || undefined,
         age: form.age ? parseInt(form.age) : undefined,
-        gender: form.gender,
+        gender: form.gender || undefined,
       };
-      await usersApi.updateMe(updateDto);
       
-      // Update local store immediately to fix latency
-      updateUserData({ ...originalUser, ...updateDto });
+      const res = await usersApi.updateMe(updateDto);
+      const updatedUser = res.data;
+      
+      // Update local store immediately
+      updateUserData(updatedUser);
 
       Alert.alert('Success', 'Profile updated successfully!', [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
-    } catch {
-      Alert.alert('Error', 'Failed to update profile. Please try again.');
+    } catch (err: any) {
+      console.error('[EditProfile] Update failed:', err.response?.data || err.message);
+      const msg = err.response?.data?.message || 'Failed to update profile. Please try again.';
+      Alert.alert('Update Failed', Array.isArray(msg) ? msg[0] : msg);
     } finally {
       setSaving(false);
     }

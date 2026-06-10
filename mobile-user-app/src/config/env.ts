@@ -7,9 +7,9 @@
 
 import Constants from 'expo-constants';
 
-const DEFAULT_SERVER_BASE = ' https://35d8-175-107-236-228.ngrok-free.app';
+const DEFAULT_SERVER_BASE = 'https://b9f2-175-107-236-228.ngrok-free.app';
 const extra: any = (Constants as any)?.expoConfig?.extra ?? (Constants as any)?.manifest?.extra ?? {};
-const SERVER_BASE: string = (extra?.SERVER_BASE as string) || DEFAULT_SERVER_BASE;
+const SERVER_BASE: string = ((extra?.SERVER_BASE as string) || DEFAULT_SERVER_BASE).trim();
 
 export const ENV = {
   BASE_URL: `${SERVER_BASE}/api/v1`,

@@ -505,7 +505,6 @@ export default function FoodScreen({ navigation }: any) {
         locationLabel={locationLabel}
         cartCount={cartCount}
         variant="food"
-        greeting="What are you craving today?"
         onLocationPress={() => navigation.navigate('SavedAddresses')}
         onNotificationsPress={() => navigation.navigate('Notifications')}
         onCartPress={() => navigation.navigate('Cart')}

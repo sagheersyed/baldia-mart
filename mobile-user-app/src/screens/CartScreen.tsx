@@ -401,7 +401,7 @@ export default function CartScreen({ navigation, route }: any) {
             data={data}
             keyExtractor={keyExtractor}
             renderItem={renderRow}
-            contentContainerStyle={{ paddingVertical: theme.spacing.md, paddingBottom: 160 + insets.bottom }}
+            contentContainerStyle={{ paddingBottom: 160 + insets.bottom }}
           />
 
           {/* Sticky gradient footer */}
