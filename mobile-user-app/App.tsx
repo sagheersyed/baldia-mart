@@ -81,6 +81,8 @@ import ChangeRequestDetailScreen from './src/screens/cms/ChangeRequestDetailScre
 import CmsAuthGateScreen from './src/screens/cms/CmsAuthGateScreen';
 import AddItemScreen from './src/screens/cms/AddItemScreen';
 import AddNewItemFormScreen from './src/screens/cms/AddNewItemFormScreen';
+import MerchantOrdersScreen from './src/screens/cms/MerchantOrdersScreen';
+import StoreProfileScreen from './src/screens/cms/StoreProfileScreen';
 import FloatingTabBar from './src/components/FloatingTabBar';
 import AppLoader from './src/components/AppLoader';
 import { usePushNotifications } from './src/hooks/usePushNotifications';
@@ -251,6 +253,8 @@ function Navigation() {
           <Stack.Screen name="CmsAuthGate" component={CmsAuthGateScreen} />
           <Stack.Screen name="AddItem" component={AddItemScreen} />
           <Stack.Screen name="AddNewItemForm" component={AddNewItemFormScreen} />
+          <Stack.Screen name="MerchantOrders" component={MerchantOrdersScreen} />
+          <Stack.Screen name="StoreProfile" component={StoreProfileScreen} />
           </>
         )}
       </Stack.Navigator>

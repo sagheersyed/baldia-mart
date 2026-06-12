@@ -1,5 +1,5 @@
 config:
-  target: " https://b9f2-175-107-236-228.ngrok-free.app/api/v1"
+  target: " https://clergyman-envelope-prism.ngrok-free.dev/api/v1"
   phases:
     - duration: 60
       arrivalRate: 5

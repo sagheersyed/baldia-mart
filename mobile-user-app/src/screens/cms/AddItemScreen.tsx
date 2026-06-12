@@ -13,7 +13,7 @@ import { theme } from '../../theme/theme';
 
 export default function AddItemScreen({ navigation }: any) {
   const { activeTenantId, activeTenant } = useCmsStore();
-  const isPharmacy = activeTenant?.type === 'pharmacy';
+  const isPharmacy = activeTenant?.type === 'pharmacy' || activeTenant?.type === 'pharma';
   const isGrocery = activeTenant?.type === 'grocery' || activeTenant?.type === 'mart';
 
   const [search, setSearch] = useState('');
@@ -173,7 +173,7 @@ export default function AddItemScreen({ navigation }: any) {
       {/* Header */}
       <View style={styles.header}>
         <AppIconButton size={40} onPress={() => navigation.goBack()}>
-          <Ionicons name="chevron-back" size={24} color={theme.colors.text} />
+          <Ionicons name="chevron-back" size={24} color={theme.colors.textPrimary} />
         </AppIconButton>
         <View style={{ flex: 1, marginLeft: 12 }}>
           <AppText variant="h3" style={{ fontWeight: '700' }}>Add from Catalog</AppText>
@@ -181,7 +181,7 @@ export default function AddItemScreen({ navigation }: any) {
             Link master items to your store catalog
           </AppText>
         </View>
-        <AppIconButton size={40} onPress={() => navigation.navigate('AddNewItemForm')}>
+        <AppIconButton size={40} onPress={() => navigation.navigate('AddNewItemForm', { vertical: isPharmacy ? 'pharmacy' : 'grocery' })}>
           <Ionicons name="create-outline" size={24} color={theme.colors.primary} />
         </AppIconButton>
       </View>
@@ -226,7 +226,7 @@ export default function AddItemScreen({ navigation }: any) {
               <AppButton
                 label="Request Brand New Item"
                 variant="primary"
-                onPress={() => navigation.navigate('AddNewItemForm')}
+                onPress={() => navigation.navigate('AddNewItemForm', { vertical: isPharmacy ? 'pharmacy' : 'grocery' })}
                 style={{ marginTop: 16 }}
               />
             </View>
@@ -251,7 +251,7 @@ export default function AddItemScreen({ navigation }: any) {
             <View style={styles.modalHeader}>
               <AppText variant="h3" style={{ fontWeight: '700' }}>Set Price & Stock</AppText>
               <AppIconButton size={36} onPress={() => setModalVisible(false)}>
-                <Ionicons name="close" size={20} color={theme.colors.text} />
+                <Ionicons name="close" size={20} color={theme.colors.textPrimary} />
               </AppIconButton>
             </View>
 

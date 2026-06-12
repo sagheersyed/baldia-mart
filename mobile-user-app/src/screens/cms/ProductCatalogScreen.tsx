@@ -16,7 +16,7 @@ export default function ProductCatalogScreen({ navigation }: any) {
   const { activeTenant } = useCmsStore();
   const tenantId = activeTenant?.tenantId ?? '';
   const isRestaurant = activeTenant?.type === 'restaurant';
-  const isPharmacy = activeTenant?.type === 'pharmacy';
+  const isPharmacy  = activeTenant?.type === 'pharmacy' || activeTenant?.type === 'pharma';
 
   const [items, setItems]         = useState<any[]>([]);
   const [filtered, setFiltered]   = useState<any[]>([]);

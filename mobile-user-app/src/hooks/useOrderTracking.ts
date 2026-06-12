@@ -92,11 +92,13 @@ export function useOrderTracking(orderId: string, navigation: any) {
         // Pharma: load first page of all medicines, or search if query provided
         const { pharmaApi } = require('../api/api');
         const res = await pharmaApi.searchMedicines(q.trim() || '', 1, 50);
-        setAllProducts(Array.isArray(res.data) ? res.data : (res.data?.data || []));
+        const data = res.data;
+        setAllProducts(Array.isArray(data) ? data : (data?.data || []));
       } else if (isMart) {
         // Mart: load first page of all products, or search if query provided
         const res = await productsApi.search(q.trim() || '', 1, 50);
-        setAllProducts(Array.isArray(res.data) ? res.data : (res.data?.data || []));
+        const data = res.data;
+        setAllProducts(Array.isArray(data) ? data : (data?.data || []));
       }
     } catch (e) {
       console.error('Search failed:', e);

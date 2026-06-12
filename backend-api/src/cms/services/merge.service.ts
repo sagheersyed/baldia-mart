@@ -12,6 +12,7 @@ import { PharmacyInventory } from '../../pharma/pharmacies/pharmacy-inventory.en
 import { Vendor } from '../../vendors/vendor.entity';
 import { Restaurant } from '../../restaurants/restaurant.entity';
 import { Pharmacy } from '../../pharma/pharmacies/pharmacy.entity';
+import { Medicine } from '../../pharma/medicines/medicine.entity';
 
 interface PatchOp {
   op: 'replace' | 'add' | 'remove';
@@ -31,7 +32,7 @@ export class MergeService {
     Product,
     VendorProduct,
     MenuItem,
-    Medicine: PharmacyMedicine,
+    Medicine,
     PharmacyMedicine,
     PharmacyInventory,
     Vendor,

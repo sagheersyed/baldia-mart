@@ -1,15 +1,22 @@
 import {
   Controller, Get, Post, Put, Delete, Body, Param, Query,
-  UseGuards, Req, BadRequestException, ForbiddenException,
+  UseGuards, Req, BadRequestException, ForbiddenException, Patch,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AdminRoleGuard } from '../../auth/admin-role.guard';
 import { TenantGuard } from '../guards/tenant.guard';
+import { TenantRoles } from '../decorators/tenant-roles.decorator';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Tenant } from '../entities/tenant.entity';
 import { TenantUser } from '../entities/tenant-user.entity';
+import { Order } from '../../orders/order.entity';
+import { VendorProduct } from '../../vendors/vendor-product.entity';
+import { MenuItem } from '../../menu-items/menu-item.entity';
+import { PharmacyInventory } from '../../pharma/pharmacies/pharmacy-inventory.entity';
+import { ChangeRequest } from '../entities/change-request.entity';
 import * as bcrypt from 'bcryptjs';
+import { Between, In } from 'typeorm';
 
 /**
  * Admin-only endpoints for managing tenants (businesses) and their memberships.
@@ -22,6 +29,16 @@ export class TenantController {
     private readonly tenantRepo: Repository<Tenant>,
     @InjectRepository(TenantUser)
     private readonly tenantUserRepo: Repository<TenantUser>,
+    @InjectRepository(Order)
+    private readonly orderRepo: Repository<Order>,
+    @InjectRepository(VendorProduct)
+    private readonly vpRepo: Repository<VendorProduct>,
+    @InjectRepository(MenuItem)
+    private readonly menuRepo: Repository<MenuItem>,
+    @InjectRepository(PharmacyInventory)
+    private readonly phinvRepo: Repository<PharmacyInventory>,
+    @InjectRepository(ChangeRequest)
+    private readonly crRepo: Repository<ChangeRequest>,
   ) {}
 
   // ── Admin: Tenant CRUD ───────────────────────────────────────
@@ -171,5 +188,90 @@ export class TenantController {
       throw new ForbiddenException('Invalid PIN.');
     }
     return { success: true };
+  }
+
+  @Patch(':tenantId/profile')
+  @UseGuards(JwtAuthGuard, TenantGuard)
+  @TenantRoles('owner', 'manager')
+  async updateMyStoreProfile(
+    @Req() req: any,
+    @Body() dto: { 
+      status?: string; 
+      logoUrl?: string; 
+      bannerUrl?: string;
+      openingTime?: string;
+      closingTime?: string;
+    },
+  ) {
+    const tenantId = req.tenantId;
+    await this.tenantRepo.update(tenantId, dto);
+    return this.tenantRepo.findOneOrFail({ where: { id: tenantId } });
+  }
+  
+  // ── Merchant Dashboard ───────────────────────────────────────
+  
+  @Get(':tenantId/dashboard')
+  @UseGuards(JwtAuthGuard, TenantGuard)
+  async getDashboardStats(@Req() req: any) {
+    const tenantId = req.tenantId;
+    const tenant = await this.tenantRepo.findOneOrFail({ where: { id: tenantId } });
+    const entityId = tenant.entityId;
+
+    if (!entityId) {
+      return { todayRevenue: 0, activeOrders: 0, totalInventory: 0, pendingRequests: 0 };
+    }
+
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
+
+    // 1. Today's Revenue & Active Orders
+    const orderFilter: any = { createdAt: Between(startOfDay, endOfDay) };
+    if (tenant.type === 'grocery' || tenant.type === 'mart') orderFilter.martId = entityId;
+    else if (tenant.type === 'food' || tenant.type === 'restaurant') orderFilter.restaurantId = entityId;
+    else if (tenant.type === 'pharma' || tenant.type === 'pharmacy') orderFilter.pharmacyId = entityId;
+
+    const todayOrders = await this.orderRepo.find({
+      where: { 
+        ...orderFilter, 
+        status: In(['confirmed', 'out_for_delivery', 'delivered']) 
+      }
+    });
+
+    const todayRevenue = todayOrders.reduce((sum, o) => sum + Number(o.total), 0);
+
+    const activeOrders = await this.orderRepo.count({
+      where: {
+        ...orderFilter,
+        status: In(['pending', 'confirmed', 'out_for_delivery'])
+      }
+    });
+
+    // 2. Inventory Count
+    let totalInventory = 0;
+    if (tenant.type === 'grocery' || tenant.type === 'mart') {
+      totalInventory = await this.vpRepo.count({ where: { vendorId: entityId } });
+    } else if (tenant.type === 'food' || tenant.type === 'restaurant') {
+      totalInventory = await this.menuRepo.count({ where: { restaurantId: entityId } });
+    } else if (tenant.type === 'pharma' || tenant.type === 'pharmacy') {
+      totalInventory = await this.phinvRepo.count({ where: { pharmacyId: entityId } });
+    }
+
+    // 3. Pending Change Requests
+    const pendingRequests = await this.crRepo.count({
+      where: {
+        tenantId: tenantId,
+        status: In(['submitted', 'under_review'])
+      }
+    });
+
+    return {
+      todayRevenue: Number(todayRevenue.toFixed(2)),
+      activeOrders,
+      totalInventory,
+      pendingRequests,
+      storeStatus: tenant.status,
+    };
   }
 }

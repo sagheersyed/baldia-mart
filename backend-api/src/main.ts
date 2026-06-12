@@ -20,16 +20,9 @@ async function bootstrap() {
     crossOriginResourcePolicy: false, // Allow loading images from different origins
   }));
 
-  // Enable CORS with strict allowlist (set ALLOWED_ORIGINS in env)
-  const allowedOrigins = getAllowedOrigins();
+  // Enable CORS (Temporarily permissive for debugging 403)
   app.enableCors({
-    origin: (origin, callback) => {
-      if (isOriginAllowed(origin)) {
-        callback(null, true);
-        return;
-      }
-      callback(new Error('CORS origin denied'));
-    },
+    origin: true,
     credentials: true,
   });
   
@@ -69,7 +62,7 @@ async function bootstrap() {
   await app.listen(3000, '0.0.0.0');
   console.log(`Application is running on: ${await app.getUrl()}`);
   console.log(`Swagger Docs available at: ${await app.getUrl()}/docs`);
-  console.log(`Allowed CORS origins: ${allowedOrigins.join(', ')}`);
+  console.log(`CORS is in PERMISSIVE mode`);
 }
 bootstrap();
 

@@ -13,7 +13,7 @@ export const socket = io(ENV.SOCKET_URL, {
   timeout: 20000,
   extraHeaders: {
     'ngrok-skip-browser-warning': 'true',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'
+    'User-Agent': 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36'
   }
 });
 
@@ -40,15 +40,20 @@ export const normalizeUrl = (url: string | null | undefined): string | null => {
   if (!url) return null;
   const trimmed = url.trim();
   if (!trimmed) return null;
-  const serverBase = ENV.SOCKET_URL.trim();
+  
+  const serverBase = ENV.SOCKET_URL.trim().replace(/\/+$/, '');
+  
   if (trimmed.startsWith('http')) {
     // Replace any localhost variant (with or without port) with the real server base
     return trimmed.replace(/https?:\/\/localhost(:\d+)?/i, serverBase);
   }
+  
   if (trimmed.startsWith('/')) {
     return `${serverBase}${trimmed}`;
   }
-  return trimmed;
+  
+  // Handle paths like 'uploads/file.png'
+  return `${serverBase}/${trimmed}`;
 };
 
 export const normalizePhone = (phone: string): string => {
@@ -69,10 +74,8 @@ const api = axios.create({
   timeout: 15000,
   headers: {
     'ngrok-skip-browser-warning': 'true',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36',
-    'Cache-Control': 'no-cache',
-    'Pragma': 'no-cache',
-    'Expires': '0',
+    'User-Agent': 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36',
+    'Accept': 'application/json',
   },
 });
 
@@ -545,6 +548,13 @@ export interface CmsPatchOp {
 }
 
 export const cmsApi = {
+  // Dashboard & Stats
+  getDashboardStats: (tenantId: string) =>
+    api.get(`/cms/tenants/${tenantId}/dashboard`, tenantHeaders(tenantId)),
+  
+  updateStoreProfile: (tenantId: string, data: any) =>
+    api.patch(`/cms/tenants/${tenantId}/profile`, data, tenantHeaders(tenantId)),
+
   // Memberships
   getMyMemberships: () => api.get('/cms/tenants/my/list'),
 
@@ -606,8 +616,8 @@ export const cmsApi = {
   requestPharmacyPriceUpdate: (tenantId: string, pmId: string, newPrice: number) =>
     api.post(`/cms/pharmacy/medicines/${pmId}/update-price`, { newPrice }, tenantHeaders(tenantId)),
 
-  togglePharmacyAvailability: (tenantId: string, pmId: string, isActive: boolean) =>
-    api.put(`/cms/pharmacy/medicines/${pmId}/availability`, { isActive }, tenantHeaders(tenantId)),
+  togglePharmacyAvailability: (tenantId: string, pmId: string, isAvailable: boolean) =>
+    api.put(`/cms/pharmacy/medicines/${pmId}/availability`, { isAvailable }, tenantHeaders(tenantId)),
 
   requestBrandNewProduct: (tenantId: string, data: any) =>
     api.post('/cms/vendor/products/request-new', data, tenantHeaders(tenantId)),
@@ -634,4 +644,14 @@ export const cmsApi = {
 
   postDiscussion: (tenantId: string, crId: string, message: string) =>
     api.post(`/cms/change-requests/${crId}/discussions`, { message }, tenantHeaders(tenantId)),
+
+  // Order Management
+  getMerchantOrders: (tenantId: string, status?: string) =>
+    api.get('/cms/orders', { params: { status, limit: 50 }, ...tenantHeaders(tenantId) }),
+  
+  getMerchantOrderDetail: (tenantId: string, orderId: string) =>
+    api.get(`/cms/orders/${orderId}`, tenantHeaders(tenantId)),
+  
+  updateMerchantOrderStatus: (tenantId: string, orderId: string, status: string) =>
+    api.put(`/cms/orders/${orderId}/status`, { status }, tenantHeaders(tenantId)),
 };

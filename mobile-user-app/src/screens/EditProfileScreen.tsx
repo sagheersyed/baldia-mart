@@ -137,23 +137,25 @@ export default function EditProfileScreen({ navigation }: any) {
             <View style={[styles.field, styles.fieldBorder]}>
               <AppText variant="caption" style={{ marginBottom: 4 }}>Full name</AppText>
               <TextInput
-                style={styles.fieldInput}
+                style={[styles.fieldInput, !!originalUser?.name && { color: theme.colors.textSecondary || '#64748B' }]}
                 value={form.name}
                 onChangeText={(v) => setForm({ ...form, name: v })}
                 placeholder="Enter your full name"
                 placeholderTextColor={theme.colors.textMuted}
                 autoCorrect={false}
+                editable={!originalUser?.name}
               />
             </View>
             <View style={styles.field}>
               <AppText variant="caption" style={{ marginBottom: 4 }}>Phone number</AppText>
               <TextInput
-                style={styles.fieldInput}
+                style={[styles.fieldInput, !!originalUser?.phoneNumber && { color: theme.colors.textSecondary || '#64748B' }]}
                 value={form.phoneNumber}
                 onChangeText={(v) => setForm({ ...form, phoneNumber: v })}
                 placeholder="+92 300 0000000"
                 placeholderTextColor={theme.colors.textMuted}
                 keyboardType="phone-pad"
+                editable={!originalUser?.phoneNumber}
               />
             </View>
           </View>
@@ -202,13 +204,14 @@ export default function EditProfileScreen({ navigation }: any) {
             <View style={[styles.field, styles.fieldBorder]}>
               <AppText variant="caption" style={{ marginBottom: 4 }}>Email address</AppText>
               <TextInput
-                style={styles.fieldInput}
+                style={[styles.fieldInput, !!originalUser?.email && { color: theme.colors.textSecondary || '#64748B' }]}
                 value={form.email}
                 onChangeText={(v) => setForm({ ...form, email: v })}
                 placeholder="Enter your email"
                 placeholderTextColor={theme.colors.textMuted}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                editable={!originalUser?.email}
               />
             </View>
             <View style={styles.field}>

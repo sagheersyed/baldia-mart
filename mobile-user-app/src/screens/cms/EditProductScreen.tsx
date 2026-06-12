@@ -23,9 +23,31 @@ export default function EditProductScreen({ route, navigation }: any) {
   const { activeTenant } = useCmsStore();
   const tenantId = activeTenant?.tenantId ?? '';
 
-  const name     = item.product?.name ?? item.name ?? item.medicine?.name ?? 'Product';
-  const oldPrice = Number(item.price ?? item.product?.price ?? item.priceOverride ?? item.medicine?.price ?? 0);
-  const oldStock = Number(item.stockQty ?? item.stock_qty ?? item.product?.stockQuantity ?? item.stockQuantity ?? 0);
+  const name     = item.product?.name ?? item.medicine?.name ?? item.name ?? 'Product';
+  
+  // Robust price resolution: prioritize selling price (inventory) over mrp (medicine) over base price
+  const oldPrice = Number(
+    item.sellingPrice ?? 
+    item.selling_price ?? 
+    item.price ?? 
+    item.priceOverride ?? 
+    item.medicine?.mrp ?? 
+    item.medicine?.sellingPrice ?? 
+    item.product?.price ?? 
+    0
+  );
+
+  // Robust stock resolution: check all variations of stock qty fields
+  const oldStock = Number(
+    item.stockQuantity ?? 
+    item.stock_quantity ?? 
+    item.stockQty ?? 
+    item.stock_qty ?? 
+    item.stock ?? 
+    item.product?.stockQuantity ?? 
+    item.medicine?.stockQuantity ?? 
+    0
+  );
 
   const [price, setPrice]   = useState(String(oldPrice));
   const [stock, setStock]   = useState(String(oldStock));

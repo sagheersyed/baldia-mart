@@ -19,6 +19,8 @@ import { PharmacyInventory } from '../pharma/pharmacies/pharmacy-inventory.entit
 import { Pharmacy } from '../pharma/pharmacies/pharmacy.entity';
 import { Product } from '../products/product.entity';
 import { Medicine } from '../pharma/medicines/medicine.entity';
+import { Order } from '../orders/order.entity';
+import { SubOrder } from '../orders/sub-order.entity';
 
 // Services
 import { AuditService } from './services/audit.service';
@@ -36,6 +38,7 @@ import { ApprovalRuleController } from './controllers/approval-rule.controller';
 import { VendorCmsController } from './controllers/vendor-cms.controller';
 import { RestaurantCmsController } from './controllers/restaurant-cms.controller';
 import { PharmacyCmsController } from './controllers/pharmacy-cms.controller';
+import { MerchantOrdersController } from './controllers/merchant-orders.controller';
 
 // Guards
 import { TenantGuard } from './guards/tenant.guard';
@@ -59,6 +62,8 @@ import { TenantGuard } from './guards/tenant.guard';
       Pharmacy,
       Product,
       Medicine,
+      Order,
+      SubOrder,
     ]),
     BullModule.registerQueue({
       name: 'cms-moderation',
@@ -71,6 +76,7 @@ import { TenantGuard } from './guards/tenant.guard';
     VendorCmsController,
     RestaurantCmsController,
     PharmacyCmsController,
+    MerchantOrdersController,
   ],
   providers: [
     // Services

@@ -60,9 +60,17 @@ export class CmsModerationProcessor extends WorkerHost {
     this.logger.log(`Evaluating CR ${cr.id} (${cr.entityType}.${cr.actionType})`);
 
     // For CREATE actions, we typically require moderation (new content)
+    // UNLESS it's just linking from catalog (PharmacyInventory or VendorProduct)
     if (cr.actionType === 'CREATE') {
-      this.logger.log(`CR ${cr.id} is a CREATE action — requires manual review.`);
-      return; // Leave as 'submitted'
+      const isCatalogLink = ['PharmacyInventory', 'VendorProduct'].includes(cr.entityType);
+      if (isCatalogLink) {
+        this.logger.log(`CR ${cr.id} is a Catalog Link CREATE action — auto-approving.`);
+        await this.autoApproveAndPublish(cr);
+        return;
+      } else {
+        this.logger.log(`CR ${cr.id} is a CREATE action — requires manual review.`);
+        return; // Leave as 'submitted'
+      }
     }
 
     // For DELETE actions, always require moderation
@@ -81,23 +89,7 @@ export class CmsModerationProcessor extends WorkerHost {
     const result = await this.ruleService.requiresModeration(cr.entityType, patches);
 
     if (!result.requiresModeration) {
-      // Auto-approve and publish immediately
-      this.logger.log(`CR ${cr.id} auto-approved. Publishing...`);
-
-      await this.crRepo.update(cr.id, {
-        status: 'auto_approved',
-        reviewedAt: new Date(),
-      });
-
-      await this.auditService.log({
-        tenantId: cr.tenantId,
-        action: 'change_request.auto_approved',
-        changeRequestId: cr.id,
-        payload: { reasons: ['All changes within safe thresholds.'] },
-      });
-
-      // Publish immediately
-      await this.publish(cr);
+      await this.autoApproveAndPublish(cr);
     } else {
       this.logger.log(
         `CR ${cr.id} requires manual review. Reasons: ${result.reasons.join('; ')}`,
@@ -110,6 +102,26 @@ export class CmsModerationProcessor extends WorkerHost {
         payload: { reasons: result.reasons },
       });
     }
+  }
+
+  private async autoApproveAndPublish(cr: ChangeRequest): Promise<void> {
+      // Auto-approve and publish immediately
+      this.logger.log(`CR ${cr.id} auto-approving. Publishing...`);
+
+      await this.crRepo.update(cr.id, {
+        status: 'auto_approved',
+        reviewedAt: new Date(),
+      });
+
+      await this.auditService.log({
+        tenantId: cr.tenantId,
+        action: 'change_request.auto_approved',
+        changeRequestId: cr.id,
+        payload: { reasons: ['Auto-approved based on system rules.'] },
+      });
+
+      // Publish immediately
+      await this.publish(cr);
   }
 
   /**

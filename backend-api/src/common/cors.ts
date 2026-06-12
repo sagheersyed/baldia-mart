@@ -1,7 +1,7 @@
 const DEFAULT_ORIGINS = [
   'http://localhost:3000',
   'http://localhost:3001',
-  'https://b9f2-175-107-236-228.ngrok-free.app',
+  'https://clergyman-envelope-prism.ngrok-free.dev',
   'http://192.168.100.142:3001',
 ];
 
@@ -19,8 +19,12 @@ export function getAllowedOrigins(): string[] {
 }
 
 export function isOriginAllowed(origin?: string): boolean {
-  if (!origin) return true;
+  if (!origin || origin === 'null') return true;
   const normalized = normalizeOrigin(origin);
-  return getAllowedOrigins().includes(normalized);
+  const allowed = getAllowedOrigins().includes(normalized);
+  if (!allowed) {
+    console.warn(`[CORS] Denied origin: ${origin}`);
+  }
+  return allowed;
 }
 

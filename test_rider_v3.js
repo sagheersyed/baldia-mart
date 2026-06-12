@@ -5,7 +5,7 @@ const phone = '+923114106131';
 const data = JSON.stringify({ phoneNumber: phone, role: 'rider' });
 
 const options = {
-  hostname: ' https://b9f2-175-107-236-228.ngrok-free.app',
+  hostname: ' https://clergyman-envelope-prism.ngrok-free.dev',
   port: 3000,
   path: '/api/v1/auth/check-status',
   method: 'POST',

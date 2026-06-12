@@ -253,7 +253,7 @@ export class ProductsService {
   async search(q: string, page = 1, limit = 20): Promise<PaginatedResult<Product>> {
     const trimmed = (q || '').trim();
     if (!trimmed) {
-      return { data: [], total: 0, page, limit, totalPages: 0 };
+      return this.findAllActive(page, limit);
     }
 
     const cacheKey = `products:search:${trimmed.toLowerCase()}:${page}:${limit}`;

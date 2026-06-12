@@ -185,11 +185,16 @@ export class PharmacyCmsController {
       medicineId: string;
       stockQuantity: number;
       sellingPrice?: number;
+      priceOverride?: number; // Added to support field name from frontend
       batchNumber?: string;
+      shelfLocation?: string;
     },
   ) {
     const medicine = await this.medicineRepo.findOne({ where: { id: dto.medicineId } });
     const tenant = await this.tenantRepo.findOne({ where: { id: req.tenantId } });
+    
+    const finalPrice = dto.sellingPrice ?? dto.priceOverride ?? null;
+
     return this.crService.create({
       tenantId: req.tenantId,
       entityType: 'PharmacyInventory',
@@ -198,8 +203,9 @@ export class PharmacyCmsController {
         pharmacyId: tenant?.entityId,
         medicineId: dto.medicineId,
         stockQuantity: dto.stockQuantity,
-        sellingPrice: dto.sellingPrice ?? null,
+        sellingPrice: finalPrice,
         batchNumber: dto.batchNumber ?? null,
+        shelfLocation: dto.shelfLocation ?? null,
         isAvailable: true,
       },
       preChangeSnapshot: medicine ? { name: medicine.name } : null,

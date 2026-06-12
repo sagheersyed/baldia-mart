@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from './authStore';
+import { normalizeUrl } from '../api/api';
 
 const CART_KEYS = {
   mart: '@cart_mart',
@@ -110,34 +111,39 @@ export const useCartStore = create<CartState>((set, get) => ({
     const { activeMode, martCart, foodCart, pharmaCart } = get();
     const mode = modeOpt || activeMode;
 
+    // Resolve details from potentially nested objects (CMS patterns)
+    const id = product.id;
+    const name = product.name || product.medicine?.name || product.product?.name || 'Unknown';
+    const rawImage = product.imageUrl || product.medicine?.imageUrl || product.product?.imageUrl || product.image_url || '';
+    const imageUrl = normalizeUrl(rawImage) || '';
+    const limit = Number(product.maxQuantityPerOrder) || 0;
+
     if (mode === 'pharma') {
-      const existing = pharmaCart.find((i) => i.id === product.id);
-      const limit = Number(product.maxQuantityPerOrder) || 0;
+      const existing = pharmaCart.find((i) => i.id === id);
       let next: PharmaCartItem[];
       
       if (existing) {
         if (limit > 0 && existing.quantity >= limit) {
-          Alert.alert('Limit Reached ✋', `Maximum allowed per order is ${limit} units for ${product.name}.`);
+          Alert.alert('Limit Reached ✋', `Maximum allowed per order is ${limit} units for ${name}.`);
           return;
         }
-        next = pharmaCart.map((i) => (i.id === product.id ? { ...i, quantity: i.quantity + 1 } : i));
+        next = pharmaCart.map((i) => (i.id === id ? { ...i, quantity: i.quantity + 1 } : i));
       } else {
-        // Map medicine properties to PharmaCartItem
         next = [
           ...pharmaCart,
           {
-            id: product.id,
-            name: product.name,
-            mrp: Number(product.mrp),
-            sellingPrice: Number(product.mrp) - Number(product.discount || 0),
+            id: id,
+            name: name,
+            mrp: Number(product.mrp || product.medicine?.mrp || 0),
+            sellingPrice: Number(product.sellingPrice || product.medicine?.mrp || product.mrp || 0) || Number(product.mrp || product.medicine?.mrp || 0),
             quantity: 1,
-            imageUrl: product.imageUrl,
-            requiresPrescription: product.requiresPrescription === true || product.requiresPrescription === 'true' || product.requiresPrescription === 1 || product.requiresPrescription === '1',
-            dosageForm: product.dosageForm,
-            strength: product.strength,
-            packSize: product.packSize,
-            categoryId: product.categoryId,
-            maxQuantityPerOrder: product.maxQuantityPerOrder,
+            imageUrl: imageUrl,
+            requiresPrescription: !!(product.requiresPrescription || product.medicine?.requiresPrescription),
+            dosageForm: product.dosageForm || product.medicine?.dosageForm,
+            strength: product.strength || product.medicine?.strength,
+            packSize: product.packSize || product.medicine?.packSize,
+            categoryId: product.categoryId || product.medicine?.categoryId,
+            maxQuantityPerOrder: limit,
           },
         ];
       }
@@ -146,34 +152,34 @@ export const useCartStore = create<CartState>((set, get) => ({
       return;
     }
 
-    const effectivePrice = Number(product.price) - Number(product.discount || 0);
-    const limit = Number(product.maxQuantityPerOrder) || 0;
+    const price = Number(product.price || product.product?.price || 0);
+    const effectivePrice = price - Number(product.discount || 0);
 
     const prevCart = mode === 'mart' ? martCart : foodCart;
-    const existingItem = prevCart.find((item) => item.id === product.id);
+    const existingItem = prevCart.find((item) => item.id === id);
 
     let nextCart;
     if (existingItem) {
       if (limit > 0 && existingItem.quantity >= limit) {
-        Alert.alert('Limit Reached ✋', `Maximum allowed per order is ${limit} units for ${product.name}.`);
+        Alert.alert('Limit Reached ✋', `Maximum allowed per order is ${limit} units for ${name}.`);
         return;
       }
       nextCart = prevCart.map((item) =>
-        item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
+        item.id === id ? { ...item, quantity: item.quantity + 1 } : item
       );
     } else {
       nextCart = [
         ...prevCart,
         {
-          id: product.id,
-          name: product.name,
+          id: id,
+          name: name,
           price: effectivePrice,
-          imageUrl: product.imageUrl,
+          imageUrl: imageUrl,
           quantity: 1,
           restaurantId: product.restaurantId,
           restaurantName: product.restaurantName,
           prepTimeMinutes: product.prepTimeMinutes,
-          maxQuantityPerOrder: product.maxQuantityPerOrder,
+          maxQuantityPerOrder: limit,
         },
       ];
     }

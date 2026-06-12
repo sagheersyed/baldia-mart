@@ -7,7 +7,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useFavourites } from '../hooks/useFavourites';
-import { restaurantsApi, productsApi } from '../api/api';
+import { restaurantsApi, productsApi, brandsApi } from '../api/api';
 import { useCart } from '../context/CartContext';
 import { useSettings } from '../context/SettingsContext';
 import { isBusinessOpen } from '../utils/helpers';
@@ -50,7 +50,7 @@ export default function FavouritesScreen({ navigation }: any) {
         const [rRes, pRes, bRes] = await Promise.allSettled([
           restaurantsApi.getAll(),
           productsApi.getAll(),
-          import('../api/api').then(m => m.brandsApi.getAll()),
+          brandsApi.getAll(),
         ]);
         if (!active) return;
         const liveR = rRes.status === 'fulfilled' ? rRes.value.data : [];
