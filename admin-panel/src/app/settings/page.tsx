@@ -1,7 +1,12 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Save, RefreshCw, Truck, ArrowRight, Ruler, Phone, Mail, MapPin, Building2, Shield, ToggleLeft, ToggleRight, Boxes, Scale, ArrowUpCircle, Plus, Trash2, Pill } from 'lucide-react';
+import { 
+  Save, RefreshCw, Truck, Ruler, Phone, Mail, MapPin, 
+  Building2, Shield, ToggleLeft, ToggleRight, Boxes, 
+  Scale, ArrowUpCircle, Plus, Trash2, Pill, Activity,
+  Download, MessageSquare, Lock
+} from 'lucide-react';
 import { fetchWithAuth, BASE_URL, getErrorMessage, parseApiError } from '@/lib/api';
 import { showToast } from '@/hooks/useToast';
 
@@ -10,9 +15,7 @@ const SETTINGS_API_URL = `${BASE_URL}/settings`;
 export default function SettingsPage() {
   const [settings, setSettings] = useState<any>({});
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState('');
-  const [conditionsList, setConditionsList] = useState<any[]>([]);
+  const [saving, setSaving] = useState<string | null>(null);
 
   useEffect(() => {
     fetchSettings();
@@ -22,887 +25,326 @@ export default function SettingsPage() {
     try {
       setLoading(true);
       const res = await fetchWithAuth(SETTINGS_API_URL);
-      if (!res.ok) throw new Error(await parseApiError(res, 'Failed to load settings'));
+      if (!res.ok) throw new Error(await parseApiError(res, 'Sync failure'));
       const data = await res.json();
       setSettings(data);
-      if (data.pharma_conditions_list) {
-        try {
-          setConditionsList(JSON.parse(data.pharma_conditions_list));
-        } catch {
-          setConditionsList([]);
-        }
-      } else {
-        setConditionsList([]);
-      }
     } catch (error) {
-      console.error('Failed to fetch settings:', error);
-      setMessage('Failed to load settings');
-      showToast({ title: getErrorMessage(error, 'Failed to load settings'), variant: 'error' });
+      showToast({ title: getErrorMessage(error, 'System out of sync'), variant: 'error' });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleUpdate = async (key: string, value: string) => {
+  const handleUpdate = async (key: string, value: any) => {
+    const prevValue = settings[key];
+    const stringValue = String(value);
+    
+    setSettings(prev => ({ ...prev, [key]: value }));
+    setSaving(key);
+
     try {
-      setSaving(true);
       const res = await fetchWithAuth(`${SETTINGS_API_URL}/${key}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ value }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: stringValue }),
       });
 
-      if (!res.ok) throw new Error(await parseApiError(res, 'Update failed'));
-
-      setMessage(`${key} updated successfully!`);
-      showToast({ title: `${key} updated successfully`, variant: 'success' });
-      setTimeout(() => setMessage(''), 3000);
-      fetchSettings();
+      if (!res.ok) throw new Error(await parseApiError(res, 'Transmission failed'));
+      showToast({ title: `${key.replace(/_/g, ' ')} synchronized`, variant: 'success' });
     } catch (error) {
-      console.error('Update failed:', error);
-      setMessage('Update failed. Please try again.');
-      showToast({ title: getErrorMessage(error, 'Update failed. Please try again.'), variant: 'error' });
+      setSettings(prev => ({ ...prev, [key]: prevValue }));
+      showToast({ title: getErrorMessage(error, 'Remote update failed'), variant: 'error' });
     } finally {
-      setSaving(false);
+      setSaving(null);
     }
-  };
-
-  const handleSettingChange = (key: string, value: string) => {
-    setSettings((prev: any) => ({ ...prev, [key]: value }));
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <RefreshCw className="animate-spin text-blue-600" size={40} />
+      <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
+        <div className="w-16 h-16 border-4 border-primary-500/20 border-t-primary-500 rounded-full animate-spin" />
+        <p className="text-slate-400 font-black text-xs uppercase tracking-[0.3em] animate-pulse">Syncing Core...</p>
       </div>
     );
   }
 
   return (
-    <div className="p-8 max-w-4xl mx-auto">
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-800">System Settings</h1>
-          <p className="text-gray-500 mt-1">Manage global app configurations and delivery rates.</p>
-        </div>
-        {message && (
-          <div className={`px-4 py-2 rounded-lg ${message.includes('failed') ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
-            {message}
+    <div className="page-container !max-w-5xl mx-auto space-y-12 pb-24">
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-2 border-b border-slate-100/50">
+        <div className="space-y-1">
+          <div className="flex items-center gap-3">
+             <div className="w-12 h-12 bg-slate-950 rounded-2xl flex items-center justify-center shadow-2xl shadow-slate-900/20">
+               <Shield size={24} className="text-primary-400" />
+             </div>
+             <h1 className="text-3xl font-black text-slate-900 tracking-tighter uppercase italic">System Core</h1>
           </div>
-        )}
+          <p className="text-slate-400 font-bold ml-15 text-[10px] uppercase tracking-[0.3em] pl-15">Platform Configuration & Logic Engine</p>
+        </div>
       </div>
 
-      <div className="grid gap-8">
-        {/* Delivery Configuration */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="bg-gray-50 p-6 border-b border-gray-100 flex items-center space-x-3">
-            <Truck className="text-blue-600" size={24} />
-            <h2 className="text-xl font-semibold text-gray-800">Delivery Fee Structure</h2>
+      <div className="grid gap-16">
+        {/* Logistics Section */}
+        <section className="space-y-6">
+          <div className="flex items-center gap-3 px-1">
+            <div className="w-1.5 h-6 bg-primary-500 rounded-full" />
+            <h2 className="text-lg font-black text-slate-800 uppercase tracking-widest italic">Logistics Matrix</h2>
           </div>
-
-          <div className="p-6 space-y-8">
-            <p className="text-sm text-gray-500 bg-blue-50 p-4 rounded-xl">
-              <strong>Dynamic Formula:</strong> Delivery Fee = Base Fee + ( (Distance - Threshold) × Per KM Fee )
-              <br />
-              <em>* If distance is less than threshold, only the Base Fee applies.</em>
-            </p>
-
-            <div className="grid md:grid-cols-2 gap-8">
-              {/* Base Fee */}
-              <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-700">Base Delivery Fee (Rs.)</label>
-                <div className="flex space-x-2">
-                  <div className="relative flex-1">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">Rs.</span>
-                    <input
-                      type="number"
-                      value={settings.delivery_base_fee || ''}
-                      onChange={(e) => handleSettingChange('delivery_base_fee', e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition"
-                      placeholder="150"
-                    />
-                  </div>
-                  <button
-                    onClick={() => handleUpdate('delivery_base_fee', settings.delivery_base_fee)}
-                    disabled={saving}
-                    className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition disabled:opacity-50"
-                  >
-                    <Save size={20} />
-                  </button>
-                </div>
-                <p className="text-xs text-gray-400 italic">Minimum charge for any successful delivery.</p>
-              </div>
-
-              {/* Threshold Distance */}
-              <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-700">Base Distance Threshold (KM)</label>
-                <div className="flex space-x-2">
-                  <div className="relative flex-1">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><Ruler size={16} /></span>
-                    <input
-                      type="number"
-                      value={settings.delivery_threshold_km || ''}
-                      onChange={(e) => handleSettingChange('delivery_threshold_km', e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition"
-                      placeholder="3"
-                    />
-                  </div>
-                  <button
-                    onClick={() => handleUpdate('delivery_threshold_km', settings.delivery_threshold_km)}
-                    disabled={saving}
-                    className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition disabled:opacity-50"
-                  >
-                    <Save size={20} />
-                  </button>
-                </div>
-                <p className="text-xs text-gray-400 italic">Distance covered by the base fee without extra charges.</p>
-              </div>
-
-              {/* Per KM Fee */}
-              <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-700">Per KM Surcharge (Rs./KM)</label>
-                <div className="flex space-x-2">
-                  <div className="relative flex-1">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">Rs.</span>
-                    <input
-                      type="number"
-                      value={settings.delivery_per_km_fee || ''}
-                      onChange={(e) => handleSettingChange('delivery_per_km_fee', e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition"
-                      placeholder="20"
-                    />
-                  </div>
-                  <button
-                    onClick={() => handleUpdate('delivery_per_km_fee', settings.delivery_per_km_fee)}
-                    disabled={saving}
-                    className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition disabled:opacity-50"
-                  >
-                    <Save size={20} />
-                  </button>
-                </div>
-                <p className="text-xs text-gray-400 italic">Added for every kilometer beyond the threshold distance.</p>
-              </div>
-
-              {/* Multi-Restaurant Distance Limit */}
-              <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-700">Multi-Restaurant Max Distance (KM)</label>
-                <div className="flex space-x-2">
-                  <div className="relative flex-1">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><Ruler size={16} /></span>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={settings.multi_restaurant_max_distance_km || ''}
-                      onChange={(e) => handleSettingChange('multi_restaurant_max_distance_km', e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition"
-                      placeholder="0.4"
-                    />
-                  </div>
-                  <button
-                    onClick={() => handleUpdate('multi_restaurant_max_distance_km', settings.multi_restaurant_max_distance_km)}
-                    disabled={saving}
-                    className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition disabled:opacity-50"
-                  >
-                    <Save size={20} />
-                  </button>
-                </div>
-                <p className="text-xs text-gray-400 italic">Max distance allowed between pickup points for batch/multi-stop orders.</p>
+          
+          <div className="card !p-0 overflow-hidden border border-slate-100 shadow-xl shadow-slate-200/20 !rounded-[2.5rem]">
+            <div className="bg-slate-900/5 p-6 border-b border-slate-100 flex items-center gap-3">
+              <Truck size={18} className="text-primary-600" />
+              <span className="font-black text-slate-700 uppercase tracking-widest text-[10px]">Standard Delivery Parameters</span>
+            </div>
+            <div className="p-8 space-y-8">
+              <div className="grid md:grid-cols-3 gap-8">
+                <SettingsInput 
+                  label="Base Fee (PKR)" 
+                  icon="Rs" 
+                  value={settings.delivery_base_fee} 
+                  onSave={(v) => handleUpdate('delivery_base_fee', v)}
+                  isSaving={saving === 'delivery_base_fee'}
+                />
+                <SettingsInput 
+                  label="Threshold (KM)" 
+                  icon={<Ruler size={14} />} 
+                  value={settings.delivery_threshold_km} 
+                  onSave={(v) => handleUpdate('delivery_threshold_km', v)}
+                  isSaving={saving === 'delivery_threshold_km'}
+                />
+                <SettingsInput 
+                  label="Rate per KM" 
+                  icon="Rs" 
+                  value={settings.delivery_per_km_fee} 
+                  onSave={(v) => handleUpdate('delivery_per_km_fee', v)}
+                  isSaving={saving === 'delivery_per_km_fee'}
+                />
               </div>
             </div>
           </div>
-        </div>
-        {/* Pharma Delivery Configuration */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="bg-gray-50 p-6 border-b border-gray-100 flex items-center space-x-3">
-            <Truck className="text-teal-600" size={24} />
-            <h2 className="text-xl font-semibold text-gray-800">Pharmacy Delivery Fee Structure</h2>
-          </div>
 
-          <div className="p-6 space-y-8">
-            <p className="text-sm text-gray-500 bg-teal-50 p-4 rounded-xl border border-teal-100">
-              <strong>Pharma-Specific Rates:</strong> These rates apply exclusively to medicines and pharmacy products.
-            </p>
-
-            <div className="grid md:grid-cols-2 gap-8">
-              {/* Pharma Base Fee */}
-              <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-700">Pharma Base Fee (Rs.)</label>
-                <div className="flex space-x-2">
-                  <div className="relative flex-1">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">Rs.</span>
-                    <input
-                      type="number"
-                      value={settings.pharma_delivery_base_fee || ''}
-                      onChange={(e) => handleSettingChange('pharma_delivery_base_fee', e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600 outline-none transition"
-                      placeholder="80"
-                    />
-                  </div>
-                  <button
-                    onClick={() => handleUpdate('pharma_delivery_base_fee', settings.pharma_delivery_base_fee)}
-                    disabled={saving}
-                    className="p-3 bg-teal-600 text-white rounded-xl hover:bg-teal-700 transition disabled:opacity-50"
-                  >
-                    <Save size={20} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Pharma Threshold */}
-              <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-700">Pharma Distance Threshold (KM)</label>
-                <div className="flex space-x-2">
-                  <div className="relative flex-1">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><Ruler size={16} /></span>
-                    <input
-                      type="number"
-                      value={settings.pharma_delivery_threshold_km || ''}
-                      onChange={(e) => handleSettingChange('pharma_delivery_threshold_km', e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600 outline-none transition"
-                      placeholder="3"
-                    />
-                  </div>
-                  <button
-                    onClick={() => handleUpdate('pharma_delivery_threshold_km', settings.pharma_delivery_threshold_km)}
-                    disabled={saving}
-                    className="p-3 bg-teal-600 text-white rounded-xl hover:bg-teal-700 transition disabled:opacity-50"
-                  >
-                    <Save size={20} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Pharma Per KM */}
-              <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-700">Pharma Per KM Fee (Rs./KM)</label>
-                <div className="flex space-x-2">
-                  <div className="relative flex-1">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">Rs.</span>
-                    <input
-                      type="number"
-                      value={settings.pharma_delivery_per_km_fee || ''}
-                      onChange={(e) => handleSettingChange('pharma_delivery_per_km_fee', e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600 outline-none transition"
-                      placeholder="5"
-                    />
-                  </div>
-                  <button
-                    onClick={() => handleUpdate('pharma_delivery_per_km_fee', settings.pharma_delivery_per_km_fee)}
-                    disabled={saving}
-                    className="p-3 bg-teal-600 text-white rounded-xl hover:bg-teal-700 transition disabled:opacity-50"
-                  >
-                    <Save size={20} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Pharma Max Radius */}
-              <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-700">Pharma Max Delivery Radius (KM)</label>
-                <div className="flex space-x-2">
-                  <div className="relative flex-1">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><MapPin size={16} /></span>
-                    <input
-                      type="number"
-                      value={settings.pharma_delivery_max_radius_km || ''}
-                      onChange={(e) => handleSettingChange('pharma_delivery_max_radius_km', e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600 outline-none transition"
-                      placeholder="15"
-                    />
-                  </div>
-                  <button
-                    onClick={() => handleUpdate('pharma_delivery_max_radius_km', settings.pharma_delivery_max_radius_km)}
-                    disabled={saving}
-                    className="p-3 bg-teal-600 text-white rounded-xl hover:bg-teal-700 transition disabled:opacity-50"
-                  >
-                    <Save size={20} />
-                  </button>
-                </div>
+          <div className="card !p-0 overflow-hidden border border-slate-100 shadow-xl shadow-slate-200/20 !rounded-[2.5rem]">
+            <div className="bg-teal-900/5 p-6 border-b border-slate-100 flex items-center gap-3">
+              <Activity size={18} className="text-teal-600" />
+              <span className="font-black text-slate-700 uppercase tracking-widest text-[10px]">Pharma Specific Logistics</span>
+            </div>
+            <div className="p-8 space-y-8">
+              <div className="grid md:grid-cols-3 gap-8">
+                <SettingsInput 
+                  label="Pharma Base" 
+                  icon="Rs" 
+                  value={settings.pharma_delivery_base_fee} 
+                  onSave={(v) => handleUpdate('pharma_delivery_base_fee', v)}
+                  isSaving={saving === 'pharma_delivery_base_fee'}
+                />
+                <SettingsInput 
+                  label="Pharma Limit (KM)" 
+                  icon={<MapPin size={14} />} 
+                  value={settings.pharma_delivery_max_radius_km} 
+                  onSave={(v) => handleUpdate('pharma_delivery_max_radius_km', v)}
+                  isSaving={saving === 'pharma_delivery_max_radius_km'}
+                />
+                 <SettingsInput 
+                  label="Multi-Resto Link" 
+                  icon={<Boxes size={14} />} 
+                  value={settings.multi_restaurant_max_distance_km} 
+                  onSave={(v) => handleUpdate('multi_restaurant_max_distance_km', v)}
+                  isSaving={saving === 'multi_restaurant_max_distance_km'}
+                />
               </div>
             </div>
           </div>
-        </div>
+        </section>
 
-        {/* Healthcare Service Management */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="bg-gray-50 p-6 border-b border-gray-100 flex items-center space-x-3">
-            <Shield className="text-teal-600" size={24} />
-            <h2 className="text-xl font-semibold text-gray-800">Healthcare Service Management</h2>
+        {/* Healthcare Section */}
+        <section className="space-y-6">
+          <div className="flex items-center gap-3 px-1">
+            <div className="w-1.5 h-6 bg-teal-500 rounded-full" />
+            <h2 className="text-lg font-black text-slate-800 uppercase tracking-widest italic">Healthcare Engine</h2>
           </div>
-
-          <div className="p-6 space-y-6">
-            <p className="text-sm text-gray-500 bg-teal-50 p-4 rounded-xl border border-teal-100">
-              <strong>Control Panel:</strong> Manage specialist verification and advanced healthcare modules.
-            </p>
-
-            <div className="grid md:grid-cols-2 gap-6">
+          <div className="card !p-0 overflow-hidden border border-slate-100 shadow-xl shadow-slate-200/20 !rounded-[2.5rem]">
+            <div className="p-8 grid md:grid-cols-2 gap-6">
               {[
-                { key: 'pharma_skip_prescription_verification', label: 'Expert Mode (Bypass Rx)', desc: 'Allow orders without pharmacist approval' },
-                { key: 'feature_pharma_lab_tests_enabled', label: 'Lab Test Module', desc: 'Enable/Disable home sample collection' },
-                { key: 'feature_pharma_doctor_consultations_enabled', label: 'Doctor Consultation', desc: 'Enable/Disable video appointments' },
-                { key: 'feature_pharma_reminders_enabled', label: 'Pill Reminders', desc: 'Enable/Disable medicine schedule alerts' },
-                { key: 'feature_pharma_refills_enabled', label: 'Medicine Refills', desc: 'Enable/Disable recurring medicine orders' },
-              ].map(({ key, label, desc }) => {
-                const isEnabled = settings[key] === 'true' || settings[key] === true;
-                return (
-                  <div key={key} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100">
-                    <div>
-                      <p className="font-semibold text-gray-800">{label}</p>
-                      <p className="text-xs text-gray-500">{desc}</p>
-                    </div>
-                    <button
-                      disabled={saving}
-                      onClick={() => handleUpdate(key, isEnabled ? 'false' : 'true')}
-                      className={`transition ${isEnabled ? 'text-teal-600' : 'text-gray-400 hover:text-gray-600'} disabled:opacity-50`}
-                    >
-                      {isEnabled ? <ToggleRight size={44} /> : <ToggleLeft size={44} />}
-                    </button>
-                  </div>
-                );
-              })}
+                { key: 'pharma_skip_prescription_verification', label: 'Bypass Rx Verification', desc: 'Auto-approve prescription meds' },
+                { key: 'feature_pharma_lab_tests_enabled', label: 'Lab Diagnostics', desc: 'Home sample collection module' },
+                { key: 'feature_pharma_doctor_consultations_enabled', label: 'Tele-Health', desc: 'Virtual doctor appointments' },
+                { key: 'feature_pharma_reminders_enabled', label: 'Dose Reminders', desc: 'Pill schedule notifications' },
+              ].map(({ key, label, desc }) => (
+                <SettingsToggle 
+                  key={key}
+                  label={label}
+                  desc={desc}
+                  isEnabled={settings[key] === 'true' || settings[key] === true}
+                  onToggle={(val) => handleUpdate(key, val)}
+                  isSaving={saving === key}
+                  variant="teal"
+                />
+              ))}
             </div>
           </div>
-        </div>
+        </section>
 
-        {/* Pharma Shop by Condition Catalog */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="bg-gray-50 p-6 border-b border-gray-100 flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <Pill className="text-teal-600" size={24} />
-              <h2 className="text-xl font-semibold text-gray-800">Pharma "Shop by Condition" Catalog</h2>
-            </div>
-            <button
-              onClick={() => {
-                const newCond = {
-                  id: `cond_${Date.now()}`,
-                  label: 'New Condition',
-                  icon: 'medical-outline',
-                  bg: '#E0F2FE',
-                  color: '#0369A1'
-                };
-                setConditionsList(prev => [...prev, newCond]);
-              }}
-              className="px-4 py-2 bg-teal-600 text-white rounded-xl font-bold flex items-center text-sm hover:bg-teal-700 transition"
-            >
-              <Plus size={16} className="mr-1" /> Add Condition
-            </button>
+        {/* Security & Access Section */}
+        <section className="space-y-6">
+          <div className="flex items-center gap-3 px-1">
+            <div className="w-1.5 h-6 bg-purple-500 rounded-full" />
+            <h2 className="text-lg font-black text-slate-800 uppercase tracking-widest italic">Security & Access</h2>
           </div>
+          <div className="card !p-0 overflow-hidden border border-slate-100 shadow-xl shadow-slate-200/20 !rounded-[2.5rem]">
+            <div className="p-8 grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[
+                { key: 'auth_customer_mpin_enabled', label: 'Customer MPIN', desc: 'Primary customer login' },
+                { key: 'auth_customer_google_enabled', label: 'Customer Google', desc: 'Third-party auth' },
+                { key: 'auth_rider_mpin_enabled', label: 'Rider MPIN', desc: 'Secure rider terminal' },
+                { key: 'feature_chat_enabled', label: 'Order Chat', desc: 'In-app messaging gateway' },
+              ].map(({ key, label, desc }) => (
+                <SettingsToggle 
+                  key={key}
+                  label={label}
+                  desc={desc}
+                  isEnabled={settings[key] === 'true' || settings[key] === true}
+                  onToggle={(val) => handleUpdate(key, val)}
+                  isSaving={saving === key}
+                  variant="purple"
+                />
+              ))}
+            </div>
+          </div>
+        </section>
 
-          <div className="p-6 space-y-6">
-            <p className="text-sm text-gray-500 bg-teal-50 p-4 rounded-xl border border-teal-100">
-              <strong>Dynamic Navigation:</strong> These conditions appear in the mobile user app under "Shop by Condition". Clicking a condition searches for matching products in the catalog.
-            </p>
+        {/* Global Features Section */}
+        <section className="space-y-6">
+          <div className="flex items-center gap-3 px-1">
+            <div className="w-1.5 h-6 bg-blue-500 rounded-full" />
+            <h2 className="text-lg font-black text-slate-800 uppercase tracking-widest italic">App Orchestration</h2>
+          </div>
+          <div className="card !p-0 overflow-hidden border border-slate-100 shadow-xl shadow-slate-200/20 !rounded-[2.5rem]">
+             <div className="p-8 grid md:grid-cols-3 gap-6">
+              {[
+                { key: 'feature_show_mart', label: 'Mart Module', variant: 'blue' },
+                { key: 'feature_show_restaurants', label: 'Food Module', variant: 'blue' },
+                { key: 'feature_show_pharma', label: 'Pharma Module', variant: 'blue' },
+                { key: 'feature_rashan_enabled', label: 'Rashan Bulk', variant: 'orange' },
+                { key: 'feature_show_brands', label: 'Brand Center', variant: 'purple' },
+              ].map(({ key, label, variant }: any) => (
+                <SettingsToggle 
+                  key={key}
+                  label={label}
+                  desc={settings[key] === 'true' || settings[key] === true ? 'Module Live' : 'Module Hidden'}
+                  isEnabled={settings[key] === 'true' || settings[key] === true}
+                  onToggle={(val) => handleUpdate(key, val)}
+                  isSaving={saving === key}
+                  variant={variant}
+                />
+              ))}
+            </div>
+          </div>
+        </section>
 
-            <div className="space-y-4">
-              {conditionsList.length === 0 ? (
-                <div className="text-center p-8 text-gray-400 border border-dashed rounded-xl">
-                  No conditions configured. Click "Add Condition" to create one.
-                </div>
-              ) : (
-                conditionsList.map((cond, idx) => (
-                  <div key={cond.id || idx} className="grid grid-cols-1 md:grid-cols-5 gap-4 p-4 border border-gray-100 bg-gray-50/50 rounded-2xl items-center">
-                    <div>
-                      <label className="text-[10px] font-black text-gray-400 uppercase">Search Tag / ID *</label>
-                      <input
-                        type="text"
-                        value={cond.id || ''}
-                        onChange={e => {
-                          const next = [...conditionsList];
-                          next[idx].id = e.target.value;
-                          setConditionsList(next);
-                        }}
-                        placeholder="e.g. fever"
-                        className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-semibold outline-none"
+        {/* Retail Identity Section */}
+        <section className="space-y-6">
+          <div className="flex items-center gap-3 px-1">
+            <div className="w-1.5 h-6 bg-slate-400 rounded-full" />
+            <h2 className="text-lg font-black text-slate-800 uppercase tracking-widest italic">Retail Identity</h2>
+          </div>
+          <div className="card !p-8 border border-slate-100 shadow-xl shadow-slate-200/20 !rounded-[2.5rem]">
+            <div className="grid md:grid-cols-2 gap-8">
+              <SettingsInput 
+                label="Support Line" 
+                icon={<Phone size={14} />} 
+                value={settings.contact_phone} 
+                onSave={(v) => handleUpdate('contact_phone', v)}
+                isSaving={saving === 'contact_phone'}
+              />
+              <SettingsInput 
+                label="Support Email" 
+                icon={<Mail size={14} />} 
+                value={settings.contact_email} 
+                onSave={(v) => handleUpdate('contact_email', v)}
+                isSaving={saving === 'contact_email'}
+              />
+               <div className="md:col-span-2 space-y-2.5">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Base Operations Hub</label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1 group">
+                      <span className="absolute left-4 top-4 text-slate-400 group-focus-within:text-primary-500 transition-colors"><MapPin size={16} /></span>
+                      <textarea
+                        value={settings.mart_location || ''}
+                        onChange={(e) => setSettings((prev: any) => ({ ...prev, mart_location: e.target.value }))}
+                        className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-3xl text-sm font-black focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500/50 outline-none transition-all h-24 italic shadow-inner"
                       />
                     </div>
-                    <div>
-                      <label className="text-[10px] font-black text-gray-400 uppercase">Display Label *</label>
-                      <input
-                        type="text"
-                        value={cond.label || ''}
-                        onChange={e => {
-                          const next = [...conditionsList];
-                          next[idx].label = e.target.value;
-                          setConditionsList(next);
-                        }}
-                        placeholder="e.g. Fever & Pain"
-                        className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-semibold outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-black text-gray-400 uppercase">Icon Name *</label>
-                      <select
-                        value={cond.icon || 'medical-outline'}
-                        onChange={e => {
-                          const next = [...conditionsList];
-                          next[idx].icon = e.target.value;
-                          setConditionsList(next);
-                        }}
-                        className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm font-semibold outline-none"
-                      >
-                        <option value="thermometer-outline">Thermometer (Fever) 🌡️</option>
-                        <option value="water-outline">Water Drop (Cough) 💧</option>
-                        <option value="medkit-outline">Medkit (Stomach) 🩺</option>
-                        <option value="sparkles-outline">Sparkles (Skin) ✨</option>
-                        <option value="heart-outline">Heart (Cardio) ❤️</option>
-                        <option value="eye-outline">Eye Care 👁️</option>
-                        <option value="nutrition-outline">Nutrition / Baby 🍼</option>
-                        <option value="bandage-outline">Bandage / First Aid 🩹</option>
-                        <option value="medical-outline">General Meds 💊</option>
-                      </select>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[10px] font-black text-gray-400 uppercase block">BG Color</label>
-                        <input
-                          type="color"
-                          value={cond.bg || '#FEE2E2'}
-                          onChange={e => {
-                            const next = [...conditionsList];
-                            next[idx].bg = e.target.value;
-                            setConditionsList(next);
-                          }}
-                          className="w-full h-8 rounded border border-gray-200 cursor-pointer"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-black text-gray-400 uppercase block">Icon Color</label>
-                        <input
-                          type="color"
-                          value={cond.color || '#DC2626'}
-                          onChange={e => {
-                            const next = [...conditionsList];
-                            next[idx].color = e.target.value;
-                            setConditionsList(next);
-                          }}
-                          className="w-full h-8 rounded border border-gray-200 cursor-pointer"
-                        />
-                      </div>
-                    </div>
-                    <div className="flex justify-end pr-2 pt-4 md:pt-0">
-                      <button
-                        onClick={() => {
-                          setConditionsList(prev => prev.filter((_, i) => i !== idx));
-                        }}
-                        className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition"
-                        title="Delete Condition"
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            {conditionsList.length > 0 && (
-              <button
-                onClick={() => handleUpdate('pharma_conditions_list', JSON.stringify(conditionsList))}
-                disabled={saving}
-                className="w-full py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold flex items-center justify-center transition shadow-lg shadow-teal-600/10 disabled:opacity-50"
-              >
-                {saving ? <RefreshCw className="animate-spin mr-2" size={16} /> : <Save size={16} className="mr-2" />}
-                Save Conditions Catalog Configuration
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="bg-gray-50 p-6 border-b border-gray-100 flex items-center space-x-3">
-            <Boxes className="text-orange-600" size={24} />
-            <h2 className="text-xl font-semibold text-gray-800">Rashan Bulk Grocery Pricing</h2>
-          </div>
-
-          <div className="p-6 space-y-8">
-            <p className="text-sm text-gray-500 bg-orange-50 p-4 rounded-xl border border-orange-100">
-              <strong>Refined Logic:</strong> These rates define the service fee (sourcing & logistics) for Rashan orders. Subtotal = Groceries + Service Fee.
-            </p>
-
-            <div className="grid md:grid-cols-2 gap-8">
-              {/* Rashan Base Fee */}
-              <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-700">Base Sourcing Fee (Rs.)</label>
-                <div className="flex space-x-2">
-                  <div className="relative flex-1">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">Rs.</span>
-                    <input
-                      type="number"
-                      value={settings.rashan_base_fee || ''}
-                      onChange={(e) => handleSettingChange('rashan_base_fee', e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-orange-600/20 focus:border-orange-600 outline-none transition"
-                      placeholder="750"
-                    />
-                  </div>
-                  <button
-                    onClick={() => handleUpdate('rashan_base_fee', settings.rashan_base_fee)}
-                    disabled={saving}
-                    className="p-3 bg-orange-600 text-white rounded-xl hover:bg-orange-700 transition disabled:opacity-50"
-                  >
-                    <Save size={20} />
-                  </button>
-                </div>
-                <p className="text-xs text-gray-400 italic">Starting fee for any Rashan sourcing request.</p>
-              </div>
-
-              {/* Placement Fee */}
-              <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-700">Inside Placement Surcharge (Rs.)</label>
-                <div className="flex space-x-2">
-                  <div className="relative flex-1">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">Rs.</span>
-                    <input
-                      type="number"
-                      value={settings.rashan_placement_fee || ''}
-                      onChange={(e) => handleSettingChange('rashan_placement_fee', e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-orange-600/20 focus:border-orange-600 outline-none transition"
-                      placeholder="150"
-                    />
-                  </div>
-                  <button
-                    onClick={() => handleUpdate('rashan_placement_fee', settings.rashan_placement_fee)}
-                    disabled={saving}
-                    className="p-3 bg-orange-600 text-white rounded-xl hover:bg-orange-700 transition disabled:opacity-50"
-                  >
-                    <Save size={20} />
-                  </button>
-                </div>
-                <p className="text-xs text-gray-400 italic">Added when the rider delivers inside the kitchen/pantry.</p>
-              </div>
-
-              {/* Medium Weight Surcharge */}
-              <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-700">Medium Weight Surcharge (Rs.)</label>
-                <div className="flex space-x-2">
-                  <div className="relative flex-1">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><Scale size={16} /></span>
-                    <input
-                      type="number"
-                      value={settings.rashan_surcharge_medium || ''}
-                      onChange={(e) => handleSettingChange('rashan_surcharge_medium', e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-orange-600/20 focus:border-orange-600 outline-none transition"
-                      placeholder="200"
-                    />
-                  </div>
-                  <button
-                    onClick={() => handleUpdate('rashan_surcharge_medium', settings.rashan_surcharge_medium)}
-                    disabled={saving}
-                    className="p-3 bg-orange-600 text-white rounded-xl hover:bg-orange-700 transition disabled:opacity-50"
-                  >
-                    <Save size={20} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Heavy Weight Surcharge */}
-              <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-700">Heavy Weight Surcharge (Rs.)</label>
-                <div className="flex space-x-2">
-                  <div className="relative flex-1">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><Scale size={16} /></span>
-                    <input
-                      type="number"
-                      value={settings.rashan_surcharge_heavy || ''}
-                      onChange={(e) => handleSettingChange('rashan_surcharge_heavy', e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-orange-600/20 focus:border-orange-600 outline-none transition"
-                      placeholder="450"
-                    />
-                  </div>
-                  <button
-                    onClick={() => handleUpdate('rashan_surcharge_heavy', settings.rashan_surcharge_heavy)}
-                    disabled={saving}
-                    className="p-3 bg-orange-600 text-white rounded-xl hover:bg-orange-700 transition disabled:opacity-50"
-                  >
-                    <Save size={20} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Floor Low Surcharge */}
-              <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-700">Floor (1-2) Surcharge (Rs.)</label>
-                <div className="flex space-x-2">
-                  <div className="relative flex-1">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><ArrowUpCircle size={16} /></span>
-                    <input
-                      type="number"
-                      value={settings.rashan_floor_surcharge_low || ''}
-                      onChange={(e) => handleSettingChange('rashan_floor_surcharge_low', e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-orange-600/20 focus:border-orange-600 outline-none transition"
-                      placeholder="150"
-                    />
-                  </div>
-                  <button
-                    onClick={() => handleUpdate('rashan_floor_surcharge_low', settings.rashan_floor_surcharge_low)}
-                    disabled={saving}
-                    className="p-3 bg-orange-600 text-white rounded-xl hover:bg-orange-700 transition disabled:opacity-50"
-                  >
-                    <Save size={20} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Floor High Surcharge */}
-              <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-700">Floor (3+) Surcharge (Rs.)</label>
-                <div className="flex space-x-2">
-                  <div className="relative flex-1">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><ArrowUpCircle size={16} /></span>
-                    <input
-                      type="number"
-                      value={settings.rashan_floor_surcharge_high || ''}
-                      onChange={(e) => handleSettingChange('rashan_floor_surcharge_high', e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-orange-600/20 focus:border-orange-600 outline-none transition"
-                      placeholder="300"
-                    />
-                  </div>
-                  <button
-                    onClick={() => handleUpdate('rashan_floor_surcharge_high', settings.rashan_floor_surcharge_high)}
-                    disabled={saving}
-                    className="p-3 bg-orange-600 text-white rounded-xl hover:bg-orange-700 transition disabled:opacity-50"
-                  >
-                    <Save size={20} />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Store Information */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="bg-gray-50 p-6 border-b border-gray-100 flex items-center space-x-3">
-            <Building2 className="text-primary-600" size={24} />
-            <h2 className="text-xl font-semibold text-gray-800">Store Profile & Location</h2>
-          </div>
-
-          <div className="p-6 space-y-8">
-            <p className="text-sm text-gray-500 bg-orange-50 p-4 rounded-xl border border-orange-100">
-              <strong>Public Info:</strong> This contact information and default location is used across the user and rider apps.
-            </p>
-
-            <div className="grid md:grid-cols-2 gap-8">
-              {/* Contact Phone */}
-              <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-700">Support Phone Number</label>
-                <div className="flex space-x-2">
-                  <div className="relative flex-1">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><Phone size={16} /></span>
-                    <input
-                      type="text"
-                      value={settings.contact_phone || ''}
-                      onChange={(e) => handleSettingChange('contact_phone', e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500-500 outline-none transition"
-                      placeholder="+92 300 0000000"
-                    />
-                  </div>
-                  <button
-                    onClick={() => handleUpdate('contact_phone', settings.contact_phone)}
-                    disabled={saving}
-                    className="p-3 bg-primary-600 text-white rounded-xl hover:bg-orange-600 transition disabled:opacity-50"
-                  >
-                    <Save size={20} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Contact Email */}
-              <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-700">Support Email</label>
-                <div className="flex space-x-2">
-                  <div className="relative flex-1">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><Mail size={16} /></span>
-                    <input
-                      type="email"
-                      value={settings.contact_email || ''}
-                      onChange={(e) => handleSettingChange('contact_email', e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500-500 outline-none transition"
-                      placeholder="support@baldiamart.com"
-                    />
-                  </div>
-                  <button
-                    onClick={() => handleUpdate('contact_email', settings.contact_email)}
-                    disabled={saving}
-                    className="p-3 bg-primary-600 text-white rounded-xl hover:bg-orange-600 transition disabled:opacity-50"
-                  >
-                    <Save size={20} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Mart Location */}
-              <div className="space-y-3 md:col-span-2">
-                <label className="text-sm font-medium text-gray-700">Primary Mart Location(s)</label>
-                <div className="flex space-x-2">
-                  <div className="relative flex-1">
-                    <span className="absolute left-3 top-3 text-gray-400"><MapPin size={16} /></span>
-                    <textarea
-                      value={settings.mart_location || ''}
-                      onChange={(e) => handleSettingChange('mart_location', e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500-500 outline-none transition resize-none h-24"
-                      placeholder="Baldia Town, Sector 4, Karachi"
-                    />
-                  </div>
-                  <div className="flex flex-col justify-end pb-1">
                     <button
                       onClick={() => handleUpdate('mart_location', settings.mart_location)}
-                      disabled={saving}
-                      className="p-3 bg-primary-600 text-white rounded-xl hover:bg-orange-600 transition disabled:opacity-50 h-[46px]"
+                      disabled={saving === 'mart_location'}
+                      className="w-16 h-24 bg-slate-900 text-white rounded-3xl flex items-center justify-center hover:bg-black transition-all disabled:opacity-20 active:scale-95 shadow-lg shadow-slate-900/20"
                     >
-                      <Save size={20} />
+                      {saving === 'mart_location' ? <RefreshCw className="animate-spin" size={24} /> : <Save size={24} />}
                     </button>
                   </div>
-                </div>
-                <p className="text-xs text-gray-400 italic">Displayed to riders for pickup validation. In the future, this will support a list of coordinates.</p>
-              </div>
+               </div>
             </div>
           </div>
-        </div>
-
+        </section>
       </div>
+    </div>
+  );
+}
 
-      {/* Authentication Configuration */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-8">
-        <div className="bg-gray-50 p-6 border-b border-gray-100 flex items-center space-x-3">
-          <Shield className="text-purple-600" size={24} />
-          <h2 className="text-xl font-semibold text-gray-800">Authentication Configuration</h2>
+function SettingsInput({ label, icon, value, onSave, isSaving }: any) {
+  const [localValue, setLocalValue] = useState(value || '');
+  useEffect(() => { setLocalValue(value || ''); }, [value]);
+
+  return (
+    <div className="space-y-2.5">
+      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{label}</label>
+      <div className="flex gap-2">
+        <div className="relative flex-1 group">
+          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary-500 font-black text-[12px] transition-colors">{icon}</span>
+          <input
+            type="text"
+            value={localValue}
+            onChange={(e) => setLocalValue(e.target.value)}
+            className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-black focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500/50 outline-none transition-all placeholder:text-slate-300"
+          />
         </div>
-
-        <div className="p-6 space-y-8">
-          <p className="text-sm text-gray-500 bg-purple-50 p-4 rounded-xl border border-purple-100">
-            <strong>Security & Cost:</strong> Toggle login methods for Customers and Riders. Disabling expensive methods like OTP or Google Auth can reduce costs. MPIN is highly recommended as the primary login.
-          </p>
-
-          <div className="grid md:grid-cols-2 gap-8">
-            {/* Customer Settings */}
-            <div className="space-y-6">
-              <h3 className="font-semibold text-gray-700 border-b pb-2">Customer App</h3>
-
-              {['auth_customer_mpin_enabled', 'auth_customer_otp_enabled', 'auth_customer_google_enabled'].map(key => {
-                const label = key.includes('mpin') ? 'MPIN Login' : key.includes('otp') ? 'OTP Login' : 'Google Auth';
-                const isEnabled = settings[key] === 'true' || settings[key] === true;
-                return (
-                  <div key={key} className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium text-sm text-gray-800">{label}</p>
-                    </div>
-                    <button
-                      disabled={saving}
-                      onClick={() => handleUpdate(key, isEnabled ? 'false' : 'true')}
-                      className={`transition ${isEnabled ? 'text-green-600' : 'text-gray-400 hover:text-gray-600'} disabled:opacity-50`}
-                    >
-                      {isEnabled ? <ToggleRight size={36} /> : <ToggleLeft size={36} />}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Rider Settings */}
-            <div className="space-y-6">
-              <h3 className="font-semibold text-gray-700 border-b pb-2">Rider App</h3>
-
-              {['auth_rider_mpin_enabled', 'auth_rider_otp_enabled'].map(key => {
-                const label = key.includes('mpin') ? 'MPIN Login' : 'OTP Login';
-                const isEnabled = settings[key] === 'true' || settings[key] === true;
-                return (
-                  <div key={key} className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium text-sm text-gray-800">{label}</p>
-                    </div>
-                    <button
-                      disabled={saving}
-                      onClick={() => handleUpdate(key, isEnabled ? 'false' : 'true')}
-                      className={`transition ${isEnabled ? 'text-green-600' : 'text-gray-400 hover:text-gray-600'} disabled:opacity-50`}
-                    >
-                      {isEnabled ? <ToggleRight size={36} /> : <ToggleLeft size={36} />}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
+        <button
+          onClick={() => onSave(localValue)}
+          disabled={isSaving || String(localValue) === String(value)}
+          className="w-12 h-[51px] bg-slate-900 text-white rounded-2xl flex items-center justify-center hover:bg-black transition-all disabled:opacity-20 active:scale-95 shadow-lg shadow-slate-900/10"
+        >
+          {isSaving ? <RefreshCw className="animate-spin" size={16} /> : <Save size={18} />}
+        </button>
       </div>
+    </div>
+  );
+}
 
-      {/* Feature Configuration */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-8">
-        <div className="bg-gray-50 p-6 border-b border-gray-100 flex items-center space-x-3">
-          <Save className="text-blue-600" size={24} />
-          <h2 className="text-xl font-semibold text-gray-800">Feature Visibility</h2>
-        </div>
+function SettingsToggle({ label, desc, isEnabled, onToggle, isSaving, variant = 'teal' }: any) {
+  const colors: any = {
+    teal: isEnabled ? 'bg-teal-500' : 'bg-slate-200',
+    blue: isEnabled ? 'bg-blue-600' : 'bg-slate-200',
+    orange: isEnabled ? 'bg-orange-500' : 'bg-slate-200',
+    purple: isEnabled ? 'bg-purple-600' : 'bg-slate-200'
+  };
 
-        <div className="p-6 space-y-8">
-          <p className="text-sm text-gray-500 bg-blue-50 p-4 rounded-xl border border-blue-100">
-            <strong>App Modules:</strong> Enable or disable major sections of the mobile apps in real-time.
-          </p>
-
-          <div className="grid md:grid-cols-2 gap-8">
-            {['feature_show_mart', 'feature_show_restaurants', 'feature_show_brands', 'feature_rashan_enabled', 'feature_show_pharma'].map(key => {
-              const label = key === 'feature_rashan_enabled' ? 'Rashan/Bulk Module' : key === 'feature_show_pharma' ? 'Pharma Module' : key.includes('mart') ? 'Mart Section' : key.includes('restaurants') ? 'Restaurant Section' : 'Brand Carousel';
-              const isEnabled = settings[key] === 'true' || settings[key] === true;
-              return (
-                <div key={key} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                  <div>
-                    <p className="font-semibold text-gray-800">{label}</p>
-                    <p className="text-xs text-gray-500">{isEnabled ? 'Visible in Mobile Apps' : 'Hidden from Users'}</p>
-                  </div>
-                  <button
-                    disabled={saving}
-                    onClick={() => handleUpdate(key, isEnabled ? 'false' : 'true')}
-                    className={`transition ${isEnabled ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'} disabled:opacity-50`}
-                  >
-                    {isEnabled ? <ToggleRight size={44} /> : <ToggleLeft size={44} />}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+  return (
+    <div className="flex items-center justify-between p-6 bg-slate-50/50 border border-slate-100 rounded-[2rem] hover:bg-white hover:shadow-xl hover:shadow-slate-200/30 transition-all group border-b-4 border-b-transparent hover:border-b-primary-500/10">
+      <div className="min-w-0">
+        <p className="font-black text-slate-800 text-xs uppercase tracking-tight">{label}</p>
+        <p className="text-[10px] text-slate-400 font-bold mt-1 uppercase tracking-tighter truncate">{desc}</p>
       </div>
-
-      {/* Chat Configuration */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-8">
-        <div className="bg-gray-50 p-6 border-b border-gray-100 flex items-center space-x-3">
-          <Mail className="text-green-600" size={24} />
-          <h2 className="text-xl font-semibold text-gray-800">Chat Features</h2>
-        </div>
-
-        <div className="p-6 space-y-8">
-          <p className="text-sm text-gray-500 bg-green-50 p-4 rounded-xl border border-green-100">
-            <strong>Communication Control:</strong> Enable or disable advanced chat features for Riders and Customers.
-          </p>
-
-          <div className="grid md:grid-cols-2 gap-8">
-            {['feature_chat_enabled', 'chat_enable_replies', 'chat_enable_images'].map(key => {
-              const label = key === 'feature_chat_enabled' ? 'Enable Order Chat' : key.includes('replies') ? 'Message Replies (Quoted)' : 'Image Attachments';
-              const isEnabled = settings[key] === 'true' || settings[key] === true;
-              const isDisabled = key !== 'feature_chat_enabled' && (settings['feature_chat_enabled'] === 'false' || settings['feature_chat_enabled'] === false);
-
-              return (
-                <div key={key} className={`flex items-center justify-between p-4 bg-gray-50 rounded-xl ${isDisabled ? 'opacity-50' : ''}`}>
-                  <div>
-                    <p className="font-semibold text-gray-800">{label}</p>
-                    <p className="text-xs text-gray-500">
-                      {key === 'feature_chat_enabled' ? (isEnabled ? 'Visible in Apps' : 'Hidden from Apps') : (isEnabled ? 'Enabled' : 'Disabled')}
-                    </p>
-                  </div>
-                  <button
-                    disabled={saving || isDisabled}
-                    onClick={() => handleUpdate(key, isEnabled ? 'false' : 'true')}
-                    className={`transition ${isEnabled ? 'text-green-600' : 'text-gray-400 hover:text-gray-600'} disabled:opacity-50`}
-                  >
-                    {isEnabled ? <ToggleRight size={44} /> : <ToggleLeft size={44} />}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
+      <button
+        disabled={isSaving}
+        onClick={() => onToggle(!isEnabled)}
+        className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 ${colors[variant]}`}
+      >
+        <span
+          className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-lg ring-0 transition duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${isEnabled ? 'translate-x-5' : 'translate-x-0'} flex items-center justify-center`}
+        >
+          {isSaving ? <RefreshCw className="animate-spin text-slate-400" size={10} /> : <div className={`w-1.5 h-1.5 rounded-full ${isEnabled ? colors[variant] : 'bg-slate-300'}`} />}
+        </span>
+      </button>
     </div>
   );
 }

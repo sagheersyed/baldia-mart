@@ -42,30 +42,16 @@ export default function FavouritesScreen({ navigation }: any) {
   const favAccentBorder = '#C7D2FE';
 
   useFocusEffect(useCallback(() => {
-    let active = true;
     const sync = async () => {
       setSyncing(true);
-      await reload();
       try {
-        const [rRes, pRes, bRes] = await Promise.allSettled([
-          restaurantsApi.getAll(),
-          productsApi.getAll(),
-          brandsApi.getAll(),
-        ]);
-        if (!active) return;
-        const liveR = rRes.status === 'fulfilled' ? rRes.value.data : [];
-        const liveP = pRes.status === 'fulfilled' ? pRes.value.data : [];
-        const liveB = bRes.status === 'fulfilled' ? bRes.value.data : [];
-        await syncFromApi(liveR, liveP, liveB);
-      } catch {
-        // noop
+        await reload();
       } finally {
-        if (active) setSyncing(false);
+        setSyncing(false);
       }
     };
     sync();
-    return () => { active = false; };
-  }, [reload, syncFromApi]));
+  }, [reload]));
 
   const combinedShops = useMemo(() => [...restaurants, ...brands], [restaurants, brands]);
   

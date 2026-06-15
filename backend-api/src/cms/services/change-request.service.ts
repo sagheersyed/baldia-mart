@@ -62,13 +62,20 @@ export class ChangeRequestService {
         
         const hasOverlap = newPaths.some(path => existingPaths.includes(path));
         if (hasOverlap) {
+          // Idempotency: If the patchData is PRECISELY the same, just return the existing one
+          // This avoids "Toggle Failed" errors if user clicks fast or network retries.
+          if (JSON.stringify(existing.patchData) === JSON.stringify(params.patchData)) {
+             this.logger.log(`Idempotent CR request for ${params.entityType} ${params.entityId}. Returning existing ${existing.id}`);
+             return existing;
+          }
+
           this.logger.warn(`Rejected duplicate CR for ${params.entityType} ${params.entityId}`);
           throw new BadRequestException('A pending change request for this field already exists.');
         }
       } else if (existing && params.actionType === 'CREATE') {
          // For CREATE, we check if the patchData matches (basic check)
          if (JSON.stringify(existing.patchData) === JSON.stringify(params.patchData)) {
-            throw new BadRequestException('An identical request is already pending review.');
+            return existing;
          }
       }
     }

@@ -313,6 +313,64 @@ export default function ProfileScreen({ navigation }: any) {
           </LinearGradient>
         </View>
 
+        {/* System Administration Section */}
+        {user?.role === 'admin' && (
+          <View style={{ paddingHorizontal: theme.spacing.lg, marginTop: theme.spacing.md }}>
+            <AppText variant="overline" style={{ marginBottom: theme.spacing.sm, marginLeft: 4 }}>SYSTEM ADMINISTRATION</AppText>
+            <Pressable
+              style={({ pressed }) => [{
+                flexDirection: 'row', alignItems: 'center', gap: 12,
+                backgroundColor: theme.colors.surface,
+                borderRadius: theme.radius.lg,
+                padding: theme.spacing.md,
+                borderWidth: 1.5, borderColor: theme.colors.pro + '40',
+                ...(theme.shadows.sm as any),
+              }, pressed ? { opacity: 0.85, transform: [{ scale: 0.98 }] } : null]}
+              onPress={() => navigation.navigate('PlatformFinancials')}
+            >
+              <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: theme.colors.pro + '18', alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name="stats-chart-outline" size={22} color={theme.colors.pro} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <AppText variant="bodyStrong">Platform Financials</AppText>
+                <AppText variant="caption" color={theme.colors.textMuted}>Revenue, commissions, and daily snapshots</AppText>
+              </View>
+              <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: theme.colors.pro + '15' }}>
+                <AppText variant="badge" color={theme.colors.pro}>Manage →</AppText>
+              </View>
+            </Pressable>
+          </View>
+        )}
+
+        {/* Rider Business Section */}
+        {user?.role === 'rider' && (
+          <View style={{ paddingHorizontal: theme.spacing.lg, marginTop: theme.spacing.md }}>
+            <AppText variant="overline" style={{ marginBottom: theme.spacing.sm, marginLeft: 4 }}>RIDER BUSINESS</AppText>
+            <Pressable
+              style={({ pressed }) => [{
+                flexDirection: 'row', alignItems: 'center', gap: 12,
+                backgroundColor: theme.colors.surface,
+                borderRadius: theme.radius.lg,
+                padding: theme.spacing.md,
+                borderWidth: 1.5, borderColor: '#10B98140',
+                ...(theme.shadows.sm as any),
+              }, pressed ? { opacity: 0.85, transform: [{ scale: 0.98 }] } : null]}
+              onPress={() => navigation.navigate('RiderStatement')}
+            >
+              <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: '#10B98118', alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name="bicycle-outline" size={22} color="#10B981" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <AppText variant="bodyStrong">Earnings & Wallet</AppText>
+                <AppText variant="caption" color={theme.colors.textMuted}>View your delivery fees and collections</AppText>
+              </View>
+              <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: '#10B98115' }}>
+                <AppText variant="badge" color="#10B981">Open →</AppText>
+              </View>
+            </Pressable>
+          </View>
+        )}
+
         {/* Merchant CMS Banner */}
         {memberships.length > 0 && (
           <View style={{ paddingHorizontal: theme.spacing.lg, marginTop: theme.spacing.lg }}>

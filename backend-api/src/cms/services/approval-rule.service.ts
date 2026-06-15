@@ -37,6 +37,20 @@ export class ApprovalRuleService {
       where: { entityType, isActive: true },
     });
 
+    // Fast-track: certain routine operations bypass moderation even if no rule is found
+    const fastTrackFields = ['isAvailable', 'is_available', 'isActive', 'is_active', 'stockQuantity', 'stockQty', 'stock'];
+    const inventoryEntities = ['PharmacyInventory', 'VendorProduct', 'MenuItem'];
+    
+    if (inventoryEntities.includes(entityType)) {
+      const allOpsFastTrack = patchOps.every(op => {
+        const field = op.path.replace(/^\//, '');
+        return fastTrackFields.includes(field);
+      });
+      if (allOpsFastTrack) {
+        return { requiresModeration: false, reasons: [] };
+      }
+    }
+
     // Check for wildcard rules first (e.g. PharmacyMedicine.* → always_moderate)
     const wildcardRule = rules.find(r => r.fieldName === '*');
     if (wildcardRule?.ruleType === 'always_moderate') {

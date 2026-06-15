@@ -186,7 +186,7 @@ export default function OrderDetailsScreen({ route, navigation }: any) {
                         <View style={{ flex: 1 }}>
                           <Text style={styles.itemText}>{item.quantity}x {itemName || 'Item'}</Text>
                         </View>
-                        <Text style={styles.itemPrice}>Rs. {Number(item.priceAtTime || 0) * item.quantity}</Text>
+                        <Text style={styles.itemPrice}>Rs. {Math.round(Number(item.priceAtTime || 0) * Number(item.quantity || 0))}</Text>
                       </View>
                     );
                   })}

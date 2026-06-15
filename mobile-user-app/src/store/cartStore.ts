@@ -113,10 +113,18 @@ export const useCartStore = create<CartState>((set, get) => ({
 
     // Resolve details from potentially nested objects (CMS patterns)
     const id = product.id;
-    const name = product.name || product.medicine?.name || product.product?.name || 'Unknown';
-    const rawImage = product.imageUrl || product.medicine?.imageUrl || product.product?.imageUrl || product.image_url || '';
+    const name = product.name || product.medicine?.name || product.product?.name || product.item?.name || 'Unknown';
+    const rawImage = 
+      product.imageUrl || 
+      product.image_url || 
+      product.medicine?.imageUrl || 
+      product.medicine?.image_url || 
+      product.product?.imageUrl || 
+      product.product?.image_url || 
+      product.image || 
+      '';
     const imageUrl = normalizeUrl(rawImage) || '';
-    const limit = Number(product.maxQuantityPerOrder) || 0;
+    const limit = Number(product.maxQuantityPerOrder || product.medicine?.maxQuantityPerOrder || product.product?.maxQuantityPerOrder) || 0;
 
     if (mode === 'pharma') {
       const existing = pharmaCart.find((i) => i.id === id);
@@ -135,7 +143,13 @@ export const useCartStore = create<CartState>((set, get) => ({
             id: id,
             name: name,
             mrp: Number(product.mrp || product.medicine?.mrp || 0),
-            sellingPrice: Number(product.sellingPrice || product.medicine?.mrp || product.mrp || 0) || Number(product.mrp || product.medicine?.mrp || 0),
+            sellingPrice: Number(
+              product.sellingPrice || 
+              product.selling_price || 
+              product.price || 
+              product.medicine?.mrp || 
+              product.mrp || 0
+            ) || Number(product.mrp || product.medicine?.mrp || 0),
             quantity: 1,
             imageUrl: imageUrl,
             requiresPrescription: !!(product.requiresPrescription || product.medicine?.requiresPrescription),
@@ -152,8 +166,17 @@ export const useCartStore = create<CartState>((set, get) => ({
       return;
     }
 
-    const price = Number(product.price || product.product?.price || 0);
-    const effectivePrice = price - Number(product.discount || 0);
+    const basePrice = Number(
+      product.price || 
+      product.sellingPrice || 
+      product.selling_price || 
+      product.product?.price || 
+      product.medicine?.mrp || 
+      product.mrp || 
+      0
+    );
+    const discount = Number(product.discount || product.medicine?.discount || product.product?.discount || 0);
+    const effectivePrice = basePrice - discount;
 
     const prevCart = mode === 'mart' ? martCart : foodCart;
     const existingItem = prevCart.find((item) => item.id === id);

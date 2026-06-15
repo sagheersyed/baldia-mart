@@ -15,6 +15,7 @@ import FavouriteButton from '../ui/FavouriteButton';
 import { isBusinessOpen } from '../../utils/helpers';
 import { normalizeUrl } from '../../api/api';
 import { useTheme } from '../../context/ThemeContext';
+import SleekExpandModal from '../animations/SleekExpandModal';
 import { DEFAULT_IMAGES } from '../../constants/images';
 
 const { height: SCREEN_H } = Dimensions.get('window');
@@ -73,7 +74,9 @@ const ProductCard = memo(function ProductCard({
   const [detailVisible, setDetailVisible] = useState(false);
   const [isScrollAtTop, setIsScrollAtTop] = useState(true);
   const [imageError, setImageError] = useState(false);
+  const [startLayout, setStartLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
 
+  const cardRef = useRef<View>(null);
   const translateY = useRef(new Animated.Value(SCREEN_H)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
 
@@ -89,10 +92,7 @@ const ProductCard = memo(function ProductCard({
   }, [detailVisible]);
 
   const closeModal = () => {
-    Animated.parallel([
-      Animated.timing(backdropOpacity, { toValue: 0, duration: 190, useNativeDriver: true }),
-      Animated.timing(translateY, { toValue: SCREEN_H, duration: 190, useNativeDriver: true }),
-    ]).start(() => setDetailVisible(false));
+    setDetailVisible(false);
   };
 
   const panResponder = useRef(
@@ -136,22 +136,26 @@ const ProductCard = memo(function ProductCard({
     : (normalizeUrl(product.imageUrl ?? (product as any).image_url) || DEFAULT_IMAGES.product);
 
   const handleCardPress = () => {
-    if (onPress) onPress();
-    else setDetailVisible(true);
+    cardRef.current?.measure((x, y, w, h, px, py) => {
+      setStartLayout({ x: px, y: py, width: w, height: h });
+      if (onPress) onPress();
+      else setDetailVisible(true);
+    });
   };
 
   const isGrid = variant === 'grid';
 
   return (
     <>
-      <Pressable
-        onPress={handleCardPress}
-        style={({ pressed }) => [
-          isGrid ? styles.grid : styles.horizontal,
-          { backgroundColor: theme.colors.surface, borderColor: theme.colors.border },
-          pressed ? { transform: [{ scale: 0.97 }] } : null,
-        ]}
-      >
+      <View ref={cardRef} collapsable={false}>
+        <Pressable
+          onPress={handleCardPress}
+          style={({ pressed }) => [
+            isGrid ? styles.grid : styles.horizontal,
+            { backgroundColor: theme.colors.surface, borderColor: theme.colors.border },
+            pressed ? { transform: [{ scale: 0.97 }] } : null,
+          ]}
+        >
         {/* Image Box */}
         <View style={[styles.imageWrap, { backgroundColor: theme.colors.isDark ? theme.colors.surfaceMuted : '#F8FAFC' }]}>
           <Image
@@ -262,151 +266,142 @@ const ProductCard = memo(function ProductCard({
           </View>
         </View>
       </Pressable>
+    </View>
 
-      {/* Product Detail Modal */}
-      <Modal visible={detailVisible} transparent statusBarTranslucent onRequestClose={closeModal}>
-        <View style={styles.modalOverlay}>
-          <Animated.View
-            style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(10, 15, 30, 0.65)', opacity: backdropOpacity }]}
-          >
-            <Pressable style={StyleSheet.absoluteFillObject} onPress={closeModal} />
-          </Animated.View>
-
-          <Animated.View
-            style={[
-              styles.modalSheet,
-              { backgroundColor: theme.colors.surface },
-              { transform: [{ translateY }] },
-            ]}
-          >
-            {/* Drag handle */}
-            <View {...panResponder.panHandlers} style={styles.dragArea}>
-              <View style={[styles.handle, { backgroundColor: theme.colors.border }]} />
-            </View>
-
-            <Pressable onPress={closeModal} style={[styles.closeBtn, { backgroundColor: theme.colors.surfaceMuted }]} hitSlop={12}>
-              <Ionicons name="close" size={20} color={theme.colors.textPrimary} />
-            </Pressable>
-
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.modalContent}
-              onScroll={(e) => setIsScrollAtTop(e.nativeEvent.contentOffset.y <= 0)}
-              scrollEventThrottle={16}
-            >
-              <View style={[styles.modalImageWrap, { backgroundColor: theme.colors.isDark ? theme.colors.surfaceMuted : '#EFF3FF' }]}>
-                <Image
-                  source={{ uri: imgUri }}
-                  style={styles.modalImage}
-                  contentFit="cover"
-                  cachePolicy="memory-disk"
-                  onError={() => setImageError(true)}
-                />
-                {discountPercent > 0 && !blocked && (
-                  <View style={[styles.discountTag, { backgroundColor: theme.colors.danger, position: 'absolute', top: 12, left: 12 }]}>
-                    <Text style={styles.discountTagText}>{discountPercent}% OFF</Text>
-                  </View>
-                )}
+      {/* Product Detail Modal with Premium Expansion Animation */}
+      <SleekExpandModal
+        visible={detailVisible}
+        onClose={closeModal}
+        startLayout={startLayout}
+        theme={theme}
+      >
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.modalContent}
+          onScroll={(e) => setIsScrollAtTop(e.nativeEvent.contentOffset.y <= 0)}
+          scrollEventThrottle={16}
+        >
+          <View style={[styles.modalImageWrap, { backgroundColor: theme.colors.isDark ? theme.colors.surfaceMuted : '#EFF3FF' }]}>
+            <Image
+              source={{ uri: imgUri }}
+              style={styles.modalImage}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              onError={() => setImageError(true)}
+            />
+            {discountPercent > 0 && !blocked && (
+              <View style={[styles.discountTag, { backgroundColor: theme.colors.danger, position: 'absolute', top: 12, left: 12 }]}>
+                <Text style={styles.discountTagText}>{discountPercent}% OFF</Text>
               </View>
+            )}
+          </View>
 
-              <View style={styles.modalInfo}>
-                {product.brand?.name && (
-                  <AppText variant="overline" color={tint} style={{ marginBottom: 4 }}>
-                    {product.brand.name}
-                  </AppText>
-                )}
-                <AppText variant="h2" color={theme.colors.textHeader} style={styles.modalName}>
-                  {product.name}
+          <View style={styles.modalInfo}>
+            {product.brand?.name && (
+              <AppText variant="overline" color={tint} style={{ marginBottom: 4 }}>
+                {product.brand.name}
+              </AppText>
+            )}
+            <AppText variant="h2" color={theme.colors.textHeader} style={styles.modalName}>
+              {product.name}
+            </AppText>
+            {subline && (
+              <AppText variant="body" color={theme.colors.textSecondary} style={{ marginTop: 4 }}>
+                {subline}
+              </AppText>
+            )}
+
+            <View style={styles.modalPriceRow}>
+              <AppText variant="display" color={tint} style={styles.modalPrice}>
+                Rs. {Math.round(finalPrice).toLocaleString()}
+              </AppText>
+              {hasDiscount && (
+                <AppText variant="pricePrev" style={styles.modalOldPrice}>
+                  Rs. {Math.round(numericPrice).toLocaleString()}
                 </AppText>
-                {subline && (
-                  <AppText variant="body" color={theme.colors.textSecondary} style={{ marginTop: 4 }}>
-                    {subline}
-                  </AppText>
-                )}
-
-                <View style={styles.modalPriceRow}>
-                  <AppText variant="display" color={tint} style={styles.modalPrice}>
-                    Rs. {Math.round(finalPrice).toLocaleString()}
-                  </AppText>
-                  {hasDiscount && (
-                    <AppText variant="pricePrev" style={styles.modalOldPrice}>
-                      Rs. {Math.round(numericPrice).toLocaleString()}
-                    </AppText>
-                  )}
-                </View>
-
-                <View style={styles.trustRow}>
-                  <TrustChip icon="bicycle" label="30 min" tint={tint} theme={theme} />
-                  <TrustChip icon="shield-checkmark" label="Verified" tint={tint} theme={theme} />
-                  <TrustChip icon="refresh" label="Easy Returns" tint={tint} theme={theme} />
-                </View>
-
-                <View style={[styles.modalDivider, { backgroundColor: theme.colors.divider }]} />
-
-                <View style={styles.modalSection}>
-                  <AppText variant="title" color={theme.colors.textHeader} style={{ marginBottom: 8 }}>
-                    Product Details
-                  </AppText>
-                  <AppText variant="body" color={theme.colors.textSecondary} style={styles.modalDesc}>
-                    {product.description ||
-                      'Premium quality product. Carefully sourced and packed to meet the highest safety and hygiene standards. Enjoy with BaldiaMart\'s 100% satisfaction guarantee.'}
-                  </AppText>
-                </View>
-
-                <View style={[styles.modalSection, { marginTop: 16 }]}>
-                  <AppText variant="title" color={theme.colors.textHeader} style={{ marginBottom: 12 }}>
-                    Specifications
-                  </AppText>
-                  <View style={[styles.specTable, { backgroundColor: theme.colors.surfaceMuted, borderColor: theme.colors.border }]}>
-                    <SpecRow label="Category" value={product.category?.name || 'Groceries'} theme={theme} last={false} />
-                    {product.brand?.name && (
-                      <SpecRow label="Brand" value={product.brand.name} theme={theme} last={false} />
-                    )}
-                    <SpecRow label="Quality" value="Verified Fresh ✓" theme={theme} last valueColor={theme.colors.success} />
-                  </View>
-                </View>
-              </View>
-            </ScrollView>
-
-            <View style={[styles.modalFooter, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border }]}>
-              {blocked ? (
-                <View style={[styles.blockedFooterBtn, { backgroundColor: theme.colors.surfaceMuted }]}>
-                  <Ionicons name="time" size={18} color={theme.colors.textSecondary} />
-                  <AppText variant="bodyStrong" color={theme.colors.textSecondary} style={{ marginLeft: 8 }}>
-                    {businessClosed ? 'Store Currently Closed' : 'Out of Stock'}
-                  </AppText>
-                </View>
-              ) : cartQty > 0 && onIncrement && onDecrement ? (
-                <View style={[styles.modalStepper, { backgroundColor: tint }]}>
-                  <Pressable onPress={onDecrement} style={styles.modalStepperBtn} hitSlop={12}>
-                    <Ionicons name="remove" size={22} color="#fff" />
-                  </Pressable>
-                  <AppText variant="h3" color="#fff" style={styles.modalStepperQty}>
-                    {cartQty} in basket
-                  </AppText>
-                  <Pressable onPress={onIncrement} style={styles.modalStepperBtn} disabled={maxedOut} hitSlop={12}>
-                    <Ionicons name="add" size={22} color="#fff" />
-                  </Pressable>
-                </View>
-              ) : (
-                <Pressable
-                  onPress={() => onAdd()}
-                  style={({ pressed }) => [
-                    styles.modalAddBtn,
-                    { backgroundColor: tint },
-                    pressed ? { opacity: 0.9 } : null,
-                  ]}
-                >
-                  <Ionicons name="basket" size={20} color="#fff" />
-                  <AppText variant="bodyStrong" color="#fff" style={{ marginLeft: 10, fontSize: 15 }}>
-                    Add to Basket — Rs.{Math.round(finalPrice).toLocaleString()}
-                  </AppText>
-                </Pressable>
               )}
             </View>
-          </Animated.View>
+
+            <View style={styles.trustRow}>
+              <TrustChip icon="bicycle" label="30 min" tint={tint} theme={theme} />
+              <TrustChip icon="shield-checkmark" label="Verified" tint={tint} theme={theme} />
+              <TrustChip icon="refresh" label="Easy Returns" tint={tint} theme={theme} />
+            </View>
+
+            <View style={[styles.modalDivider, { backgroundColor: theme.colors.divider }]} />
+
+            <View style={styles.modalSection}>
+              <AppText variant="title" color={theme.colors.textHeader} style={{ marginBottom: 8 }}>
+                Product Details
+              </AppText>
+              <AppText variant="body" color={theme.colors.textSecondary} style={styles.modalDesc}>
+                {product.description ||
+                  'Premium quality product. Carefully sourced and packed to meet the highest safety and hygiene standards. Enjoy with BaldiaMart\'s 100% satisfaction guarantee.'}
+              </AppText>
+            </View>
+
+            {/* Specifications Section */}
+            <View style={[styles.modalSection, { marginTop: 16 }]}>
+              <AppText variant="title" color={theme.colors.textHeader} style={{ marginBottom: 12 }}>
+                Specifications
+              </AppText>
+              <View style={[styles.specTable, { backgroundColor: theme.colors.surfaceMuted, borderColor: theme.colors.border }]}>
+                <SpecRow label="Category" value={product.category?.name || 'Groceries'} theme={theme} last={false} />
+                {product.brand?.name && (
+                  <SpecRow label="Brand" value={product.brand.name} theme={theme} last={false} />
+                )}
+                <SpecRow label="Quality" value="Verified Fresh ✓" theme={theme} last valueColor={theme.colors.success} />
+              </View>
+            </View>
+          </View>
+        </ScrollView>
+
+        <View style={[styles.modalFooter, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border }]}>
+          {blocked ? (
+            <View style={[styles.blockedFooterBtn, { backgroundColor: theme.colors.surfaceMuted }]}>
+              <Ionicons name="time" size={18} color={theme.colors.textSecondary} />
+              <AppText variant="bodyStrong" color={theme.colors.textSecondary} style={{ marginLeft: 8 }}>
+                {businessClosed ? 'Store Currently Closed' : 'Out of Stock'}
+              </AppText>
+            </View>
+          ) : cartQty > 0 && onIncrement && onDecrement ? (
+            <View style={[styles.modalStepper, { backgroundColor: tint }]}>
+              <Pressable onPress={onDecrement} style={styles.modalStepperBtn} hitSlop={12}>
+                <Ionicons name="remove" size={22} color="#fff" />
+              </Pressable>
+              <AppText variant="h3" color="#fff" style={styles.modalStepperQty}>
+                {cartQty} in basket
+              </AppText>
+              <Pressable onPress={onIncrement} style={styles.modalStepperBtn} disabled={maxedOut} hitSlop={12}>
+                <Ionicons name="add" size={22} color="#fff" />
+              </Pressable>
+            </View>
+          ) : (
+            <Pressable
+              onPress={() => onAdd()}
+              style={({ pressed }) => [
+                styles.modalAddBtn,
+                { backgroundColor: tint },
+                pressed ? { opacity: 0.9 } : null,
+              ]}
+            >
+              <Ionicons name="basket" size={20} color="#fff" />
+              <AppText variant="bodyStrong" color="#fff" style={{ marginLeft: 10, fontSize: 15 }}>
+                Add to Basket — Rs.{Math.round(finalPrice).toLocaleString()}
+              </AppText>
+            </Pressable>
+          )}
         </View>
-      </Modal>
+
+        {/* Close Button UI integrated in modal content */}
+        <Pressable
+          onPress={closeModal}
+          style={[styles.closeBtn, { backgroundColor: theme.colors.surfaceMuted }]}
+          hitSlop={12}
+        >
+          <Ionicons name="close" size={20} color={theme.colors.textPrimary} />
+        </Pressable>
+      </SleekExpandModal>
     </>
   );
 });

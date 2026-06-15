@@ -1,0 +1,40 @@
+I have compiled a comprehensive documentation of the BaldiaMart Unified Financial Ecosystem. This document outlines everything we have implemented for each role and provides a clear vision for the platform's financial future.
+
+📄 Financial System Documentation: Phase 1 (Stability & Transparency)
+1. Core Architecture (The Engine)
+We transitioned from a simple "balance" system to a High-Fidelity Digital Ledger. Every movement of money is now recorded with a specific entryType (e.g., Commission, Delivery Fee, COD Collection).
+
+Running Balance: Every transaction calculates a "Running Balance" in real-time, preventing balance drift and ensuring a perfect audit trail.
+Automated Daily Snapshots: A backend cron job runs every night at 00:01 AM to "close the books" for the previous day, saving a permanent record of GMV, Net Profit, and Order Volume.
+2. Features by User Role
+Role	Interface	Key Features Implemented
+Admin	Admin Web Panel	Finance Center: Real-time platform aggregates (Total GMV, Revenue). View and filter Daily Snapshots for auditing.
+Vendor	User App (CMS)	Financial Statement: Detailed transaction ledger. View Net Balance after platform commissions. Track earnings per order.
+Rider	Rider App	Rebuilt Wallet: Track "Take-Home Pay" vs. "COD Outstanding." Clear distinction between earned fees and cash collected from customers.
+Platform	Backend API	Data Migration: A script to port old wallet data into the new system. Auto-Reconciliation: Automatic balance updates upon delivery.
+3. Operational Highlights
+Financial Transparency: Vendors can no longer "guess" their earnings; every PKR is accounted for in their statement.
+Risk Mitigation: Admins can now see exactly how much cash is held by Riders in the field (COD Outstanding), allowing for debt management.
+Production Readiness: Bypassed moderation for routine inventory changes (Price/Stock) so vendors can manage their business efficiently without platform bottlenecks.
+4. Future Roadmap & Strategy
+To take BaldiaMart to the level of global leaders like Foodpanda or Careem, here is how we will proceed:
+
+Short Term (Payouts & Settlements)
+
+Withdrawal Request Flow: Allow Vendors and Riders to request payouts directly from their wallet, which Admins can approve in the web panel.
+Bank Integration: Add fields for Bank Account / IBAN details for verified business payments.
+Mid Term (Incentives & Penalties)
+
+Dynamic Rider Bonuses: Automated bonuses for completing $X$ deliveries in a day, automatically credited via the ledger.
+Vendor Performance Rebates: Lower commission rates for high-performing vendors, managed by the new CommissionConfig engine.
+Long Term (Intelligence & Tax)
+
+Tax Compliance: Automated GST/VAT calculation on every order based on the category (e.g., Medicine vs. Food).
+Financial Reporting: One-click PDF/Excel exports for monthly tax filing and business performance reviews.
+🚀 Summary Report
+We have successfully built a "bulletproof" financial foundation. Your system no longer just "tracks numbers"—it operates as a professional financial entity.
+
+Your next action: You can now safely run the 
+
+migrate-legacy-tx.ts
+ script to bring all your old history into this new, beautiful system.

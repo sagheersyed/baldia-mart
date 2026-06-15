@@ -224,9 +224,9 @@ export default function AddItemScreen({ navigation }: any) {
                 No catalog items found.
               </AppText>
               <AppButton
-                label="Request Brand New Item"
+                label={isPharmacy ? 'Request Brand New Medicine' : 'Request Brand New Product'}
                 variant="primary"
-                onPress={() => navigation.navigate('AddNewItemForm', { vertical: isPharmacy ? 'pharmacy' : 'grocery' })}
+                onPress={() => navigation.navigate('AddNewItemForm', { vertical: isPharmacy ? 'pharma' : 'mart' })}
                 style={{ marginTop: 16 }}
               />
             </View>

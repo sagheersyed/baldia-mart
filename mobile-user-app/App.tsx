@@ -83,6 +83,9 @@ import AddItemScreen from './src/screens/cms/AddItemScreen';
 import AddNewItemFormScreen from './src/screens/cms/AddNewItemFormScreen';
 import MerchantOrdersScreen from './src/screens/cms/MerchantOrdersScreen';
 import StoreProfileScreen from './src/screens/cms/StoreProfileScreen';
+import FinancialStatementScreen from './src/screens/cms/FinancialStatementScreen';
+import RiderStatementScreen from './src/screens/RiderStatementScreen';
+import PlatformFinancialsScreen from './src/screens/PlatformFinancialsScreen';
 import FloatingTabBar from './src/components/FloatingTabBar';
 import AppLoader from './src/components/AppLoader';
 import { usePushNotifications } from './src/hooks/usePushNotifications';
@@ -255,6 +258,9 @@ function Navigation() {
           <Stack.Screen name="AddNewItemForm" component={AddNewItemFormScreen} />
           <Stack.Screen name="MerchantOrders" component={MerchantOrdersScreen} />
           <Stack.Screen name="StoreProfile" component={StoreProfileScreen} />
+          <Stack.Screen name="FinancialStatement" component={FinancialStatementScreen} />
+          <Stack.Screen name="RiderStatement" component={RiderStatementScreen} />
+          <Stack.Screen name="PlatformFinancials" component={PlatformFinancialsScreen} />
           </>
         )}
       </Stack.Navigator>

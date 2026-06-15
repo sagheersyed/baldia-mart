@@ -7,8 +7,13 @@ import { WalletTransaction } from './wallet-transaction.entity';
 import { WithdrawalRequest } from './withdrawal-request.entity';
 import { WalletSettlement } from './wallet-settlement.entity';
 
+import { FinanceModule } from '../finance/finance.module';
+
 @Module({
-  imports: [TypeOrmModule.forFeature([Wallet, WalletTransaction, WithdrawalRequest, WalletSettlement])],
+  imports: [
+    TypeOrmModule.forFeature([Wallet, WalletTransaction, WithdrawalRequest, WalletSettlement]),
+    FinanceModule,
+  ],
   providers: [WalletsService],
   controllers: [WalletsController],
   exports: [WalletsService]

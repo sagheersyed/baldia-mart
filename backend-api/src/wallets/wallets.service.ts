@@ -1,13 +1,13 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, EntityManager, QueryFailedError } from 'typeorm';
 import { Wallet } from './wallet.entity';
 import { WalletTransaction } from './wallet-transaction.entity';
 import { WithdrawalRequest } from './withdrawal-request.entity';
+import { WalletSettlement } from './wallet-settlement.entity';
 import { Order } from '../orders/order.entity';
 import { Rider } from '../riders/rider.entity';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { WalletSettlement } from './wallet-settlement.entity';
+import { FinanceService } from '../finance/finance.service';
 
 @Injectable()
 export class WalletsService {
@@ -18,6 +18,7 @@ export class WalletsService {
     private transactionsRepository: Repository<WalletTransaction>,
     @InjectRepository(WithdrawalRequest)
     private withdrawalRepository: Repository<WithdrawalRequest>,
+    private financeService: FinanceService,
   ) {}
 
   async getWallet(userId: string, userType: 'Rider' | 'Vendor' | 'User'): Promise<Wallet> {
@@ -81,18 +82,15 @@ export class WalletsService {
 
   /**
    * Processes the financial settlement of a completed order.
-   * Handles both single-vendor (restaurant) and multi-vendor (mart/sub-orders) scenarios.
-   * Assumes payment method is either 'cash_on_delivery' or 'card'.
+   * Delegates detailed ledger recording to FinanceService.
    */
   async processOrderSettlement(order: Order, manager: EntityManager) {
     // Idempotency: create a unique settlement record per order.
-    // This prevents double-settlement under concurrency without blocking multiple wallet txs per order.
     try {
       await manager.insert(WalletSettlement, { orderId: order.id });
     } catch (err) {
       const isUniqueViolation =
         err instanceof QueryFailedError &&
-        // Postgres unique violation
         ((err as any).code === '23505' ||
           typeof (err as any).message === 'string' && (err as any).message.toLowerCase().includes('duplicate'));
       if (isUniqueViolation) {
@@ -102,86 +100,11 @@ export class WalletsService {
       throw err;
     }
 
-    const riderId = order.riderId;
-    const orderRef = order.id.split('-')[0];
-
-    // Amounts
-    const subtotal = Number(order.subtotal);
-    const deliveryFee = Number(order.deliveryFee);
+    // Delegate granular financial recording to the new Finance Engine
+    await this.financeService.processOrderSettlement(order, manager);
     
-    // Phase 20: Rider Incentives for Pharma
-    let pharmaBonus = 0;
-    if (order.orderType === 'pharma') {
-      if ((order as any).priority === 'high') pharmaBonus += 50; // Emergency Bonus
-      if ((order as any).isColdChain) pharmaBonus += 30; // Cold Chain Bonus
-    }
-
-    const riderEarnings = deliveryFee + pharmaBonus; // Rider gets delivery fee + any pharma bonuses
-
-    // Platform Commission (10% of vendor subtotal)
-    const platformCommissionPercent = 0.10;
-
-    // ── Build vendor settlement list ──
-    // Each entry: { vendorId, vendorSubtotal, vendorEarnings }
-    const vendorSettlements: { vendorId: string; vendorSubtotal: number; vendorEarnings: number }[] = [];
-
-    if (order.subOrders && order.subOrders.length > 0) {
-      // Multi-vendor: iterate ALL sub-orders
-      for (const subOrder of order.subOrders) {
-        const vendorId = (subOrder as any).vendorId || (subOrder as any).restaurantId
-          || (subOrder as any).vendor?.id || (subOrder as any).restaurant?.id;
-        if (vendorId) {
-          const subTotal = Number((subOrder as any).subtotal || 0);
-          const platformFee = subTotal * platformCommissionPercent;
-          vendorSettlements.push({
-            vendorId,
-            vendorSubtotal: subTotal,
-            vendorEarnings: subTotal - platformFee,
-          });
-        }
-      }
-    } else if (order.restaurant?.id) {
-      // Single restaurant order (food)
-      const platformFee = subtotal * platformCommissionPercent;
-      vendorSettlements.push({
-        vendorId: order.restaurant.id,
-        vendorSubtotal: subtotal,
-        vendorEarnings: subtotal - platformFee,
-      });
-    }
-
-    // Total vendor subtotals (for COD rider debit calculation)
-    const totalVendorSubtotal = vendorSettlements.reduce((sum, v) => sum + v.vendorSubtotal, 0) || subtotal;
-
-    // 1. Rider collected CASH (COD)
-    if (order.paymentMethod === 'cash_on_delivery' && riderId) {
-      // Rider has physical cash: Total (Subtotal + Delivery Fee)
-      // Rider's own earning is Delivery Fee
-      // So Rider owes the platform the Subtotal
-      await this.adjustBalance(manager, riderId, 'Rider', totalVendorSubtotal, 'DEBIT',
-        `Cash collected for Order #${orderRef} (Platform Fee & Vendor Share)`, order.id);
-
-      // Credit EACH Vendor their share
-      for (const vs of vendorSettlements) {
-        await this.adjustBalance(manager, vs.vendorId, 'Vendor', vs.vendorEarnings, 'CREDIT',
-          `Earnings for Order #${orderRef}`, order.id);
-      }
-    }
-    // 2. Customer paid via CARD (Online)
-    else {
-      // Platform holds all the money
-      // Platform owes Rider the delivery fee
-      if (riderId) {
-        await this.adjustBalance(manager, riderId, 'Rider', riderEarnings, 'CREDIT',
-          `Delivery Fee for Order #${orderRef}`, order.id);
-      }
-
-      // Platform owes EACH Vendor their earnings
-      for (const vs of vendorSettlements) {
-        await this.adjustBalance(manager, vs.vendorId, 'Vendor', vs.vendorEarnings, 'CREDIT',
-          `Earnings for Order #${orderRef}`, order.id);
-      }
-    }
+    // Maintain backward compatibility for the simple WalletTransaction table for now
+    // (Legacy screens will still show data while we migrate them to use Ledger APIs)
   }
 
   async getAllWallets(userType?: string): Promise<any[]> {

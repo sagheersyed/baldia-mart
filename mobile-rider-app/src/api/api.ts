@@ -133,3 +133,8 @@ export const settingsApi = {
 export const walletsApi = {
   getMyWallet: () => api.get('/wallets/my-wallet'),
 };
+
+export const financeApi = {
+  getRiderSummary: () => api.get('/finance/rider/summary'),
+  getRiderStatement: () => api.get('/finance/rider/statement'),
+};

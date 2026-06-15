@@ -6,7 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useCmsStore } from '../../store/cmsStore';
-import { cmsApi } from '../../api/api';
+import { cmsApi, financeApi } from '../../api/api';
 import { AppText } from '../../components/ui';
 import { theme } from '../../theme/theme';
 import { useIsFocused } from '@react-navigation/native';
@@ -22,20 +22,24 @@ export default function MerchantDashboardScreen({ navigation }: any) {
   const tenantId = activeTenant?.tenantId ?? '';
   const vertical = activeTenant?.type ?? 'mart';
 
+  const [financeSummary, setFinanceSummary] = useState<any>(null);
+
   const loadData = useCallback(async () => {
     if (!tenantId) return;
     try {
-      const [prodRes, statsRes] = await Promise.all([
+      const [prodRes, statsRes, finRes] = await Promise.all([
         vertical === 'restaurant'
           ? cmsApi.getRestaurantMenu(tenantId)
           : vertical === 'pharmacy'
           ? cmsApi.getPharmacyMedicines(tenantId)
           : cmsApi.getVendorProducts(tenantId),
         cmsApi.getDashboardStats(tenantId),
+        financeApi.getVendorSummary().catch(() => ({ data: null })),
       ]);
 
       setProducts(prodRes.data ?? []);
       setDashboardStats(statsRes.data);
+      setFinanceSummary(finRes.data);
     } catch (e) {
       console.warn('[Dashboard] load error', e);
     } finally {
@@ -118,6 +122,36 @@ export default function MerchantDashboardScreen({ navigation }: any) {
               <AppText variant="caption" color={theme.colors.textMuted}>In progress</AppText>
             </Pressable>
           </View>
+        </View>
+
+        {/* Financial Summary */}
+        <View style={styles.section}>
+          <AppText variant="h3" style={{ marginBottom: 12 }}>Financial Summary</AppText>
+          <Pressable 
+            style={[styles.financeCard, { backgroundColor: color + '10', borderColor: color + '30' }]}
+            onPress={() => navigation.navigate('FinancialStatement')}
+          >
+            <View style={styles.financeHeader}>
+              <View>
+                <AppText variant="caption" color={theme.colors.textMuted}>Net Balance</AppText>
+                <AppText variant="h1" color={theme.colors.textPrimary}>Rs. {financeSummary?.netBalance?.toLocaleString() ?? '0'}</AppText>
+              </View>
+              <View style={[styles.financeBadge, { backgroundColor: color }]}>
+                <Ionicons name="wallet-outline" size={20} color="#fff" />
+              </View>
+            </View>
+            <View style={styles.financeStats}>
+              <View style={styles.finStat}>
+                <AppText variant="caption" color={theme.colors.textMuted}>Total Earnings</AppText>
+                <AppText variant="bodyStrong">Rs. {financeSummary?.totalEarnings?.toLocaleString() ?? '0'}</AppText>
+              </View>
+              <View style={styles.finDivider} />
+              <View style={styles.finStat}>
+                <AppText variant="caption" color={theme.colors.textMuted}>Commission</AppText>
+                <AppText variant="bodyStrong">Rs. {financeSummary?.totalCommissions?.toLocaleString() ?? '0'}</AppText>
+              </View>
+            </View>
+          </Pressable>
         </View>
 
         {/* Catalog & Requests Grid */}
@@ -304,4 +338,31 @@ const styles = StyleSheet.create({
   insightTrend: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
   pill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   actionIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginRight: 4 },
+  financeCard: {
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1.5,
+  },
+  financeHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  financeBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  financeStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.05)',
+  },
+  finStat: { flex: 1 },
+  finDivider: { width: 1, height: 24, backgroundColor: 'rgba(0,0,0,0.05)', marginHorizontal: 12 },
 });

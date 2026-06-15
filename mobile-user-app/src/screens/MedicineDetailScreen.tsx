@@ -12,7 +12,7 @@ import { useFavourites } from '../hooks/useFavourites';
 
 export default function MedicineDetailScreen({ route, navigation }: any) {
   const { medicineId } = route.params;
-  
+
   // ── Hooks ─────────────────────────────────────────────
   const { theme } = useTheme();
   const ACCENT = theme.colors.pharma;
@@ -80,7 +80,7 @@ export default function MedicineDetailScreen({ route, navigation }: any) {
   const discount = Number(medicine.discount || 0);
   const hasDiscount = discount > 0;
   const sellingPrice = hasDiscount ? mrp - discount : mrp;
-  
+
   const rxRequired = medicine.requiresPrescription === true || medicine.requiresPrescription === 'true' || medicine.requiresPrescription === 1 || medicine.requiresPrescription === '1';
 
   const handleAddToCart = () => {
@@ -107,10 +107,12 @@ export default function MedicineDetailScreen({ route, navigation }: any) {
         'This medicine requires a valid prescription. You can upload it in your cart before checkout.',
         [
           { text: 'Continue Shopping', style: 'cancel' },
-          { text: 'View Cart', onPress: () => {
-            setActiveMode('pharma');
-            navigation.navigate('Cart');
-          }},
+          {
+            text: 'View Cart', onPress: () => {
+              setActiveMode('pharma');
+              navigation.navigate('Cart');
+            }
+          },
         ]
       );
     } else {
@@ -146,15 +148,15 @@ export default function MedicineDetailScreen({ route, navigation }: any) {
         </Pressable>
       </View>
 
-      <ScrollView 
+      <ScrollView
         ref={scrollRef}
-        style={{ flex: 1 }} 
+        style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: 100 }}
       >
         {/* Image */}
         <View style={[styles.imgWrap, { backgroundColor: theme.colors.isDark ? theme.colors.surfaceMuted : '#EFF3FF' }]}>
           {img ? (
-            <Image source={{ uri: img }} style={styles.img} resizeMode="contain" />
+            <Image source={{ uri: img }} style={styles.img} resizeMode="cover" />
           ) : (
             <View style={[styles.img, { justifyContent: 'center', alignItems: 'center' }]}>
               <Ionicons name="medkit-outline" size={64} color={ACCENT} />
@@ -234,7 +236,7 @@ export default function MedicineDetailScreen({ route, navigation }: any) {
                   </AppText>
                 </View>
                 {substitutes.length > 0 && (
-                  <Pressable 
+                  <Pressable
                     style={styles.altHintBtn}
                     onPress={() => scrollRef.current?.scrollTo({ y: subSectionY, animated: true })}
                   >
@@ -288,7 +290,7 @@ export default function MedicineDetailScreen({ route, navigation }: any) {
 
         {/* ── Substitutions ──────────────────────────────── */}
         {substitutes.length > 0 && (
-          <View 
+          <View
             style={styles.detailsBlock}
             onLayout={(e) => setSubSectionY(e.nativeEvent.layout.y)}
           >
@@ -326,7 +328,7 @@ export default function MedicineDetailScreen({ route, navigation }: any) {
       </ScrollView>
 
       {addedToCart && (
-        <View style={{ position: 'absolute', top: 80, left: 20, right: 20, backgroundColor: '#10B981', padding: 14, borderRadius: 16, flexDirection: 'row', alignItems: 'center', zIndex: 999, shadowColor: '#000', shadowOffset: {width:0,height:4}, shadowOpacity: 0.2, shadowRadius: 8, elevation: 8 }}>
+        <View style={{ position: 'absolute', top: 80, left: 20, right: 20, backgroundColor: '#10B981', padding: 14, borderRadius: 16, flexDirection: 'row', alignItems: 'center', zIndex: 999, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 8 }}>
           <Ionicons name="checkmark-circle" size={22} color="#fff" />
           <AppText variant="bodyStrong" color="#fff" style={{ marginLeft: 8 }}>Added to cart!</AppText>
         </View>
@@ -361,8 +363,8 @@ export default function MedicineDetailScreen({ route, navigation }: any) {
         </View>
 
         {/* Recurring Toggle */}
-        <Pressable 
-          style={styles.recurringBtn} 
+        <Pressable
+          style={styles.recurringBtn}
           onPress={() => navigation.navigate('PharmaSubscribe', { medicineId })}
         >
           <Ionicons name="repeat" size={20} color={ACCENT} />
@@ -371,8 +373,8 @@ export default function MedicineDetailScreen({ route, navigation }: any) {
 
         {availability?.available && itemQty > 0 ? (
           <View style={styles.stepperContainer}>
-            <Pressable 
-              style={styles.stepperBtn} 
+            <Pressable
+              style={styles.stepperBtn}
               onPress={() => updateQuantity(medicine.id, itemQty - 1, 'pharma')}
               hitSlop={8}
             >
@@ -381,8 +383,8 @@ export default function MedicineDetailScreen({ route, navigation }: any) {
             <AppText variant="bodyStrong" color={theme.colors.textPrimary} style={styles.stepperQty}>
               {itemQty}
             </AppText>
-            <Pressable 
-              style={styles.stepperBtn} 
+            <Pressable
+              style={styles.stepperBtn}
               onPress={() => {
                 const limit = Number(medicine.maxQuantityPerOrder) || 0;
                 if (limit > 0 && itemQty >= limit) {
@@ -397,8 +399,8 @@ export default function MedicineDetailScreen({ route, navigation }: any) {
             </Pressable>
           </View>
         ) : (
-          <Pressable 
-            style={[styles.addBtn, !availability?.available ? { backgroundColor: theme.colors.surfaceMuted, borderWidth: 1, borderColor: theme.colors.border } : null]} 
+          <Pressable
+            style={[styles.addBtn, !availability?.available ? { backgroundColor: theme.colors.surfaceMuted, borderWidth: 1, borderColor: theme.colors.border } : null]}
             onPress={() => {
               if (!availability?.available && substitutes.length > 0) {
                 scrollRef.current?.scrollTo({ y: subSectionY, animated: true });
@@ -407,17 +409,17 @@ export default function MedicineDetailScreen({ route, navigation }: any) {
               }
             }}
           >
-            <Ionicons 
-              name={availability?.available ? "cart-outline" : "swap-horizontal"} 
-              size={20} 
-              color={availability?.available ? "#fff" : theme.colors.textSecondary} 
+            <Ionicons
+              name={availability?.available ? "cart-outline" : "swap-horizontal"}
+              size={20}
+              color={availability?.available ? "#fff" : theme.colors.textSecondary}
             />
-            <AppText 
-              variant="bodyStrong" 
-              color={availability?.available ? "#fff" : theme.colors.textSecondary} 
+            <AppText
+              variant="bodyStrong"
+              color={availability?.available ? "#fff" : theme.colors.textSecondary}
               style={{ marginLeft: 8 }}
             >
-              {availability?.available 
+              {availability?.available
                 ? (rxRequired ? 'Upload Rx & Order' : 'Add to Cart')
                 : (substitutes.length > 0 ? 'View Alternatives' : 'Out of Stock')}
             </AppText>

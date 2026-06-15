@@ -91,12 +91,18 @@ export function useOrderTracking(orderId: string, navigation: any) {
       } else if (isPharma) {
         // Pharma: load first page of all medicines, or search if query provided
         const { pharmaApi } = require('../api/api');
-        const res = await pharmaApi.searchMedicines(q.trim() || '', 1, 50);
+        const query = q.trim();
+        const res = query 
+          ? await pharmaApi.searchMedicines(query, 1, 50)
+          : await pharmaApi.getFeatured(50); // Show featured if no search
         const data = res.data;
         setAllProducts(Array.isArray(data) ? data : (data?.data || []));
       } else if (isMart) {
         // Mart: load first page of all products, or search if query provided
-        const res = await productsApi.search(q.trim() || '', 1, 50);
+        const query = q.trim();
+        const res = query
+          ? await productsApi.search(query, 1, 50)
+          : await productsApi.list({ limit: 50 }); // Show general list if no search
         const data = res.data;
         setAllProducts(Array.isArray(data) ? data : (data?.data || []));
       }

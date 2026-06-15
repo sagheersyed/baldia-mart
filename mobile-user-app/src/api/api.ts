@@ -655,3 +655,13 @@ export const cmsApi = {
   updateMerchantOrderStatus: (tenantId: string, orderId: string, status: string) =>
     api.put(`/cms/orders/${orderId}/status`, { status }, tenantHeaders(tenantId)),
 };
+
+export const financeApi = {
+  getVendorSummary: () => api.get('/finance/vendor/summary'),
+  getVendorStatement: () => api.get('/finance/vendor/statement'),
+  getRiderSummary: () => api.get('/finance/rider/summary'),
+  getRiderStatement: () => api.get('/finance/rider/statement'),
+  getPlatformSummary: () => api.get('/finance/admin/platform-summary'),
+  getDailySnapshots: (from?: string, to?: string) => 
+    api.get('/finance/admin/daily-snapshots', { params: { from, to } }),
+};

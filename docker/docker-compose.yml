@@ -37,8 +37,8 @@ services:
     ports:
       - "3001:3000" # Maps Next.js to 3001
     environment:
-      - NEXT_PUBLIC_API_URL=https://clergyman-envelope-prism.ngrok-free.dev/api/v1
-      - NEXT_PUBLIC_SOCKET_URL=https://clergyman-envelope-prism.ngrok-free.dev
+      - NEXT_PUBLIC_API_URL=http://192.168.100.142:3000/api/v1
+      - NEXT_PUBLIC_SOCKET_URL=http://192.168.100.142:3000
     depends_on:
       - backend-api
     networks:

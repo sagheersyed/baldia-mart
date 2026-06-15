@@ -102,6 +102,14 @@ import { ApprovalRule } from './cms/entities/approval-rule.entity';
 import { AuditLog } from './cms/entities/audit-log.entity';
 import { CmsModule } from './cms/cms.module';
 
+// Finance domain entities & module
+import { FinancialLedgerEntry } from './finance/entities/financial-ledger-entry.entity';
+import { CommissionConfig } from './finance/entities/commission-config.entity';
+import { SettlementPeriod } from './finance/entities/settlement-period.entity';
+import { DailyFinancialSnapshot } from './finance/entities/daily-financial-snapshot.entity';
+import { FinanceModule } from './finance/finance.module';
+
+
 @Module({
   imports: [
     AppCacheModule,
@@ -146,6 +154,8 @@ import { CmsModule } from './cms/cms.module';
         ModuleEvent,
         // CMS entities
         Tenant, TenantUser, ChangeRequest, ChangeRequestDiscussion, ApprovalRule, AuditLog,
+        // Finance entities
+        FinancialLedgerEntry, CommissionConfig, SettlementPeriod, DailyFinancialSnapshot,
       ],
       logging: false,
       synchronize: process.env.NODE_ENV !== 'production',
@@ -182,6 +192,7 @@ import { CmsModule } from './cms/cms.module';
     PharmaModule,
     ModuleEventsModule,
     CmsModule,
+    FinanceModule,
   ],
   controllers: [AppController, HealthController],
   providers: [

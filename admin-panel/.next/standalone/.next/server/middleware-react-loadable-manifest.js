@@ -1,1 +1,0 @@
-self.__REACT_LOADABLE_MANIFEST='{"app\\\\live-map\\\\page.tsx -> @/components/RiderMap":{"id":87927,"files":["static/css/63516b7b0d9e3452.css","static/chunks/d0deef33.0379166a4ec23470.js","static/chunks/4414-74179cc16ed6ec47.js","static/chunks/7927.bc6a9a39ff68dc1a.js"]}}';

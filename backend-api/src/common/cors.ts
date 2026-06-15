@@ -1,7 +1,7 @@
 const DEFAULT_ORIGINS = [
   'http://localhost:3000',
   'http://localhost:3001',
-  'https://clergyman-envelope-prism.ngrok-free.dev',
+  'http://192.168.100.142:3000',
   'http://192.168.100.142:3001',
 ];
 

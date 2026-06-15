@@ -7,9 +7,10 @@ import {
   LayoutDashboard, ShoppingBag, Package, LayoutList, Tag, UtensilsCrossed,
   Store, Layers, ClipboardList, Users, Bike, Radar, Wallet, MapPin, Megaphone,
   Star, Settings, LogOut, ChevronLeft, ShoppingCart, Activity, Pill, FileText,
-  Stethoscope, FlaskConical, Video, Building2, RefreshCw, Calendar,
+  Stethoscope, FlaskConical, Video, Building2, RefreshCw, Calendar, DollarSign
 } from 'lucide-react';
 import { clearAdminSession, BASE_URL } from '@/lib/api';
+import { useSettings } from '@/context/SettingsContext';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -17,88 +18,86 @@ interface SidebarProps {
   onToggleCollapse: () => void;
 }
 
-const NAV = [
-  { name: 'Dashboard',        icon: LayoutDashboard, path: '/' },
-  { name: 'Change Requests', icon: RefreshCw,       path: '/change-requests' },
-  { name: 'Orders',           icon: ClipboardList,   path: '/orders' },
-  { name: 'Products',         icon: ShoppingBag,     path: '/products' },
-  { name: 'Medicines',        icon: Pill,            path: '/medicines' },
-  { name: 'Doctors',          icon: Stethoscope,     path: '/doctors' },
-  { name: 'Clinics',          icon: Building2,       path: '/clinics' },
-  { name: 'Consultations',    icon: Video,           path: '/consultations' },
-  { name: 'Lab Tests',        icon: FlaskConical,    path: '/lab-tests' },
-  { name: 'Lab Bookings',     icon: ClipboardList,   path: '/lab-bookings' },
-  { name: 'Prescriptions',    icon: FileText,        path: '/prescriptions' },
-  { name: 'Subscriptions',    icon: RefreshCw,       path: '/subscriptions' },
-  { name: 'Pharma Analytics', icon: Activity,        path: '/pharma-analytics' },
-  { name: 'Rashan Requests',  icon: Package,         path: '/rashan' },
-  { name: 'Categories',       icon: LayoutList,      path: '/categories' },
-  { name: 'Brands',           icon: Tag,             path: '/brands' },
-  { name: 'Restaurants',      icon: UtensilsCrossed, path: '/restaurants' },
-  { name: 'Vendors',          icon: Store,           path: '/vendors' },
-  { name: 'Pharmacies',       icon: Activity,        path: '/pharmacies' },
-  { name: 'Banners',          icon: Layers,          path: '/banners' },
-  { name: 'Events & Campaigns', icon: Calendar,        path: '/events' },
-  { name: 'Users',            icon: Users,           path: '/users' },
-  { name: 'Riders',           icon: Bike,            path: '/riders' },
-  { name: 'Live Map',         icon: Radar,           path: '/live-map' },
-  { name: 'Wallets',          icon: Wallet,          path: '/wallets' },
-  { name: 'Delivery Zones',   icon: MapPin,          path: '/zones' },
-  { name: 'Marketing',        icon: Megaphone,       path: '/marketing' },
-  { name: 'Ratings',          icon: Star,            path: '/ratings' },
-  { name: 'Settings',         icon: Settings,        path: '/settings' },
+const NAVIGATION_GROUPS = [
+  {
+    label: 'Management',
+    items: [
+      { name: 'Insights', icon: LayoutDashboard, path: '/' },
+      { name: 'Finance Center', icon: DollarSign, path: '/finance' },
+      { name: 'Queue Manager', icon: RefreshCw, path: '/change-requests' },
+      { name: 'Orders', icon: ClipboardList, path: '/orders' },
+    ]
+  },
+  {
+    label: 'Verticals',
+    items: [
+      { name: 'Products', icon: ShoppingBag, path: '/products' },
+      { name: 'Medicines', icon: Pill, path: '/medicines' },
+      { name: 'Clinics', icon: Building2, path: '/clinics' },
+      { name: 'Restaurants', icon: UtensilsCrossed, path: '/restaurants' },
+      { name: 'Rashan Requests', icon: Package, path: '/rashan' },
+    ]
+  },
+  {
+    label: 'Healthcare',
+    pharmaOnly: true,
+    items: [
+      { name: 'Doctors', icon: Stethoscope, path: '/doctors' },
+      { name: 'Consultations', icon: Video, path: '/consultations' },
+      { name: 'Lab Tests', icon: FlaskConical, path: '/lab-tests' },
+      { name: 'Prescriptions', icon: FileText, path: '/prescriptions' },
+      { name: 'Subscriptions', icon: RefreshCw, path: '/subscriptions' },
+    ]
+  },
+  {
+    label: 'Ecosystem',
+    items: [
+      { name: 'Vendors', icon: Store, path: '/vendors' },
+      { name: 'Users', icon: Users, path: '/users' },
+      { name: 'Riders', icon: Bike, path: '/riders' },
+      { name: 'Live Map', icon: Radar, path: '/live-map' },
+      { name: 'Wallets', icon: Wallet, path: '/wallets' },
+    ]
+  },
+  {
+    label: 'Platform',
+    items: [
+      { name: 'Delivery Zones', icon: MapPin, path: '/zones' },
+      { name: 'Marketing', icon: Megaphone, path: '/marketing' },
+      { name: 'Banners', icon: Layers, path: '/banners' },
+      { name: 'Ratings', icon: Star, path: '/ratings' },
+      { name: 'Settings', icon: Settings, path: '/settings' },
+    ]
+  }
 ];
 
 export default function Sidebar({ isOpen, isCollapsed, onToggleCollapse }: SidebarProps) {
   const pathname = usePathname();
-  const router   = useRouter();
-  const [settings, setSettings] = React.useState<any>({});
-
-  React.useEffect(() => {
-    const fetchSettings = async () => {
-      try {
-        const res = await fetch(`${BASE_URL}/settings/public`);
-        if (res.ok) setSettings(await res.json());
-      } catch (e) {
-        console.error('Sidebar settings fetch failed', e);
-      }
-    };
-    fetchSettings();
-  }, []);
+  const router = useRouter();
+  const { settings } = useSettings();
 
   const handleLogout = () => {
     clearAdminSession();
     router.replace('/login');
   };
 
-  const filteredNav = NAV.filter(item => {
-    if (['Doctors', 'Clinics', 'Consultations'].includes(item.name)) {
-      return settings.feature_pharma_doctor_consultations_enabled;
-    }
-    if (['Lab Tests', 'Lab Bookings'].includes(item.name)) {
-      return settings.feature_pharma_lab_tests_enabled;
-    }
-    if (item.name === 'Subscriptions') {
-      return settings.feature_pharma_refills_enabled !== false && settings.feature_show_pharma !== false;
-    }
-    if (['Medicines', 'Prescriptions', 'Pharma Analytics', 'Pharmacies'].includes(item.name)) {
-      return settings.feature_show_pharma !== false;
-    }
-    if (['Products', 'Vendors', 'Categories'].includes(item.name)) {
-      return settings.feature_show_mart !== false;
-    }
-    if (item.name === 'Restaurants') return settings.feature_show_restaurants !== false;
-    if (item.name === 'Rashan Requests') return settings.feature_rashan_enabled !== false;
-    if (item.name === 'Brands') return settings.feature_show_brands !== false;
+  const isModuleEnabled = (name: string) => {
+    if (['Doctors', 'Clinics', 'Consultations'].includes(name)) return settings.feature_pharma_doctor_consultations_enabled;
+    if (['Lab Tests', 'Lab Bookings'].includes(name)) return settings.feature_pharma_lab_tests_enabled;
+    if (name === 'Subscriptions') return settings.feature_pharma_refills_enabled && settings.feature_show_pharma;
+    if (['Medicines', 'Prescriptions', 'Pharma Analytics', 'Pharmacies'].includes(name)) return settings.feature_show_pharma;
+    if (['Products', 'Vendors', 'Categories'].includes(name)) return settings.feature_show_mart;
+    if (name === 'Restaurants') return settings.feature_show_restaurants;
+    if (name === 'Rashan Requests') return settings.feature_rashan_enabled;
+    if (name === 'Brands') return settings.feature_show_brands;
     return true;
-  });
+  };
 
   return (
     <>
-      {/* Backdrop mobile */}
       {isOpen && (
         <div
-          className="lg:hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40"
+          className="lg:hidden fixed inset-0 bg-slate-950/40 backdrop-blur-md z-40"
           onClick={onToggleCollapse}
         />
       )}
@@ -106,72 +105,80 @@ export default function Sidebar({ isOpen, isCollapsed, onToggleCollapse }: Sideb
       <aside
         className={`
           fixed lg:static inset-y-0 left-0 z-50 flex flex-col
-          ${isCollapsed ? 'lg:w-[72px]' : 'lg:w-64'} w-64
-          bg-slate-900 text-white
+          ${isCollapsed ? 'lg:w-[84px]' : 'lg:w-64'} w-64
+          bg-[#0B0E14] text-white
           transition-all duration-300 ease-in-out
           ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-          shadow-xl lg:shadow-none
+          shadow-2xl lg:shadow-none border-r border-white/5
         `}
       >
-        {/* Logo */}
-        <div className={`h-16 flex items-center shrink-0 border-b border-white/8 px-4 ${isCollapsed ? 'justify-center' : 'gap-3'}`}>
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center text-white text-sm font-bold shadow shrink-0">
-            <ShoppingCart size={16} />
+        <div className={`h-20 flex items-center shrink-0 px-6 ${isCollapsed ? 'justify-center border-b border-white/5' : 'gap-3'}`}>
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-primary-600 to-indigo-600 flex items-center justify-center text-white shadow-xl shadow-primary-600/20 shrink-0 transform hover:scale-105 transition-transform">
+            <ShoppingCart size={20} />
           </div>
           {!isCollapsed && (
             <div className="min-w-0">
-              <p className="font-bold text-sm text-white truncate">Baldia Mart</p>
-              <p className="text-[10px] text-slate-400 font-medium">Admin Panel</p>
+              <p className="font-black text-xs text-white tracking-[0.2em] uppercase italic">Baldia Mart</p>
+              <p className="text-[10px] text-slate-500 font-black tracking-widest mt-0.5">CORE OS</p>
             </div>
           )}
 
-          {/* Collapse toggle (desktop) */}
           <button
             onClick={onToggleCollapse}
-            className={`hidden lg:flex ml-auto p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-white/10 transition shrink-0 ${isCollapsed ? 'rotate-180' : ''}`}
-            aria-label="Toggle sidebar"
+            className={`hidden lg:flex ml-auto p-2 rounded-xl text-slate-600 hover:text-white hover:bg-white/5 transition-all shrink-0 ${isCollapsed ? 'rotate-180' : ''}`}
           >
             <ChevronLeft size={16} />
           </button>
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
-          {filteredNav.map((item) => {
-            const active =
-              item.path === '/'
-                ? pathname === '/'
-                : pathname.startsWith(item.path);
+        <nav className="flex-1 overflow-y-auto pt-6 px-4 space-y-8 custom-scrollbar pb-12">
+          {NAVIGATION_GROUPS.map((group) => {
+            const filteredItems = group.items.filter(item => isModuleEnabled(item.name));
+            if (filteredItems.length === 0) return null;
 
             return (
-              <Link
-                key={item.path}
-                href={item.path}
-                title={isCollapsed ? item.name : undefined}
-                className={`
-                  flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-150
-                  ${active
-                    ? 'bg-primary-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:bg-white/8 hover:text-white'}
-                  ${isCollapsed ? 'justify-center' : ''}
-                `}
-              >
-                <item.icon size={17} className="shrink-0" />
-                {!isCollapsed && <span className="truncate">{item.name}</span>}
-              </Link>
+              <div key={group.label} className="space-y-2">
+                {!isCollapsed && (
+                  <p className="px-3 text-[10px] font-black text-slate-600 uppercase tracking-[0.3em] pl-4">{group.label}</p>
+                )}
+                <div className="space-y-1">
+                  {filteredItems.map((item) => {
+                    const active = item.path === '/' ? pathname === '/' : pathname.startsWith(item.path);
+                    return (
+                      <Link
+                        key={item.path}
+                        href={item.path}
+                        className={`
+                          group flex items-center py-3 rounded-2xl transition-all duration-200
+                          ${isCollapsed ? 'justify-center px-0' : 'px-4 gap-3'}
+                          ${active 
+                            ? 'bg-gradient-to-r from-white/10 to-transparent text-white shadow-lg border-l-4 border-primary-500 shadow-white/5' 
+                            : 'text-slate-500 hover:text-white hover:bg-white/5'}
+                        `}
+                      >
+                        <item.icon size={isCollapsed ? 20 : 18} className={`shrink-0 transition-colors ${active ? 'text-primary-500' : 'group-hover:text-primary-400'}`} />
+                        {!isCollapsed && <span className="text-[13px] font-bold tracking-tight">{item.name}</span>}
+                        {active && !isCollapsed && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-primary-500 animate-pulse" />}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
             );
           })}
         </nav>
 
-        {/* Logout */}
-        <div className="shrink-0 border-t border-white/8 px-3 py-4">
+        <div className="shrink-0 p-4 border-t border-white/5 bg-black/20">
           <button
             onClick={handleLogout}
-            title={isCollapsed ? 'Logout' : undefined}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium text-red-400 hover:bg-red-500/10 hover:text-red-300 transition ${isCollapsed ? 'justify-center' : ''}`}
+            className={`
+              w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl text-[13px] font-black transition-all
+              text-red-500 hover:bg-red-500/10 hover:shadow-lg hover:shadow-red-500/5
+              ${isCollapsed ? 'justify-center' : ''}
+            `}
           >
-            <LogOut size={17} className="shrink-0" />
-            {!isCollapsed && <span>Logout</span>}
+            <LogOut size={18} className="shrink-0" />
+            {!isCollapsed && <span className="uppercase tracking-widest italic">Terminate</span>}
           </button>
         </div>
       </aside>
