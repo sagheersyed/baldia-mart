@@ -55,8 +55,11 @@ const config: Config = {
         fadeIn:  { from: { opacity: '0' }, to: { opacity: '1' } },
         slideUp: { from: { opacity: '0', transform: 'translateY(8px)' }, to: { opacity: '1', transform: 'translateY(0)' } },
       },
+      transitionTimingFunction: {
+        'premium': 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+      },
     },
   },
-  plugins: [],
+  plugins: [require("tailwindcss-animate")],
 }
 export default config

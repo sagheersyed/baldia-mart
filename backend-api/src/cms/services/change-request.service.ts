@@ -62,23 +62,35 @@ export class ChangeRequestService {
         
         const hasOverlap = newPaths.some(path => existingPaths.includes(path));
         if (hasOverlap) {
-          // Idempotency: If the patchData is PRECISELY the same, just return the existing one
-          // This avoids "Toggle Failed" errors if user clicks fast or network retries.
+          // ── Idempotency Check ──
+          // If the patchData is PRECISELY the same, just return the existing one.
           if (JSON.stringify(existing.patchData) === JSON.stringify(params.patchData)) {
              this.logger.log(`Idempotent CR request for ${params.entityType} ${params.entityId}. Returning existing ${existing.id}`);
              return existing;
           }
 
-          this.logger.warn(`Rejected duplicate CR for ${params.entityType} ${params.entityId}`);
-          throw new BadRequestException('A pending change request for this field already exists.');
+          // ── Supersede Logic ──
+          // If the existing request is still 'submitted' (not yet picked up by an admin),
+          // we allow the new request to 'supersede' it by marking the old one as 'superseded'.
+          // This prevents blockers when users rapidly toggle state (e.g., availability).
+          if (existing.status === 'submitted') {
+            this.logger.log(`Superseding pending CR ${existing.id} with new request for ${params.entityType} ${params.entityId}`);
+            existing.status = 'rejected';
+            existing.rejectionReason = 'Superseded by a newer request for the same field(s).';
+            await this.crRepo.save(existing);
+            // We continue and create the new CR
+          } else {
+            this.logger.warn(`Rejected duplicate CR for ${params.entityType} ${params.entityId} because it is already under_review`);
+            throw new BadRequestException('A change request for this field is already under review by an admin.');
+          }
         }
       } else if (existing && params.actionType === 'CREATE') {
          // For CREATE, we check if the patchData matches (basic check)
          if (JSON.stringify(existing.patchData) === JSON.stringify(params.patchData)) {
             return existing;
-         }
+          }
+        }
       }
-    }
 
     const cr = this.crRepo.create({
       tenantId: params.tenantId,

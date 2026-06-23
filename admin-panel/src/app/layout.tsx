@@ -39,7 +39,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={inter.variable}>
       <title>Baldia Mart Admin</title>
-      <body className={`${inter.className} ${isLoginPage ? 'bg-slate-50' : 'flex bg-slate-100 min-h-screen'}`}>
+      <body className={`${inter.className} ${isLoginPage ? 'bg-slate-50' : 'flex bg-[#F8FAFC] min-h-screen'}`}>
         <SettingsProvider>
           {isLoginPage ? (
             children
@@ -54,12 +54,13 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               {/* Main */}
               <div className="flex-1 flex flex-col min-h-screen min-w-0 overflow-hidden">
                 <TopBar onMenuToggle={() => setIsSidebarOpen((v) => !v)} />
-                <main className="flex-1 overflow-y-auto p-5 lg:p-7 animate-fade-in">
+                <main className="flex-1 overflow-y-auto custom-scrollbar">
                   {children}
                 </main>
               </div>
             </>
           )}
+
 
           <ToastHost />
           <SocketListener />

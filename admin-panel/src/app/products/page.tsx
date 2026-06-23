@@ -9,7 +9,7 @@ import { showToast } from '@/hooks/useToast';
 import Pagination from '@/components/Pagination';
 
 interface Category { id: string; name: string; section?: string }
-interface Brand    { id: string; name: string }
+interface Brand { id: string; name: string }
 interface Product {
   id: string; name: string; description: string; price: number; discount: number;
   stockQuantity: number; imageUrl: string; categoryId: string; brandId?: string;
@@ -20,8 +20,8 @@ interface Product {
   tags?: string[] | null; sortOrder?: number;
 }
 
-const API_URL  = `${BASE_URL}/products`;
-const CAT_URL  = `${BASE_URL}/categories`;
+const API_URL = `${BASE_URL}/products`;
+const CAT_URL = `${BASE_URL}/categories`;
 
 const EMPTY_FORM = {
   name: '', description: '', price: 0, discount: 0, stockQuantity: 0,
@@ -34,12 +34,12 @@ const EMPTY_FORM = {
 };
 
 export default function ProductsPage() {
-  const [products,  setProducts]  = useState<Product[]>([]);
-  const [categories,setCategories]= useState<Category[]>([]);
-  const [brands,    setBrands]    = useState<Brand[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [brands, setBrands] = useState<Brand[]>([]);
   const { loading, error, execute } = useAsyncData();
-  const [showModal,      setShowModal]      = useState(false);
-  const [isSubmitting,   setIsSubmitting]   = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [formData, setFormData] = useState({ ...EMPTY_FORM });
   const [page, setPage] = useState(1);
@@ -66,13 +66,13 @@ export default function ProductsPage() {
       if (!cR.ok) throw new Error(await parseApiError(cR, 'Failed to load categories'));
       if (!bR.ok) throw new Error(await parseApiError(bR, 'Failed to load brands'));
       const [pRaw, c, b] = await Promise.all([pR.json(), cR.json(), bR.json()]);
-      
+
       const p = Array.isArray(pRaw) ? pRaw : (pRaw?.data || []);
       setProducts(p);
       setTotalPages(pRaw?.totalPages || 1);
       setTotalItems(pRaw?.total || 0);
       setPage(targetPage);
-      
+
       setCategories(Array.isArray(c) ? c : (c?.data || []));
       setBrands(Array.isArray(b) ? b : (b?.data || []));
       return true;
@@ -83,7 +83,7 @@ export default function ProductsPage() {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const url    = editingProduct ? `${API_URL}/${editingProduct.id}` : API_URL;
+      const url = editingProduct ? `${API_URL}/${editingProduct.id}` : API_URL;
       const method = editingProduct ? 'PUT' : 'POST';
       const tagsArr = String(formData.tags || '')
         .split(',').map(t => t.trim()).filter(Boolean);
@@ -176,157 +176,115 @@ export default function ProductsPage() {
   const openAdd = () => { setEditingProduct(null); setFormData({ ...EMPTY_FORM }); setShowModal(true); };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-8 animate-in fade-in duration-500">
       <div className="page-header">
         <div>
           <h1 className="page-title">Products</h1>
-          <p className="page-subtitle">Manage inventory, pricing and merchandising · {products.length} items</p>
+          <p className="page-subtitle">Manage inventory, pricing and merchandising across all verticals.</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
-            <input 
-              type="text" 
-              placeholder="Search products…" 
-              className="input pl-9 w-56" 
-              value={searchQuery} 
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <input
+              type="text"
+              placeholder="Search catalog..."
+              className="input pl-10 w-64"
+              value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
                 fetchData(1, e.target.value);
-              }} 
+              }}
             />
           </div>
           <button onClick={() => fetchData(1)} className="btn-ghost btn-icon">
-            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+            <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
           </button>
-          <button onClick={openAdd} className="btn-primary">
-            <Plus size={16} /> Add Product
+          <button onClick={openAdd} className="btn-accent">
+            <Plus size={18} /> New Product
           </button>
         </div>
       </div>
 
-      <div className="card overflow-hidden">
-        {error && !loading ? (
-          <ErrorState message={error} onRetry={fetchData} />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Product</th>
-                  <th>Category / Brand</th>
-                  <th className="text-right">Price</th>
-                  <th className="text-center">Stock</th>
-                  <th className="text-center">Merchandising</th>
-                  <th className="text-center">Status</th>
-                  <th className="text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading && products.length === 0 ? (
-                  <tr>
-                    <td colSpan={7}>
-                      <LoadingState message="Loading products…" />
-                    </td>
-                  </tr>
-                ) : products.length === 0 ? (
-                  <tr>
-                    <td colSpan={7}>
-                      <EmptyState title="No products yet" message="Add your first product to get started." icon={<Package size={22} className="text-slate-300" />} />
-                    </td>
-                  </tr>
-                ) : products.map((prod) => (
-                  <tr key={prod.id}>
-                    <td>
-                      <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 bg-slate-50 rounded-xl overflow-hidden border border-slate-100 shrink-0">
-                          {prod.imageUrl
-                            ? <img src={prod.imageUrl} alt={prod.name} className="w-full h-full object-cover" />
-                            : <div className="w-full h-full flex items-center justify-center"><Package size={18} className="text-slate-300" /></div>
-                          }
-                        </div>
-                        <div className="min-w-0">
-                          <p className="font-semibold text-slate-800 truncate max-w-[200px]">{prod.name}</p>
-                          <p className="text-xs text-slate-400 truncate max-w-[200px]">
-                            {[prod.weight, prod.unit].filter(Boolean).join(' · ') || prod.description || '—'}
-                          </p>
-                        </div>
-                      </div>
-                    </td>
-                    <td>
-                      <div className="flex flex-wrap gap-1">
-                        <span className="badge-gray">{prod.category?.name || 'Uncategorized'}</span>
-                        {prod.brand?.name && <span className="badge-blue">{prod.brand.name}</span>}
-                      </div>
-                    </td>
-                    <td className="text-right">
-                      <div className="font-bold text-slate-800">
-                        Rs. {(Number(prod.price || 0) - Number(prod.discount || 0)).toFixed(0)}
-                      </div>
-                      {Number(prod.discount) > 0 && (
-                        <div className="text-xs text-slate-400 line-through">
-                          Rs. {Number(prod.price).toFixed(0)}
-                        </div>
-                      )}
-                    </td>
-                    <td className="text-center">
-                      <span className={`text-sm font-semibold ${prod.stockQuantity < 10 ? 'text-red-500' : 'text-slate-700'}`}>
-                        {prod.stockQuantity}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="flex items-center justify-center gap-1.5">
-                        <FlagToggle
-                          icon={<Star size={14} />}
-                          active={!!prod.isFeatured}
-                          activeClass="bg-amber-50 border-amber-200 text-amber-600"
-                          title="Featured"
-                          onClick={() => toggleFlag(prod, 'isFeatured')}
-                        />
-                        <FlagToggle
-                          icon={<Flame size={14} />}
-                          active={!!prod.isBestSeller}
-                          activeClass="bg-rose-50 border-rose-200 text-rose-600"
-                          title="Best Seller"
-                          onClick={() => toggleFlag(prod, 'isBestSeller')}
-                        />
-                        <FlagToggle
-                          icon={<Zap size={14} />}
-                          active={!!prod.isDeal}
-                          activeClass="bg-emerald-50 border-emerald-200 text-emerald-600"
-                          title="Deal"
-                          onClick={() => toggleFlag(prod, 'isDeal')}
-                        />
-                      </div>
-                    </td>
-                    <td className="text-center">
-                      <span className={prod.isActive ? 'badge-green' : 'badge-gray'}>
-                        {prod.isActive ? 'Active' : 'Archived'}
-                      </span>
-                    </td>
-                    <td className="text-right">
-                      <div className="flex justify-end gap-1.5">
-                        <button onClick={() => handleEdit(prod)} className="btn-ghost btn-icon text-blue-600 border-blue-100 hover:bg-blue-50">
-                          <Pencil size={14} />
-                        </button>
-                        <button onClick={() => handleDelete(prod.id)} className="btn-ghost btn-icon text-red-500 border-red-100 hover:bg-red-50">
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        {loading && products.length === 0 ? (
+          Array(8).fill(0).map((_, i) => (
+            <div key={i} className="card h-96 animate-pulse bg-slate-50" />
+          ))
+        ) : products.length === 0 ? (
+          <div className="col-span-full py-32 flex flex-col items-center justify-center card bg-white border-dashed">
+            <Package size={48} className="text-slate-200 mb-4" />
+            <p className="text-sm font-semibold text-slate-400">No products match your search</p>
           </div>
-        )}
+        ) : products.map((prod) => (
+          <div key={prod.id} className="card flex flex-col">
+            {/* Image Section */}
+            <div className="relative aspect-square overflow-hidden bg-slate-50 border-b border-slate-100 shrink-0">
+              {prod.imageUrl ? (
+                <img src={prod.imageUrl} alt={prod.name} className="w-full h-full object-cover transition-transform duration-500 hover:scale-110" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-slate-200">
+                  <Package size={48} />
+                </div>
+              )}
+              
+              {/* Status Overlay */}
+              <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 max-w-[80%]">
+                {prod.isFeatured && <span className="px-2 py-0.5 rounded-lg bg-blue-600 text-white text-[10px] font-bold uppercase tracking-wider shadow-sm">Featured</span>}
+                {prod.isBestSeller && <span className="px-2 py-0.5 rounded-lg bg-rose-600 text-white text-[10px] font-bold uppercase tracking-wider shadow-sm">Hot</span>}
+              </div>
 
-        <div className="flex items-center justify-between px-6 py-4 bg-slate-50 border-t border-slate-100">
-          <div className="text-sm text-slate-500">
-            Showing <span className="font-semibold text-slate-700">{products.length}</span> of <span className="font-semibold text-slate-700">{totalItems}</span> items
+              <div className="absolute bottom-3 right-3">
+                <span className={prod.isActive ? 'badge-blue' : 'badge-gray'}>
+                  {prod.isActive ? 'Active' : 'Draft'}
+                </span>
+              </div>
+            </div>
+
+            <div className="p-5 flex-1 flex flex-col">
+              <div className="flex-1 mb-6">
+                <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mb-1 block">
+                  {prod.category?.name || 'Uncategorized'}
+                </span>
+                <h3 className="font-bold text-slate-900 text-lg leading-tight line-clamp-1 mb-1.5">{prod.name}</h3>
+                <p className="text-sm text-slate-500 line-clamp-2">{prod.description || 'No description provided.'}</p>
+              </div>
+
+              <div className="flex items-center justify-between mb-6 pt-4 border-t border-slate-50">
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Inventory</span>
+                  <span className={`text-sm font-bold ${prod.stockQuantity < 10 ? 'text-rose-600' : 'text-slate-900'}`}>
+                    {prod.stockQuantity} <span className="text-slate-400 font-medium">in stock</span>
+                  </span>
+                </div>
+                <div className="flex flex-col items-end">
+                  <span className="text-xl font-bold text-slate-900">
+                    Rs. {(Number(prod.price || 0) - Number(prod.discount || 0)).toFixed(0)}
+                  </span>
+                  {Number(prod.discount) > 0 && (
+                    <span className="text-xs text-slate-400 line-through font-medium">Rs. {Number(prod.price).toFixed(0)}</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <button onClick={() => handleEdit(prod)} className="flex-1 btn-ghost !rounded-xl !py-2.5">
+                  <Pencil size={15} /> Edit
+                </button>
+                <button onClick={() => handleDelete(prod.id)} className="w-11 btn-ghost !text-rose-500 hover:!bg-rose-50 hover:!border-rose-100 !rounded-xl">
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            </div>
           </div>
-          <Pagination page={page} totalPages={totalPages} onPageChange={fetchData} />
+        ))}
+      </div>
+
+
+      <div className="flex items-center justify-between px-6 py-4 bg-slate-50 border-t border-slate-100">
+        <div className="text-sm text-slate-500">
+          Showing <span className="font-semibold text-slate-700">{products.length}</span> of <span className="font-semibold text-slate-700">{totalItems}</span> items
         </div>
+        <Pagination page={page} totalPages={totalPages} onPageChange={fetchData} />
       </div>
 
       {showModal && (

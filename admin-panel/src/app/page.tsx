@@ -122,70 +122,62 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="page-container space-y-12 pb-20">
-      {/* Platform Header */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-2 border-b border-slate-100/50">
-        <div className="space-y-1">
-          <div className="flex items-center gap-3">
-             <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center shadow-2xl shadow-slate-900/20">
-               <Activity size={24} className="text-primary-400" />
-             </div>
-             <h1 className="text-3xl font-black text-slate-900 tracking-tighter uppercase italic">Control Protocol</h1>
-          </div>
-          <p className="text-slate-400 font-bold ml-15 text-[10px] uppercase tracking-[0.3em] pl-15">Real-time Neural Engine · Global Sync</p>
+    <div className="page-container space-y-10 pb-20">
+      {/* Premium Header */}
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Dashboard</h1>
+          <p className="page-subtitle">Platform overview and real-time performance analytics.</p>
         </div>
         <div className="flex items-center gap-4">
            <div className="hidden lg:flex flex-col items-end">
-             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Last Data Burst</p>
-             <p className="text-sm font-black text-slate-900 mt-1">{lastUpdated?.toLocaleTimeString()}</p>
+             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Last Updated</span>
+             <span className="text-sm font-semibold text-slate-900 mt-1">{lastUpdated?.toLocaleTimeString()}</span>
            </div>
            <button
             onClick={() => { setLoading(true); fetchData(); }}
-            className="w-14 h-14 bg-white border border-slate-100 rounded-2xl flex items-center justify-center text-slate-400 hover:text-primary-600 hover:shadow-xl transition-all active:scale-90"
+            className="btn-ghost btn-icon"
           >
             <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
           </button>
         </div>
       </div>
 
-      {/* Primary Metrics Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-8">
+      {/* Primary Metrics Group */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {statCards.map((s, i) => (
-          <div key={i} className="relative group perspective-1000">
-            <div className="h-44 bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-2xl shadow-slate-200/40 relative overflow-hidden transition-all duration-500 group-hover:-translate-y-2 group-hover:shadow-primary-500/20 group-hover:border-primary-500/10">
-              <div className="flex justify-between items-start">
-                 <div className={`p-4 rounded-3xl bg-gradient-to-br ${s.color} text-white shadow-lg ${s.shadow} shrink-0 group-hover:scale-110 transition-transform`}>
-                    <s.icon size={20} />
-                 </div>
-                 <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black tracking-tight ${s.up ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
-                    {s.up ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
-                    {s.trend}
-                 </div>
-              </div>
-              <div className="mt-6 flex flex-col">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{s.title}</span>
-                <span className="text-2xl font-black text-slate-900 tracking-tighter mt-1">{s.value}</span>
-              </div>
-              <div className={`absolute -right-8 -bottom-8 w-32 h-32 bg-gradient-to-br ${s.color} opacity-[0.03] rounded-full blur-3xl group-hover:opacity-10 transition-opacity`} />
+          <div key={i} className="stat-card hover:bg-slate-50 transition-all border-slate-200/60">
+            <div className="flex justify-between items-start mb-4">
+               <div className={`p-3 rounded-xl bg-slate-900 text-white shadow-sm`}>
+                  <s.icon size={20} />
+               </div>
+               <div className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold ${s.up ? 'bg-emerald-50 text-emerald-600 border border-emerald-100/50' : 'bg-rose-50 text-rose-600 border border-rose-100/50'}`}>
+                  {s.up ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}
+                  {s.trend}
+               </div>
+            </div>
+            <div>
+              <p className="stat-label uppercase tracking-widest text-[10px] mb-1">{s.title}</p>
+              <p className="stat-value">{s.value}</p>
             </div>
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
-        {/* Main Analytics Engine */}
-        <div className="card !p-0 !rounded-[3rem] overflow-hidden border border-slate-100 shadow-2xl shadow-slate-200/30 lg:col-span-2">
-          <div className="bg-slate-950 p-8 flex flex-wrap items-center justify-between gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Revenue Performance Chart */}
+        <div className="data-table-container lg:col-span-2 flex flex-col">
+          <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-black text-white tracking-widest uppercase italic">Revenue Velocity</h2>
-              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.3em] mt-1">Global Transactional Flow</p>
+              <h2 className="text-lg font-bold text-slate-900">Revenue Performance</h2>
+              <p className="text-xs text-slate-500 font-medium">Daily transaction pulse across all systems</p>
             </div>
-            <div className="flex items-center gap-2 p-1.5 bg-white/5 rounded-2xl backdrop-blur-xl">
+            <div className="flex items-center gap-1.5 p-1 bg-slate-50 rounded-xl border border-slate-200/60">
               {RANGE_OPTS.map((o) => (
                 <button
                   key={o}
                   onClick={() => setRange(o)}
-                  className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${range === o ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
+                  className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${range === o ? 'bg-white text-slate-900 shadow-sm border border-slate-200' : 'text-slate-400 hover:text-slate-900'}`}
                 >
                   {o}
                 </button>
@@ -193,132 +185,130 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="p-8 pb-10 bg-white">
-            <div className="h-96">
+          <div className="p-8">
+            <div className="h-[380px]">
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={chartData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
                   <defs>
-                    <linearGradient id="gr" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%"   stopColor="#6366f1" stopOpacity={0.2} />
-                      <stop offset="100%" stopColor="#6366f1" stopOpacity={0} />
+                    <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.1} />
+                      <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="10 10" stroke="#f1f5f9" vertical={false} />
-                  <XAxis dataKey="date" tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 900 }} axisLine={false} tickLine={false} dy={15} />
-                  <YAxis yAxisId="l" tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 900 }} axisLine={false} tickLine={false}
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                  <XAxis dataKey="date" tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 600 }} axisLine={false} tickLine={false} dy={10} />
+                  <YAxis yAxisId="l" tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 600 }} axisLine={false} tickLine={false}
                     tickFormatter={(v) => `${v >= 1000 ? (v / 1000).toFixed(0) + 'K' : v}`} />
                   <YAxis yAxisId="r" orientation="right" hide />
                   <Tooltip
-                    cursor={{ stroke: '#6366f1', strokeWidth: 2 }}
                     content={({ active, payload, label }) =>
                       active && payload?.length ? (
-                        <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl p-5 min-w-[200px] animate-in zoom-in-95 duration-200 ring-4 ring-black/5">
-                          <p className="font-black text-white/40 mb-4 text-[10px] uppercase tracking-[0.3em]">{label}</p>
-                          <div className="space-y-3">
+                        <div className="bg-white border border-slate-200 rounded-xl shadow-xl p-4 min-w-[200px] animate-in zoom-in-95 duration-200">
+                          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">{label}</p>
+                          <div className="space-y-2">
                             <div className="flex items-center justify-between">
-                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Revenue</span>
-                              <b className="text-sm font-black text-indigo-400 tracking-tighter">RS. {payload[0]?.value?.toLocaleString()}</b>
+                              <span className="text-[11px] font-medium text-slate-500">Revenue</span>
+                              <span className="text-xs font-bold text-blue-600">Rs. {payload[0]?.value?.toLocaleString()}</span>
                             </div>
                             <div className="flex items-center justify-between">
-                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Load</span>
-                              <b className="text-sm font-black text-white tracking-tighter">{payload[1]?.value} OPS</b>
+                              <span className="text-[11px] font-medium text-slate-500">Volume</span>
+                              <span className="text-xs font-bold text-slate-900">{payload[1]?.value} units</span>
                             </div>
                           </div>
                         </div>
                       ) : null
                     }
                   />
-                  <Area yAxisId="l" type="monotone" dataKey="revenue" stroke="#6366f1" strokeWidth={4} fill="url(#gr)" dot={{ r: 6, fill: '#6366f1', strokeWidth: 3, stroke: '#fff' }} activeDot={{ r: 8, strokeWidth: 0 }} />
-                  <Bar   yAxisId="r" dataKey="orders" fill="#000" radius={[4, 4, 0, 0]} barSize={12} opacity={0.1} />
+                  <Area yAxisId="l" type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={3} fill="url(#revenueGradient)" dot={{ r: 4, fill: '#3b82f6', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6, strokeWidth: 0, fill: '#3b82f6' }} />
+                  <Bar yAxisId="r" dataKey="orders" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={12} opacity={0.05} />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
           </div>
         </div>
 
-        {/* CMS Live Queue */}
-        <div className="card !p-0 !rounded-[3rem] overflow-hidden border border-slate-100 shadow-2xl shadow-slate-200/30 flex flex-col h-[600px]">
-          <div className="p-8 bg-slate-50 border-b border-slate-100 shrink-0">
+        {/* Action Hub / Pending Requests */}
+        <div className="data-table-container flex flex-col h-[544px]">
+          <div className="px-6 py-6 border-b border-slate-100 bg-white">
              <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-lg font-black text-slate-900 tracking-tight uppercase italic underline decoration-primary-500/20 underline-offset-8">Live Queue</h2>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.3em] mt-2">Moderation Protocol</p>
+                  <h2 className="text-lg font-bold text-slate-900">Action Queue</h2>
+                  <p className="text-xs font-medium text-slate-500">Pending moderation requests</p>
                 </div>
                 {metrics.pendingChangeRequests > 0 && (
-                  <div className="w-10 h-10 rounded-2xl bg-rose-500 text-white flex items-center justify-center text-xs font-black shadow-lg shadow-rose-500/20 animate-bounce">
-                    {metrics.pendingChangeRequests}
-                  </div>
+                  <span className="px-2.5 py-1 rounded-full bg-rose-50 text-rose-600 text-[10px] font-bold border border-rose-100">
+                    {metrics.pendingChangeRequests} Action Required
+                  </span>
                 )}
              </div>
           </div>
-          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 custom-scrollbar bg-slate-50/30">
+          <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar bg-slate-50/50">
             {pendingCRs.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-center p-12 opacity-40 grayscale">
-                <RefreshCw size={40} className="text-slate-300 animate-spin-slow mb-4" />
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">System Quiescent</p>
+              <div className="h-full flex flex-col items-center justify-center text-center p-8 opacity-40">
+                <RefreshCw size={32} className="text-slate-300 mb-4" />
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Queue Synchronized</p>
               </div>
             ) : pendingCRs.map((cr) => (
-              <div key={cr.id} className="p-6 bg-white rounded-3xl border border-slate-100 hover:shadow-2xl hover:shadow-slate-200/40 hover:border-primary-500/20 transition-all cursor-pointer group" onClick={() => router.push(`/change-requests/${cr.id}`)}>
+              <div 
+                key={cr.id} 
+                className="p-4 bg-white rounded-xl border border-slate-200/60 hover:border-blue-500/30 hover:shadow-sm transition-all cursor-pointer group" 
+                onClick={() => router.push(`/change-requests/${cr.id}`)}
+              >
                 <div className="flex justify-between items-center">
-                  <div className="min-w-0 flex-1">
-                    <p className="font-black text-slate-900 text-xs uppercase tracking-widest truncate">{cr.entityType}</p>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter mt-1 truncate">{cr.tenantName}</p>
+                  <div className="min-w-0 pr-4">
+                    <p className="font-bold text-slate-900 text-xs truncate mb-0.5">{cr.entityType}</p>
+                    <p className="text-[10px] text-slate-500 font-medium truncate">{cr.tenantName}</p>
                   </div>
-                  <div className="flex flex-col items-end gap-1.5 shrink-0 ml-4">
-                    <span className="px-2.5 py-1 rounded-lg bg-slate-900 text-[9px] text-white font-black uppercase tracking-widest">{cr.actionType}</span>
-                    <ChevronRight size={14} className="text-slate-300 group-hover:text-primary-500 group-hover:translate-x-1 transition-all" />
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="px-2 py-1 rounded-lg bg-slate-100 text-[9px] font-bold text-slate-600 uppercase">{cr.actionType}</span>
+                    <ChevronRight size={14} className="text-slate-300 group-hover:text-blue-600 transition-colors" />
                   </div>
                 </div>
               </div>
             ))}
           </div>
-          <div className="p-8 shrink-0 bg-white border-t border-slate-100">
+          <div className="p-4 bg-white border-t border-slate-100">
             <button
                onClick={() => router.push('/change-requests')}
-               className="w-full h-14 bg-slate-900 text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.3em] flex items-center justify-center gap-3 hover:bg-black transition-all shadow-2xl shadow-slate-900/20 active:scale-95"
+               className="btn-ghost w-full py-2.5 rounded-xl border-slate-200 text-xs font-bold flex items-center justify-center gap-2"
             >
-              Access Global Stack <ExternalLink size={14} />
+              View All Requests <ExternalLink size={14} />
             </button>
           </div>
         </div>
 
-        {/* Snapshot Feed */}
-        <div className="card !p-0 !rounded-[4rem] overflow-hidden border border-slate-100 shadow-2xl shadow-slate-200/30 lg:col-span-3">
-          <div className="px-10 py-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div className="flex items-center gap-4">
-               <div className="w-1.5 h-10 bg-slate-900 rounded-full" />
-               <div>
-                  <h2 className="text-xl font-black text-slate-900 tracking-tighter uppercase italic">Purchase Protocol</h2>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.4em] mt-1">Latest Transmissions</p>
-               </div>
+        {/* Global Transaction Stream */}
+        <div className="data-table-container lg:col-span-3">
+          <div className="px-8 py-8 flex flex-col sm:flex-row sm:items-center justify-between gap-6 border-b border-slate-100">
+            <div>
+              <h2 className="text-xl font-bold text-slate-900">Recent Transactions</h2>
+              <p className="text-xs font-medium text-slate-500">Live order audit and status stream</p>
             </div>
             <button
                onClick={() => router.push('/orders')}
-               className="px-8 py-3 rounded-2xl bg-slate-50 border border-slate-100 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-100 transition-all active:scale-95"
+               className="btn-ghost !px-6 !py-2 rounded-xl text-xs font-bold"
             >
-              Audit Global Stream
+              View Full History
             </button>
           </div>
-          <div className="px-10 pb-12">
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+          <div className="px-8 pb-10 pt-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
               {recentOrders.length === 0 ? (
-                <div className="col-span-full py-20 text-center text-[10px] font-black text-slate-300 uppercase tracking-widest border-2 border-dashed border-slate-100 rounded-[3rem]">Void Stream</div>
+                <div className="col-span-full py-16 text-center text-xs font-semibold text-slate-300 uppercase tracking-widest border-2 border-dashed border-slate-50 rounded-3xl">No Transaction Data</div>
               ) : recentOrders.map((o) => (
-                <div key={o.id} className="relative group p-8 rounded-[2.5rem] bg-white border border-slate-100 hover:border-indigo-500/20 hover:shadow-2xl hover:shadow-indigo-500/5 transition-all">
+                <div key={o.id} className="p-6 rounded-2xl bg-slate-50/50 border border-slate-200/50 hover:bg-white hover:border-blue-500/20 transition-all group">
                   <div className="flex justify-between items-start mb-6">
-                     <p className="font-black text-slate-900 text-sm truncate tracking-tighter w-2/3">{o.customerName}</p>
-                     <div className="w-8 h-8 rounded-xl bg-slate-950 flex items-center justify-center text-[10px] text-white">
-                        <ShoppingBag size={14} />
+                     <p className="font-bold text-slate-900 text-sm truncate w-2/3">{o.customerName}</p>
+                     <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-400 group-hover:bg-slate-900 group-hover:text-white transition-colors shadow-sm">
+                        <ShoppingBag size={15} />
                      </div>
                   </div>
                   <div className="space-y-4">
                     <div className="flex flex-col">
-                      <span className="text-2xl font-black text-slate-900 tracking-tighter">RS. {Math.round(o.totalAmount || 0)}</span>
-                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Processed at {new Date(o.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      <span className="text-2xl font-bold text-slate-900 leading-tight">Rs. {Math.round(o.totalAmount || 0)}</span>
+                      <span className="text-[10px] font-medium text-slate-400 mt-1">{new Date(o.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
-                    <div className="pt-4 border-t border-slate-50">
-                       <StatusBadge status={o.status} />
-                    </div>
+                    <StatusBadge status={o.status} />
                   </div>
                 </div>
               ))}
@@ -327,5 +317,6 @@ export default function Dashboard() {
         </div>
       </div>
     </div>
+
   );
 }

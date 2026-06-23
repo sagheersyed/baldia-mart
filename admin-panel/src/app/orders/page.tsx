@@ -4,11 +4,12 @@ import React, { useState, useEffect } from 'react';
 import {
   ShoppingBag, Search, Eye, Clock, CheckCircle, Truck, XCircle,
   Package, MapPin, Phone, User, Bike, RefreshCw, X, ChevronDown,
-  FileText, ExternalLink,
+  FileText, ExternalLink, Pill, Boxes, ArrowRight, Activity, Zap, ShieldCheck,
+  UtensilsCrossed
 } from 'lucide-react';
+import { format } from 'date-fns';
 import { fetchWithAuth, BASE_URL, getErrorMessage, parseApiError, normalizeUrl } from '@/lib/api';
 import { useAsyncData } from '@/hooks/useAsyncData';
-import { LoadingState, ErrorState, EmptyState } from '@/components/PageState';
 import { showToast } from '@/hooks/useToast';
 import Pagination from '@/components/Pagination';
 import { useSettings } from '@/context/SettingsContext';
@@ -37,7 +38,6 @@ interface Order {
 
 const API_URL         = `${BASE_URL}/orders/all`;
 const ZONES_URL       = `${BASE_URL}/delivery-zones/all`;
-const SETTINGS_URL    = `${BASE_URL}/settings/public`;
 const STATUS_UPDATE_URL = (id: string) => `${BASE_URL}/orders/${id}/status`;
 
 const STATUS_FILTERS = ['ALL', 'PENDING', 'CONFIRMED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED', 'INSTABILITY'];
@@ -60,8 +60,9 @@ export default function OrdersPage() {
   const [orders,        setOrders]       = useState<Order[]>([]);
   const [riders,        setRiders]       = useState<any[]>([]);
   const { settings } = useSettings();
-  const { loading, error, setLoading, setError } = useAsyncData();
+  const { loading, setLoading, setError } = useAsyncData();
   const [filter,        setFilter]       = useState('ALL');
+  const [selectedModule, setSelectedModule] = useState('ALL');
   const [selectedZone,  setSelectedZone] = useState('all');
   const [zones,         setZones]        = useState<any[]>([]);
   const [martLocations, setMartLocations]= useState<any[]>([]);
@@ -73,6 +74,11 @@ export default function OrdersPage() {
 
   useEffect(() => { fetchRiders(); fetchZones(); }, []);
   useEffect(() => { void fetchOrders(page); }, [page]);
+  
+  useEffect(() => {
+    if (page !== 1) setPage(1);
+    else void fetchOrders(1);
+  }, [selectedModule, filter, selectedZone]);
 
   const fetchZones = async () => {
     try {
@@ -100,19 +106,20 @@ export default function OrdersPage() {
 
   const fetchOrders = async (targetPage = page) => {
     try {
-      setLoading(true); setError(null);
+      setLoading(true);
       const params = new URLSearchParams({ page: String(targetPage), limit: String(limit) });
+      if (selectedModule !== 'ALL') params.append('orderType', selectedModule.toLowerCase());
+      if (filter !== 'ALL') params.append('status', filter);
+      if (selectedZone !== 'all') params.append('zoneId', selectedZone);
+
       const res = await fetchWithAuth(`${API_URL}?${params}`);
-      if (!res.ok) throw new Error(await parseApiError(res, 'Failed to fetch orders'));
-      const data = await res.json();
-      setOrders(data.data || []);
-      setTotalOrders(Number(data.total || 0));
-      setPage(Number(data.page || targetPage));
-    } catch (err) {
-      setError(getErrorMessage(err, 'Platform sync failed'));
-    } finally {
-      setLoading(false);
-    }
+      if (res.ok) {
+        const data = await res.json();
+        setOrders(data.data || []);
+        setTotalOrders(Number(data.total || 0));
+        setPage(Number(data.page || targetPage));
+      }
+    } catch (err) { console.error(err); } finally { setLoading(false); }
   };
 
   const totalPages = Math.max(1, Math.ceil(totalOrders / limit));
@@ -123,13 +130,9 @@ export default function OrdersPage() {
       if (res.ok) {
         setOrders(o => o.map(x => x.id === orderId ? { ...x, status: newStatus } : x));
         if (selectedOrder?.id === orderId) setSelectedOrder(s => s ? { ...s, status: newStatus } : s);
-        showToast({ title: `Order ${newStatus.toLowerCase()}`, variant: 'success' });
-      } else {
-        showToast({ title: await parseApiError(res, 'Protocol failure'), variant: 'error' });
+        showToast({ title: `Order ${newStatus.replace(/_/g, ' ')}`, variant: 'success' });
       }
-    } catch (err) {
-      showToast({ title: getErrorMessage(err, 'Transmission error'), variant: 'error' });
-    }
+    } catch (err) { console.error(err); }
   };
 
   const handleAssignRider = async (orderId: string, riderId: string) => {
@@ -141,331 +144,310 @@ export default function OrdersPage() {
         const fullRider = riders.find(r => r.id === riderId);
         setOrders(o => o.map(x => x.id === orderId ? { ...x, status: updated.status, rider: fullRider || x.rider } : x));
         if (selectedOrder?.id === orderId) setSelectedOrder(s => s ? { ...s, status: updated.status, rider: fullRider || s.rider } : s);
-        showToast({ title: 'Logistics asset assigned', variant: 'success' });
-      } else {
-        showToast({ title: await parseApiError(res, 'Assignment failed'), variant: 'error' });
+        showToast({ title: 'Rider Dispatched', variant: 'success' });
       }
-    } catch (err) {
-      showToast({ title: getErrorMessage(err, 'Rider sync error'), variant: 'error' });
-    }
+    } catch (err) { console.error(err); }
   };
 
-  const getOrderZoneId = React.useCallback((order: Order): string | null => {
-    if (order.subOrders?.length) {
-      const z = (order.subOrders[0] as any).restaurant?.zoneId;
-      if (z) return z;
-    }
-    if (order.orderType === 'mart' && (order as any).martId) {
-      const mart = martLocations.find(m => m.id === (order as any).martId);
-      if (mart?.lat && mart?.lng) {
-        const z = zones.find(z => calcDist(Number(mart.lat), Number(mart.lng), Number(z.centerLat), Number(z.centerLng)) <= Number(z.radiusKm));
-        if (z) return z.id;
-      }
-    }
-    return null;
-  }, [martLocations, zones]);
-
-  const filteredOrders = React.useMemo(() => {
-    return orders.filter(o => {
-      if (filter === 'INSTABILITY') return (o.releaseCount || 0) >= 3;
-      const matchF = filter === 'ALL' || o.status.toUpperCase() === filter;
-      const matchZ = selectedZone === 'all' || getOrderZoneId(o) === selectedZone;
-      const matchS = o.id.toLowerCase().includes(searchTerm.toLowerCase()) || (o.user?.name || '').toLowerCase().includes(searchTerm.toLowerCase());
-      return matchF && matchZ && matchS;
-    });
-  }, [orders, filter, selectedZone, searchTerm, getOrderZoneId]);
-
   return (
-    <div className="h-[calc(100vh-6rem)] flex flex-col gap-8 pb-4">
-      {/* Strategic Header */}
-      <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-6 pb-2 border-b border-slate-100/60">
-        <div className="space-y-1">
-          <div className="flex items-center gap-3">
-             <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center shadow-2xl shadow-slate-900/20">
-               <Package size={24} className="text-primary-400" />
-             </div>
-             <h1 className="text-3xl font-black text-slate-900 tracking-tighter uppercase italic">Logistics Deck</h1>
-          </div>
-          <p className="text-slate-400 font-bold ml-15 text-[10px] uppercase tracking-[0.3em] pl-15">Real-time Order Flow · Tactical Rejection Analysis</p>
-        </div>
-        
-        <div className="flex flex-wrap items-center gap-4">
-           <div className="relative group max-w-xs">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-primary-500 transition-colors" size={16} />
-              <input 
-                type="text" 
-                placeholder="Search transmission ID..." 
-                className="pl-12 pr-6 py-3.5 bg-white border border-slate-200 rounded-2xl text-[10px] font-black tracking-widest uppercase focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500/50 outline-none w-64 transition-all"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-           </div>
-           
-           <div className="flex bg-white/50 backdrop-blur-xl p-1.5 rounded-2xl border border-slate-200">
-              <select 
-                className="px-6 py-2 bg-transparent text-[10px] font-black uppercase tracking-widest outline-none text-slate-500 hover:text-slate-900"
-                value={selectedZone}
-                onChange={(e) => setSelectedZone(e.target.value)}
-              >
-                <option value="all">Global Zones</option>
-                {zones.map(z => <option key={z.id} value={z.id}>{z.name}</option>)}
-              </select>
-           </div>
-
-           <button 
-             onClick={() => fetchOrders(page)}
-             className="w-14 h-14 bg-slate-900 text-white rounded-2xl flex items-center justify-center hover:bg-black transition-all active:scale-95 shadow-xl shadow-slate-900/20"
-           >
-              <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
-           </button>
-        </div>
-      </div>
-
-      {/* Filter Matrix */}
-      <div className="flex gap-2.5 overflow-x-auto pb-4 scrollbar-hide shrink-0">
-        {STATUS_FILTERS.map(f => (
-          <button
-            key={f}
-            onClick={() => { setFilter(f); setPage(1); }}
-            className={`px-8 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap shadow-sm border ${
-              filter === f 
-                ? (f === 'INSTABILITY' ? 'bg-rose-500 text-white border-rose-600 shadow-rose-200' : 'bg-slate-900 text-white border-slate-950 shadow-slate-200') 
-                : 'bg-white border-slate-100 text-slate-400 hover:text-slate-900 hover:border-slate-200'
-            }`}
-          >
-            {f === 'INSTABILITY' ? '⚠️ High Risk' : f.replace(/_/g, ' ')}
-          </button>
-        ))}
-      </div>
-
-      {/* Multi-Pane Operations */}
-      <div className="flex-1 min-h-0 flex gap-8">
-        {/* Stream Pane */}
-        <div className={`flex flex-col min-h-0 transition-all duration-500 ease-out ${selectedOrder ? 'w-[45%]' : 'w-full'}`}>
-          <div className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar">
-            {loading && orders.length === 0 ? (
-              <div className="py-20 flex flex-col items-center"><RefreshCw className="animate-spin text-primary-500 mb-6" size={48} /><p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.4em]">Syncing Stream...</p></div>
-            ) : filteredOrders.length === 0 ? (
-              <div className="py-32 flex flex-col items-center opacity-40"><Package size={64} className="text-slate-200 mb-6" /><p className="text-[11px] font-black text-slate-300 uppercase tracking-[0.5em]">No active transmissions</p></div>
-            ) : (
-              filteredOrders.map(order => (
-                <div
-                  key={order.id}
-                  onClick={() => setSelectedOrder(order)}
-                  className={`group relative p-8 rounded-[2.5rem] border transition-all cursor-pointer overflow-hidden ${
-                    selectedOrder?.id === order.id 
-                      ? 'bg-slate-900 border-slate-900 text-white shadow-2xl shadow-slate-900/30' 
-                      : 'bg-white border-slate-100/60 hover:border-primary-200 hover:shadow-2xl hover:shadow-slate-200/50 hover:-translate-y-1.5'
-                  }`}
-                >
-                  <div className="flex justify-between items-start relative z-10">
-                    <div className="space-y-1">
-                      <p className={`text-[10px] font-black uppercase tracking-widest ${selectedOrder?.id === order.id ? 'text-white/40' : 'text-slate-300'}`}>TXN ID · {order.id.slice(0, 8).toUpperCase()}</p>
-                      <h4 className={`text-xl font-black tracking-tight italic ${selectedOrder?.id === order.id ? 'text-white' : 'text-slate-800'}`}>{order.user?.name || 'External Entity'}</h4>
-                      <p className={`text-[10px] font-bold ${selectedOrder?.id === order.id ? 'text-white/60' : 'text-slate-400'} uppercase`}>{order.orderType} Transmission · {format(new Date(order.createdAt), 'HH:mm:ss')}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className={`text-2xl font-black tracking-tighter ${selectedOrder?.id === order.id ? 'text-primary-400' : 'text-slate-900'}`}>RS. {Number(order.total || 0).toLocaleString()}</p>
-                      <StatusBadge status={order.status} />
-                    </div>
-                  </div>
-                  
-                  {order.releaseCount && order.releaseCount >= 3 && (
-                     <div className="mt-6 flex items-center gap-3 p-3 bg-rose-500/10 border border-rose-500/20 rounded-2xl animate-pulse">
-                        <XCircle size={14} className="text-rose-500" />
-                        <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest">Logistic Failure: Released {order.releaseCount} times</span>
-                     </div>
-                  )}
-                  
-                  <div className={`absolute bottom-0 right-0 w-32 h-32 rounded-full -mr-16 -mt-16 opacity-0 group-hover:opacity-5 transition-opacity bg-primary-500`} />
-                </div>
-              ))
-            )}
-          </div>
-
-          <div className="mt-8 pt-6 border-t border-slate-100 flex items-center justify-between">
-             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{totalOrders} Transmissions Processed</p>
-             <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
-          </div>
-        </div>
-
-        {/* Tactical Intel Pane */}
-        {selectedOrder && (
-          <div className="flex-1 card !p-0 !rounded-[3.5rem] bg-white border border-slate-100 shadow-2xl shadow-slate-200/50 flex flex-col overflow-hidden animate-slide-up relative">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-slate-50 rounded-full -mr-32 -mt-32 opacity-50 z-0" />
-            
-            <div className="px-12 py-10 border-b border-slate-50 flex items-center justify-between relative z-10 shrink-0">
-               <div>
-                  <h2 className="text-3xl font-black text-slate-900 tracking-tighter uppercase italic">Control Panel</h2>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.3em] mt-1">Manual Bypass & Dispatch Protocol</p>
-               </div>
-               <button 
-                 onClick={() => setSelectedOrder(null)} 
-                 className="w-14 h-14 bg-slate-50 text-slate-300 hover:text-slate-900 rounded-full flex items-center justify-center transition-all hover:rotate-90 active:scale-90"
-               >
-                 <X size={24} />
-               </button>
+    <div className="page-container h-full flex flex-col gap-10 !pb-0 overflow-hidden">
+      
+      {/* ─── Level 1: Terminal Header ───────────────────── */}
+      <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-8 shrink-0">
+         <div className="space-y-4">
+            <div className="flex items-center gap-3">
+               <div className="w-12 h-1 bg-indigo-600 rounded-full" />
+               <span className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.4em]">Operations Unit</span>
             </div>
+            <h1 className="text-5xl font-black text-slate-900 tracking-tighter italic uppercase leading-none">Order<br/>Architecture</h1>
+         </div>
 
-            <div className="flex-1 overflow-y-auto p-12 custom-scrollbar relative z-10 space-y-12">
-               {/* Quick Actions Matrix */}
-               <div className="space-y-4">
-                  <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Operational Protocol</h5>
-                  <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+         <div className="flex flex-wrap items-center gap-4 p-2 bg-white rounded-3xl border border-slate-100 shadow-xl shadow-slate-200/40">
+            <div className="relative group max-w-xs">
+               <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-indigo-500 transition-colors" size={16} />
+               <input 
+                 type="text" 
+                 placeholder="Search transmissions..." 
+                 className="input pl-14 w-72 !border-none !bg-transparent"
+                 value={searchTerm}
+                 onChange={(e) => setSearchTerm(e.target.value)}
+               />
+            </div>
+            <div className="w-px h-8 bg-slate-100" />
+            <select 
+              className="bg-transparent px-6 py-2 text-[10px] font-black uppercase tracking-widest text-slate-600 outline-none cursor-pointer"
+              value={selectedZone}
+              onChange={(e) => setSelectedZone(e.target.value)}
+            >
+              <option value="all">Global Zones</option>
+              {zones.map(z => <option key={z.id} value={z.id}>{z.name}</option>)}
+            </select>
+            <button 
+              onClick={() => fetchOrders(page)}
+              className="w-12 h-12 flex items-center justify-center bg-slate-50 hover:bg-indigo-50 hover:text-indigo-600 rounded-2xl transition-all"
+            >
+              <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+            </button>
+         </div>
+      </div>
+
+      {/* ─── Level 2: Control Matrix ───────────────────── */}
+      <div className="flex flex-col md:flex-row gap-6 shrink-0">
+          <div className="flex bg-slate-900/5 p-1 rounded-[2rem] border border-slate-100 shadow-inner">
+            {[
+              { id: 'ALL', label: 'Global', icon: Package },
+              { id: 'mart', label: 'Mart', icon: ShoppingBag },
+              { id: 'pharma', label: 'Pharma', icon: Pill },
+              { id: 'restaurant', label: 'Dining', icon: UtensilsCrossed },
+              { id: 'rashan', label: 'Rashan', icon: Boxes },
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setSelectedModule(tab.id)}
+                className={`flex items-center gap-3 px-8 py-3.5 rounded-[1.75rem] text-[10px] font-black uppercase tracking-widest transition-all ${
+                  selectedModule === tab.id 
+                    ? 'bg-indigo-600 text-white shadow-2xl shadow-indigo-500/40 translate-y-[-2px]' 
+                    : 'text-slate-400 hover:text-indigo-600 hover:bg-indigo-50/50'
+                }`}
+              >
+                <tab.icon size={14} /> <span>{tab.label}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="flex-1 flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+            {STATUS_FILTERS.map(f => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`px-6 py-3.5 rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all border whitespace-nowrap ${
+                  filter === f 
+                    ? 'bg-slate-900 text-white border-slate-900 shadow-lg' 
+                    : 'bg-white border-slate-100 text-slate-400 hover:border-slate-300'
+                }`}
+              >
+                {f === 'INSTABILITY' ? '⚠️ High Risk' : f.replace(/_/g, ' ')}
+              </button>
+            ))}
+          </div>
+      </div>
+
+      {/* ─── Level 3: Dual-Pane Operations ───────────────────── */}
+      <div className="flex-1 flex gap-10 min-h-0 pb-8">
+          
+          {/* Order Stream Lane */}
+          <div className={`flex flex-col min-h-0 transition-all duration-700 ease-out ${selectedOrder ? 'w-[45%]' : 'w-full'}`}>
+              <div className="flex-1 overflow-y-auto space-y-6 pr-4 custom-scrollbar">
+                  {loading && orders.length === 0 ? (
+                    <div className="py-20 flex flex-col items-center opacity-40"><RefreshCw className="animate-spin text-indigo-500 mb-6" size={48} /><p className="text-[10px] font-black uppercase tracking-[0.5em]">Syncing Feed...</p></div>
+                  ) : orders.length === 0 ? (
+                    <div className="py-32 flex flex-col items-center opacity-20 border-2 border-dashed border-slate-100 rounded-[3rem]"><Package size={64} className="mb-6" /><p className="text-[10px] font-black uppercase tracking-[0.4em]">Grid Empty</p></div>
+                  ) : (
+                    orders.map(order => (
+                      <div
+                        key={order.id}
+                        onClick={() => setSelectedOrder(order)}
+                        className={`group relative p-10 rounded-[3rem] border transition-all cursor-pointer overflow-hidden ${
+                          selectedOrder?.id === order.id 
+                            ? 'bg-slate-900 border-slate-900 text-white shadow-[0_40px_80px_rgba(15,23,42,0.25)]' 
+                            : 'bg-white border-slate-100 hover:border-indigo-200 hover:shadow-2xl hover:shadow-slate-200/40 hover:-translate-y-2'
+                        }`}
+                      >
+                        <div className="flex justify-between items-start">
+                           <div className="space-y-3">
+                              <div className="flex items-center gap-3">
+                                 <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${selectedOrder?.id === order.id ? 'text-white/40' : 'text-slate-300'}`}>TXN://{order.id.slice(0, 8).toUpperCase()}</span>
+                                 <StatusBadge status={order.status} />
+                              </div>
+                              <h4 className={`text-2xl font-black italic uppercase tracking-tighter leading-none ${selectedOrder?.id === order.id ? 'text-white' : 'text-slate-800'}`}>{order.user?.name || 'Anonymous Entity'}</h4>
+                              <div className={`flex items-center gap-4 text-[10px] font-bold uppercase tracking-widest ${selectedOrder?.id === order.id ? 'text-white/60' : 'text-slate-400'}`}>
+                                 <Zap size={12} className={selectedOrder?.id === order.id ? 'text-indigo-400' : 'text-indigo-600'} />
+                                 {order.orderType} hub
+                                 <div className="w-1 h-1 rounded-full bg-slate-300" />
+                                 {format(new Date(order.createdAt), 'HH:mm:ss')}
+                              </div>
+                           </div>
+                           <div className="text-right">
+                              <p className={`text-3xl font-black tracking-tighter italic ${selectedOrder?.id === order.id ? 'text-indigo-400' : 'text-slate-900'}`}>Rs. {Number(order.total).toLocaleString()}</p>
+                              <p className={`text-[10px] font-bold uppercase tracking-widest mt-2 ${selectedOrder?.id === order.id ? 'text-white/40' : 'text-slate-300'}`}>{order.items?.length || 0} Resource Units</p>
+                           </div>
+                        </div>
+                        
+                        {order.releaseCount && order.releaseCount >= 3 && (
+                           <div className="mt-8 flex items-center gap-4 p-4 bg-rose-500/10 border border-rose-500/20 rounded-[1.5rem]">
+                              <Activity size={16} className="text-rose-500" />
+                              <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest italic leading-none">Security Risk: Released {order.releaseCount} times</span>
+                           </div>
+                        )}
+                      </div>
+                    ))
+                  )}
+              </div>
+
+              <div className="mt-8 pt-8 border-t border-slate-100 flex items-center justify-between shrink-0">
+                 <div className="flex items-center gap-3">
+                    <ShieldCheck size={16} className="text-indigo-600" />
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{totalOrders} Processed</p>
+                 </div>
+                 <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+              </div>
+          </div>
+
+          {/* Tactical Intel Expansion */}
+          {selectedOrder && (
+            <div className="flex-1 card !p-0 !rounded-[4rem] bg-white border-slate-100 shadow-[0_50px_100px_rgba(79,70,229,0.12)] flex flex-col overflow-hidden animate-in fade-in slide-in-from-right-10 duration-700">
+               <div className="p-12 pb-0 flex items-center justify-between shrink-0">
+                  <div className="space-y-4">
+                     <div className="flex items-center gap-3 text-indigo-600">
+                        <Zap size={20} className="animate-pulse" />
+                        <span className="text-[10px] font-black uppercase tracking-[0.4em]">Tactical Intelligence</span>
+                     </div>
+                     <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase italic">Unit Details</h2>
+                  </div>
+                  <button onClick={() => setSelectedOrder(null)} className="w-16 h-16 flex items-center justify-center bg-slate-50 hover:bg-rose-50 hover:text-rose-600 rounded-[2rem] transition-all"><X size={28} /></button>
+               </div>
+
+               <div className="flex-1 overflow-y-auto p-12 custom-scrollbar space-y-12">
+                  
+                  {/* Status Protocols */}
+                  <div className="grid grid-cols-2 gap-4">
                      {[
-                       {s:'confirmed', l:'Confirm', c:'bg-emerald-50 text-emerald-600 border-emerald-100'},
-                       {s:'out_for_delivery', l:'Dispatch', c:'bg-blue-50 text-blue-600 border-blue-100'},
-                       {s:'delivered', l:'Finalize', c:'bg-slate-900 text-white border-slate-950'},
-                       {s:'cancelled', l:'Abort', c:'bg-rose-50 text-rose-600 border-rose-100'}
+                       {s:'confirmed', l:'Authorize', c:'bg-emerald-50 text-emerald-600 border-emerald-100'},
+                       {s:'out_for_delivery', l:'Dispatch', c:'bg-indigo-600 text-white shadow-xl shadow-indigo-200'},
+                       {s:'delivered', l:'Archive', c:'bg-slate-900 text-white shadow-xl shadow-slate-400/20'},
+                       {s:'cancelled', l:'Decommission', c:'bg-rose-50 text-rose-600 border-rose-100'}
                      ].map(act => (
                        <button
                          key={act.s}
                          onClick={() => handleUpdateStatus(selectedOrder.id, act.s)}
-                         className={`py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all active:scale-95 shadow-sm ${act.c}`}
+                         className={`py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all active:scale-95 ${act.c}`}
                        >
-                         {act.l}
+                         {act.l} Protocol
                        </button>
                      ))}
                   </div>
-               </div>
 
-               {/* Logistics Assets */}
-               <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-                  {/* Entity Information */}
-                  <div className="space-y-4">
-                     <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Entity & Routing</h5>
-                     <div className="bg-slate-950 p-8 rounded-[2.5rem] text-white shadow-2xl shadow-slate-900/20">
-                        <div className="flex items-center gap-4 mb-8">
-                           <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center border border-white/5 shadow-inner">
-                              <User size={20} className="text-primary-400" />
+                  {/* Geospatial & Logistic Mapping */}
+                  <div className="grid grid-cols-2 gap-10">
+                     <div className="bg-slate-900 p-10 rounded-[3rem] text-white space-y-8 relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full -mr-16 -mt-16" />
+                        <div className="relative space-y-6">
+                           <div className="flex items-center gap-4">
+                              <div className="w-14 h-14 bg-white/10 rounded-2xl flex items-center justify-center border border-white/5 backdrop-blur-xl">
+                                 <User size={24} className="text-indigo-400" />
+                              </div>
+                              <div>
+                                 <p className="text-xl font-black uppercase italic tracking-tight leading-none">{selectedOrder.user?.name || 'Unknown Entity'}</p>
+                                 <p className="text-[10px] text-white/40 font-black uppercase tracking-widest mt-2 tracking-[0.2em]">Authorized User</p>
+                              </div>
                            </div>
-                           <div className="min-w-0">
-                              <p className="text-[13px] font-black tracking-tight uppercase italic truncate">{selectedOrder.user?.name || 'Anonymous Entity'}</p>
-                              <p className="text-[9px] text-white/40 font-bold uppercase tracking-widest mt-1">Status: Verified</p>
-                           </div>
-                        </div>
-                        <div className="space-y-4">
-                           <div className="flex items-center gap-3">
-                              <MapPin size={16} className="text-white/20" />
-                              <p className="text-[11px] font-medium text-white/70 leading-relaxed truncate">{selectedOrder.address?.streetAddress}, {selectedOrder.address?.city}</p>
-                           </div>
-                           <div className="flex items-center gap-3">
-                              <Phone size={16} className="text-white/20" />
-                              <p className="text-[11px] font-black tracking-[0.1em]">{selectedOrder.user?.phoneNumber || 'HIDDEN'}</p>
+                           <div className="space-y-4 pt-4">
+                              <div className="flex items-start gap-4">
+                                 <MapPin size={16} className="text-indigo-400 shrink-0 mt-1" />
+                                 <p className="text-xs font-bold leading-relaxed text-white/70">{selectedOrder.address?.streetAddress}</p>
+                              </div>
+                              <div className="flex items-center gap-4">
+                                 <Phone size={16} className="text-emerald-400 shrink-0" />
+                                 <p className="text-sm font-black tracking-[0.2em]">{selectedOrder.user?.phoneNumber}</p>
+                              </div>
                            </div>
                         </div>
                      </div>
-                  </div>
 
-                  {/* Rider Dispatch */}
-                  <div className="space-y-4">
-                     <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Logistic Support</h5>
-                     <div className="bg-white border border-slate-100 p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/20 h-full flex flex-col justify-between">
-                        {selectedOrder.rider ? (
+                     <div className="bg-white border-2 border-slate-100 p-10 rounded-[3rem] space-y-8 flex flex-col justify-between">
+                        <div className="space-y-6">
                            <div className="flex items-center gap-4">
-                              <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center">
+                              <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center">
                                  <Bike size={24} />
                               </div>
                               <div>
-                                 <p className="text-[13px] font-black text-slate-900 uppercase italic leading-tight">{selectedOrder.rider.name}</p>
-                                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1.5 flex items-center gap-2">
-                                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Asset Tracking Active
-                                 </p>
+                                 <p className="text-lg font-black uppercase tracking-tighter">{selectedOrder.rider?.name || 'Logistic Node Offline'}</p>
+                                 <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mt-1">Personnel Tracking</p>
                               </div>
                            </div>
-                        ) : (
-                           <p className="text-[11px] font-black text-slate-300 uppercase tracking-[0.2em] italic">Awaiting Logistic Assignment</p>
-                        )}
-                        <div className="mt-8">
-                           <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">Release Dispatch</label>
-                           <select 
-                             className="w-full bg-slate-50 border border-slate-100 p-4 rounded-xl text-[10px] font-black uppercase tracking-widest outline-none focus:ring-4 focus:ring-primary-500/5 transition-all text-slate-600"
-                             value={selectedOrder.rider?.id || ''} 
-                             onChange={(e) => handleAssignRider(selectedOrder.id, e.target.value)}
-                           >
-                              <option value="">Manual Override Selection...</option>
-                              {riders.map(r => <option key={r.id} value={r.id}>{r.name.toUpperCase()} · UNIT {r.id.slice(-4).toUpperCase()}</option>)}
-                           </select>
+                        </div>
+                        <select 
+                          className="input w-full !bg-slate-50 border-none"
+                          value={selectedOrder.rider?.id || ''} 
+                          onChange={(e) => handleAssignRider(selectedOrder.id, e.target.value)}
+                        >
+                           <option value="">Map Dispatch Link...</option>
+                           {riders.map(r => <option key={r.id} value={r.id}>{r.name.toUpperCase()}</option>)}
+                        </select>
+                     </div>
+                  </div>
+
+                  {/* Payload Manifest Terminal */}
+                  <div className="space-y-8">
+                     <div className="flex items-center gap-3">
+                        <Package size={20} className="text-slate-300" />
+                        <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Resource Payload Manifest</h5>
+                     </div>
+                     <div className="space-y-4">
+                        {selectedOrder.items?.map(item => (
+                           <div key={item.id} className="p-8 bg-slate-50 rounded-3xl border border-slate-100 flex items-center justify-between group hover:bg-white transition-all hover:shadow-xl hover:shadow-slate-200/40">
+                              <div className="flex items-center gap-6">
+                                 <div className="w-16 h-16 bg-white rounded-2xl border border-slate-200 overflow-hidden p-2 shadow-sm">
+                                    <img src={normalizeUrl(item.product?.imageUrl || item.medicine?.imageUrl || item.menuItem?.imageUrl || '')} alt="" className="w-full h-full object-contain" />
+                                 </div>
+                                 <div className="space-y-1">
+                                    <p className="text-sm font-black uppercase italic tracking-tight">{item.product?.name || item.medicine?.name || item.menuItem?.name || 'Resource Unit'}</p>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">QTY: {item.quantity} · Price: RS. {item.priceAtTime}</p>
+                                 </div>
+                              </div>
+                              <p className="text-lg font-black text-slate-900 tracking-tighter italic">RS. {(Number(item.quantity) * Number(item.priceAtTime)).toLocaleString()}</p>
+                           </div>
+                        ))}
+                     </div>
+                  </div>
+
+                  {/* Final Settlement Logic */}
+                  <div className="p-10 bg-indigo-600 rounded-[3rem] text-white shadow-2xl shadow-indigo-200 space-y-6 relative overflow-hidden">
+                     <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/5 rounded-full -ml-16 -mb-16" />
+                     <div className="flex justify-between items-center opacity-60 text-[10px] font-black uppercase tracking-[0.3em]">
+                        <span>Primary Resource Total</span>
+                        <span>Rs. {Number(selectedOrder.subtotal).toLocaleString()}</span>
+                     </div>
+                     <div className="flex justify-between items-center opacity-60 text-[10px] font-black uppercase tracking-[0.3em]">
+                        <span>Logistic Protocol Fee</span>
+                        <span>Rs. {Number(selectedOrder.deliveryFee).toLocaleString()}</span>
+                     </div>
+                     <div className="pt-6 border-t border-white/20 flex justify-between items-end">
+                        <div className="space-y-2">
+                           <span className="text-[10px] font-black uppercase tracking-[0.4em] text-indigo-200">Settlement Total</span>
+                           <h4 className="text-5xl font-black italic tracking-tighter">RS. {Number(selectedOrder.total).toLocaleString()}</h4>
+                        </div>
+                        <div className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-xl border border-white/10">
+                           <ArrowRight size={14} className="text-indigo-400" />
+                           <span className="text-[10px] font-black uppercase tracking-widest">{selectedOrder.paymentMethod}</span>
                         </div>
                      </div>
                   </div>
-               </div>
 
-               {/* Inventory List */}
-               <div className="space-y-6">
-                  <div className="flex items-center justify-between px-1">
-                     <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Payload Manifest</h5>
-                     <span className="text-[10px] font-black text-slate-900 uppercase tracking-widest bg-slate-50 px-3 py-1 rounded-lg border border-slate-100">{selectedOrder.items?.length || 0} SECTIONS</span>
-                  </div>
-                  <div className="space-y-3">
-                     {selectedOrder.items?.map(item => (
-                        <div key={item.id} className="p-6 bg-slate-50/50 border border-slate-100 rounded-3xl flex items-center justify-between group transition-all hover:bg-white hover:border-slate-200">
-                           <div className="flex items-center gap-5">
-                              <div className="w-14 h-14 bg-white rounded-2xl border border-slate-100 overflow-hidden p-2 shadow-sm group-hover:scale-110 transition-transform">
-                                 <img src={normalizeUrl(item.product?.imageUrl || item.medicine?.imageUrl || item.menuItem?.imageUrl || '')} alt="" className="w-full h-full object-contain" />
-                              </div>
-                              <div>
-                                 <p className="text-[13px] font-black text-slate-800 uppercase tracking-tighter italic">{item.product?.name || item.medicine?.name || item.menuItem?.name || 'Logistic Unit'}</p>
-                                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">QUANTUM: {item.quantity} · VAL: RS.{Number(item.priceAtTime).toLocaleString()} NET</p>
+                  {/* Activity Log System */}
+                  <div className="space-y-8">
+                     <div className="flex items-center gap-3">
+                        <Activity size={20} className="text-slate-300" />
+                        <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Execution Timeline</h5>
+                     </div>
+                     <div className="space-y-6 pl-6 border-l-2 border-slate-50 ml-2">
+                        {[...(selectedOrder.orderHistory || [])].reverse().map((evt) => (
+                           <div key={evt.id} className="relative group">
+                              <div className="absolute -left-[1.95rem] top-2 w-3.5 h-3.5 rounded-full bg-slate-200 border-4 border-white shadow-sm group-hover:bg-indigo-600 group-hover:scale-125 transition-all" />
+                              <div className="p-6 bg-slate-50/50 rounded-2xl border border-slate-100 group-hover:bg-white transition-all">
+                                 <div className="flex justify-between items-center mb-2">
+                                    <span className="text-[10px] font-black text-slate-900 uppercase tracking-widest italic">{evt.status.replace(/_/g, ' ')}</span>
+                                    <span className="text-[9px] font-bold text-slate-400 uppercase">{format(new Date(evt.createdAt), 'MMM dd, HH:mm:ss')}</span>
+                                 </div>
+                                 {evt.notes && <p className="text-[11px] font-bold text-slate-500 italic opacity-60">"Protocol Note: {evt.notes}"</p>}
                               </div>
                            </div>
-                           <p className="text-lg font-black text-slate-900 tracking-tighter italic">RS.{(Number(item.quantity) * Number(item.priceAtTime)).toLocaleString()}</p>
-                        </div>
-                     ))}
-                  </div>
-               </div>
-
-               {/* Financial Reconcilliation */}
-               <div className="card !p-12 !bg-slate-950 text-white !rounded-[3rem] shadow-2xl shadow-slate-900/30 relative overflow-hidden group">
-                  <div className="absolute top-0 right-0 w-48 h-48 bg-white/5 rounded-full -mr-24 -mt-24 blur-3xl" />
-                  
-                  <div className="space-y-6 text-[11px] font-black uppercase tracking-widest relative z-10">
-                     <div className="flex justify-between items-center opacity-40">
-                        <span>Transmission Subtotal</span>
-                        <span className="text-white">RS. {Number(selectedOrder.subtotal).toLocaleString()}</span>
+                        ))}
                      </div>
-                     <div className="flex justify-between items-center opacity-40">
-                        <span>Logistic Operational Fee</span>
-                        <span className="text-white">RS. {Number(selectedOrder.deliveryFee).toLocaleString()}</span>
-                     </div>
-                     <div className="pt-6 mt-2 border-t border-white/10 flex justify-between items-center">
-                        <span className="text-primary-400 opacity-100">Settlement Total</span>
-                        <span className="text-4xl italic tracking-tighter text-white drop-shadow-xl">RS. {Number(selectedOrder.total).toLocaleString()}</span>
-                     </div>
-                  </div>
-                  
-                  <div className="mt-10 flex items-center gap-4 p-5 bg-white/5 rounded-2xl border border-white/5 relative z-10">
-                     <RefreshCw size={16} className="text-white/20" />
-                     <div>
-                        <p className="text-[9px] font-black text-white/30 uppercase tracking-[0.2em] leading-none mb-2">Protocol Verified Source</p>
-                        <p className="text-[13px] font-black text-white tracking-widest uppercase">{selectedOrder.paymentMethod?.replace(/_/g, ' ') || 'SYSTEM ALLOCATED'}</p>
-                     </div>
-                  </div>
-               </div>
-
-               {/* Strategic Timeline */}
-               <div className="space-y-6">
-                  <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Operational Chronology</h5>
-                  <div className="space-y-4 pl-4 border-l-2 border-slate-50 ml-2">
-                     {[...(selectedOrder.orderHistory || [])].reverse().map((evt) => (
-                        <div key={evt.id} className="relative">
-                           <div className="absolute -left-[2.2rem] top-1.5 w-5 h-5 rounded-full bg-white border-2 border-slate-900 flex items-center justify-center shadow-lg">
-                              <div className="w-2 h-2 rounded-full bg-slate-900" />
-                           </div>
-                           <div className="bg-slate-50/50 p-6 rounded-3xl border border-slate-100/50 group hover:bg-white hover:border-slate-200 transition-all">
-                              <div className="flex justify-between items-center mb-1.5">
-                                 <span className="text-[11px] font-black text-slate-800 uppercase tracking-widest italic leading-none">{evt.status.replace(/_/g, ' ')}</span>
-                                 <span className="text-[9px] font-black text-slate-300 uppercase leading-none">{format(new Date(evt.createdAt), 'MMM dd | HH:mm')}</span>
-                              </div>
-                              {evt.notes && <p className="text-[11px] font-medium text-slate-500 italic mt-2 tracking-tight">"{evt.notes}"</p>}
-                           </div>
-                        </div>
-                     ))}
                   </div>
                </div>
             </div>
-          </div>
-        )}
+          )}
       </div>
     </div>
   );

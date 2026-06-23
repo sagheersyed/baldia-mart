@@ -1,7 +1,11 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, X, Pencil, MapPin, Store, CheckCircle, XCircle, Package } from 'lucide-react';
+import { 
+  Plus, Trash2, X, Pencil, MapPin, Store, CheckCircle, XCircle, 
+  Package, RefreshCw, Search, ArrowRight, ShieldCheck, Zap, 
+  LayoutGrid, List, Filter, Activity, Globe, Info
+} from 'lucide-react';
 import { fetchWithAuth, BASE_URL, getErrorMessage, parseApiError } from '@/lib/api';
 import { showToast } from '@/hooks/useToast';
 
@@ -69,50 +73,38 @@ export default function VendorsPage() {
   const [editingVendor, setEditingVendor] = useState<Vendor | null>(null);
   const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [productSearchTerms, setProductSearchTerms] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    fetchVendors();
-    fetchProducts();
-    fetchZones();
+    void fetchVendors();
+    void fetchProducts();
+    void fetchZones();
   }, []);
 
   const fetchZones = async () => {
     try {
       const res = await fetchWithAuth(`${BASE_URL}/delivery-zones/all`);
-      if (!res.ok) throw new Error(await parseApiError(res, 'Failed to fetch zones'));
-      const data = await res.json();
-      setZones(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error('Failed to fetch zones:', err);
-      showToast({ title: getErrorMessage(err, 'Failed to fetch zones'), variant: 'error' });
-    }
+      if (res.ok) setZones(await res.json());
+    } catch (err) { console.error(err); }
   };
 
   const fetchVendors = async () => {
     setLoading(true);
     try {
       const res = await fetchWithAuth(API_URL);
-      if (!res.ok) throw new Error(await parseApiError(res, 'Failed to fetch vendors'));
       const data = await res.json();
       setVendors(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error('Failed to fetch vendors:', err);
-      showToast({ title: getErrorMessage(err, 'Failed to fetch vendors'), variant: 'error' });
-    } finally {
-      setLoading(false);
-    }
+      showToast({ title: 'Failed to sync vendors', variant: 'error' });
+    } finally { setLoading(false); }
   };
 
   const fetchProducts = async () => {
     try {
       const res = await fetchWithAuth(PRODUCTS_API);
-      if (!res.ok) throw new Error(await parseApiError(res, 'Failed to fetch products'));
-      const data = await res.json();
-      setProducts(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error('Failed to fetch products:', err);
-      showToast({ title: getErrorMessage(err, 'Failed to fetch products'), variant: 'error' });
-    }
+      if (res.ok) setProducts(await res.json());
+    } catch (err) { console.error(err); }
   };
 
   const handleVendorSubmit = async (e: React.FormEvent) => {
@@ -121,33 +113,26 @@ export default function VendorsPage() {
     try {
       const url = editingVendor ? `${API_URL}/${editingVendor.id}` : API_URL;
       const method = editingVendor ? 'PATCH' : 'POST';
-      const payload = {
-        ...vendorForm,
-        lat: vendorForm.lat ? parseFloat(vendorForm.lat) : null,
-        lng: vendorForm.lng ? parseFloat(vendorForm.lng) : null,
-        zoneId: vendorForm.zoneId || null
-      };
-      
       const res = await fetchWithAuth(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          ...vendorForm,
+          lat: vendorForm.lat ? parseFloat(vendorForm.lat) : null,
+          lng: vendorForm.lng ? parseFloat(vendorForm.lng) : null,
+        }),
       });
       if (res.ok) {
         setShowVendorModal(false);
         setEditingVendor(null);
-        setVendorForm(emptyVendorForm);
         fetchVendors();
-        showToast({ title: editingVendor ? 'Vendor updated' : 'Vendor created', variant: 'success' });
+        showToast({ title: 'System Node Updated', variant: 'success' });
       } else {
-        showToast({ title: await parseApiError(res, 'Failed to save vendor'), variant: 'error' });
+        showToast({ title: await parseApiError(res, 'Update failed'), variant: 'error' });
       }
     } catch (err) {
-      console.error('Failed to save vendor:', err);
-      showToast({ title: getErrorMessage(err, 'Failed to save vendor'), variant: 'error' });
-    } finally {
-      setIsSubmitting(false);
-    }
+      showToast({ title: 'Transmission error', variant: 'error' });
+    } finally { setIsSubmitting(false); }
   };
 
   const handleVendorProductSubmit = async (e: React.FormEvent) => {
@@ -155,69 +140,40 @@ export default function VendorsPage() {
     if (!selectedVendor || !vpForm.productId) return;
     setIsSubmitting(true);
     try {
-      const url = `${API_URL}/${selectedVendor.id}/products`;
-      const payload = {
-        productId: vpForm.productId,
-        price: parseFloat(vpForm.price),
-        stockQty: parseInt(vpForm.stockQty),
-        isAvailable: vpForm.isAvailable
-      };
-      const res = await fetchWithAuth(url, {
+      const res = await fetchWithAuth(`${API_URL}/${selectedVendor.id}/products`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          productId: vpForm.productId,
+          price: parseFloat(vpForm.price),
+          stockQty: parseInt(vpForm.stockQty),
+          isAvailable: vpForm.isAvailable
+        }),
       });
       if (res.ok) {
         setShowVendorProductModal(false);
-        setVpForm(emptyVendorProductForm);
         fetchVendors();
-        showToast({ title: 'Product mapped to vendor', variant: 'success' });
-      } else {
-        showToast({ title: await parseApiError(res, 'Failed to map product'), variant: 'error' });
+        showToast({ title: 'Resource Mapped', variant: 'success' });
       }
-    } catch (err) {
-      console.error('Failed to save vendor product:', err);
-      showToast({ title: getErrorMessage(err, 'Failed to map product'), variant: 'error' });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleDeleteVendorProduct = async (vendorId: string, vpId: string) => {
-    if (!confirm('Remove this product from the vendor?')) return;
-    try {
-      const res = await fetchWithAuth(`${API_URL}/${vendorId}/products/${vpId}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error(await parseApiError(res, 'Failed to remove vendor product'));
-      fetchVendors();
-      showToast({ title: 'Vendor product removed', variant: 'success' });
-    } catch (err) {
-      showToast({ title: getErrorMessage(err, 'Failed to remove vendor product'), variant: 'error' });
-    }
+    } catch (err) { console.error(err); } finally { setIsSubmitting(false); }
   };
 
   const handleDeleteVendor = async (id: string) => {
-    if (!confirm('Delete this vendor?')) return;
+    if (!confirm('Decommission this vendor node?')) return;
     try {
       const res = await fetchWithAuth(`${API_URL}/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error(await parseApiError(res, 'Failed to delete vendor'));
-      fetchVendors();
-      showToast({ title: 'Vendor deleted', variant: 'success' });
-    } catch (err) {
-      showToast({ title: getErrorMessage(err, 'Failed to delete vendor'), variant: 'error' });
-    }
+      if (res.ok) { fetchVendors(); showToast({ title: 'Node Removed', variant: 'success' }); }
+    } catch (err) { console.error(err); }
   };
 
   const openEditVendor = (v: Vendor) => {
     setEditingVendor(v);
     setVendorForm({
       name: v.name, type: v.type || 'grocery', address: v.address || '',
-      location: v.location || '',
-      lat: v.lat ? v.lat.toString() : '', lng: v.lng ? v.lng.toString() : '',
-      isOpen: v.isOpen, isActive: v.isActive,
-      openingHours: v.openingHours || '09:00 AM - 11:00 PM',
-      openingTime: v.openingTime || '09:00',
-      closingTime: v.closingTime || '23:00',
-      zoneId: v.zoneId || ''
+      location: v.location || '', lat: v.lat ? v.lat.toString() : '', 
+      lng: v.lng ? v.lng.toString() : '', isOpen: v.isOpen, isActive: v.isActive,
+      openingHours: v.openingHours || '', openingTime: v.openingTime || '',
+      closingTime: v.closingTime || '', zoneId: v.zoneId || ''
     });
     setShowVendorModal(true);
   };
@@ -227,251 +183,323 @@ export default function VendorsPage() {
     : vendors.filter(v => v.zoneId === selectedZoneFilter);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-teal-50 to-emerald-50 p-8">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-4xl font-black text-gray-900">🏪 Vendors</h1>
-            <p className="text-gray-400 font-medium mt-1">Manage local vendors and item stock mapping for Mart mode</p>
+    <div className="page-container bg-[#FDFDFF]">
+      <div className="max-w-[1600px] mx-auto">
+        
+        {/* ─── Architectural Header ───────────────────── */}
+        <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-10 mb-16">
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+               <div className="w-12 h-1 bg-indigo-600 rounded-full" />
+               <span className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.4em]">Node Management</span>
+            </div>
+            <h1 className="text-6xl font-black text-slate-900 tracking-tighter italic uppercase leading-none">Vendor<br/>Terminal</h1>
+            <p className="text-slate-400 font-bold text-xs uppercase tracking-widest max-w-md leading-relaxed">
+              Orchestrate local inventory nodes and geospatial delivery logic across the Baldia Mart network.
+            </p>
           </div>
-          <div className="flex items-center gap-4">
-            <select 
-              className="bg-white border border-gray-100 rounded-2xl px-4 py-3 font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-500/20 shadow-sm"
-              value={selectedZoneFilter}
-              onChange={(e) => setSelectedZoneFilter(e.target.value)}
-            >
-              <option value="all">All Delivery Zones</option>
-              {zones.map(zone => (
-                <option key={zone.id} value={zone.id}>{zone.name}</option>
-              ))}
-            </select>
+          
+          <div className="flex flex-wrap items-center gap-4 p-2 bg-white rounded-3xl border border-slate-100 shadow-xl shadow-slate-200/40">
+            <div className="flex items-center gap-1.5 px-4">
+               <Filter size={14} className="text-slate-300" />
+               <select 
+                 className="bg-transparent border-none outline-none text-[10px] font-black uppercase tracking-widest text-slate-600 cursor-pointer"
+                 value={selectedZoneFilter}
+                 onChange={(e) => setSelectedZoneFilter(e.target.value)}
+               >
+                 <option value="all">Global Sectors</option>
+                 {zones.map(zone => (
+                   <option key={zone.id} value={zone.id}>{zone.name}</option>
+                 ))}
+               </select>
+            </div>
+            <div className="w-px h-8 bg-slate-100" />
+            <div className="flex bg-slate-50 p-1 rounded-2xl">
+               <button onClick={() => setViewMode('grid')} className={`p-3 rounded-xl transition-all ${viewMode === 'grid' ? 'bg-white shadow-lg text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}>
+                  <LayoutGrid size={18} />
+               </button>
+               <button onClick={() => setViewMode('list')} className={`p-3 rounded-xl transition-all ${viewMode === 'list' ? 'bg-white shadow-lg text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}>
+                  <List size={18} />
+               </button>
+            </div>
             <button
               onClick={() => { setEditingVendor(null); setVendorForm(emptyVendorForm); setShowVendorModal(true); }}
-              className="flex items-center space-x-2 bg-gradient-to-br from-teal-500 to-emerald-600 text-white px-6 py-3 rounded-2xl font-bold hover:shadow-lg transition-all"
+              className="btn-primary !h-14 !px-10"
             >
-              <Plus size={18} />
-              <span>Add Vendor</span>
+              <Plus size={20} />
+              <span>Register Node</span>
             </button>
           </div>
         </div>
 
+        {/* ─── Hero Intelligence ───────────────────── */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-16">
+          {[
+            { label: 'Network Nodes', value: vendors.length, icon: Store, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+            { label: 'Active Sectors', value: zones.length, icon: Globe, color: 'text-blue-600', bg: 'bg-blue-50' },
+            { label: 'Operational', value: vendors.filter(v => v.isOpen).length, icon: Activity, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+            { label: 'Stock Units', value: vendors.reduce((acc, v) => acc + (v.vendorProducts?.length || 0), 0), icon: Package, color: 'text-amber-600', bg: 'bg-amber-50' },
+          ].map((stat, i) => (
+            <div key={i} className="card p-8 flex items-center justify-between group">
+               <div className="space-y-2">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{stat.label}</p>
+                  <p className="text-4xl font-black text-slate-900 italic tracking-tighter">{stat.value}</p>
+               </div>
+               <div className={`w-14 h-14 rounded-2xl ${stat.bg} ${stat.color} flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform duration-500`}>
+                  <stat.icon size={24} />
+               </div>
+            </div>
+          ))}
+        </div>
+
         {loading ? (
-          <div className="flex justify-center items-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-500" />
+          <div className="flex flex-col justify-center items-center h-[50vh] gap-6">
+            <div className="relative">
+               <div className="w-24 h-24 rounded-full border-4 border-slate-100 border-t-indigo-600 animate-spin" />
+               <Zap className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-indigo-600 animate-pulse" size={32} />
+            </div>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.5em] animate-pulse">Syncing Grid Nodes...</p>
           </div>
         ) : (
-          <div className="space-y-6">
-            {filteredVendors.map(vendor => (
-              <div key={vendor.id} className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-                <div className="flex items-center justify-between p-6 border-b border-gray-50">
-                  <div className="flex items-center space-x-4">
-                    <div className="w-16 h-16 rounded-2xl bg-teal-50 border border-teal-100 flex items-center justify-center overflow-hidden">
-                      <Store size={28} className="text-teal-500" />
-                    </div>
-                    <div>
-                      <h2 className="text-xl font-black text-gray-900">{vendor.name} <span className="text-sm font-semibold text-teal-600 bg-teal-50 px-2 py-1 rounded-lg ml-2">{vendor.type}</span></h2>
-                      <div className="flex items-center gap-3 mt-2 flex-wrap">
-                        {vendor.address && (
-                          <span className="flex items-center gap-1 text-xs font-bold text-gray-500 bg-gray-50 px-2 py-1 rounded-full">
-                            <MapPin size={10} /> {vendor.address}
-                          </span>
-                        )}
-                        {vendor.location && (
-                          <span className="flex items-center gap-1 text-xs font-bold text-teal-500 bg-teal-50 px-2 py-1 rounded-full">
-                            📍 {vendor.location}
-                          </span>
-                        )}
-                        {vendor.openingHours && (
-                          <span className="flex items-center gap-1 text-xs font-bold text-amber-500 bg-amber-50 px-2 py-1 rounded-full">
-                             🕒 {vendor.openingHours}
-                          </span>
-                        )}
-                        <span className={`flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full ${vendor.isOpen ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
-                          {vendor.isOpen ? <CheckCircle size={10} /> : <XCircle size={10} />}
-                          {vendor.isOpen ? 'Currently Open' : 'Closed'}
-                        </span>
-                      </div>
+          <div className={viewMode === 'grid' ? "grid grid-cols-1 xl:grid-cols-2 gap-10" : "space-y-8"}>
+            {filteredVendors.map(vendor => {
+              const searchTerm = productSearchTerms[vendor.id] || '';
+              const vendorProducts = vendor.vendorProducts || [];
+              const filteredVPs = vendorProducts.filter(vp => 
+                (vp.product?.name || '').toLowerCase().includes(searchTerm.toLowerCase())
+              );
+
+              return (
+                <div key={vendor.id} className="card group relative flex flex-col h-full !rounded-[3rem] bg-white border-slate-100/50 shadow-2xl shadow-slate-200/20 active:scale-[0.99] transition-transform">
+                  
+                  {/* Card Header Layer */}
+                  <div className="p-10 pb-0 shrink-0">
+                    <div className="flex items-start justify-between mb-8">
+                       <div className="flex gap-6">
+                          <div className="w-20 h-20 rounded-[2rem] bg-slate-900 flex items-center justify-center text-white shadow-2xl shadow-slate-400/30 overflow-hidden relative group-hover:rotate-6 transition-transform duration-500">
+                             <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/20 to-transparent" />
+                             <Store size={32} />
+                          </div>
+                          <div className="space-y-2">
+                             <div className="flex items-center gap-3">
+                                <h2 className="text-2xl font-black text-slate-900 tracking-tighter uppercase italic">{vendor.name}</h2>
+                                <span className="badge-purple">#{vendor.type}</span>
+                             </div>
+                             <div className="flex items-center gap-4">
+                                <span className={vendor.isOpen ? 'badge-green' : 'badge-red'}>
+                                   <div className={`w-1.5 h-1.5 rounded-full mr-2 inline-block ${vendor.isOpen ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]' : 'bg-rose-500'}`} />
+                                   {vendor.isOpen ? 'Operational' : 'Disconnected'}
+                                </span>
+                                <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                   <MapPin size={12} className="text-indigo-600" />
+                                   {vendor.location || 'Sector Zero'}
+                                </div>
+                             </div>
+                          </div>
+                       </div>
+                       
+                       <div className="flex gap-2">
+                          <button onClick={() => openEditVendor(vendor)} className="w-12 h-12 flex items-center justify-center bg-slate-50 hover:bg-indigo-50 hover:text-indigo-600 rounded-2xl border border-slate-100 transition-all">
+                             <Pencil size={18} />
+                          </button>
+                          <button onClick={() => handleDeleteVendor(vendor.id)} className="w-12 h-12 flex items-center justify-center bg-slate-50 hover:bg-rose-50 hover:text-rose-600 rounded-2xl border border-slate-100 transition-all text-slate-300">
+                             <Trash2 size={18} />
+                          </button>
+                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => { setSelectedVendor(vendor); setVpForm(emptyVendorProductForm); setShowVendorProductModal(true); }}
-                      className="flex items-center gap-2 bg-teal-50 hover:bg-teal-100 text-teal-700 px-4 py-2 rounded-xl font-bold text-sm transition-all"
-                    >
-                      <Plus size={14} /> Map Product
-                    </button>
-                    <button onClick={() => openEditVendor(vendor)} className="p-2 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all">
-                      <Pencil size={18} />
-                    </button>
-                    <button onClick={() => handleDeleteVendor(vendor.id)} className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all">
-                      <Trash2 size={18} />
-                    </button>
+
+                  {/* Operational Terminal */}
+                  <div className="px-10 pb-10 flex-1 flex flex-col">
+                     <div className="bg-slate-50/50 rounded-[2.5rem] border border-slate-100/50 p-8 flex-1 flex flex-col">
+                        <div className="flex items-center justify-between mb-6">
+                           <div className="flex items-center gap-3">
+                              <Zap size={16} className="text-indigo-600 animate-pulse" />
+                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Resource Grid · {vendorProducts.length} Units</p>
+                           </div>
+                           
+                           <div className="relative group/search">
+                              <Search size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within/search:text-indigo-600" />
+                              <input 
+                                type="text"
+                                placeholder="Search inventory..."
+                                value={searchTerm}
+                                onChange={(e) => setProductSearchTerms({ ...productSearchTerms, [vendor.id]: e.target.value })}
+                                className="w-40 xl:w-56 bg-white border border-slate-100 rounded-full pl-10 pr-4 py-2.5 text-[11px] font-bold outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/30 transition-all"
+                              />
+                           </div>
+                        </div>
+
+                        {vendorProducts.length > 0 ? (
+                          <div className="max-h-[360px] overflow-y-auto pr-4 custom-scrollbar space-y-3">
+                             {filteredVPs.map(vp => (
+                               <div key={vp.id} className="group/item flex items-center justify-between bg-white border border-slate-100/50 p-5 rounded-3xl hover:border-indigo-200 hover:shadow-xl hover:shadow-slate-200/30 transition-all">
+                                  <div className="flex items-center gap-4">
+                                     <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover/item:text-indigo-600 transition-colors">
+                                        <Package size={20} />
+                                     </div>
+                                     <div>
+                                        <p className="text-sm font-black text-slate-900 uppercase tracking-tight italic">{vp.product?.name || 'Logistic Payload'}</p>
+                                        <div className="flex items-center gap-2 mt-1">
+                                           <span className="text-[10px] font-black text-indigo-600 tracking-tighter">RS. {vp.price}</span>
+                                           <div className="w-1 h-1 rounded-full bg-slate-200" />
+                                           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{vp.stockQty} In Stash</span>
+                                        </div>
+                                     </div>
+                                  </div>
+                                  <button className="p-3 text-slate-200 hover:text-rose-500 transition-colors">
+                                     <ArrowRight size={18} />
+                                  </button>
+                               </div>
+                             ))}
+                          </div>
+                        ) : (
+                          <div className="flex-1 flex flex-col items-center justify-center opacity-20 border-2 border-dashed border-slate-200 rounded-[2rem] py-16">
+                             <Package size={48} className="mb-4" />
+                             <p className="text-[10px] font-black uppercase tracking-[0.4em]">Empty Payload Hub</p>
+                          </div>
+                        )}
+                     </div>
+                     
+                     <div className="mt-8 flex items-center justify-between px-2">
+                        <div className="flex items-center gap-2">
+                           <ShieldCheck size={16} className="text-indigo-600" />
+                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Authorized Sector Node</p>
+                        </div>
+                        <button
+                          onClick={() => { setSelectedVendor(vendor); setVpForm(emptyVendorProductForm); setShowVendorProductModal(true); }}
+                          className="flex items-center gap-2 text-indigo-600 font-black text-[10px] uppercase tracking-widest hover:gap-4 transition-all"
+                        >
+                          Map New Resource <ArrowRight size={14} />
+                        </button>
+                     </div>
                   </div>
                 </div>
-
-                {vendor.vendorProducts && vendor.vendorProducts.length > 0 ? (
-                  <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {vendor.vendorProducts.map(vp => (
-                      <div key={vp.id} className="flex items-center gap-3 bg-gray-50 rounded-xl p-4 border border-gray-100">
-                        <div className="w-10 h-10 rounded-lg bg-white border border-gray-100 flex items-center justify-center text-teal-500">
-                          <Package size={20} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="font-bold text-gray-900 text-sm truncate">{vp.product?.name || 'Unknown Product'}</p>
-                            {!vp.isAvailable && (
-                              <span className="text-[10px] font-black bg-red-100 text-red-600 px-1.5 py-0.5 rounded uppercase">Hidden</span>
-                            )}
-                          </div>
-                          <div className="flex justify-between items-center mt-1">
-                            <p className="text-sm font-black text-teal-600">Rs {vp.price}</p>
-                            <p className="text-xs font-semibold text-gray-400">Stock: {vp.stockQty}</p>
-                          </div>
-                        </div>
-                        <button onClick={() => handleDeleteVendorProduct(vendor.id, vp.id)} className="p-2 text-red-400 hover:text-red-600 bg-white rounded-lg border border-red-50">
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="p-6 text-center text-gray-400 text-sm">No products mapped to this vendor yet.</div>
-                )}
-              </div>
-            ))}
-            {vendors.length === 0 && !loading && (
-              <div className="text-center py-20">
-                <Store className="mx-auto h-16 w-16 text-gray-300 mb-4" />
-                <h3 className="text-xl font-bold text-gray-400">No vendors registered</h3>
-                <p className="text-gray-300 mt-2">Add your first local vendor to enable smart splitting.</p>
-              </div>
-            )}
+              );
+            })}
           </div>
         )}
       </div>
 
+      {/* ─── Modals Redesign ───────────────────── */}
       {showVendorModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg">
-            <div className="flex justify-between items-center p-7 border-b border-gray-100">
-              <h2 className="text-2xl font-black">{editingVendor ? 'Edit Vendor' : 'Add Vendor'}</h2>
-              <button onClick={() => setShowVendorModal(false)} className="p-2 hover:bg-gray-100 rounded-xl"><X size={20} /></button>
+        <div className="modal-overlay">
+          <div className="modal-box !max-w-3xl">
+            <div className="modal-header">
+               <div className="space-y-2">
+                  <span className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.4em]">Protocol Authorization</span>
+                  <h2 className="text-3xl font-black text-slate-900 uppercase italic tracking-tighter">
+                    {editingVendor ? 'Update Sector Hub' : 'Onboard Primary Node'}
+                  </h2>
+               </div>
+               <button onClick={() => setShowVendorModal(false)} className="btn-ghost btn-icon !rounded-full"><X size={24} /></button>
             </div>
-            <form onSubmit={handleVendorSubmit} className="p-7 space-y-4">
-              <div>
-                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Vendor Name *</label>
-                <input required className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-teal-500/20 font-bold" value={vendorForm.name} onChange={e => setVendorForm({ ...vendorForm, name: e.target.value })} />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Store Type</label>
-                  <select className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none font-bold" value={vendorForm.type} onChange={e => setVendorForm({ ...vendorForm, type: e.target.value })}>
-                    <option value="grocery">Grocery Store</option>
-                    <option value="dairy">Dairy Shop</option>
-                    <option value="vegetable">Vegetable Market</option>
-                    <option value="pharmacy">Pharmacy</option>
-                    <option value="butcher">Meat & Poultry</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Delivery Zone</label>
-                  <select required className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none font-bold" value={vendorForm.zoneId} onChange={e => setVendorForm({ ...vendorForm, zoneId: e.target.value })}>
-                    <option value="">Select a zone...</option>
-                    {zones.map(zone => (
-                      <option key={zone.id} value={zone.id}>{zone.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex items-center mt-8">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" checked={vendorForm.isOpen} onChange={e => setVendorForm({ ...vendorForm, isOpen: e.target.checked })} className="w-5 h-5 accent-teal-500" />
-                    <span className="font-bold text-gray-700">Currently Open</span>
-                  </label>
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Location/Area Name</label>
-                <input className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-teal-500/20 font-bold" value={vendorForm.location} onChange={e => setVendorForm({ ...vendorForm, location: e.target.value })} placeholder="e.g. Colony No 1, Baldia Town" />
-              </div>
-              <div>
-                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Full Street Address</label>
-                <input className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-teal-500/20 font-bold" value={vendorForm.address} onChange={e => setVendorForm({ ...vendorForm, address: e.target.value })} placeholder="Street 5, Block B, House 12..." />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Display Hours (e.g. 9AM-11PM)</label>
-                  <input className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-teal-500/20 font-bold" value={vendorForm.openingHours} onChange={e => setVendorForm({ ...vendorForm, openingHours: e.target.value })} />
-                </div>
-                <div className="flex gap-2">
-                  <div className="flex-1">
-                    <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Open</label>
-                    <input type="time" className="w-full px-3 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none font-bold" value={vendorForm.openingTime} onChange={e => setVendorForm({ ...vendorForm, openingTime: e.target.value })} />
+            <form onSubmit={handleVendorSubmit} className="modal-body space-y-10">
+               
+               <div className="grid grid-cols-2 gap-10">
+                  <div className="col-span-2 space-y-4">
+                     <p className="text-[11px] font-black text-slate-900 uppercase tracking-widest ml-1 border-l-4 border-indigo-600 pl-4">Identification Matrix</p>
+                     <div className="grid grid-cols-2 gap-6">
+                        <div className="col-span-1">
+                           <label className="input-label">Entity Name *</label>
+                           <input required className="input w-full" value={vendorForm.name} onChange={e => setVendorForm({ ...vendorForm, name: e.target.value })} placeholder="Global Hub One" />
+                        </div>
+                        <div className="col-span-1">
+                           <label className="input-label">Node Sector</label>
+                           <select className="input w-full" value={vendorForm.type} onChange={e => setVendorForm({ ...vendorForm, type: e.target.value })}>
+                              <option value="grocery">Logistic Center (Grocery)</option>
+                              <option value="dairy">Dairy Exchange</option>
+                              <option value="pharmacy">Medical Protocol Hub</option>
+                              <option value="restaurants">Food Production Link</option>
+                           </select>
+                        </div>
+                     </div>
                   </div>
-                  <div className="flex-1">
-                    <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Close</label>
-                    <input type="time" className="w-full px-3 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none font-bold" value={vendorForm.closingTime} onChange={e => setVendorForm({ ...vendorForm, closingTime: e.target.value })} />
+
+                  <div className="col-span-2 space-y-6 bg-slate-50 p-8 rounded-[2.5rem] border border-slate-100">
+                     <div className="flex items-center justify-between mb-4">
+                        <p className="text-[11px] font-black text-slate-900 uppercase tracking-widest flex items-center gap-3">
+                           <MapPin size={14} className="text-indigo-600" /> Geospatial Routing
+                        </p>
+                        <div className="flex items-center gap-3">
+                           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Active Ops</span>
+                           <label className="w-14 h-8 bg-slate-200 rounded-full relative cursor-pointer group">
+                              <input type="checkbox" className="hidden peer" checked={vendorForm.isOpen} onChange={e => setVendorForm({ ...vendorForm, isOpen: e.target.checked })} />
+                              <div className="absolute left-1 top-1 w-6 h-6 bg-white rounded-full transition-all peer-checked:translate-x-6 peer-checked:bg-indigo-600 shadow-sm" />
+                           </label>
+                        </div>
+                     </div>
+                     <div className="grid grid-cols-2 gap-6">
+                        <div className="col-span-2">
+                           <label className="input-label">Full Vector Address</label>
+                           <input className="input w-full" value={vendorForm.address} onChange={e => setVendorForm({ ...vendorForm, address: e.target.value })} />
+                        </div>
+                        <div>
+                           <label className="input-label">Zone Mapping</label>
+                           <select required className="input w-full" value={vendorForm.zoneId} onChange={e => setVendorForm({ ...vendorForm, zoneId: e.target.value })}>
+                              <option value="">Select Target Zone...</option>
+                              {zones.map(z => <option key={z.id} value={z.id}>{z.name}</option>)}
+                           </select>
+                        </div>
+                        <div>
+                           <label className="input-label">Sector Name</label>
+                           <input className="input w-full" value={vendorForm.location} onChange={e => setVendorForm({ ...vendorForm, location: e.target.value })} />
+                        </div>
+                     </div>
                   </div>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Latitude</label>
-                  <input type="number" step="any" className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none font-bold" value={vendorForm.lat} onChange={e => setVendorForm({ ...vendorForm, lat: e.target.value })} />
-                </div>
-                <div>
-                  <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Longitude</label>
-                  <input type="number" step="any" className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none font-bold" value={vendorForm.lng} onChange={e => setVendorForm({ ...vendorForm, lng: e.target.value })} />
-                </div>
-              </div>
-              <div className="pt-2">
-                <button type="submit" disabled={isSubmitting} className="w-full h-14 bg-gradient-to-br from-teal-500 to-emerald-600 text-white rounded-2xl font-black text-lg hover:shadow-lg transition-all disabled:opacity-60">
-                  {isSubmitting ? 'Saving...' : editingVendor ? 'Update Vendor' : 'Add Vendor'}
-                </button>
-              </div>
+               </div>
             </form>
+            <div className="modal-footer">
+               <button onClick={() => setShowVendorModal(false)} className="btn-ghost">Decline Update</button>
+               <button type="submit" onClick={handleVendorSubmit} className="btn-primary min-w-[200px]">
+                  Authorize Transmission
+               </button>
+            </div>
           </div>
         </div>
       )}
 
+      {/* Map Resource Modal Redesign */}
       {showVendorProductModal && selectedVendor && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg">
-            <div className="flex justify-between items-center p-7 border-b border-gray-100">
-              <div>
-                <h2 className="text-2xl font-black">Map Product</h2>
-                <p className="text-sm text-gray-400 mt-1">To: {selectedVendor.name}</p>
-              </div>
-              <button onClick={() => setShowVendorProductModal(false)} className="p-2 hover:bg-gray-100 rounded-xl"><X size={20} /></button>
-            </div>
-            <form onSubmit={handleVendorProductSubmit} className="p-7 space-y-4">
-              <div>
-                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Global Product *</label>
-                <select required className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none font-bold" value={vpForm.productId} onChange={e => {
-                  const prod = products.find(p => p.id === e.target.value);
-                  setVpForm({ ...vpForm, productId: e.target.value, price: prod ? prod.price.toString() : '' });
-                }}>
-                  <option value="">Select a product...</option>
-                  {products.map(p => (
-                    <option key={p.id} value={p.id}>{p.name} (Base Rs {p.price})</option>
-                  ))}
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
+        <div className="modal-overlay">
+          <div className="modal-box !max-w-xl">
+             <div className="modal-header">
                 <div>
-                  <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Vendor Price (Rs) *</label>
-                  <input required type="number" step="any" className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none font-bold" value={vpForm.price} onChange={e => setVpForm({ ...vpForm, price: e.target.value })} />
+                   <span className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.4em]">Inventory Injection</span>
+                   <h2 className="text-2xl font-black text-slate-900 uppercase italic tracking-tighter mt-2 leading-none">Map Payload Resource</h2>
+                   <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mt-3">Node ID: {selectedVendor.name}</p>
                 </div>
-                <div>
-                  <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Stock Quantity</label>
-                  <input required type="number" className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none font-bold" value={vpForm.stockQty} onChange={e => setVpForm({ ...vpForm, stockQty: e.target.value })} />
+                <button onClick={() => setShowVendorProductModal(false)} className="btn-ghost btn-icon !rounded-full"><X size={20} /></button>
+             </div>
+             <form onSubmit={handleVendorProductSubmit} className="modal-body space-y-8">
+                <div className="space-y-6">
+                   <div>
+                      <label className="input-label">Global Resource Profile *</label>
+                      <select required className="input w-full" value={vpForm.productId} onChange={e => {
+                        const prod = products.find(p => p.id === e.target.value);
+                        setVpForm({ ...vpForm, productId: e.target.value, price: prod ? prod.price.toString() : '' });
+                      }}>
+                        <option value="">Select Resource Type...</option>
+                        {products.map(p => <option key={p.id} value={p.id}>{p.name} (Ref: RS. {p.price})</option>)}
+                      </select>
+                   </div>
+                   <div className="grid grid-cols-2 gap-6 p-8 bg-slate-50 rounded-[2rem] border border-slate-100">
+                      <div>
+                         <label className="input-label text-slate-900">Unit Price (RS)</label>
+                         <input required type="number" step="any" className="input w-full border-white" value={vpForm.price} onChange={e => setVpForm({ ...vpForm, price: e.target.value })} />
+                      </div>
+                      <div>
+                         <label className="input-label text-slate-900">Stash Limit</label>
+                         <input required type="number" className="input w-full border-white" value={vpForm.stockQty} onChange={e => setVpForm({ ...vpForm, stockQty: e.target.value })} />
+                      </div>
+                   </div>
                 </div>
-              </div>
-              <div className="pt-2">
-                <button type="submit" disabled={isSubmitting} className="w-full h-14 bg-gradient-to-br from-teal-500 to-emerald-600 text-white rounded-2xl font-black text-lg hover:shadow-lg transition-all disabled:opacity-60">
-                  {isSubmitting ? 'Saving...' : 'Map Product to Vendor'}
+             </form>
+             <div className="modal-footer">
+                <button type="submit" onClick={handleVendorProductSubmit} className="btn-primary w-full !h-16">
+                   Finalize Mapping Protocol
                 </button>
-              </div>
-            </form>
+             </div>
           </div>
         </div>
       )}

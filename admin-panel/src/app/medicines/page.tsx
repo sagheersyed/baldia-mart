@@ -232,79 +232,78 @@ export default function MedicinesPage() {
         </div>
       </div>
 
-      <div className="card">
-        <div className="overflow-x-auto">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Medicine</th>
-                <th>Category</th>
-                <th className="text-center">Price</th>
-                <th className="text-center">Reqs</th>
-                <th className="text-center">Featured</th>
-                <th className="text-center">Status</th>
-                <th className="text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && medicines.length === 0 ? (
-                <tr><td colSpan={6} className="text-center py-10 text-slate-400">Loading master catalog…</td></tr>
-              ) : filteredMedicines.map(m => (
-                <tr key={m.id}>
-                  <td>
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-slate-50 flex items-center justify-center border border-slate-100">
-                        <Pill size={20} className="text-teal-500" />
-                      </div>
-                      <div>
-                        <p className="font-bold text-slate-800">{m.name}</p>
-                        <p className="text-xs text-slate-400 italic">{m.genericName || 'No generic name'}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td>
-                    <span className="badge-gray">{m.category?.name || 'Uncategorized'}</span>
-                  </td>
-                  <td className="text-center">
-                    <p className="font-black text-slate-700">Rs. {Number(m.mrp).toFixed(0)}</p>
-                    {(m.discount ?? 0) > 0 && <p className="text-[10px] text-green-600 font-bold">-{m.discount} OFF</p>}
-                  </td>
-                  <td className="text-center">
-                    <div className="flex justify-center gap-1">
-                      {m.requiresPrescription && <span title="Rx Required" className="w-5 h-5 rounded bg-purple-100 text-purple-700 flex items-center justify-center text-[10px] font-black">Rx</span>}
-                      {m.isEmergency && <span title="Emergency" className="w-5 h-5 rounded bg-red-100 text-red-700 flex items-center justify-center"><AlertCircle size={10} /></span>}
-                      {m.isOtc && <span title="OTC Medicine" className="w-8 h-5 rounded bg-teal-100 text-teal-700 flex items-center justify-center text-[10px] font-black">OTC</span>}
-                    </div>
-                  </td>
-                  <td className="text-center">
-                    <button
-                      onClick={() => toggleFlag(m, 'isFeatured')}
-                      className={`w-8 h-8 rounded-lg border transition-all flex items-center justify-center m-auto ${
-                        m.isFeatured ? 'bg-amber-50 border-amber-200 text-amber-600' : 'bg-white border-slate-200 text-slate-300'
-                      }`}
-                    >
-                      <Star size={14} fill={m.isFeatured ? 'currentColor' : 'none'} />
-                    </button>
-                  </td>
-                  <td className="text-center">
-                    <button 
-                      onClick={() => toggleFlag(m, 'isActive')}
-                      className={m.isActive ? 'badge-green cursor-pointer' : 'badge-gray cursor-pointer'}
-                    >
-                      {m.isActive ? 'Active' : 'Hidden'}
-                    </button>
-                  </td>
-                  <td className="text-right">
-                    <div className="flex justify-end gap-1.5">
-                      <button onClick={() => handleEdit(m)} className="btn-ghost btn-icon text-blue-600 border-blue-100"><Pencil size={14} /></button>
-                      <button onClick={() => handleDelete(m.id)} className="btn-ghost btn-icon text-red-500 border-red-100"><Trash2 size={14} /></button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+        {loading && medicines.length === 0 ? (
+          Array(8).fill(0).map((_, i) => (
+            <div key={i} className="card h-64 animate-pulse bg-slate-100/50" />
+          ))
+        ) : filteredMedicines.map(m => (
+          <div key={m.id} className="card group bg-white hover:border-indigo-500/20 transition-all duration-500">
+            <div className="p-6">
+              <div className="flex justify-between items-start mb-6">
+                <div className="w-14 h-14 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center group-hover:scale-110 transition-transform duration-500 shadow-sm shadow-slate-100">
+                  <Pill size={24} className="text-indigo-600" />
+                </div>
+                <div className="flex flex-col items-end gap-1.5">
+                   <button 
+                    onClick={() => toggleFlag(m, 'isActive')}
+                    className={m.isActive ? 'badge-blue' : 'badge-gray'}
+                  >
+                    {m.isActive ? 'Active' : 'Hidden'}
+                  </button>
+                  <div className="flex gap-1">
+                    {m.requiresPrescription && <span title="Rx" className="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center text-[10px] font-black border border-indigo-100">Rx</span>}
+                    {m.isEmergency && <span title="Emergency" className="w-6 h-6 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center border border-rose-100"><AlertCircle size={12} /></span>}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-1 mb-6">
+                <h3 className="font-black text-slate-900 text-lg tracking-tight truncate group-hover:text-indigo-700 transition-colors">{m.name}</h3>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest truncate italic">{m.genericName || 'Formula Pending'}</p>
+              </div>
+
+              <div className="flex items-center gap-2 mb-6">
+                <span className="badge-gray !bg-slate-100/50">{m.category?.name || 'General'}</span>
+                <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{m.dosageForm}</span>
+              </div>
+
+              <div className="flex items-center justify-between pt-6 border-t border-slate-50/80">
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Price Point</span>
+                  <span className="text-xl font-black text-slate-900 tracking-tighter">Rs. {Number(m.mrp).toFixed(0)}</span>
+                </div>
+                <div className="flex gap-2">
+                   <button onClick={() => handleEdit(m)} className="btn-ghost btn-icon !p-2.5 !w-10 !h-10 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 hover:border-indigo-100">
+                    <Pencil size={16} />
+                  </button>
+                  <button onClick={() => handleDelete(m.id)} className="btn-ghost btn-icon !p-2.5 !w-10 !h-10 text-slate-400 hover:text-rose-600 hover:bg-rose-50 hover:border-rose-100">
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Actions Overlay (Featured/OTC) */}
+            <div className="absolute top-0 right-0 p-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+               <button
+                  onClick={() => toggleFlag(m, 'isFeatured')}
+                  className={`w-10 h-10 rounded-xl border backdrop-blur-md transition-all flex items-center justify-center ${
+                    m.isFeatured ? 'bg-amber-500/10 border-amber-500/20 text-amber-600' : 'bg-white/80 border-slate-200 text-slate-300'
+                  }`}
+                >
+                  <Star size={18} fill={m.isFeatured ? 'currentColor' : 'none'} />
+                </button>
+            </div>
+            
+            {m.isOtc && (
+              <div className="absolute bottom-24 left-6">
+                <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-[9px] font-black uppercase tracking-widest border border-indigo-100">OTC</span>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
         
         {/* Pagination Controls */}
         <div className="flex items-center justify-between px-6 py-4 bg-slate-50 border-t border-slate-100">
@@ -331,7 +330,6 @@ export default function MedicinesPage() {
             </button>
           </div>
         </div>
-      </div>
 
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>

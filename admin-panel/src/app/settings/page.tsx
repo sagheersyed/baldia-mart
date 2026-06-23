@@ -39,7 +39,7 @@ export default function SettingsPage() {
     const prevValue = settings[key];
     const stringValue = String(value);
     
-    setSettings(prev => ({ ...prev, [key]: value }));
+    setSettings((prev: any) => ({ ...prev, [key]: value }));
     setSaving(key);
 
     try {
@@ -52,7 +52,7 @@ export default function SettingsPage() {
       if (!res.ok) throw new Error(await parseApiError(res, 'Transmission failed'));
       showToast({ title: `${key.replace(/_/g, ' ')} synchronized`, variant: 'success' });
     } catch (error) {
-      setSettings(prev => ({ ...prev, [key]: prevValue }));
+      setSettings((prev: any) => ({ ...prev, [key]: prevValue }));
       showToast({ title: getErrorMessage(error, 'Remote update failed'), variant: 'error' });
     } finally {
       setSaving(null);
@@ -102,21 +102,21 @@ export default function SettingsPage() {
                   label="Base Fee (PKR)" 
                   icon="Rs" 
                   value={settings.delivery_base_fee} 
-                  onSave={(v) => handleUpdate('delivery_base_fee', v)}
+                  onSave={(v: any) => handleUpdate('delivery_base_fee', v)}
                   isSaving={saving === 'delivery_base_fee'}
                 />
                 <SettingsInput 
                   label="Threshold (KM)" 
                   icon={<Ruler size={14} />} 
                   value={settings.delivery_threshold_km} 
-                  onSave={(v) => handleUpdate('delivery_threshold_km', v)}
+                  onSave={(v: any) => handleUpdate('delivery_threshold_km', v)}
                   isSaving={saving === 'delivery_threshold_km'}
                 />
                 <SettingsInput 
                   label="Rate per KM" 
                   icon="Rs" 
                   value={settings.delivery_per_km_fee} 
-                  onSave={(v) => handleUpdate('delivery_per_km_fee', v)}
+                  onSave={(v: any) => handleUpdate('delivery_per_km_fee', v)}
                   isSaving={saving === 'delivery_per_km_fee'}
                 />
               </div>
@@ -134,21 +134,21 @@ export default function SettingsPage() {
                   label="Pharma Base" 
                   icon="Rs" 
                   value={settings.pharma_delivery_base_fee} 
-                  onSave={(v) => handleUpdate('pharma_delivery_base_fee', v)}
+                  onSave={(v: any) => handleUpdate('pharma_delivery_base_fee', v)}
                   isSaving={saving === 'pharma_delivery_base_fee'}
                 />
                 <SettingsInput 
                   label="Pharma Limit (KM)" 
                   icon={<MapPin size={14} />} 
                   value={settings.pharma_delivery_max_radius_km} 
-                  onSave={(v) => handleUpdate('pharma_delivery_max_radius_km', v)}
+                  onSave={(v: any) => handleUpdate('pharma_delivery_max_radius_km', v)}
                   isSaving={saving === 'pharma_delivery_max_radius_km'}
                 />
                  <SettingsInput 
                   label="Multi-Resto Link" 
                   icon={<Boxes size={14} />} 
                   value={settings.multi_restaurant_max_distance_km} 
-                  onSave={(v) => handleUpdate('multi_restaurant_max_distance_km', v)}
+                  onSave={(v: any) => handleUpdate('multi_restaurant_max_distance_km', v)}
                   isSaving={saving === 'multi_restaurant_max_distance_km'}
                 />
               </div>
@@ -175,7 +175,7 @@ export default function SettingsPage() {
                   label={label}
                   desc={desc}
                   isEnabled={settings[key] === 'true' || settings[key] === true}
-                  onToggle={(val) => handleUpdate(key, val)}
+                  onToggle={(val: any) => handleUpdate(key, val)}
                   isSaving={saving === key}
                   variant="teal"
                 />
@@ -194,6 +194,7 @@ export default function SettingsPage() {
             <div className="p-8 grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {[
                 { key: 'auth_customer_mpin_enabled', label: 'Customer MPIN', desc: 'Primary customer login' },
+                { key: 'auth_customer_otp_enabled', label: 'Customer OTP', desc: 'One-Time Password login' },
                 { key: 'auth_customer_google_enabled', label: 'Customer Google', desc: 'Third-party auth' },
                 { key: 'auth_rider_mpin_enabled', label: 'Rider MPIN', desc: 'Secure rider terminal' },
                 { key: 'feature_chat_enabled', label: 'Order Chat', desc: 'In-app messaging gateway' },
@@ -203,7 +204,7 @@ export default function SettingsPage() {
                   label={label}
                   desc={desc}
                   isEnabled={settings[key] === 'true' || settings[key] === true}
-                  onToggle={(val) => handleUpdate(key, val)}
+                  onToggle={(val: any) => handleUpdate(key, val)}
                   isSaving={saving === key}
                   variant="purple"
                 />
@@ -232,7 +233,7 @@ export default function SettingsPage() {
                   label={label}
                   desc={settings[key] === 'true' || settings[key] === true ? 'Module Live' : 'Module Hidden'}
                   isEnabled={settings[key] === 'true' || settings[key] === true}
-                  onToggle={(val) => handleUpdate(key, val)}
+                  onToggle={(val: any) => handleUpdate(key, val)}
                   isSaving={saving === key}
                   variant={variant}
                 />
@@ -253,14 +254,14 @@ export default function SettingsPage() {
                 label="Support Line" 
                 icon={<Phone size={14} />} 
                 value={settings.contact_phone} 
-                onSave={(v) => handleUpdate('contact_phone', v)}
+                onSave={(v: any) => handleUpdate('contact_phone', v)}
                 isSaving={saving === 'contact_phone'}
               />
               <SettingsInput 
                 label="Support Email" 
                 icon={<Mail size={14} />} 
                 value={settings.contact_email} 
-                onSave={(v) => handleUpdate('contact_email', v)}
+                onSave={(v: any) => handleUpdate('contact_email', v)}
                 isSaving={saving === 'contact_email'}
               />
                <div className="md:col-span-2 space-y-2.5">
@@ -340,7 +341,7 @@ function SettingsToggle({ label, desc, isEnabled, onToggle, isSaving, variant = 
         className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 ${colors[variant]}`}
       >
         <span
-          className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-lg ring-0 transition duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${isEnabled ? 'translate-x-5' : 'translate-x-0'} flex items-center justify-center`}
+          className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-lg ring-0 transition duration-300 ease-premium ${isEnabled ? 'translate-x-5' : 'translate-x-0'} flex items-center justify-center`}
         >
           {isSaving ? <RefreshCw className="animate-spin text-slate-400" size={10} /> : <div className={`w-1.5 h-1.5 rounded-full ${isEnabled ? colors[variant] : 'bg-slate-300'}`} />}
         </span>

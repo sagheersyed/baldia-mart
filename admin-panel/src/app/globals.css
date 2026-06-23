@@ -2,184 +2,207 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ─── Variables & Tokens ────────────────────────────────── */
-:root {
-  --sidebar-width: 256px;
-  --sidebar-collapsed-width: 72px;
-  --header-height: 64px;
-  --transition-speed: 250ms;
-}
-
-/* ─── Base ─────────────────────────────────────────────── */
 @layer base {
-
-  *,
-  *::before,
-  *::after {
-    box-sizing: border-box;
-  }
-
-  html {
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
-    -webkit-font-smoothing: antialiased;
-    scroll-behavior: smooth;
-  }
-
-  body {
-    @apply bg-slate-50 text-slate-900 min-h-screen selection:bg-primary-100 selection:text-primary-700;
-  }
-
-  /* Elegant scrollbar */
-  ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-
-  ::-webkit-scrollbar-track {
-    @apply bg-transparent;
-  }
-
-  ::-webkit-scrollbar-thumb {
-    @apply bg-slate-300/50 rounded-full hover:bg-slate-400/50 transition-colors;
+  :root {
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
+    
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    
+    --primary: 238 100% 63%; /* Deep Premium Indigo */
+    --primary-foreground: 210 40% 98%;
+    
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222 47% 11.2%;
+    
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222 47% 11.2%;
+    
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 238 100% 63%;
+    
+    --radius-sm: 0.75rem;
+    --radius-md: 1.25rem;
+    --radius-lg: 1.75rem;
+    --radius-xl: 2.5rem;
   }
 }
 
-/* ─── Components ────────────────────────────────────────── */
 @layer components {
+  .page-container {
+    @apply p-8 lg:p-12 animate-in fade-in slide-in-from-bottom-3 duration-700 ease-out;
+  }
 
-  /* Modern Cards with Glass & Depth */
+  .page-header {
+    @apply flex flex-col md:flex-row md:items-center justify-between gap-8 mb-12;
+  }
+
+  .page-title {
+    @apply text-4xl font-black tracking-tight text-slate-900 italic uppercase;
+  }
+
+  .page-subtitle {
+    @apply text-slate-400 font-bold text-[10px] uppercase tracking-[0.4em] mt-2 block;
+  }
+
+  /* ─── Premium Card System ────────────────────────────────── */
   .card {
-    @apply bg-white rounded-2xl border border-slate-200/60 shadow-sm transition-all duration-300;
-    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+    @apply bg-white border border-slate-100/80 rounded-[2.5rem] shadow-[0_8px_30px_rgb(0,0,0,0.02)] transition-all duration-500 overflow-hidden;
   }
-
+  
   .card:hover {
-    @apply border-slate-300/80 shadow-md transform -translate-y-0.5;
+    @apply shadow-[0_20px_50px_rgba(79,70,229,0.08)] border-indigo-100/50 -translate-y-1;
   }
 
-  .card-premium {
-    @apply relative overflow-hidden bg-white rounded-3xl border border-white shadow-xl;
-    background: linear-gradient(135deg, #ffffff 0%, #f9fafb 100%);
-  }
-
-  /* Refined Buttons */
-  .btn {
-    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all duration-200 cursor-pointer select-none disabled:opacity-50 disabled:grayscale disabled:pointer-events-none active:scale-95;
-  }
-
+  /* ─── High-Octane Buttons ────────────────────────────────── */
   .btn-primary {
-    @apply btn bg-slate-900 text-white hover:bg-slate-800 shadow-lg shadow-slate-200 hover:shadow-slate-300;
+    @apply bg-gradient-to-br from-indigo-600 to-blue-700 text-white px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-3 transition-all hover:shadow-2xl hover:shadow-indigo-500/30 hover:-translate-y-0.5 active:scale-95 disabled:opacity-50 border border-indigo-500/20;
   }
 
   .btn-accent {
-    @apply btn bg-primary-600 text-white hover:bg-primary-700 shadow-lg shadow-primary-100 hover:shadow-primary-200;
+    @apply bg-white text-indigo-600 px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-3 transition-all border border-indigo-100 hover:bg-indigo-50 hover:border-indigo-200 active:scale-95 disabled:opacity-50;
   }
 
   .btn-ghost {
-    @apply btn bg-slate-100/50 text-slate-600 hover:bg-slate-200/80 border border-slate-200/50;
+    @apply text-slate-400 px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-3 transition-all hover:bg-slate-50 hover:text-slate-900 active:scale-95;
   }
 
-  .btn-danger {
-    @apply btn bg-white text-red-600 border border-red-100 hover:bg-red-600 hover:text-white shadow-sm;
+  .btn-icon {
+    @apply p-0 w-14 h-14 flex items-center justify-center rounded-2xl;
   }
 
-  /* Form Elements */
-  .input-group {
-    @apply relative flex flex-col gap-1.5;
-  }
-
+  /* ─── Advanced Inputs ────────────────────────────────── */
   .input {
-    @apply w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 shadow-sm;
+    @apply bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-xs font-bold text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/30 focus:bg-white outline-none transition-all placeholder:text-slate-300 placeholder:uppercase placeholder:tracking-widest;
   }
 
   .input-label {
-    @apply text-[11px] font-bold text-slate-500 uppercase tracking-widest pl-1;
+    @apply text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-3 block ml-1;
   }
 
-  /* Tables - High End Density */
+  /* ─── Navigation & Sidebar Architecture ───────────────────── */
+  .nav-item {
+    @apply flex items-center gap-4 px-5 py-4 rounded-2xl transition-all duration-300 text-slate-400 font-bold text-[11px] uppercase tracking-[0.15em] hover:bg-slate-50 hover:text-indigo-600 relative overflow-hidden;
+  }
+
+  .nav-item::after {
+    content: '';
+    @apply absolute left-0 top-0 bottom-0 w-1 bg-indigo-600 transform scale-y-0 transition-transform duration-300;
+  }
+
+  .nav-item:hover::after {
+    @apply scale-y-50;
+  }
+
+  .nav-item-active {
+    @apply nav-item bg-gradient-to-br from-indigo-600 to-blue-700 text-white shadow-2xl shadow-indigo-900/20 hover:text-white hover:bg-indigo-700;
+  }
+
+  .nav-item-active::after {
+    @apply bg-white scale-y-100;
+  }
+
+  .nav-item-active svg {
+    @apply text-white;
+  }
+
+  /* ─── Professional Tables ────────────────────────────────── */
   .data-table-container {
-    @apply overflow-hidden rounded-2xl border border-slate-200/60 bg-white;
+    @apply card !rounded-[2rem] overflow-hidden;
   }
 
   .data-table {
-    @apply w-full text-left text-sm border-collapse;
+    @apply w-full text-left border-collapse;
   }
 
-  .data-table thead th {
-    @apply px-6 py-4 bg-slate-50/80 text-[10px] font-bold text-slate-500 uppercase tracking-widest border-b border-slate-100 backdrop-blur-sm;
+  .data-table th {
+    @apply px-8 py-5 bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b border-slate-100;
   }
 
-  .data-table tbody tr {
-    @apply border-b border-slate-50 hover:bg-slate-50/50 transition-all duration-150;
+  .data-table td {
+    @apply px-8 py-5 text-[13px] text-slate-600 border-b border-slate-50/50 font-bold;
   }
 
-  .data-table tbody td {
-    @apply px-6 py-4 text-slate-600 font-medium;
+  .data-table tr:hover td {
+    @apply bg-indigo-50/20;
   }
 
-  /* Badges - Subtle & Clean */
-  .badge {
-    @apply inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-bold tracking-wider uppercase;
+  /* ─── Status Badges ────────────────────────────────────────── */
+  .badge-blue { @apply px-3 py-1.5 rounded-xl bg-blue-50 text-blue-600 border border-blue-100 text-[9px] font-black uppercase tracking-widest; }
+  .badge-green { @apply px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100 text-[9px] font-black uppercase tracking-widest; }
+  .badge-purple { @apply px-3 py-1.5 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100 text-[9px] font-black uppercase tracking-widest; }
+  .badge-orange { @apply px-3 py-1.5 rounded-xl bg-orange-50 text-orange-600 border border-orange-100 text-[9px] font-black uppercase tracking-widest; }
+  .badge-red { @apply px-3 py-1.5 rounded-xl bg-rose-50 text-rose-600 border border-rose-100 text-[9px] font-black uppercase tracking-widest; }
+  .badge-gray { @apply px-3 py-1.5 rounded-xl bg-slate-50 text-slate-500 border border-slate-200 text-[9px] font-black uppercase tracking-widest; }
+  .badge-yellow { @apply px-3 py-1.5 rounded-xl bg-amber-50 text-amber-600 border border-amber-100 text-[9px] font-black uppercase tracking-widest; }
+
+  /* ─── Dashboard Stats ──────────────────────────────────────── */
+  .stat-card {
+    @apply card p-10 flex flex-col justify-between;
+  }
+  
+  .stat-label {
+    @apply text-slate-400 text-[10px] font-black uppercase tracking-[0.3em];
   }
 
-  .badge-success {
-    @apply bg-emerald-50 text-emerald-700 border border-emerald-100;
+  .stat-value {
+    @apply text-4xl font-black text-slate-900 tracking-tighter mt-3 italic;
   }
 
-  .badge-warning {
-    @apply bg-amber-50 text-amber-700 border border-amber-100;
+  /* ─── Custom UI Tools ──────────────────────────────────────── */
+  .glass {
+    @apply bg-white/70 backdrop-blur-2xl border border-white/40 shadow-2xl;
   }
 
-  .badge-error {
-    @apply bg-red-50 text-red-700 border border-red-100;
+  .custom-scrollbar::-webkit-scrollbar {
+    @apply w-2 h-2;
   }
-
-  .badge-info {
-    @apply bg-blue-50 text-blue-700 border border-blue-100;
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-transparent;
   }
-
-  /* Layout Skeleton */
-  .page-container {
-    @apply animate-in fade-in slide-in-from-bottom-2 duration-500 p-6 lg:p-8;
-  }
-}
-
-/* ─── Animations ────────────────────────────────────────── */
-@keyframes shimmer {
-  0% {
-    transform: translateX(-100%);
-  }
-
-  100% {
-    transform: translateX(100%);
-  }
-}
-
-.animate-shimmer {
-  @apply relative overflow-hidden after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/20 after:to-transparent after:animate-[shimmer_2s_infinite];
-}
-
-@keyframes float {
-
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-
-  50% {
-    transform: translateY(-4px);
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-slate-200 rounded-full hover:bg-indigo-200 transition-colors;
   }
 }
 
-.animate-float {
-  animation: float 3s ease-in-out infinite;
+/* ─── Advanced Animations ────────────────────────────────────── */
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-m-active {
-  @apply nav-item bg-primary-600 text-white shadow-sm;
+.animate-slide-up {
+  animation: slideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-.nav-item-inactive {
-  @apply nav-item text-slate-400 hover:bg-white/10 hover:text-white;
+/* Modal Architecture */
+.modal-overlay {
+  @apply fixed inset-0 bg-slate-950/40 backdrop-blur-xl z-[100] flex items-center justify-center p-6 animate-in fade-in duration-500;
 }
+
+.modal-box {
+  @apply bg-white rounded-[3rem] shadow-[0_30px_100px_rgba(0,0,0,0.15)] w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col border border-slate-100 animate-in zoom-in-95 duration-500;
+}
+
+.modal-header {
+  @apply p-10 border-b border-slate-50 flex items-center justify-between bg-white shrink-0;
+}
+
+.modal-body {
+  @apply p-10 overflow-y-auto custom-scrollbar flex-1;
+}
+
+.modal-footer {
+  @apply p-10 border-t border-slate-50 flex items-center justify-end gap-5 bg-slate-50/50 shrink-0;
 }
