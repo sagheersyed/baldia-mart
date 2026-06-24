@@ -23,6 +23,7 @@ import { Address } from '../addresses/address.entity';
 import { Vendor } from '../vendors/vendor.entity';
 import { UsersService } from '../users/users.service';
 import { PharmaciesService } from '../pharma/pharmacies/pharmacies.service';
+import { CouponsService } from '../coupons/coupons.service';
 
 @Injectable()
 export class OrdersService {
@@ -48,6 +49,7 @@ export class OrdersService {
     @InjectQueue('orders') private ordersQueue: Queue,
     @Inject(forwardRef(() => PharmaciesService))
     private pharmaciesService: PharmaciesService,
+    private couponsService: CouponsService,
   ) { }
 
   private isBusinessOpen(openingTime: string | null, closingTime: string | null): boolean {
@@ -68,7 +70,16 @@ export class OrdersService {
     }
   }
 
-  async placeOrder(userId: string, addressId: string, paymentMethod: string, notes?: string, items?: any[], orderType: string = 'mart', restaurantId?: string): Promise<Order> {
+  async placeOrder(
+    userId: string, 
+    addressId: string, 
+    paymentMethod: string, 
+    notes?: string, 
+    items?: any[], 
+    orderType: string = 'mart', 
+    restaurantId?: string,
+    promoCode?: string
+  ): Promise<Order> {
     console.log('--- PlaceOrder Debug ---');
     console.log('UserId:', userId);
     console.log('AddressId:', addressId);
@@ -358,6 +369,19 @@ export class OrdersService {
       subtotal += itemPrice * item.quantity;
     }
 
+    // --- PROMO CODE VALIDATION ---
+    let discountAmount = 0;
+    let appliedCouponCode: string | undefined = undefined;
+    if (promoCode) {
+      const vendorIds = distinctRestaurants.map(r => r.id);
+      const validation = await this.couponsService.validateCoupon(userId, promoCode, subtotal, vendorIds);
+      if (!validation.success) {
+        throw new BadRequestException(validation.error_message);
+      }
+      discountAmount = validation.discount_amount;
+      appliedCouponCode = promoCode;
+    }
+
     // 5. Create Parent Order
     let orderBrandId = undefined;
     if (orderType === 'mart') {
@@ -365,7 +389,8 @@ export class OrdersService {
       if (brandItem) orderBrandId = brandItem.product.brandId;
     }
 
-    const order = transactionalManager.getRepository(Order).create({
+    const order = new Order();
+    Object.assign(order, {
       userId,
       addressId,
       martId: (martId && isUuid(martId)) ? martId : undefined,
@@ -373,13 +398,20 @@ export class OrdersService {
       brandId: orderBrandId,
       subtotal,
       deliveryFee: finalDeliveryFee,
-      total: subtotal + finalDeliveryFee,
+      discountAmount,
+      couponCode: appliedCouponCode,
+      total: Math.max(0, subtotal - discountAmount + finalDeliveryFee),
       paymentMethod,
       deliveryDistanceKm: pricing.distance,
       notes,
       orderType,
     });
     const savedOrder = await transactionalManager.getRepository(Order).save(order);
+
+    // --- INCREMENT COUPON USAGE ---
+    if (appliedCouponCode) {
+      await this.couponsService.incrementUsage(appliedCouponCode, transactionalManager);
+    }
 
     // 5. Atomic Stock Decrement (for Mart products)
     for (const item of cartItems) {
@@ -608,7 +640,14 @@ export class OrdersService {
     return query.orderBy('order.createdAt', 'DESC').getMany();
   }
 
-  async getAllOrdersForAdmin(page = 1, limit = 20, startDate?: string, endDate?: string): Promise<{ data: Order[], total: number, page: number, limit: number }> {
+  async getAllOrdersForAdmin(
+    page = 1, 
+    limit = 20, 
+    startDate?: string, 
+    endDate?: string,
+    orderType?: string,
+    status?: string
+  ): Promise<{ data: Order[], total: number, page: number, limit: number }> {
     const where: any = {};
     if (startDate) {
       const start = new Date(startDate);
@@ -617,6 +656,8 @@ export class OrdersService {
       end.setHours(23, 59, 59, 999);
       where.createdAt = Between(start, end);
     }
+    if (orderType) where.orderType = orderType;
+    if (status) where.status = status;
 
     const [data, total] = await this.ordersRepository.findAndCount({
       where,

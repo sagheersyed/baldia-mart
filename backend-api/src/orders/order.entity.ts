@@ -82,6 +82,9 @@ export class Order {
   @Column('decimal', { precision: 10, scale: 2 })
   total: number;
 
+  @Column({ name: 'coupon_code', nullable: true })
+  couponCode: string;
+
   @Column({ name: 'payment_method' })
   paymentMethod: string; // cod, online
 

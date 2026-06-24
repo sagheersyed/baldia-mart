@@ -35,6 +35,10 @@ export class PlaceOrderDto {
   restaurantId?: string;
 
   @IsOptional()
+  @IsString()
+  promoCode?: string;
+
+  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => CheckoutItemDto)

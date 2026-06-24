@@ -665,3 +665,8 @@ export const financeApi = {
   getDailySnapshots: (from?: string, to?: string) => 
     api.get('/finance/admin/daily-snapshots', { params: { from, to } }),
 };
+
+export const couponsApi = {
+  validate: (code: string, subtotal: number, vendorIds: string[]) => 
+    api.post('/coupons/validate', { code, subtotal, vendorIds }),
+};

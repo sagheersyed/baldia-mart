@@ -45,6 +45,9 @@ export default function CheckoutScreen({ navigation, route }: any) {
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(true);
   const [deliveryNotes, setDeliveryNotes] = useState('');
   const [voucherCode, setVoucherCode] = useState('');
+  const [isValidatingVoucher, setIsValidatingVoucher] = useState(false);
+  const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
+  const [couponDiscount, setCouponDiscount] = useState(0);
   const [approvedPrescriptionId, setApprovedPrescriptionId] = useState<string | null>(null);
   const [loadingRx, setLoadingRx] = useState(false);
 
@@ -153,14 +156,36 @@ export default function CheckoutScreen({ navigation, route }: any) {
   };
 
   const subtotal = getCartTotal(mode);
-
   const uniqueRestaurants = mode === 'food'
     ? Array.from(new Set(cart.map((item: any) => item.restaurantId).filter(Boolean)))
     : [];
   const multiStopCount = uniqueRestaurants.length > 1 ? uniqueRestaurants.length - 1 : 0;
   const multiStopSurcharge = multiStopCount * 50;
 
-  const total = subtotal + deliveryFee + multiStopSurcharge;
+  const handleValidateVoucher = async () => {
+    if (!voucherCode) return;
+    setIsValidatingVoucher(true);
+    try {
+      const vendorIds = mode === 'food' ? uniqueRestaurants as string[] : [];
+      const res = await (require('../api/api').couponsApi).validate(voucherCode, subtotal, vendorIds);
+      if (res.data && res.data.success) {
+        setAppliedCoupon(res.data.coupon);
+        setCouponDiscount(res.data.discount_amount);
+        Alert.alert('Success', `Voucher applied! Discount: Rs. ${res.data.discount_amount}`);
+      } else {
+        setAppliedCoupon(null);
+        setCouponDiscount(0);
+        Alert.alert('Invalid Voucher', res.data.error_message || 'This code is not valid.');
+      }
+    } catch (err: any) {
+      const msg = err.response?.data?.message || 'Failed to validate voucher.';
+      Alert.alert('Error', msg);
+    } finally {
+      setIsValidatingVoucher(false);
+    }
+  };
+
+  const total = (subtotal - couponDiscount) + deliveryFee + multiStopSurcharge;
   const totalItems = cart.reduce((sum: number, item: any) => sum + item.quantity, 0);
 
   const handlePlaceOrder = () => {
@@ -397,22 +422,49 @@ export default function CheckoutScreen({ navigation, route }: any) {
 
           {/* Voucher / promo */}
           <AppText variant="overline" style={styles.sectionLabel}>Voucher</AppText>
-          <View style={styles.voucherBox}>
-            <Ionicons name="pricetag-outline" size={18} color={theme.colors.textSecondary} />
-            <TextInput
-              value={voucherCode}
-              onChangeText={setVoucherCode}
-              placeholder="Enter promo code (optional)"
-              placeholderTextColor={theme.colors.textMuted}
-              style={styles.voucherInput}
-              autoCapitalize="characters"
+          <View style={styles.voucherContainer}>
+            <View style={[styles.voucherBox, { flex: 1 }]}>
+              <Ionicons name="pricetag-outline" size={18} color={theme.colors.textSecondary} />
+              <TextInput
+                value={voucherCode}
+                onChangeText={(txt) => {
+                  setVoucherCode(txt);
+                  if (appliedCoupon && txt !== appliedCoupon.code) {
+                    setAppliedCoupon(null);
+                    setCouponDiscount(0);
+                  }
+                }}
+                placeholder="Enter promo code"
+                placeholderTextColor={theme.colors.textMuted}
+                style={styles.voucherInput}
+                autoCapitalize="characters"
+                editable={!isValidatingVoucher}
+              />
+              {voucherCode ? (
+                <Pressable onPress={() => { setVoucherCode(''); setAppliedCoupon(null); setCouponDiscount(0); }} hitSlop={8}>
+                  <Ionicons name="close-circle" size={18} color={theme.colors.textMuted} />
+                </Pressable>
+              ) : null}
+            </View>
+            <AppButton
+              label={appliedCoupon ? "Applied" : "Apply"}
+              variant={appliedCoupon ? "secondary" : "primary"}
+              tint={appliedCoupon ? theme.colors.success : accent}
+              size="sm"
+              loading={isValidatingVoucher}
+              onPress={handleValidateVoucher}
+              disabled={!voucherCode || !!appliedCoupon || isValidatingVoucher}
+              style={{ minWidth: 80, height: 48, borderRadius: theme.radius.md }}
             />
-            {voucherCode ? (
-              <Pressable onPress={() => setVoucherCode('')} hitSlop={8}>
-                <Ionicons name="close-circle" size={18} color={theme.colors.textMuted} />
-              </Pressable>
-            ) : null}
           </View>
+          {appliedCoupon && (
+            <View style={styles.couponSuccess}>
+              <Ionicons name="checkmark-circle" size={14} color={theme.colors.success} />
+              <AppText variant="captionStrong" color={theme.colors.success}>
+                Voucher applied! You saved Rs. {Math.round(couponDiscount)}
+              </AppText>
+            </View>
+          )}
 
           {/* Order summary */}
           <AppText variant="overline" style={styles.sectionLabel}>Order summary</AppText>
@@ -450,6 +502,12 @@ export default function CheckoutScreen({ navigation, route }: any) {
               <AppText variant="body" color={theme.colors.textSecondary}>Subtotal</AppText>
               <AppText variant="bodyStrong">Rs. {Math.round(subtotal)}</AppText>
             </View>
+            {couponDiscount > 0 && (
+              <View style={styles.sumRow}>
+                <AppText variant="body" color={theme.colors.success}>Voucher Discount</AppText>
+                <AppText variant="bodyStrong" color={theme.colors.success}>- Rs. {Math.round(couponDiscount)}</AppText>
+              </View>
+            )}
             <View style={styles.sumRow}>
               <AppText variant="body" color={theme.colors.textSecondary}>Delivery fee</AppText>
               {isLoadingFee ? (
@@ -474,7 +532,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
             <View style={styles.sumRow}>
               <AppText variant="title">Grand total</AppText>
               <AppText variant="h3" color={accent}>
-                {!isAddressValid ? 'N/A' : `Rs. ${total.toLocaleString()}`}
+                {!isAddressValid ? 'N/A' : `Rs. ${Math.max(0, Math.round(total)).toLocaleString()}`}
               </AppText>
             </View>
 
@@ -699,10 +757,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.md,
     height: 48,
   },
+  voucherContainer: { flexDirection: 'row', gap: theme.spacing.sm, alignItems: 'center' },
   voucherInput: {
     flex: 1,
     color: theme.colors.textPrimary,
     fontSize: 14,
+  },
+  couponSuccess: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    backgroundColor: theme.colors.success + '10',
+    padding: 8,
+    borderRadius: theme.radius.sm,
   },
 
   // Summary

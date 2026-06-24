@@ -24,6 +24,7 @@ import { RashanController } from './rashan.controller';
 import { UsersModule } from '../users/users.module';
 import { OrderItemSubscriber } from './order-item.subscriber';
 import { OrdersProcessor } from './orders.processor';
+import { CouponsModule } from '../coupons/coupons.module';
 
 import { WalletsModule } from '../wallets/wallets.module';
 import { PharmaModule } from '../pharma/pharma.module';
@@ -41,6 +42,7 @@ import { PharmaModule } from '../pharma/pharma.module';
     VendorsModule,
     WalletsModule,
     forwardRef(() => PharmaModule),
+    CouponsModule,
     BullModule.registerQueue({
       name: 'orders',
     }),

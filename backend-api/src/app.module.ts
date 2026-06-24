@@ -36,6 +36,8 @@ import { HomeModule } from './home/home.module';
 import { PharmaModule } from './pharma/pharma.module';
 import { ModuleEventsModule } from './module-events/module-events.module';
 import { ModuleEvent } from './module-events/module-event.entity';
+import { CouponsModule } from './coupons/coupons.module';
+import { Coupon } from './coupons/coupon.entity';
 
 // Entities
 import { User } from './users/user.entity';
@@ -143,6 +145,7 @@ import { FinanceModule } from './finance/finance.module';
         CartItem, Order, OrderItem, Payment, Notification, Rider, Otp,
         OrderHistory, RiderReview, Setting, Brand, Banner, Restaurant, MenuItem, SubOrder, BusinessReview,
         Vendor, VendorProduct, Favorite, OrderChatMessage,
+        Coupon,
         Wallet, WalletTransaction, WalletSettlement, WithdrawalRequest,
         // Pharma domain
         Medicine, MedicineReview, Pharmacy, PharmacyMedicine, PharmacyInventory, Prescription, PrescriptionQuotation,
@@ -193,6 +196,7 @@ import { FinanceModule } from './finance/finance.module';
     ModuleEventsModule,
     CmsModule,
     FinanceModule,
+    CouponsModule,
   ],
   controllers: [AppController, HealthController],
   providers: [

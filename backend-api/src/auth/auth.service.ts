@@ -94,21 +94,26 @@ export class AuthService {
 
   async adminLogin(email: string, pass: string) {
     const user = await this.usersService.findByEmail(email);
-    if (!user || user.role !== 'admin' || !user.password) {
+    // Allow any administrative or privileged role to attempt login
+    const PRIVILEGED_ROLES = ['admin', 'super_admin', 'manager', 'vendor', 'support'];
+    
+    if (!user || !PRIVILEGED_ROLES.includes(user.role) || !user.password) {
       throw new UnauthorizedException('Invalid admin credentials');
     }
     const isMatch = await bcrypt.compare(pass, user.password);
     if (!isMatch) {
       throw new UnauthorizedException('Invalid admin credentials');
     }
-    const payload = { sub: user.id, email: user.email, role: 'admin' };
+    
+    // Inject the ACTUAL user role from DB into the token payload
+    const payload = { sub: user.id, email: user.email, role: user.role };
     return {
       access_token: this.jwtService.sign(payload),
       user: {
         id: user.id,
         email: user.email,
         name: user.name,
-        role: 'admin',
+        role: user.role,
       },
     };
   }

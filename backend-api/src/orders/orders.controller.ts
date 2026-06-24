@@ -30,13 +30,17 @@ export class OrdersController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('startDate') startDate?: string,
-    @Query('endDate') endDate?: string
+    @Query('endDate') endDate?: string,
+    @Query('orderType') orderType?: string,
+    @Query('status') status?: string
   ) {
     return this.ordersService.getAllOrdersForAdmin(
       page ? parseInt(page, 10) : 1,
       limit ? parseInt(limit, 10) : 20,
       startDate,
-      endDate
+      endDate,
+      orderType,
+      status
     );
   }
 
@@ -102,7 +106,8 @@ export class OrdersController {
       body.notes,
       body.items,
       body.orderType,
-      body.restaurantId
+      body.restaurantId,
+      body.promoCode
     );
   }
 

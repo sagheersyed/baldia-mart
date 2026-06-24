@@ -1,13 +1,14 @@
 import { Controller, Get, Query, UseGuards, Param, ParseUUIDPipe } from '@nestjs/common';
 import { ComplianceService } from './compliance.service';
 import { AdminRoleGuard } from '../../auth/admin-role.guard';
+import { AuthGuard } from '@nestjs/passport';
 
 /**
  * ComplianceController — Admin-only endpoints for viewing pharma compliance audit logs.
  * All endpoints are protected by AdminRoleGuard (admin/pharmacist access only).
  */
 @Controller('pharma/compliance')
-@UseGuards(AdminRoleGuard)
+@UseGuards(AuthGuard('jwt'), AdminRoleGuard)
 export class ComplianceController {
   constructor(private readonly complianceService: ComplianceService) {}
 
