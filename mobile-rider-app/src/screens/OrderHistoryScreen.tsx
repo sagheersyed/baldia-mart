@@ -55,8 +55,23 @@ export default function OrderHistoryScreen({ navigation }: any) {
         </View>
         
         <View style={styles.cardFooter}>
-          <Text style={styles.deliveryFeeLabel}>Delivery Earning:</Text>
-          <Text style={styles.deliveryFeeValue}>Rs. {item.deliveryFee || 0}</Text>
+          <View>
+            <Text style={styles.footerLabel}>Order Total:</Text>
+            <Text style={styles.footerValue}>Rs. {item.total || 0}</Text>
+          </View>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={styles.footerLabel}>Your Earning:</Text>
+            <Text style={styles.earningValue}>Rs. {item.deliveryFee || 0}</Text>
+          </View>
+        </View>
+
+        <View style={styles.paymentRow}>
+          <Text style={styles.paymentLabel}>Payment Method:</Text>
+          <View style={[styles.payBadge, item.paymentMethod?.toLowerCase() === 'cod' ? styles.payCod : styles.payOnline]}>
+            <Text style={styles.payBadgeText}>
+              {item.paymentMethod?.toLowerCase() === 'cod' ? '💵 COD' : '💳 Online'}
+            </Text>
+          </View>
         </View>
       </View>
     );
@@ -122,9 +137,16 @@ const styles = StyleSheet.create({
   dateText: { fontSize: 13, color: '#888', marginBottom: 4 },
   addressText: { fontSize: 14, color: '#333', marginBottom: 4 },
   itemsText: { fontSize: 13, color: '#666' },
-  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#f0f0f0', paddingTop: 12 },
-  deliveryFeeLabel: { fontSize: 14, color: '#666' },
-  deliveryFeeValue: { fontSize: 16, fontWeight: 'bold', color: '#2ecc71' },
+  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#f0f0f0', paddingTop: 12, marginBottom: 10 },
+  footerLabel: { fontSize: 11, color: '#888', textTransform: 'uppercase' },
+  footerValue: { fontSize: 15, fontWeight: 'bold', color: '#333' },
+  earningValue: { fontSize: 16, fontWeight: 'bold', color: '#2ecc71' },
+  paymentRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f9f9f9', padding: 8, borderRadius: 8 },
+  paymentLabel: { fontSize: 12, color: '#666' },
+  payBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 },
+  payCod: { backgroundColor: '#FFF3E0' },
+  payOnline: { backgroundColor: '#E1F5FE' },
+  payBadgeText: { fontSize: 11, fontWeight: 'bold', color: '#E65100' },
   emptyBox: { alignItems: 'center', justifyContent: 'center', marginTop: 100 },
   emptyIcon: { fontSize: 50, marginBottom: 15 },
   emptyText: { fontSize: 16, color: '#888' }

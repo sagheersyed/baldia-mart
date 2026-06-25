@@ -27,6 +27,12 @@ export class SettingsService implements OnModuleInit {
     await this.seedDefault('pharma_delivery_threshold_km', '0');
     await this.seedDefault('pharma_delivery_per_km_fee', '20');
     await this.seedDefault('pharma_delivery_max_radius_km', '15');
+
+    // Food Delivery Configuration
+    await this.seedDefault('food_delivery_base_fee', '100');
+    await this.seedDefault('food_delivery_threshold_km', '2');
+    await this.seedDefault('food_delivery_per_km_fee', '15');
+    await this.seedDefault('food_delivery_max_radius_km', '8');
     
     // Healthcare & Expert Mode
     await this.seedDefault('pharma_skip_prescription_verification', 'false');
@@ -71,13 +77,18 @@ export class SettingsService implements OnModuleInit {
     await this.seedDefault('auth_rider_mpin_enabled', 'true');
     await this.seedDefault('auth_rider_otp_enabled', 'true');
 
-    // Pharma Conditions Catalog
     await this.seedDefault('pharma_conditions_list', JSON.stringify([
       { id: 'fever', label: 'Fever & Pain', icon: 'thermometer-outline', bg: '#FEE2E2', color: '#DC2626' },
       { id: 'cold', label: 'Cold & Cough', icon: 'water-outline', bg: '#E0F2FE', color: '#0369A1' },
       { id: 'stomach', label: 'Stomach Care', icon: 'medkit-outline', bg: '#D1FAE5', color: '#059669' },
       { id: 'skin', label: 'Skin Care', icon: 'sparkles-outline', bg: '#FCE7F3', color: '#DB2777' },
     ]));
+
+    // Security & Limits
+    await this.seedDefault('rider_cod_threshold', '5000');
+    await this.seedDefault('cod_limit_pharma', '2000');
+    await this.seedDefault('cod_limit_food', '2000');
+    await this.seedDefault('cod_limit_mart', '5000');
   }
 
   private async seedDefault(key: string, value: string) {
@@ -132,7 +143,14 @@ export class SettingsService implements OnModuleInit {
       feature_pharma_doctor_consultations_enabled: getVal('feature_pharma_doctor_consultations_enabled', 'false') === 'true',
       feature_pharma_reminders_enabled: getVal('feature_pharma_reminders_enabled', 'false') === 'true',
       feature_pharma_refills_enabled: getVal('feature_pharma_refills_enabled', 'false') === 'true',
+      food_delivery_base_fee: getNum('food_delivery_base_fee', 100),
+      food_delivery_threshold_km: getNum('food_delivery_threshold_km', 2),
+      food_delivery_per_km_fee: getNum('food_delivery_per_km_fee', 15),
+      food_delivery_max_radius_km: getNum('food_delivery_max_radius_km', 8),
       pharma_conditions: JSON.parse(getVal('pharma_conditions_list', '[]')),
+      cod_limit_pharma: getNum('cod_limit_pharma', 2000),
+      cod_limit_food: getNum('cod_limit_food', 2000),
+      cod_limit_mart: getNum('cod_limit_mart', 5000),
     };
   }
 

@@ -8,7 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import { authApi, addressesApi, ordersApi, favoritesApi } from '../api/api';
+import { authApi, addressesApi, ordersApi, favoritesApi, financeApi } from '../api/api';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
 import { useCartStore } from '../store/cartStore';
@@ -44,6 +44,7 @@ export default function ProfileScreen({ navigation }: any) {
   const [favoritesCount, setFavoritesCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [wallet, setWallet] = useState<any>(null);
 
   const lastFetchTime = useRef(0);
 
@@ -53,9 +54,10 @@ export default function ProfileScreen({ navigation }: any) {
     lastFetchTime.current = now;
     try {
       if (!force && !navigation.isFocused()) return;
-      const [addrRes, favsRes] = await Promise.allSettled([
+      const [addrRes, favsRes, walletRes] = await Promise.allSettled([
         addressesApi.getAll(),
         favoritesApi.getAll(),
+        financeApi.getUserSummary(),
       ]);
       
       // Store fetches
@@ -66,6 +68,9 @@ export default function ProfileScreen({ navigation }: any) {
       if (addrRes.status === 'fulfilled') setAddresses(addrRes.value.data || []);
       if (favsRes.status === 'fulfilled') {
         setFavoritesCount(favsRes.value.data?.length || 0);
+      }
+      if (walletRes.status === 'fulfilled') {
+        setWallet(walletRes.value.data);
       }
     } catch {
       // noop
@@ -119,6 +124,7 @@ export default function ProfileScreen({ navigation }: any) {
 
   const accountItems: MenuItem[] = [
     { icon: 'person-outline', label: 'Edit profile', desc: 'Update your personal info', screen: 'EditProfile' },
+    { icon: 'lock-closed-outline', label: 'Change MPIN', desc: 'Secure your account', screen: 'ChangeMpin' },
     { icon: 'location-outline', label: 'Saved addresses', desc: `${addresses.length} ${addresses.length === 1 ? 'address' : 'addresses'} saved`, screen: 'SavedAddresses' },
     { icon: 'card-outline', label: 'Payment methods', desc: 'Cards & wallets', screen: null },
   ];
@@ -289,28 +295,30 @@ export default function ProfileScreen({ navigation }: any) {
           </View>
         </View>
 
-        {/* Wallet/Promo placeholder banner — premium feel */}
+        {/* Real Wallet Balance Card */}
         <View style={{ paddingHorizontal: theme.spacing.lg, marginTop: 0 }}>
-          <LinearGradient
-            colors={[theme.colors.pro, '#5B21B6']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.walletCard}
-          >
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Ionicons name="diamond-outline" size={14} color="#fff" />
-                <AppText variant="badge" color="#fff">PRO REWARDS</AppText>
+          <Pressable onPress={() => navigation.navigate('UserWallet')}>
+            <LinearGradient
+              colors={['#7C3AED', '#5B21B6']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.walletCard}
+            >
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Ionicons name="wallet-outline" size={14} color="#fff" />
+                  <AppText variant="badge" color="#fff">MY WALLET</AppText>
+                </View>
+                <AppText variant="h2" color="#fff" style={{ marginTop: 6 }}>Rs {Number(wallet?.balance || 0).toLocaleString()}</AppText>
+                <AppText variant="caption" color="rgba(255,255,255,0.85)" style={{ marginTop: 4 }}>
+                  {wallet?.balance > 0 ? 'Credits available for your next order' : 'Refunds and credits will appear here'}
+                </AppText>
               </View>
-              <AppText variant="h2" color="#fff" style={{ marginTop: 6 }}>Earn on every order</AppText>
-              <AppText variant="caption" color="rgba(255,255,255,0.85)" style={{ marginTop: 4 }}>
-                Coming soon — exclusive BaldiaMart deals & cashback.
-              </AppText>
-            </View>
-            <View style={styles.walletIcon}>
-              <Ionicons name="gift-outline" size={32} color="#fff" />
-            </View>
-          </LinearGradient>
+              <View style={styles.walletIcon}>
+                <Ionicons name="chevron-forward" size={24} color="#fff" />
+              </View>
+            </LinearGradient>
+          </Pressable>
         </View>
 
         {/* System Administration Section */}

@@ -5,7 +5,7 @@ import {
   Save, RefreshCw, Truck, Ruler, Phone, Mail, MapPin, 
   Building2, Shield, ToggleLeft, ToggleRight, Boxes, 
   Scale, ArrowUpCircle, Plus, Trash2, Pill, Activity,
-  Download, MessageSquare, Lock
+  Download, MessageSquare, Lock, UtensilsCrossed
 } from 'lucide-react';
 import { fetchWithAuth, BASE_URL, getErrorMessage, parseApiError } from '@/lib/api';
 import { showToast } from '@/hooks/useToast';
@@ -124,34 +124,83 @@ export default function SettingsPage() {
           </div>
 
           <div className="card !p-0 overflow-hidden border border-slate-100 shadow-xl shadow-slate-200/20 !rounded-[2.5rem]">
+            <div className="bg-rose-900/5 p-6 border-b border-slate-100 flex items-center gap-3">
+              <UtensilsCrossed size={18} className="text-rose-600" />
+              <span className="font-black text-slate-700 uppercase tracking-widest text-[10px]">Dining (Food) Logistics</span>
+            </div>
+            <div className="p-8 space-y-8">
+              <div className="grid md:grid-cols-4 gap-6">
+                <SettingsInput label="Food Base" icon="Rs" value={settings.food_delivery_base_fee} onSave={(v: any) => handleUpdate('food_delivery_base_fee', v)} isSaving={saving === 'food_delivery_base_fee'} />
+                <SettingsInput label="Food Threshold" icon="Km" value={settings.food_delivery_threshold_km} onSave={(v: any) => handleUpdate('food_delivery_threshold_km', v)} isSaving={saving === 'food_delivery_threshold_km'} />
+                <SettingsInput label="Food Rate/KM" icon="Rs" value={settings.food_delivery_per_km_fee} onSave={(v: any) => handleUpdate('food_delivery_per_km_fee', v)} isSaving={saving === 'food_delivery_per_km_fee'} />
+                <SettingsInput label="Food Max Radius" icon="Km" value={settings.food_delivery_max_radius_km} onSave={(v: any) => handleUpdate('food_delivery_max_radius_km', v)} isSaving={saving === 'food_delivery_max_radius_km'} />
+              </div>
+            </div>
+          </div>
+
+          <div className="card !p-0 overflow-hidden border border-slate-100 shadow-xl shadow-slate-200/20 !rounded-[2.5rem]">
             <div className="bg-teal-900/5 p-6 border-b border-slate-100 flex items-center gap-3">
               <Activity size={18} className="text-teal-600" />
               <span className="font-black text-slate-700 uppercase tracking-widest text-[10px]">Pharma Specific Logistics</span>
             </div>
             <div className="p-8 space-y-8">
               <div className="grid md:grid-cols-3 gap-8">
+                <SettingsInput label="Pharma Base" icon="Rs" value={settings.pharma_delivery_base_fee} onSave={(v: any) => handleUpdate('pharma_delivery_base_fee', v)} isSaving={saving === 'pharma_delivery_base_fee'} />
+                <SettingsInput label="Pharma Limit" icon="Km" value={settings.pharma_delivery_max_radius_km} onSave={(v: any) => handleUpdate('pharma_delivery_max_radius_km', v)} isSaving={saving === 'pharma_delivery_max_radius_km'} />
+                 <SettingsInput label="Multi-Resto Link" icon={<Boxes size={14} />} value={settings.multi_restaurant_max_distance_km} onSave={(v: any) => handleUpdate('multi_restaurant_max_distance_km', v)} isSaving={saving === 'multi_restaurant_max_distance_km'} />
+              </div>
+            </div>
+          </div>
+
+          <div className="card !p-0 overflow-hidden border border-slate-100 shadow-xl shadow-slate-200/20 !rounded-[2.5rem]">
+            <div className="bg-orange-900/5 p-6 border-b border-slate-100 flex items-center gap-3">
+              <Boxes size={18} className="text-orange-600" />
+              <span className="font-black text-slate-700 uppercase tracking-widest text-[10px]">Bulk Rashan Logic Grid</span>
+            </div>
+            <div className="p-8 space-y-8">
+              <div className="grid md:grid-cols-3 gap-8">
+                <SettingsInput label="Rashan Base" icon="Rs" value={settings.rashan_base_fee} onSave={(v: any) => handleUpdate('rashan_base_fee', v)} isSaving={saving === 'rashan_base_fee'} />
+                <SettingsInput label="Surcharge (Med)" icon="Rs" value={settings.rashan_surcharge_medium} onSave={(v: any) => handleUpdate('rashan_surcharge_medium', v)} isSaving={saving === 'rashan_surcharge_medium'} />
+                <SettingsInput label="Surcharge (Heavy)" icon="Rs" value={settings.rashan_surcharge_heavy} onSave={(v: any) => handleUpdate('rashan_surcharge_heavy', v)} isSaving={saving === 'rashan_surcharge_heavy'} />
+                <SettingsInput label="Floor (1-3)" icon="Rs" value={settings.rashan_floor_surcharge_low} onSave={(v: any) => handleUpdate('rashan_floor_surcharge_low', v)} isSaving={saving === 'rashan_floor_surcharge_low'} />
+                <SettingsInput label="Floor (4+)" icon="Rs" value={settings.rashan_floor_surcharge_high} onSave={(v: any) => handleUpdate('rashan_floor_surcharge_high', v)} isSaving={saving === 'rashan_floor_surcharge_high'} />
+                <SettingsInput label="Placement Fee" icon="Rs" value={settings.rashan_placement_fee} onSave={(v: any) => handleUpdate('rashan_placement_fee', v)} isSaving={saving === 'rashan_placement_fee'} />
+              </div>
+            </div>
+          </div>
+
+          <div className="card !p-0 overflow-hidden border border-slate-100 shadow-xl shadow-slate-200/20 !rounded-[2.5rem]">
+            <div className="bg-slate-950 p-6 border-b border-slate-100 flex items-center gap-3">
+              <Shield size={18} className="text-primary-400" />
+              <span className="font-black text-white uppercase tracking-widest text-[10px]">Risk Management (COD Thresholds)</span>
+            </div>
+            <div className="p-8 space-y-8">
+              <div className="grid md:grid-cols-3 gap-8">
                 <SettingsInput 
-                  label="Pharma Base" 
+                  label="Food COD Limit" 
                   icon="Rs" 
-                  value={settings.pharma_delivery_base_fee} 
-                  onSave={(v: any) => handleUpdate('pharma_delivery_base_fee', v)}
-                  isSaving={saving === 'pharma_delivery_base_fee'}
+                  value={settings.cod_limit_food} 
+                  onSave={(v: any) => handleUpdate('cod_limit_food', v)}
+                  isSaving={saving === 'cod_limit_food'}
                 />
                 <SettingsInput 
-                  label="Pharma Limit (KM)" 
-                  icon={<MapPin size={14} />} 
-                  value={settings.pharma_delivery_max_radius_km} 
-                  onSave={(v: any) => handleUpdate('pharma_delivery_max_radius_km', v)}
-                  isSaving={saving === 'pharma_delivery_max_radius_km'}
+                  label="Pharma COD Limit" 
+                  icon="Rs" 
+                  value={settings.cod_limit_pharma} 
+                  onSave={(v: any) => handleUpdate('cod_limit_pharma', v)}
+                  isSaving={saving === 'cod_limit_pharma'}
                 />
-                 <SettingsInput 
-                  label="Multi-Resto Link" 
-                  icon={<Boxes size={14} />} 
-                  value={settings.multi_restaurant_max_distance_km} 
-                  onSave={(v: any) => handleUpdate('multi_restaurant_max_distance_km', v)}
-                  isSaving={saving === 'multi_restaurant_max_distance_km'}
+                <SettingsInput 
+                  label="Mart COD Limit" 
+                  icon="Rs" 
+                  value={settings.cod_limit_mart} 
+                  onSave={(v: any) => handleUpdate('cod_limit_mart', v)}
+                  isSaving={saving === 'cod_limit_mart'}
                 />
               </div>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest pl-2">
+                * Orders exceeding these amounts will require online payment method (MPaisa/Card).
+              </p>
             </div>
           </div>
         </section>

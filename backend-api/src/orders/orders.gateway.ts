@@ -122,7 +122,8 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
         }
       })
       .catch((error: any) => {
-        console.log(`Unauthenticated client connected: ${client.id}`);
+        console.log(`Unauthenticated client connection rejected: ${client.id} - Reason: ${error.message}`);
+        client.disconnect(true);
       });
   }
 

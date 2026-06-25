@@ -15,6 +15,7 @@ import { generateReceiptPDF, printReceipt } from '../utils/receiptGenerator';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const DEFAULT_MART = { latitude: 24.91522600, longitude: 66.96431980 };
+const SUCCESS = '#10B981';
 
 const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
   const R = 6371; // km
@@ -93,7 +94,7 @@ const getStatusLabel = (status: string, orderType: string, paymentMethod: string
   const isFood = orderType === 'food';
   const isPharma = orderType === 'pharma';
   const isCOD = paymentMethod === 'cod';
-  
+
   if (isPharma) {
     const pharmaLabels: Record<string, string> = {
       confirmed: 'Swipe — Arrived at Pharmacy',
@@ -128,7 +129,7 @@ export default function NavigationScreen({ navigation, route }: any) {
   const [isLocationBlocked, setIsLocationBlocked] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [expandedChecklist, setExpandedChecklist] = useState(true);
-  
+
   // Guard: prevents double-navigation when rider self-releases order
   // (submitReason navigates away AND backend emits 'pending' status via socket)
   const isNavigatingAway = useRef(false);
@@ -138,7 +139,7 @@ export default function NavigationScreen({ navigation, route }: any) {
   const [reasonText, setReasonText] = useState('');
   const [reasonType, setReasonType] = useState<'missing' | 'release'>('missing');
   const [pendingItem, setPendingItem] = useState<{ id: string; name: string } | null>(null);
-  
+
   const mapRef = useRef<MapView>(null);
 
   // ── Derived logic (Must be before useEffect/Handlers) ───────────────
@@ -177,19 +178,19 @@ export default function NavigationScreen({ navigation, route }: any) {
       pickupStops.push({
         id: order.pharmacy.id, stopNum: 1, name: order.pharmacy.name,
         description: order.pharmacy.location || order.pharmacy.address || 'Pharmacy',
-        coords: { 
-          latitude: Number(order.pharmacy.latitude || 0), 
-          longitude: Number(order.pharmacy.longitude || 0) 
+        coords: {
+          latitude: Number(order.pharmacy.latitude || 0),
+          longitude: Number(order.pharmacy.longitude || 0)
         },
         emoji: '🏥',
       });
     } else {
       pickupStops.push({
-        id: 'mart', 
-        stopNum: 1, 
-        name: order.orderType === 'rashan' ? 'Wholesale Market / Warehouse' : 'Baldia Mart', 
+        id: 'mart',
+        stopNum: 1,
+        name: order.orderType === 'rashan' ? 'Wholesale Market / Warehouse' : 'Baldia Mart',
         description: order.orderType === 'rashan' ? 'Monthly Bulk Sourcing Point' : 'Main Colony, Baldia Town',
-        coords: DEFAULT_MART, 
+        coords: DEFAULT_MART,
         emoji: order.orderType === 'rashan' ? '📦' : '🏪',
       });
     }
@@ -224,7 +225,7 @@ export default function NavigationScreen({ navigation, route }: any) {
           setOrder(orderRes.data);
           setStatus(orderRes.data.status);
           if (orderId) await AsyncStorage.setItem('activeOrderId', orderId);
-          
+
           if (orderRes.data.status === 'cancelled') {
             Alert.alert('Order Cancelled', 'This order is no longer active.');
             navigation.replace('Main');
@@ -245,7 +246,7 @@ export default function NavigationScreen({ navigation, route }: any) {
             // Background location fetch
             Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
               .then(loc => setRiderLoc(loc.coords))
-              .catch(() => {});
+              .catch(() => { });
 
             Location.watchPositionAsync(
               { accuracy: Location.Accuracy.High, distanceInterval: 10 },
@@ -422,12 +423,12 @@ export default function NavigationScreen({ navigation, route }: any) {
     try {
       await ordersApi.updateStatus(orderId, nextStatus);
       setStatus(nextStatus);
-      if (nextStatus === 'delivered') {
-        await AsyncStorage.removeItem('activeOrderId');
-        Alert.alert('✅ Delivered!', 'Great job! Order completed successfully.', [
-          { text: 'Back to Dashboard', onPress: () => navigation.replace('Main') },
-        ]);
-      }
+      // if (nextStatus === 'delivered') {
+      //   await AsyncStorage.removeItem('activeOrderId');
+      //   Alert.alert('✅ Delivered!', 'Great job! Order completed successfully.', [
+      //     { text: 'Back to Dashboard', onPress: () => navigation.replace('Main') },
+      //   ]);
+      // }
     } catch (e) {
       Alert.alert('Error', 'Could not update order status.');
     } finally {
@@ -512,11 +513,11 @@ export default function NavigationScreen({ navigation, route }: any) {
       Linking.openURL(`maps:0,0?q=${encodeURIComponent(firstName)}@${first.latitude},${first.longitude}`);
     }
   };
-  
+
   const handleChat = () => {
-    navigation.navigate('OrderChat', { 
-      orderId: order.id, 
-      customerName: order.user?.name || 'Customer' 
+    navigation.navigate('OrderChat', {
+      orderId: order.id,
+      customerName: order.user?.name || 'Customer'
     });
   };
 
@@ -724,7 +725,7 @@ export default function NavigationScreen({ navigation, route }: any) {
                     <View style={styles.pickedChip}><Text style={styles.pickedChipTxt}>✅ DONE</Text></View>
                   )}
                 </View>
-                
+
                 {/* Active Items */}
                 {group.active.map((item: any, idx: number) => {
                   const itemName = item.product?.name || item.menuItem?.name || 'Item';
@@ -772,24 +773,35 @@ export default function NavigationScreen({ navigation, route }: any) {
             ? <ActivityIndicator size="large" color="#FF4500" style={{ marginVertical: 12 }} />
             : <SwipeToConfirm onConfirm={handleSwipeConfirm} label={statusLabel} />
         ) : (
-          <View>
-            <View style={[styles.completedBadge, status === 'cancelled' && { backgroundColor: '#FFF5F5' }]}>
-              <Text style={[styles.completedTxt, status === 'cancelled' && { color: '#C53030' }]}>
-                {status === 'cancelled' 
-                  ? (order.notes?.includes('missing') ? '🛑 All items missing - Order Cancelled' : '🛑 Order Cancelled')
-                  : '✅ Order Successfully Delivered'}
-              </Text>
+          <View style={styles.successContainer}>
+            <View style={styles.successIconCircle}>
+              <Ionicons name="checkmark-done-circle" size={60} color={SUCCESS} />
             </View>
-            <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
-              <TouchableOpacity style={[styles.receiptSuccessBtn, { flex: 1, marginTop: 0 }]} onPress={() => generateReceiptPDF(order)}>
-                <Text style={styles.receiptSuccessBtnTxt}>📤 Share</Text>
+            <Text style={[styles.successTitle, { textAlign: 'center' }]}>Order Delivered!</Text>
+            <Text style={styles.successMsg}>
+              You earned <Text style={{ fontWeight: 'bold', color: SUCCESS }}>Rs {order.deliveryFee}</Text> from this delivery.
+            </Text>
+
+            <View style={styles.postActionRow}>
+              <TouchableOpacity style={styles.secondaryActionBtn} onPress={() => printReceipt(order)}>
+                <Ionicons name="receipt-outline" size={18} color="#64748B" />
+                <Text style={styles.secondaryActionTxt}>View Receipt</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.receiptSuccessBtn, { flex: 1, marginTop: 0, backgroundColor: '#1A1A1A', borderColor: '#1A1A1A' }]} onPress={() => printReceipt(order)}>
-                <Text style={[styles.receiptSuccessBtnTxt, { color: '#fff' }]}>🖨️ View/Print</Text>
+              <TouchableOpacity style={styles.secondaryActionBtn} onPress={() => generateReceiptPDF(order)}>
+                <Ionicons name="share-outline" size={18} color="#64748B" />
+                <Text style={styles.secondaryActionTxt}>Share</Text>
               </TouchableOpacity>
             </View>
-            <TouchableOpacity style={styles.closeBtn} onPress={() => navigation.replace('Main')}>
-              <Text style={styles.closeBtnTxt}>Return to Dashboard</Text>
+
+            <TouchableOpacity
+              style={styles.primaryFinishBtn}
+              onPress={() => {
+                AsyncStorage.removeItem('activeOrderId');
+                navigation.replace('Main')
+              }}
+            >
+              <Text style={styles.primaryFinishBtnTxt}>Go to Dashboard</Text>
+              <Ionicons name="arrow-forward" size={20} color="#fff" />
             </TouchableOpacity>
           </View>
         )}
@@ -803,8 +815,8 @@ export default function NavigationScreen({ navigation, route }: any) {
           <Text style={styles.blockMsg}>
             Please enable GPS to continue. We need your live location to track delivery progress.
           </Text>
-          <TouchableOpacity 
-            style={styles.retryBtn} 
+          <TouchableOpacity
+            style={styles.retryBtn}
             onPress={async () => {
               const enabled = await Location.hasServicesEnabledAsync();
               if (enabled) {
@@ -833,11 +845,11 @@ export default function NavigationScreen({ navigation, route }: any) {
               {reasonType === 'missing' ? 'Report Missing Item' : 'Release/Cancel Order'}
             </Text>
             <Text style={styles.modalSub}>
-              {reasonType === 'missing' 
+              {reasonType === 'missing'
                 ? `Please explain why "${pendingItem?.name}" is missing.`
                 : 'Please explain why you are releasing/cancelling this order.'}
             </Text>
-            
+
             <TextInput
               style={styles.modalInput}
               placeholder="Enter reason here..."
@@ -849,14 +861,14 @@ export default function NavigationScreen({ navigation, route }: any) {
             />
 
             <View style={styles.modalRow}>
-              <TouchableOpacity 
-                style={[styles.modalBtn, { backgroundColor: '#F5F5F5' }]} 
+              <TouchableOpacity
+                style={[styles.modalBtn, { backgroundColor: '#F5F5F5' }]}
                 onPress={() => setReasonModalVisible(false)}
               >
                 <Text style={[styles.modalBtnTxt, { color: '#666' }]}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.modalBtn, { backgroundColor: '#FF4500' }]} 
+              <TouchableOpacity
+                style={[styles.modalBtn, { backgroundColor: '#FF4500' }]}
                 onPress={submitReason}
               >
                 <Text style={styles.modalBtnTxt}>Submit</Text>
@@ -952,12 +964,12 @@ const styles = StyleSheet.create({
     borderColor: '#FF450030',
   },
   receiptSuccessBtnTxt: { color: '#FF4500', fontSize: 15, fontWeight: '700' },
-  navChatBtn: { 
-    width: 40, 
-    height: 40, 
-    backgroundColor: '#FF4500', 
-    borderRadius: 20, 
-    justifyContent: 'center', 
+  navChatBtn: {
+    width: 40,
+    height: 40,
+    backgroundColor: '#FF4500',
+    borderRadius: 20,
+    justifyContent: 'center',
     alignItems: 'center',
     marginRight: 4
   },
@@ -1034,8 +1046,8 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   modalOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', 
-    justifyContent: 'center', alignItems: 'center', padding: 20 
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center', alignItems: 'center', padding: 20
   },
   modalContent: {
     backgroundColor: '#fff', width: '100%', borderRadius: 20, padding: 24,
@@ -1051,4 +1063,63 @@ const styles = StyleSheet.create({
   modalRow: { flexDirection: 'row', gap: 12 },
   modalBtn: { flex: 1, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center' },
   modalBtnTxt: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  successContainer: {
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  successIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#E8F5E9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  successTitle: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#1A1A1A',
+    marginBottom: 4,
+  },
+  successMsg: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  postActionRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 24,
+  },
+  secondaryActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+    gap: 8,
+  },
+  secondaryActionTxt: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  primaryFinishBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1E1E1E',
+    paddingHorizontal: 30,
+    paddingVertical: 16,
+    borderRadius: 32,
+    gap: 12,
+    elevation: 4,
+  },
+  primaryFinishBtnTxt: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '800',
+  },
 });

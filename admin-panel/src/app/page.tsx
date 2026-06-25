@@ -172,16 +172,35 @@ export default function Dashboard() {
               <h2 className="text-lg font-bold text-slate-900">Revenue Performance</h2>
               <p className="text-xs text-slate-500 font-medium">Daily transaction pulse across all systems</p>
             </div>
-            <div className="flex items-center gap-1.5 p-1 bg-slate-50 rounded-xl border border-slate-200/60">
-              {RANGE_OPTS.map((o) => (
-                <button
-                  key={o}
-                  onClick={() => setRange(o)}
-                  className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${range === o ? 'bg-white text-slate-900 shadow-sm border border-slate-200' : 'text-slate-400 hover:text-slate-900'}`}
-                >
-                  {o}
-                </button>
-              ))}
+            <div className="flex flex-col items-end gap-3">
+              <div className="flex items-center gap-1.5 p-1 bg-slate-50 rounded-xl border border-slate-200/60">
+                {RANGE_OPTS.map((o) => (
+                  <button
+                    key={o}
+                    onClick={() => setRange(o)}
+                    className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${range === o ? 'bg-white text-slate-900 shadow-sm border border-slate-200' : 'text-slate-400 hover:text-slate-900'}`}
+                  >
+                    {o}
+                  </button>
+                ))}
+              </div>
+              {range === 'custom' && (
+                <div className="flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
+                  <input
+                    type="date"
+                    className="px-3 py-1 text-[10px] font-bold border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                  />
+                  <span className="text-[10px] font-bold text-slate-400">—</span>
+                  <input
+                    type="date"
+                    className="px-3 py-1 text-[10px] font-bold border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                  />
+                </div>
+              )}
             </div>
           </div>
 

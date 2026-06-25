@@ -63,6 +63,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
   const [isLoadingFee, setIsLoadingFee] = useState(false);
   const [isAddressValid, setIsAddressValid] = useState(true);
   const [zoneMessage, setZoneMessage] = useState<string | null>(null);
+  const [checkoutItems, setCheckoutItems] = useState<any[]>(cart);
 
   const fetchAddresses = useCallback(async () => {
     try {
@@ -155,9 +156,9 @@ export default function CheckoutScreen({ navigation, route }: any) {
     setShowAddressListModal(false);
   };
 
-  const subtotal = getCartTotal(mode);
+  const subtotal = checkoutItems.reduce((sum: number, item: any) => sum + ((item.sellingPrice || item.price || 0) * item.quantity), 0);
   const uniqueRestaurants = mode === 'food'
-    ? Array.from(new Set(cart.map((item: any) => item.restaurantId).filter(Boolean)))
+    ? Array.from(new Set(checkoutItems.map((item: any) => item.restaurantId).filter(Boolean)))
     : [];
   const multiStopCount = uniqueRestaurants.length > 1 ? uniqueRestaurants.length - 1 : 0;
   const multiStopSurcharge = multiStopCount * 50;
@@ -201,17 +202,43 @@ export default function CheckoutScreen({ navigation, route }: any) {
       Alert.alert('Out of zone', 'Your address is outside our delivery zone. Please choose another address.');
       return;
     }
+
     if (requiresRx && !approvedPrescriptionId) {
-      Alert.alert(
-        'Prescription Required',
-        'Your cart contains items that require an approved prescription. Please wait for pharmacist approval.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'View Prescriptions', onPress: () => navigation.navigate('PrescriptionUpload') }
-        ]
-      );
+      const rxItems = cart.filter((i: any) => (i as any).requiresPrescription);
+      const nonRxItems = cart.filter((i: any) => !(i as any).requiresPrescription);
+
+      if (nonRxItems.length > 0) {
+        Alert.alert(
+          'Prescription Required',
+          `Your cart contains ${rxItems.length} item(s) that require an approved prescription. Would you like to proceed with only the ${nonRxItems.length} non-prescription item(s)?`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Order Non-Rx Items', 
+              onPress: () => {
+                // Filter cart to only include non-Rx items for this checkout session
+                // We'll pass a flag to proceedToCheckout to only use nonRxItems
+                setCheckoutItems(nonRxItems);
+                setShowConfirmModal(true);
+              }
+            },
+            { text: 'View Prescriptions', onPress: () => navigation.navigate('PrescriptionUpload') }
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Prescription Required',
+          'Your cart contains items that require an approved prescription. Please wait for pharmacist approval.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'View Prescriptions', onPress: () => navigation.navigate('PrescriptionUpload') }
+          ]
+        );
+      }
       return;
     }
+    
+    setCheckoutItems(cart);
     setShowConfirmModal(true);
   };
 
@@ -224,7 +251,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
           addressId: selectedAddress.id,
           paymentMethod: selectedPayment,
           prescriptionId: approvedPrescriptionId || undefined,
-          items: cart.map((item: any) => ({
+          items: checkoutItems.map((item: any) => ({
             medicineId: item.id,
             quantity: item.quantity,
           })),
@@ -232,7 +259,12 @@ export default function CheckoutScreen({ navigation, route }: any) {
         };
         const res = await pharmaApi.placeOrder(orderData);
         if (res.data && res.data.id) {
-          clearCart('pharma');
+          // If we only ordered some items, only remove those from cart
+          if (checkoutItems.length < cart.length) {
+            checkoutItems.forEach(item => (require('../store/cartStore').useCartStore.getState().removeFromCart)(item.id, 'pharma'));
+          } else {
+            clearCart('pharma');
+          }
           if (selectedPayment === 'jazzcash' || selectedPayment === 'easypaisa') {
             navigation.replace('PaymentWebView', {
               orderId: res.data.id,

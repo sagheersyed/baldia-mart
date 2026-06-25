@@ -62,3 +62,15 @@ export class AdminLoginDto {
   @IsNotEmpty()
   password: string;
 }
+
+export class ChangeMpinDto {
+  @ApiProperty({ example: '1234' })
+  @IsString()
+  @Length(4, 4)
+  oldMpin: string;
+
+  @ApiProperty({ example: '5678' })
+  @IsString()
+  @Length(4, 4)
+  newMpin: string;
+}

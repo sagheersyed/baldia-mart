@@ -6,7 +6,7 @@ import { OtpService } from '../otp/otp.service';
 import { Throttle } from '@nestjs/throttler';
 import { SettingsService } from '../settings/settings.service';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
-import { SendOtpDto, VerifyOtpDto, MpinDto, LoginMpinDto, CheckStatusDto, AdminLoginDto } from './dto/auth.dto';
+import { SendOtpDto, VerifyOtpDto, MpinDto, LoginMpinDto, CheckStatusDto, AdminLoginDto, ChangeMpinDto } from './dto/auth.dto';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -147,6 +147,15 @@ export class AuthController {
   @ApiOperation({ summary: 'Direct Rider Registration via MPIN' })
   async registerRiderMpin(@Body() dto: LoginMpinDto) {
     return this.authService.registerWithMpin(dto.phoneNumber, dto.mpin, 'rider');
+  }
+
+  @Post('change-mpin')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Change Customer or Rider MPIN' })
+  async changeMpin(@Req() req: any, @Body() dto: ChangeMpinDto) {
+    const role = req.user.role === 'rider' ? 'rider' : 'customer';
+    return this.authService.changeMpin(req.user.id, dto.oldMpin, dto.newMpin, role);
   }
 
   @Get('me')

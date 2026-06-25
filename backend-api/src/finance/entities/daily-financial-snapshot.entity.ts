@@ -98,6 +98,9 @@ export class DailyFinancialSnapshot {
   @Column('decimal', { name: 'pharma_revenue', precision: 12, scale: 2, default: 0 })
   pharmaRevenue: number;
 
+  @Column('decimal', { name: 'rashan_revenue', precision: 12, scale: 2, default: 0 })
+  rashanRevenue: number;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

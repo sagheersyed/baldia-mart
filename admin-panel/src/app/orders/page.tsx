@@ -34,6 +34,8 @@ interface Order {
   subOrders?: { id: string; status: string; restaurantId: string; restaurant?: { name: string; location: string; zoneId?: string } }[];
   orderHistory?: { id: string; status: string; notes: string; createdAt: string }[];
   releaseCount?: number;
+  discountAmount?: number;
+  couponCode?: string;
 }
 
 const API_URL         = `${BASE_URL}/orders/all`;
@@ -109,7 +111,7 @@ export default function OrdersPage() {
       setLoading(true);
       const params = new URLSearchParams({ page: String(targetPage), limit: String(limit) });
       if (selectedModule !== 'ALL') params.append('orderType', selectedModule.toLowerCase());
-      if (filter !== 'ALL') params.append('status', filter);
+      if (filter !== 'ALL') params.append('status', filter.toLowerCase());
       if (selectedZone !== 'all') params.append('zoneId', selectedZone);
 
       const res = await fetchWithAuth(`${API_URL}?${params}`);
@@ -196,10 +198,9 @@ export default function OrdersPage() {
           <div className="flex bg-slate-900/5 p-1 rounded-[2rem] border border-slate-100 shadow-inner">
             {[
               { id: 'ALL', label: 'Global', icon: Package },
+              { id: 'food', label: 'Dining', icon: UtensilsCrossed },
               { id: 'mart', label: 'Mart', icon: ShoppingBag },
               { id: 'pharma', label: 'Pharma', icon: Pill },
-              { id: 'restaurant', label: 'Dining', icon: UtensilsCrossed },
-              { id: 'rashan', label: 'Rashan', icon: Boxes },
             ].map(tab => (
               <button
                 key={tab.id}
@@ -388,7 +389,12 @@ export default function OrdersPage() {
                            <div key={item.id} className="p-8 bg-slate-50 rounded-3xl border border-slate-100 flex items-center justify-between group hover:bg-white transition-all hover:shadow-xl hover:shadow-slate-200/40">
                               <div className="flex items-center gap-6">
                                  <div className="w-16 h-16 bg-white rounded-2xl border border-slate-200 overflow-hidden p-2 shadow-sm">
-                                    <img src={normalizeUrl(item.product?.imageUrl || item.medicine?.imageUrl || item.menuItem?.imageUrl || '')} alt="" className="w-full h-full object-contain" />
+                                    <img 
+                                      src={normalizeUrl(item.menuItem?.imageUrl || item.product?.imageUrl || item.medicine?.imageUrl || '')} 
+                                      alt="" 
+                                      className="w-full h-full object-contain"
+                                      onError={(e) => { (e.target as any).src = 'https://placehold.co/100x100?text=Item'; }}
+                                    />
                                  </div>
                                  <div className="space-y-1">
                                     <p className="text-sm font-black uppercase italic tracking-tight">{item.product?.name || item.medicine?.name || item.menuItem?.name || 'Resource Unit'}</p>
@@ -412,6 +418,12 @@ export default function OrdersPage() {
                         <span>Logistic Protocol Fee</span>
                         <span>Rs. {Number(selectedOrder.deliveryFee).toLocaleString()}</span>
                      </div>
+                     {Number(selectedOrder.discountAmount) > 0 && (
+                        <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-[0.3em] text-emerald-300">
+                           <span>Voucher Savings ({selectedOrder.couponCode})</span>
+                           <span>- Rs. {Number(selectedOrder.discountAmount).toLocaleString()}</span>
+                        </div>
+                     )}
                      <div className="pt-6 border-t border-white/20 flex justify-between items-end">
                         <div className="space-y-2">
                            <span className="text-[10px] font-black uppercase tracking-[0.4em] text-indigo-200">Settlement Total</span>

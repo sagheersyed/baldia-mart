@@ -109,6 +109,7 @@ import { FinancialLedgerEntry } from './finance/entities/financial-ledger-entry.
 import { CommissionConfig } from './finance/entities/commission-config.entity';
 import { SettlementPeriod } from './finance/entities/settlement-period.entity';
 import { DailyFinancialSnapshot } from './finance/entities/daily-financial-snapshot.entity';
+import { FinancialTransaction } from './finance/entities/financial-transaction.entity';
 import { FinanceModule } from './finance/finance.module';
 
 
@@ -158,7 +159,7 @@ import { FinanceModule } from './finance/finance.module';
         // CMS entities
         Tenant, TenantUser, ChangeRequest, ChangeRequestDiscussion, ApprovalRule, AuditLog,
         // Finance entities
-        FinancialLedgerEntry, CommissionConfig, SettlementPeriod, DailyFinancialSnapshot,
+        FinancialLedgerEntry, CommissionConfig, SettlementPeriod, DailyFinancialSnapshot, FinancialTransaction,
       ],
       logging: false,
       synchronize: process.env.NODE_ENV !== 'production',

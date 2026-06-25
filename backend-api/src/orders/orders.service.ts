@@ -24,6 +24,7 @@ import { Vendor } from '../vendors/vendor.entity';
 import { UsersService } from '../users/users.service';
 import { PharmaciesService } from '../pharma/pharmacies/pharmacies.service';
 import { CouponsService } from '../coupons/coupons.service';
+import { CacheService } from '../cache/cache.service';
 
 @Injectable()
 export class OrdersService {
@@ -50,6 +51,7 @@ export class OrdersService {
     @Inject(forwardRef(() => PharmaciesService))
     private pharmaciesService: PharmaciesService,
     private couponsService: CouponsService,
+    private cacheService: CacheService,
   ) { }
 
   private isBusinessOpen(openingTime: string | null, closingTime: string | null): boolean {
@@ -373,7 +375,7 @@ export class OrdersService {
     let discountAmount = 0;
     let appliedCouponCode: string | undefined = undefined;
     if (promoCode) {
-      const vendorIds = distinctRestaurants.map(r => r.id);
+      const vendorIds = orderType === 'mart' && martId && isUuid(martId) ? [martId] : distinctRestaurants.map(r => r.id);
       const validation = await this.couponsService.validateCoupon(userId, promoCode, subtotal, vendorIds);
       if (!validation.success) {
         throw new BadRequestException(validation.error_message);
@@ -389,6 +391,21 @@ export class OrdersService {
       if (brandItem) orderBrandId = brandItem.product.brandId;
     }
 
+    const finalTotal = Math.max(0, subtotal - discountAmount + finalDeliveryFee);
+
+    // --- COD Limit Enforcement ---
+    if (paymentMethod.toLowerCase() === 'cod') {
+      const limitKey = orderType === 'pharma' ? 'cod_limit_pharma' : (orderType === 'food' ? 'cod_limit_food' : 'cod_limit_mart');
+      const codLimit = await this.settingsService.getNumber(limitKey, orderType === 'mart' ? 5000 : 2000);
+      
+      if (finalTotal > codLimit) {
+        throw new BadRequestException(
+          `Cash on Delivery (COD) is only available for orders up to Rs. ${codLimit.toLocaleString()}. ` +
+          `Your total is Rs. ${finalTotal.toLocaleString()}. Please use an online payment method or reduce items.`
+        );
+      }
+    }
+
     const order = new Order();
     Object.assign(order, {
       userId,
@@ -400,7 +417,7 @@ export class OrdersService {
       deliveryFee: finalDeliveryFee,
       discountAmount,
       couponCode: appliedCouponCode,
-      total: Math.max(0, subtotal - discountAmount + finalDeliveryFee),
+      total: finalTotal,
       paymentMethod,
       deliveryDistanceKm: pricing.distance,
       notes,
@@ -410,6 +427,7 @@ export class OrdersService {
 
     // --- INCREMENT COUPON USAGE ---
     if (appliedCouponCode) {
+      console.log(`[DEBUG] Incrementing usage for coupon: ${appliedCouponCode}`);
       await this.couponsService.incrementUsage(appliedCouponCode, transactionalManager);
     }
 
@@ -661,7 +679,7 @@ export class OrdersService {
 
     const [data, total] = await this.ordersRepository.findAndCount({
       where,
-      relations: ['items', 'items.product', 'items.medicine', 'address', 'user', 'rider', 'subOrders', 'subOrders.restaurant', 'subOrders.vendor', 'subOrders.pharmacy', 'orderHistory'],
+      relations: ['items', 'items.product', 'items.medicine', 'items.menuItem', 'address', 'user', 'rider', 'subOrders', 'subOrders.restaurant', 'subOrders.vendor', 'subOrders.pharmacy', 'orderHistory'],
       order: { createdAt: 'DESC' },
       skip: (page - 1) * limit,
       take: limit,
@@ -717,14 +735,34 @@ export class OrdersService {
       throw new ForbiddenException('You are not authorized to accept pharma orders. Please contact admin.');
     }
 
+    // Finance & Suspension check (Bulletproof enforcement)
+    const walletRepo = this.ordersRepository.manager.getRepository('Wallet');
+    const wallet = await walletRepo.findOne({ where: { userId: riderId, userType: 'Rider' } }) as any;
+
+    if (wallet?.isSuspended) {
+      throw new ForbiddenException(`Your account is suspended due to high cash-in-hand (Rs. ${Number(wallet.cashInHand).toLocaleString()}). Please remit cash to platform to resume accepting orders.`);
+    }
+
     // Zone Enforcement
-    if (!rider.currentLat || !rider.currentLng) {
+    let riderLat = rider.currentLat;
+    let riderLng = rider.currentLng;
+
+    if (!riderLat || !riderLng) {
+      // Fallback to Redis Cache if DB is empty (Rider just went online)
+      const cachedLoc = await this.cacheService.getRiderLocation(riderId);
+      if (cachedLoc) {
+        riderLat = cachedLoc.lat.toString();
+        riderLng = cachedLoc.lng.toString();
+      }
+    }
+
+    if (!riderLat || !riderLng) {
       throw new BadRequestException('Please enable location services and stay online to accept orders.');
     }
 
     const zoneCheck = await this.deliveryZonesService.validateAddressInZone(
-      Number(rider.currentLat),
-      Number(rider.currentLng)
+      Number(riderLat),
+      Number(riderLng)
     );
 
     if (!zoneCheck.isValid) {
@@ -1092,7 +1130,7 @@ export class OrdersService {
       subtotal: order.subtotal,
       deliveryFee: order.deliveryFee,
       discountAmount: 0,
-      total: order.total,
+      total: Number(order.subtotal) + Number(order.deliveryFee),
       status: 'pending',
       paymentStatus: 'pending',
       riderCommission: order.riderCommission,
@@ -1612,8 +1650,8 @@ export class OrdersService {
 
     const validation = await this.deliveryZonesService.validateAddressInZone(custLat, custLng);
 
-    const maxRadiusKey = orderType === 'pharma' ? 'pharma_delivery_max_radius_km' : 'delivery_max_radius_km';
-    const maxRad = await this.settingsService.getNumber(maxRadiusKey, orderType === 'pharma' ? 15 : 10);
+    const maxRadiusKey = orderType === 'pharma' ? 'pharma_delivery_max_radius_km' : (orderType === 'food' ? 'food_delivery_max_radius_km' : 'delivery_max_radius_km');
+    const maxRad = await this.settingsService.getNumber(maxRadiusKey, orderType === 'pharma' ? 15 : (orderType === 'food' ? 8 : 10));
 
     // Calculate actual distance from pickup point
     const realDistance = this.deliveryZonesService.calculateDistance(custLat, custLng, pickupLat, pickupLng);
@@ -1632,13 +1670,13 @@ export class OrdersService {
       };
     }
 
-    const baseFeeKey = orderType === 'pharma' ? 'pharma_delivery_base_fee' : 'delivery_base_fee';
-    const thresholdKey = orderType === 'pharma' ? 'pharma_delivery_threshold_km' : 'delivery_threshold_km';
-    const perKmFeeKey = orderType === 'pharma' ? 'pharma_delivery_per_km_fee' : 'delivery_per_km_fee';
+    const baseFeeKey = orderType === 'pharma' ? 'pharma_delivery_base_fee' : (orderType === 'food' ? 'food_delivery_base_fee' : 'delivery_base_fee');
+    const thresholdKey = orderType === 'pharma' ? 'pharma_delivery_threshold_km' : (orderType === 'food' ? 'food_delivery_threshold_km' : 'delivery_threshold_km');
+    const perKmFeeKey = orderType === 'pharma' ? 'pharma_delivery_per_km_fee' : (orderType === 'food' ? 'food_delivery_per_km_fee' : 'delivery_per_km_fee');
 
-    const baseFee = await this.settingsService.getNumber(baseFeeKey, orderType === 'pharma' ? 150 : 150);
+    const baseFee = await this.settingsService.getNumber(baseFeeKey, 150);
     const threshold = await this.settingsService.getNumber(thresholdKey, 3);
-    const perKmFee = await this.settingsService.getNumber(perKmFeeKey, orderType === 'pharma' ? 20 : 20);
+    const perKmFee = await this.settingsService.getNumber(perKmFeeKey, 20);
 
     let deliveryFee = baseFee;
 

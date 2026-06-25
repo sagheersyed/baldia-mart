@@ -3,106 +3,62 @@ import {
   ManyToOne, JoinColumn, Index,
 } from 'typeorm';
 import { Wallet } from '../../wallets/wallet.entity';
-import { Order } from '../../orders/order.entity';
+import { FinancialTransaction } from './financial-transaction.entity';
 
 /**
- * Financial Ledger Entry — the core unit of the financial records system.
- *
- * Every monetary movement (order settlement, COD collection, refund, payout, etc.)
- * creates one or more ledger entries with a categorized `entryType`.
- *
- * Design:
- * - Running balance stored on each entry for O(1) balance lookups.
- * - Period key (YYYY-MM or YYYY-Www) enables fast range aggregation.
- * - Flexible JSONB metadata for vertical-specific data without schema bloat.
+ * Financial Ledger Entry — Immutable accounting lines.
+ * Follows Double-Entry: Every Transaction must have equal Debits and Credits.
  */
-@Index('IDX_LEDGER_WALLET_CREATED', ['walletId', 'createdAt'])
-@Index('IDX_LEDGER_ORDER', ['orderId'])
-@Index('IDX_LEDGER_ENTRY_TYPE', ['entryType'])
-@Index('IDX_LEDGER_PERIOD_KEY', ['periodKey'])
-@Index('IDX_LEDGER_WALLET_PERIOD', ['walletId', 'periodKey'])
+@Index('IDX_LEDGER_TX_ID', ['transactionId'])
+@Index('IDX_LEDGER_WALLET_ID', ['walletId'])
+@Index('IDX_LEDGER_ACCOUNT_TAG', ['accountTag'])
 @Entity('financial_ledger_entries')
 export class FinancialLedgerEntry {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  // ── Foreign Keys ──────────────────────────────────────────────
+  @Column({ name: 'transaction_id', nullable: true })
+  transactionId: string;
 
-  @Column({ name: 'wallet_id', type: 'uuid' })
-  walletId: string;
+  @ManyToOne(() => FinancialTransaction, tx => tx.entries)
+  @JoinColumn({ name: 'transaction_id' })
+  transaction: FinancialTransaction;
 
-  @ManyToOne(() => Wallet, { onDelete: 'CASCADE' })
+  @Column({ name: 'wallet_id', type: 'uuid', nullable: true })
+  walletId: string; // The specific rider/vendor wallet (if applicable)
+
+  @ManyToOne(() => Wallet, { nullable: true })
   @JoinColumn({ name: 'wallet_id' })
   wallet: Wallet;
 
-  @Column({ name: 'order_id', type: 'uuid', nullable: true })
-  orderId: string;
-
-  @ManyToOne(() => Order, { nullable: true, onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'order_id' })
-  order: Order;
-
-  // ── Entry Classification ──────────────────────────────────────
-
   @Column({
-    name: 'entry_type',
+    name: 'account_tag',
     type: 'enum',
     enum: [
-      'ORDER_SUBTOTAL',
-      'DELIVERY_FEE',
-      'PLATFORM_COMMISSION',
-      'VENDOR_PAYOUT',
-      'RIDER_DELIVERY_FEE',
-      'RIDER_BONUS',
-      'RIDER_TIP',
-      'COD_COLLECTION',
-      'COD_REMITTANCE',
-      'WITHDRAWAL',
-      'MANUAL_ADJUSTMENT',
-      'REFUND',
-      'DISCOUNT_SUBSIDY',
-      'TAX_DEDUCTION',
+      'EARNINGS',      // Withdraw-able balance
+      'CASH_IN_HAND',  // Physical cash held (Riders)
+      'PLATFORM_REV',  // Platform revenue account
+      'TAX_PAYABLE',   // Government tax account
+      'VOUCHER_EXP',   // Promotion expenses
     ],
+    default: 'EARNINGS'
   })
-  entryType: string;
+  accountTag: string;
 
   @Column({
     type: 'enum',
     enum: ['CREDIT', 'DEBIT'],
   })
-  direction: string;
-
-  // ── Monetary Values ───────────────────────────────────────────
+  direction: 'CREDIT' | 'DEBIT'; // CREDIT increases earnings, DEBIT decreases earnings (except for CASH/ASSET accounts)
 
   @Column('decimal', { precision: 12, scale: 2 })
   amount: number;
 
-  @Column('decimal', { name: 'running_balance', precision: 12, scale: 2, default: 0 })
-  runningBalance: number;
-
-  @Column({ default: 'PKR' })
-  currency: string;
-
-  // ── Descriptive Fields ────────────────────────────────────────
-
-  @Column({ type: 'text' })
+  @Column({ type: 'text', nullable: true })
   description: string;
 
-  @Column({ name: 'reference_id', nullable: true })
-  referenceId: string;
-
-  @Column({ name: 'metadata', type: 'jsonb', nullable: true })
-  metadata: Record<string, any>;
-
-  // ── Time Grouping ─────────────────────────────────────────────
-
-  @Column({ name: 'period_key', length: 10 })
-  periodKey: string; // 'YYYY-MM' for monthly, enables fast GROUP BY
-
-  // ── Audit ─────────────────────────────────────────────────────
-
-  @Column({ name: 'admin_id', type: 'uuid', nullable: true })
-  adminId: string;
+  @Column({ name: 'module_type', nullable: true })
+  moduleType: string; // 'food', 'mart', 'rashan', 'pharma'
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

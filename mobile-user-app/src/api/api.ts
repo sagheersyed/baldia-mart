@@ -122,6 +122,7 @@ export const authApi = {
   sendOtp: (phoneNumber: string) => api.post('/auth/send-otp', { phoneNumber: normalizePhone(phoneNumber) }),
   verifyOtp: (phoneNumber: string, otpCode: string) =>
     api.post('/auth/verify-otp', { phoneNumber: normalizePhone(phoneNumber), otpCode }),
+  changeMpin: (data: { oldMpin: string; newMpin: string }) => api.post('/auth/change-mpin', data),
 };
 
 export const usersApi = {
@@ -657,6 +658,8 @@ export const cmsApi = {
 };
 
 export const financeApi = {
+  getUserSummary: () => api.get('/finance/user/summary'),
+  getUserStatement: () => api.get('/finance/user/statement'),
   getVendorSummary: () => api.get('/finance/vendor/summary'),
   getVendorStatement: () => api.get('/finance/vendor/statement'),
   getRiderSummary: () => api.get('/finance/rider/summary'),

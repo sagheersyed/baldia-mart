@@ -150,6 +150,11 @@ export default function ProfileScreen({ navigation }: any) {
               <Text style={styles.menuTxt}>Help & Support</Text>
               <Ionicons name="chevron-forward" size={18} color="#CCC" />
             </TouchableOpacity>
+            <TouchableOpacity style={styles.menuBtn} onPress={() => navigation.navigate('RiderSettings')}>
+              <Ionicons name="settings-outline" size={22} color="#1E1E1E" />
+              <Text style={styles.menuTxt}>App Settings</Text>
+              <Ionicons name="chevron-forward" size={18} color="#CCC" />
+            </TouchableOpacity>
           </View>
         </View>
 

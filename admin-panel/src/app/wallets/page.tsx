@@ -233,7 +233,7 @@ export default function WalletsPage() {
                           {(w.rider?.name?.[0] || w.user?.name?.[0] || 'X').toUpperCase()}
                         </div>
                         <div>
-                          <p className="text-sm font-black text-slate-900 tracking-tighter uppercase italic">{w.rider?.name || w.user?.name || 'Unknown Entity'}</p>
+                          <p className="text-sm font-black text-slate-900 tracking-tighter uppercase italic">{w.rider?.name || w.vendor?.name || w.user?.name || 'Unknown Entity'}</p>
                           <p className="text-[10px] text-slate-400 font-bold tracking-widest uppercase mt-0.5">UID: {w.userId?.slice(-8).toUpperCase()}</p>
                         </div>
                       </div>
@@ -345,7 +345,7 @@ export default function WalletsPage() {
                  <div className="bg-slate-950 p-10 rounded-[3rem] text-white flex justify-between items-center shadow-2xl shadow-slate-900/20">
                     <div>
                        <p className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em] mb-3">Target Profile</p>
-                       <p className="text-xl font-black italic uppercase tracking-tight">{selectedWallet.rider?.name || selectedWallet.user?.name || 'Merchant'}</p>
+                       <p className="text-xl font-black italic uppercase tracking-tight">{selectedWallet.rider?.name || selectedWallet.vendor?.name || selectedWallet.user?.name || 'Merchant'}</p>
                     </div>
                     <div className="text-right">
                        <p className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em] mb-3">Live Balance</p>

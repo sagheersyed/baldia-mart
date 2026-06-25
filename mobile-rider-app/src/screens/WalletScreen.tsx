@@ -135,14 +135,40 @@ export default function WalletScreen({ navigation }: any) {
                 </View>
               </LinearGradient>
 
-              {/* COD Warning */}
-              {codOwed > 0 && (
-                <View style={styles.warningBox}>
-                  <Ionicons name="alert-circle" size={20} color="#991B1B" />
-                  <View style={{ flex: 1, marginLeft: 10 }}>
-                    <Text style={styles.warningTitle}>Cash Remittance Due</Text>
-                    <Text style={styles.warningText}>
-                      You have collected Rs {codOwed.toLocaleString()} from customers that belongs to the platform.
+              {/* Financial Health Row */}
+              <View style={styles.healthRow}>
+                 <View style={[styles.healthCard, { borderColor: codOwed > (summary?.limit || 5000) * 0.8 ? '#EF4444' : '#E2E8F0' }]}>
+                    <Text style={styles.healthLabel}>Cash Limit</Text>
+                    <Text style={styles.healthVal}>Rs {Number(summary?.limit || 5000).toLocaleString()}</Text>
+                    <View style={styles.healthProgress}>
+                       <View style={[styles.healthBar, { 
+                          width: `${Math.min(100, (codOwed / (summary?.limit || 5000)) * 100)}%`,
+                          backgroundColor: codOwed > (summary?.limit || 5000) * 0.8 ? '#EF4444' : SUCCESS
+                       }]} />
+                    </View>
+                    <Text style={styles.healthSub}>
+                       {codOwed > 0 ? `Rs ${(summary?.limit - codOwed).toLocaleString()} remaining` : 'Limit is fully available'}
+                    </Text>
+                 </View>
+
+                 <View style={styles.healthCard}>
+                    <Text style={styles.healthLabel}>Held Cash (COD)</Text>
+                    <Text style={[styles.healthVal, { color: codOwed > 0 ? '#EF4444' : '#1E1E1E' }]}>Rs {codOwed.toLocaleString()}</Text>
+                    <TouchableOpacity style={styles.infoBtn} onPress={() => {}}>
+                       <Ionicons name="information-circle-outline" size={14} color="#64748B" />
+                       <Text style={styles.infoText}>How to remit?</Text>
+                    </TouchableOpacity>
+                 </View>
+              </View>
+
+              {/* Suspension Warning */}
+              {summary?.isSuspended && (
+                <View style={[styles.warningBox, { backgroundColor: '#7F1D1D', borderColor: '#991B1B' }]}>
+                  <Ionicons name="shield-outline" size={24} color="#fff" />
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={[styles.warningTitle, { color: '#fff' }]}>ACCOUNT SUSPENDED</Text>
+                    <Text style={[styles.warningText, { color: 'rgba(255,255,255,0.8)' }]}>
+                      Your cash limit has been exceeded. Please remit Rs {codOwed.toLocaleString()} to reactivate your account.
                     </Text>
                   </View>
                 </View>
@@ -228,6 +254,20 @@ const styles = StyleSheet.create({
   txnDate: { fontSize: 11, color: '#888', marginTop: 2 },
   txnAmount: { fontSize: 15, fontWeight: '800' },
   txnBal: { fontSize: 10, color: '#AAA', marginTop: 2 },
+
+  healthRow: { flexDirection: 'row', gap: 12, marginTop: 16 },
+  healthCard: {
+    flex: 1, backgroundColor: '#fff', borderRadius: 20, padding: 16,
+    borderWidth: 1, borderColor: '#E2E8F0',
+    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 2,
+  },
+  healthLabel: { fontSize: 10, fontWeight: '700', color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.5 },
+  healthVal: { fontSize: 18, fontWeight: '900', color: '#1E1E1E', marginVertical: 4 },
+  healthProgress: { height: 4, backgroundColor: '#F1F5F9', borderRadius: 2, marginTop: 4 },
+  healthBar: { height: '100%', borderRadius: 2 },
+  healthSub: { fontSize: 10, color: '#94A3B8', marginTop: 8, fontWeight: '600' },
+  infoBtn: { flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 4 },
+  infoText: { fontSize: 10, color: '#64748B', fontWeight: '700' },
 
   emptyWrap: { alignItems: 'center', padding: 60, marginTop: 40 },
   emptyTxt: { color: '#aaa', fontSize: 14, marginTop: 12 },

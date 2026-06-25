@@ -143,6 +143,10 @@ export class CouponsService {
 
   async incrementUsage(couponCode: string, transactionManager?: any): Promise<void> {
     const repo = transactionManager ? transactionManager.getRepository(Coupon) : this.couponRepository;
-    await repo.increment({ code: couponCode }, 'used_count', 1);
+    await repo.createQueryBuilder()
+      .update(Coupon)
+      .set({ used_count: () => 'used_count + 1' })
+      .where('code = :code', { code: couponCode })
+      .execute();
   }
 }

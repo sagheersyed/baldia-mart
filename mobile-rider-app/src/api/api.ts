@@ -5,12 +5,12 @@ import { ENV } from '../config/env';
 
 export const socket = io(ENV.SOCKET_URL, {
   autoConnect: false,
-  transports: ['websocket'],
+  transports: ['polling', 'websocket'],
   reconnection: true,
   reconnectionAttempts: Infinity,
   reconnectionDelay: 2000,
   reconnectionDelayMax: 10000,
-  timeout: 10000,
+  timeout: 20000,
   extraHeaders: {
     'ngrok-skip-browser-warning': 'true',
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'
@@ -97,6 +97,7 @@ export const authApi = {
     api.post('/auth/rider/verify-otp', { phoneNumber: normalizePhone(phoneNumber), otpCode }),
   login: (firebaseToken: string) => api.post('/auth/login', { firebaseToken }),
   getMe: () => api.get('/auth/me'),
+  changeMpin: (data: { oldMpin: string; newMpin: string }) => api.post('/auth/change-mpin', data),
 };
 
 export const ordersApi = {

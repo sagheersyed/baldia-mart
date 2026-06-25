@@ -267,10 +267,10 @@ export default function ProductsPage() {
               </div>
 
               <div className="flex gap-2">
-                <button onClick={() => handleEdit(prod)} className="flex-1 btn-ghost !rounded-xl !py-2.5">
-                  <Pencil size={15} /> Edit
+                <button onClick={() => handleEdit(prod)} className="flex-1 btn-ghost !rounded-xl !py-2.5 flex items-center justify-center gap-2">
+                  <Pencil size={15} /> <span>Edit Unit</span>
                 </button>
-                <button onClick={() => handleDelete(prod.id)} className="w-11 btn-ghost !text-rose-500 hover:!bg-rose-50 hover:!border-rose-100 !rounded-xl">
+                <button onClick={() => handleDelete(prod.id)} title="Archive Product" className="btn-ghost !text-rose-500 hover:!bg-rose-50 hover:!border-rose-100 !rounded-xl px-4 flex items-center justify-center">
                   <Trash2 size={16} />
                 </button>
               </div>

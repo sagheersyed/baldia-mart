@@ -8,6 +8,7 @@ import { WalletSettlement } from './wallet-settlement.entity';
 import { Order } from '../orders/order.entity';
 import { Rider } from '../riders/rider.entity';
 import { FinanceService } from '../finance/finance.service';
+import { Inject, forwardRef } from '@nestjs/common';
 
 @Injectable()
 export class WalletsService {
@@ -18,6 +19,7 @@ export class WalletsService {
     private transactionsRepository: Repository<WalletTransaction>,
     @InjectRepository(WithdrawalRequest)
     private withdrawalRepository: Repository<WithdrawalRequest>,
+    @Inject(forwardRef(() => FinanceService))
     private financeService: FinanceService,
   ) {}
 
@@ -130,6 +132,15 @@ export class WalletsService {
       'user',
       'user.id = wallet.userId AND wallet.userType = :user_type',
       { user_type: 'User' }
+    );
+
+    // Join with Vendor table for merchant details
+    query.leftJoinAndMapOne(
+      'wallet.vendor',
+      'vendors',
+      'vendor',
+      'vendor.id = wallet.userId AND wallet.userType = :vendorType',
+      { vendorType: 'Vendor' }
     );
 
     query.orderBy('wallet.updatedAt', 'DESC');

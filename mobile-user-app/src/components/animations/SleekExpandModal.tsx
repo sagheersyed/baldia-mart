@@ -59,16 +59,32 @@ const SleekExpandModal = ({
   }, [visible]);
 
   const animatedStyle = useAnimatedStyle(() => {
-    // Start from the exact card position and expand to fullscreen
-    const scale = interpolate(progress.value, [0, 1], [0.8, 1]);
+    // Exact center of the screen
+    const targetX = 0; // centered in container
+    const targetY = 0; // centered in container
+
+    // Start from the exact card position and expand to fullscreen modal
+    // Note: Modal is centered in fullscreen, so we adjust relative to screen center
+    const screenCenterX = SCREEN_W / 2;
+    const screenCenterY = SCREEN_H / 2;
+    
+    // Original card center relative to screen center
+    const startCenterX = (startLayout.x + startLayout.width / 2) - screenCenterX;
+    const startCenterY = (startLayout.y + startLayout.height / 2) - screenCenterY;
+
     const opacity = interpolate(progress.value, [0, 0.2, 1], [0, 1, 1]);
-    const translateY = interpolate(progress.value, [0, 1], [20, 0]);
+    const scale = interpolate(progress.value, [0, 1], [startLayout.width / (SCREEN_W * 0.94), 1]);
+    const translateX = interpolate(progress.value, [0, 1], [startCenterX, 0]);
+    const translateY = interpolate(progress.value, [0, 1], [startCenterY, 0]);
+    const borderRadius = interpolate(progress.value, [0, 1], [14, 32]);
 
     return {
       opacity,
+      borderRadius,
       transform: [
-        { scale },
+        { translateX },
         { translateY },
+        { scale },
       ],
     };
   });

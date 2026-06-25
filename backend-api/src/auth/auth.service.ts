@@ -277,4 +277,30 @@ export class AuthService {
       return { ...authResponse, isNewUser: isNew };
     }
   }
+
+  async changeMpin(userId: string, oldMpin: string, newMpin: string, role: 'customer' | 'rider') {
+    let userOrRider: User | Rider | null = null;
+    if (role === 'customer') {
+      userOrRider = await this.usersService.findById(userId);
+    } else {
+      userOrRider = await this.ridersService.findById(userId);
+    }
+
+    if (!userOrRider || !userOrRider.mpin) {
+      throw new BadRequestException('MPIN not set up');
+    }
+
+    const isMatch = await bcrypt.compare(oldMpin, userOrRider.mpin);
+    if (!isMatch) {
+      throw new UnauthorizedException('Incorrect old MPIN');
+    }
+
+    const hashedMpin = await bcrypt.hash(newMpin, 10);
+    if (role === 'customer') {
+      await this.usersService.update(userId, { mpin: hashedMpin, mpinAttempts: 0 });
+    } else {
+      await this.ridersService.update(userId, { mpin: hashedMpin, mpinAttempts: 0 });
+    }
+    return { success: true, message: 'MPIN changed successfully' };
+  }
 }

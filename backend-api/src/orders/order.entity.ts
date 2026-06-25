@@ -79,6 +79,9 @@ export class Order {
   @Column('decimal', { name: 'discount_amount', precision: 10, scale: 2, default: 0 })
   discountAmount: number;
 
+  @Column('decimal', { name: 'wallet_adjustment', precision: 10, scale: 2, default: 0 })
+  walletAdjustment: number; // Amount paid via User Wallet credits
+
   @Column('decimal', { precision: 10, scale: 2 })
   total: number;
 

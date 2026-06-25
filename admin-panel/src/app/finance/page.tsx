@@ -5,7 +5,7 @@ import {
   DollarSign, TrendingUp, Wallet, ArrowDownCircle, ArrowUpCircle, 
   Search, Calendar, Filter, Download, ArrowRight, Activity, Clock,
   Users, ShoppingBag, BarChart3, ChevronUp, ChevronDown, Award,
-  Pill, Bike, ShieldCheck
+  Pill, Bike, ShieldCheck, Boxes
 } from 'lucide-react';
 import { fetchWithAuth, BASE_URL } from '@/lib/api';
 import { format, subDays, parseISO } from 'date-fns';
@@ -18,6 +18,7 @@ export default function FinanceDashboard() {
   const [summary, setSummary] = useState<any>(null);
   const [snapshots, setSnapshots] = useState<any[]>([]);
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
+  const [withdrawals, setWithdrawals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,17 +28,19 @@ export default function FinanceDashboard() {
       const from = format(subDays(new Date(), 30), 'yyyy-MM-dd'); // 30-day window
       const to = format(new Date(), 'yyyy-MM-dd');
 
-      const [sumRes, snapRes, leaderRes] = await Promise.all([
+      const [sumRes, snapRes, leaderRes, withdrawRes] = await Promise.all([
         fetchWithAuth(`${BASE_URL}/finance/admin/platform-summary`),
         fetchWithAuth(`${BASE_URL}/finance/admin/daily-snapshots?from=${from}&to=${to}`),
-        fetchWithAuth(`${BASE_URL}/finance/admin/leaderboard?type=Vendor&limit=10`) // Top 10 for better data density
+        fetchWithAuth(`${BASE_URL}/finance/admin/leaderboard?type=Vendor&limit=10`),
+        fetchWithAuth(`${BASE_URL}/wallets/withdraw-requests/pending`)
       ]);
 
-      if (!sumRes.ok || !snapRes.ok || !leaderRes.ok) throw new Error('Financial sync failure');
+      if (!sumRes.ok || !snapRes.ok || !leaderRes.ok || !withdrawRes.ok) throw new Error('Financial sync failure');
 
       setSummary(await sumRes.json());
       setSnapshots((await snapRes.json()).reverse());
       setLeaderboard(await leaderRes.json());
+      setWithdrawals(await withdrawRes.json());
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -114,12 +117,20 @@ export default function FinanceDashboard() {
           trend="+12.4%"
         />
         <MetricCard 
-          title="Aggregated GMV" 
-          value={summary?.totalEarnings} 
+          title="Resto/Mart GMV" 
+          value={summary ? summary.totalEarnings - summary.rashanEarnings : 0} 
           icon={<ShoppingBag className="text-blue-600" size={20} />}
           color="blue"
-          label="Gross transaction volume"
+          label="Standard Retail Volume"
           trend="+8.1%"
+        />
+        <MetricCard 
+          title="Bulk Rashan Hub" 
+          value={summary?.rashanEarnings} 
+          icon={<Boxes size={20} className="text-orange-500" />}
+          color="orange"
+          label="Rashan Sector Revenue"
+          trend="Isolated"
         />
         <MetricCard 
           title="Rider COD Risk" 
@@ -128,14 +139,6 @@ export default function FinanceDashboard() {
           color="rose"
           label="Cash currently in hand"
           trend="Critical"
-        />
-        <MetricCard 
-          title="Treasury Balance" 
-          value={summary?.netBalance} 
-          icon={<Wallet className="text-indigo-600" size={20} />}
-          color="indigo"
-          label="Available system liquidity"
-          trend="Secure"
         />
       </div>
 
@@ -221,21 +224,25 @@ export default function FinanceDashboard() {
 
           {/* Vertical Distribution Breakdown */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-             {['Mart', 'Food', 'Pharma'].map((v, i) => (
-                <div key={v} className="card !p-8 bg-white border border-slate-100 hover:border-primary-100 transition-all group overflow-hidden">
+             {[
+               { name: 'Mart', value: summary?.martEarnings || 0, icon: <ShoppingBag size={18} />, color: 'primary' },
+               { name: 'Food', value: summary?.foodEarnings || 0, icon: <Users size={18} />, color: 'orange' },
+               { name: 'Pharma', value: summary?.pharmaEarnings || 0, icon: <Pill size={18} />, color: 'teal' }
+             ].map((v, i) => (
+                <div key={v.name} className="card !p-8 bg-white border border-slate-100 hover:border-primary-100 transition-all group overflow-hidden">
                    <div className="flex items-center justify-between mb-4 relative z-10">
                       <div className={`p-2.5 rounded-xl ${i === 0 ? 'bg-primary-50 text-primary-600' : i === 1 ? 'bg-orange-50 text-orange-600' : 'bg-teal-50 text-teal-600'}`}>
-                         {i === 0 ? <ShoppingBag size={18} /> : i === 1 ? <Users size={18} /> : <Pill size={18} />}
+                         {v.icon}
                       </div>
                       <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest underline decoration-2 underline-offset-4">Vertical {i+1}</span>
                    </div>
-                   <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest relative z-10">{v} Revenue</h4>
+                   <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest relative z-10">{v.name} Revenue</h4>
                    <div className="mt-4 flex items-end gap-2 relative z-10">
-                      <p className="text-2xl font-black text-slate-900 tracking-tighter">Rs. {(Math.random() * 50000 + 20000).toFixed(0).toLocaleString()}</p>
-                      <span className="text-[10px] font-bold text-emerald-500 pb-1">+14% ↑</span>
+                      <p className="text-2xl font-black text-slate-900 tracking-tighter">Rs. {Number(v.value).toLocaleString()}</p>
+                      <span className="text-[10px] font-bold text-emerald-500 pb-1">Verified Audit</span>
                    </div>
                    <div className="mt-4 h-1.5 bg-slate-100 rounded-full overflow-hidden relative z-10">
-                      <div className={`h-full ${i === 0 ? 'bg-primary-500' : i === 1 ? 'bg-orange-500' : 'bg-teal-500'} w-2/3 rounded-full`} />
+                      <div className={`h-full ${i === 0 ? 'bg-primary-500' : i === 1 ? 'bg-orange-500' : 'bg-teal-500'} rounded-full`} style={{ width: `${Math.min(100, (v.value / (summary?.totalEarnings || 1)) * 100)}%` }} />
                    </div>
                 </div>
              ))}
@@ -287,22 +294,29 @@ export default function FinanceDashboard() {
              <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
                    <ArrowUpCircle className="text-indigo-600" size={22} />
-                   <h3 className="font-black text-slate-800 uppercase tracking-widest text-xs">Withdrawals</h3>
+                   <h3 className="font-black text-slate-800 uppercase tracking-widest text-xs">Pending Withdrawals</h3>
                 </div>
-                <span className="w-6 h-6 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center text-[10px] font-black">4</span>
+                <span className="w-6 h-6 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center text-[10px] font-black">{withdrawals.length}</span>
              </div>
              <div className="space-y-3">
-                {[1, 2, 3].map(i => (
-                  <div key={i} className="flex items-center justify-between p-4 bg-slate-50/50 border border-slate-100 rounded-2xl hover:bg-white hover:shadow-md transition-all">
+                {withdrawals.length === 0 ? (
+                  <div className="py-10 text-center text-slate-300 font-bold uppercase text-[10px] tracking-widest">No pending requests</div>
+                ) : withdrawals.slice(0, 3).map((w, i) => (
+                  <div key={w.id} onClick={() => window.location.href = '/wallets'} className="flex items-center justify-between p-4 bg-slate-50/50 border border-slate-100 rounded-2xl hover:bg-white hover:shadow-md transition-all cursor-pointer">
                      <div className="min-w-0">
-                        <p className="text-xs font-black text-slate-800 uppercase truncate">Rider #{4200+i}</p>
-                        <p className="text-[10px] text-slate-400 font-bold mt-1 uppercase tracking-tighter">JazzCash 03xx-xxxxxx</p>
+                        <p className="text-xs font-black text-slate-800 uppercase truncate">
+                          {w.user?.name || w.rider?.name || w.vendor?.name || `User ${w.userId.slice(-4)}`}
+                        </p>
+                        <p className="text-[10px] text-slate-400 font-bold mt-1 uppercase tracking-tighter">{w.bankName || 'Wallet'} · {w.accountNumber || 'Check details'}</p>
                      </div>
-                     <p className="text-sm font-black text-slate-900 ml-4 shrink-0">Rs. 4,500</p>
+                     <p className="text-sm font-black text-slate-900 ml-4 shrink-0">Rs. {Number(w.amount).toLocaleString()}</p>
                   </div>
                 ))}
              </div>
-             <button className="w-full mt-6 py-4 bg-slate-100 rounded-[1.5rem] text-[10px] font-black text-slate-500 uppercase tracking-widest hover:bg-slate-200 transition-all">
+             <button 
+               onClick={() => window.location.href = '/wallets'}
+               className="w-full mt-6 py-4 bg-slate-100 rounded-[1.5rem] text-[10px] font-black text-slate-500 uppercase tracking-widest hover:bg-slate-200 transition-all active:scale-95"
+             >
                 Review Payment Queue
              </button>
           </div>

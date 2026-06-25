@@ -39,10 +39,6 @@ export class RidersService {
     const rider = await this.ridersRepository.findOne({ where: { id } });
     if (rider) {
       await this.cacheService.set(cacheKey, rider, 3600);
-    } else {
-      // Cache the absence of the rider for 5 minutes (negative caching)
-      // to protect the DB from connection floods using invalid IDs.
-      await this.cacheService.set(cacheKey, 'NOT_FOUND', 300);
     }
     return rider;
   }

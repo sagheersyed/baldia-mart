@@ -30,6 +30,7 @@ import FoodScreen from './src/screens/FoodScreen';
 import BrandsScreen from './src/screens/BrandsScreen';
 import CartScreen from './src/screens/CartScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
+import WalletScreen from './src/screens/WalletScreen';
 import CheckoutScreen from './src/screens/CheckoutScreen';
 import OrderTrackingScreen from './src/screens/OrderTrackingScreen';
 import MyOrdersScreen from './src/screens/MyOrdersScreen';
@@ -42,6 +43,7 @@ import CompleteProfileScreen from './src/screens/CompleteProfileScreen';
 import MpinLoginScreen from './src/screens/MpinLoginScreen';
 import MpinSetupScreen from './src/screens/MpinSetupScreen';
 import MpinSetupDirectScreen from './src/screens/MpinSetupDirectScreen';
+import ChangeMpinScreen from './src/screens/ChangeMpinScreen';
 import SearchScreen from './src/screens/SearchScreen';
 import BrandDetailScreen from './src/screens/BrandDetailScreen';
 import RestaurantDetailScreen from './src/screens/RestaurantDetailScreen';
@@ -155,15 +157,10 @@ function MainTabs() {
           tabBarBadge: currentCount > 0 ? currentCount : undefined,
         }}
       />
-      <Tab.Screen
-        name="Orders"
-        component={MyOrdersScreen}
-        options={{
-          tabBarLabel: 'Orders',
-          tabBarBadge: activeOrdersCount > 0 ? activeOrdersCount : undefined,
-        }}
-      />
-      <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: 'Account' }} />
+      <Tab.Screen name="Account" component={ProfileScreen} options={{ 
+        tabBarLabel: 'Account',
+        tabBarBadge: activeOrdersCount > 0 ? activeOrdersCount : undefined,
+      }} />
     </Tab.Navigator>
   );
 }
@@ -204,6 +201,7 @@ function Navigation() {
         ) : (
           <>
             <Stack.Screen name="Main" component={MainTabs} />
+            <Stack.Screen name="ChangeMpin" component={ChangeMpinScreen} />
             <Stack.Screen name="BrandsList" component={BrandsScreen} />
             <Stack.Screen name="BrandDetail" component={BrandDetailScreen} />
             <Stack.Screen name="RestaurantDetail" component={RestaurantDetailScreen} />
@@ -212,6 +210,7 @@ function Navigation() {
             <Stack.Screen name="OrderTracking" component={OrderTrackingScreen} />
             <Stack.Screen name="MyOrders" component={MyOrdersScreen} />
             <Stack.Screen name="SavedAddresses" component={SavedAddressesScreen} />
+            <Stack.Screen name="UserWallet" component={WalletScreen} />
             <Stack.Screen name="EditProfile" component={EditProfileScreen} />
             <Stack.Screen name="Notifications" component={NotificationsScreen} />
             <Stack.Screen name="Help" component={HelpScreen} />

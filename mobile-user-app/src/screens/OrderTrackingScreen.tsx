@@ -628,9 +628,32 @@ export default function OrderTrackingScreen({ route, navigation }: any) {
 
                 <View style={styles.divider} />
                 <View style={styles.sumRow}>
-                  <AppText variant="title">Total</AppText>
-                  <AppText variant="h3" color={accent}>Rs. {Number(order.total).toLocaleString()}</AppText>
+                  <AppText variant="caption">Item Subtotal</AppText>
+                  <AppText variant="captionStrong">Rs. {Number(order.subtotal || 0).toLocaleString()}</AppText>
                 </View>
+                <View style={styles.sumRow}>
+                  <AppText variant="caption">Delivery Fee</AppText>
+                  <AppText variant="captionStrong">Rs. {Number(order.deliveryFee || 0).toLocaleString()}</AppText>
+                </View>
+                {Number(order.discountAmount || 0) > 0 && (
+                  <View style={styles.sumRow}>
+                    <AppText variant="caption" color={theme.colors.success}>Voucher Discount</AppText>
+                    <AppText variant="captionStrong" color={theme.colors.success}>- Rs. {Number(order.discountAmount).toLocaleString()}</AppText>
+                  </View>
+                )}
+                {Number(order.walletAdjustment || 0) > 0 && (
+                  <View style={styles.sumRow}>
+                    <AppText variant="caption" color={theme.colors.info}>Wallet Applied</AppText>
+                    <AppText variant="captionStrong" color={theme.colors.info}>- Rs. {Number(order.walletAdjustment).toLocaleString()}</AppText>
+                  </View>
+                )}
+                <View style={[styles.sumRow, { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: theme.colors.divider }]}>
+                  <AppText variant="title">Net Total</AppText>
+                  <AppText variant="h2" color={accent}>Rs. {Number(order.total).toLocaleString()}</AppText>
+                </View>
+                <AppText variant="caption" align="right" style={{ marginTop: 4 }}>
+                  Payment via {String(order.paymentMethod).toUpperCase()}
+                </AppText>
               </>
             ) : null}
           </View>

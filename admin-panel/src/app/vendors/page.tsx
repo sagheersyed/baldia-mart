@@ -85,7 +85,10 @@ export default function VendorsPage() {
   const fetchZones = async () => {
     try {
       const res = await fetchWithAuth(`${BASE_URL}/delivery-zones/all`);
-      if (res.ok) setZones(await res.json());
+      if (res.ok) {
+        const data = await res.json();
+        setZones(Array.isArray(data) ? data : (data.data && Array.isArray(data.data) ? data.data : []));
+      }
     } catch (err) { console.error(err); }
   };
 
@@ -103,7 +106,10 @@ export default function VendorsPage() {
   const fetchProducts = async () => {
     try {
       const res = await fetchWithAuth(PRODUCTS_API);
-      if (res.ok) setProducts(await res.json());
+      if (res.ok) {
+        const data = await res.json();
+        setProducts(Array.isArray(data) ? data : (data.data && Array.isArray(data.data) ? data.data : []));
+      }
     } catch (err) { console.error(err); }
   };
 
@@ -136,7 +142,7 @@ export default function VendorsPage() {
   };
 
   const handleVendorProductSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     if (!selectedVendor || !vpForm.productId) return;
     setIsSubmitting(true);
     try {
@@ -145,8 +151,8 @@ export default function VendorsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           productId: vpForm.productId,
-          price: parseFloat(vpForm.price),
-          stockQty: parseInt(vpForm.stockQty),
+          price: parseFloat(vpForm.price) || 0,
+          stockQty: parseInt(vpForm.stockQty) || 0,
           isAvailable: vpForm.isAvailable
         }),
       });
@@ -154,8 +160,37 @@ export default function VendorsPage() {
         setShowVendorProductModal(false);
         fetchVendors();
         showToast({ title: 'Resource Mapped', variant: 'success' });
+      } else {
+        showToast({ title: await parseApiError(res, 'Mapping failed'), variant: 'error' });
       }
-    } catch (err) { console.error(err); } finally { setIsSubmitting(false); }
+    } catch (err) { 
+      showToast({ title: 'System communication failure', variant: 'error' });
+    } finally { setIsSubmitting(false); }
+  };
+
+  const handleDeleteVendorProduct = async (vendorId: string, vpId: string) => {
+    if (!confirm('Unmap this resource from the node?')) return;
+    try {
+      const res = await fetchWithAuth(`${API_URL}/${vendorId}/products/${vpId}`, { method: 'DELETE' });
+      if (res.ok) {
+        fetchVendors();
+        showToast({ title: 'Resource Unmapped', variant: 'success' });
+      }
+    } catch (error) { console.error(error); }
+  };
+
+  const handleUpdateVendorProduct = async (vendorId: string, vpId: string, stock: number) => {
+    try {
+      const res = await fetchWithAuth(`${API_URL}/${vendorId}/products/${vpId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stockQty: stock })
+      });
+      if (res.ok) {
+        fetchVendors();
+        showToast({ title: 'Telemetrics Updated', variant: 'success' });
+      }
+    } catch (error) { console.error(error); }
   };
 
   const handleDeleteVendor = async (id: string) => {
@@ -347,9 +382,25 @@ export default function VendorsPage() {
                                         </div>
                                      </div>
                                   </div>
-                                  <button className="p-3 text-slate-200 hover:text-rose-500 transition-colors">
-                                     <ArrowRight size={18} />
-                                  </button>
+                                  <div className="flex items-center gap-2">
+                                     <button 
+                                       onClick={() => {
+                                         const next = prompt('Enter new stock quantity:', vp.stockQty.toString());
+                                         if (next !== null) handleUpdateVendorProduct(vendor.id, vp.id, parseInt(next));
+                                       }}
+                                       className="p-2 text-slate-300 hover:text-indigo-600 transition-colors"
+                                       title="Quick Update Stock"
+                                     >
+                                        <RefreshCw size={14} />
+                                     </button>
+                                     <button 
+                                       onClick={() => handleDeleteVendorProduct(vendor.id, vp.id)}
+                                       className="p-2 text-slate-200 hover:text-rose-500 transition-colors"
+                                       title="Unmap Resource"
+                                     >
+                                        <Trash2 size={14} />
+                                     </button>
+                                  </div>
                                </div>
                              ))}
                           </div>
@@ -496,8 +547,8 @@ export default function VendorsPage() {
                 </div>
              </form>
              <div className="modal-footer">
-                <button type="submit" onClick={handleVendorProductSubmit} className="btn-primary w-full !h-16">
-                   Finalize Mapping Protocol
+                <button type="submit" disabled={isSubmitting} className="btn-primary w-full !h-16">
+                   {isSubmitting ? 'Transmitting...' : 'Finalize Mapping Protocol'}
                 </button>
              </div>
           </div>
