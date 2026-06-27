@@ -106,6 +106,9 @@ export class Order {
   @Column({ name: 'order_type', default: 'mart' })
   orderType: string; // mart, food, rashan, pharma
 
+  @Column({ name: 'cash_flow_mode', default: 'MERCHANT_CREDIT' })
+  cashFlowMode: 'MERCHANT_CREDIT' | 'CASH_ON_PICK';
+
   // ── Monthly Rashan Bulk Order Fields ──────────────────────────────────────
   @Column({ name: 'bulk_list_text', type: 'text', nullable: true })
   bulkListText: string;

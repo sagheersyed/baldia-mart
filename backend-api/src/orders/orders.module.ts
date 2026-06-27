@@ -28,6 +28,7 @@ import { CouponsModule } from '../coupons/coupons.module';
 
 import { WalletsModule } from '../wallets/wallets.module';
 import { PharmaModule } from '../pharma/pharma.module';
+import { FinanceModule } from '../finance/finance.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { PharmaModule } from '../pharma/pharma.module';
     WalletsModule,
     forwardRef(() => PharmaModule),
     CouponsModule,
+    FinanceModule,
     BullModule.registerQueue({
       name: 'orders',
     }),

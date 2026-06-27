@@ -120,56 +120,31 @@ export class FinanceService {
   }
 
   private async checkRiderThreshold(manager: EntityManager, wallet: Wallet) {
-    const threshold = await this.settingsService.getNumber('rider_cod_threshold', 5000);
+    // 1. Fetch Dynamic Threshold (Default: 5000)
+    const threshold = await this.settingsService.get('rider_cod_threshold', 5000);
+    const currentCash = Number(wallet.cashInHand);
     
-    if (Number(wallet.cashInHand) > threshold && !wallet.isSuspended) {
-      this.logger.warn(`Rider ${wallet.userId} exceeded cash limit (${wallet.cashInHand}). Suspending.`);
+    if (currentCash > threshold && !wallet.isSuspended) {
+      this.logger.warn(`🛑 RIDER_SUSPENDED: ${wallet.userId} exceeded limit (${currentCash}/${threshold})`);
+      
       wallet.isSuspended = true;
       await manager.save(wallet);
-    } else if (Number(wallet.cashInHand) <= threshold && wallet.isSuspended) {
-      this.logger.log(`Rider ${wallet.userId} cleared debt. Activating.`);
+
+      // 2. Trigger Event Dispatcher (Phase 3 Spec)
+      this.emitRiderSuspensionNotification(wallet.userId, currentCash, threshold);
+      
+    } else if (currentCash <= threshold && wallet.isSuspended) {
+      this.logger.log(`✅ RIDER_REACTIVATED: ${wallet.userId} within limits (${currentCash}/${threshold})`);
       wallet.isSuspended = false;
       await manager.save(wallet);
     }
   }
 
-  /**
-   * UPGRADE 2: Automated Refund Engine (Reversal Engine)
-   */
-  async processOrderRefund(orderId: string, manager: EntityManager) {
-    this.logger.log(`Initiating reversal engine for order: ${orderId}`);
-
-    // 1. Find the original settlement transaction
-    const originalTx = await manager.findOne(FinancialTransaction, {
-      where: { referenceId: orderId, referenceType: 'ORDER_SETTLEMENT' },
-      relations: ['entries'],
-    });
-
-    if (!originalTx) {
-      this.logger.warn(`No original settlement found for order ${orderId}. Reversal skipped.`);
-      return;
-    }
-
-    // 2. Generate contra-entries (Opposites)
-    const contraEntries = originalTx.entries.map(entry => ({
-      walletId: entry.walletId,
-      accountTag: entry.accountTag as any,
-      direction: entry.direction === 'CREDIT' ? 'DEBIT' : 'CREDIT' as any,
-      amount: Number(entry.amount),
-      moduleType: entry.moduleType,
-      description: `Contra-entry: Reversal of ${entry.accountTag} from order ${orderId.split('-')[0]}`,
-    }));
-
-    // 3. Execute balanced reversal transaction
-    return this.executeLedgerTransaction(
-      manager,
-      'ORDER_REFUND',
-      orderId,
-      `Reversal of settlement for cancelled order #${orderId.split('-')[0].toUpperCase()}`,
-      contraEntries
-    );
+  private emitRiderSuspensionNotification(riderId: string, currentCash: number, threshold: number) {
+    this.logger.log(`[EventDispatcher] Emitting suspension push notification to Rider ${riderId}...`);
+    // Logic for NotificationService/SMSGateway will go here in Phase 4
+    // Payload: { event: 'SURCHARGE_LIMIT_EXCEEDED', amount: currentCash, limit: threshold }
   }
-
   private async ensureWallet(manager: EntityManager, userId: string, userType: 'Rider' | 'Vendor' | 'User'): Promise<Wallet> {
     let wallet = await manager.findOne(Wallet, { where: { userId, userType } });
     if (!wallet) {
@@ -180,6 +155,7 @@ export class FinanceService {
     return wallet;
   }
 
+
   /**
    * TASK 2-C: Multi-Vendor App Split Engine
    */
@@ -187,6 +163,10 @@ export class FinanceService {
     const isCOD = order.paymentMethod?.toLowerCase() === 'cod' || order.paymentMethod?.toLowerCase() === 'cash_on_delivery';
     const riderId = order.riderId;
     const moduleType = order.orderType;
+    const flowMode = order.cashFlowMode || 'MERCHANT_CREDIT';
+
+    // 1. Fetch Dynamic Platform Service Fee from Settings
+    const serviceFee = await this.settingsService.getNumber('platform_service_fee', 15);
 
     const ledgerLines: any[] = [];
     const riderTakeHome = Number(order.deliveryFee) + (order.orderType === 'pharma' ? 50 : 0);
@@ -194,20 +174,21 @@ export class FinanceService {
     let totalVendorPayout = 0;
     let totalPlatformCommission = 0;
 
-    const stakeholders = order.subOrders && order.subOrders.length > 0 
+    const stakeholders = (order.subOrders && order.subOrders.length > 0) 
       ? order.subOrders.map(s => ({ 
-          id: s.vendorId || s.restaurantId || s.pharmacyId, 
+          id: s.vendorId || s.restaurantId || s.pharmacyId || (s as any).vendor?.id || (s as any).restaurant?.id || (s as any).pharmacy?.id, 
           subtotal: Number(s.subtotal),
-          type: (s.pharmacyId ? 'pharmacy' : s.restaurantId ? 'restaurant' : 'vendor') as any
+          type: (s.pharmacyId || (s as any).pharmacy ? 'pharmacy' : (s.restaurantId || (s as any).restaurant) ? 'restaurant' : 'vendor') as any
         }))
       : [{ 
-          id: order.restaurantId || order.pharmacyId || order.martId, 
+          id: order.restaurantId || order.pharmacyId || order.martId || order.restaurant?.id || order.pharmacy?.id || order.brand?.id, 
           subtotal: Number(order.subtotal),
-          type: (order.pharmacyId ? 'pharmacy' : order.restaurantId ? 'restaurant' : 'vendor') as any
+          type: (order.pharmacyId || order.pharmacy ? 'pharmacy' : (order.restaurantId || order.restaurant) ? 'restaurant' : 'vendor') as any
         }];
 
-    this.logger.log(`Processing settlement for Order #${order.id} (Rider: ${riderId}, Type: ${moduleType}, COD: ${isCOD})`);
+    this.logger.log(`Finance Engine: Processing ${flowMode} settlement for #${order.id.split('-')[0].toUpperCase()} (COD: ${isCOD})`);
 
+    // --- PHASE 2 REFACTOR: Split-Payment & Commission Logic ---
     for (const sh of stakeholders) {
       if (!sh.id) continue;
       
@@ -215,30 +196,55 @@ export class FinanceService {
       const commission = this.calculateCommission(sh.subtotal, config);
       const vendorNet = sh.subtotal - commission;
 
-      totalVendorPayout += vendorNet;
       totalPlatformCommission += commission;
+      totalVendorPayout += vendorNet;
 
       const vWallet = await this.ensureWallet(manager, sh.id, 'Vendor');
-      ledgerLines.push({
-        walletId: vWallet.id,
-        accountTag: 'EARNINGS',
-        direction: 'CREDIT',
-        amount: vendorNet,
-        moduleType,
-        description: `Vendor Payout for #${order.id.split('-')[0].toUpperCase()} (${config.commissionPercent}% commute)`,
-      });
+      
+      if (flowMode === 'MERCHANT_CREDIT') {
+        ledgerLines.push({
+          walletId: vWallet.id,
+          accountTag: 'EARNINGS',
+          direction: 'CREDIT',
+          amount: vendorNet,
+          moduleType,
+          description: `Vendor Payout for #${order.id.split('-')[0].toUpperCase()} (${config.commissionPercent}% comm)`,
+        });
+      } else {
+        // CASH_ON_PICK: Rider paid vendor upfront. 
+        // We log the earnings and the corresponding cash receipt to keep ledger balanced and reports accurate.
+        ledgerLines.push({
+          walletId: vWallet.id,
+          accountTag: 'EARNINGS',
+          direction: 'CREDIT',
+          amount: vendorNet,
+          moduleType,
+          description: `Gross Sale for #${order.id.split('-')[0].toUpperCase()} (Cash-on-Pick)`,
+        });
+        ledgerLines.push({
+          walletId: vWallet.id,
+          accountTag: 'EARNINGS',
+          direction: 'DEBIT',
+          amount: vendorNet,
+          moduleType,
+          description: `Rider Cash-on-Pick Payment for #${order.id.split('-')[0].toUpperCase()}`,
+        });
+      }
     }
 
+    // Platform Revenue Impact (Commission + Service Fee)
     ledgerLines.push({
       accountTag: 'PLATFORM_REV',
       direction: 'CREDIT',
-      amount: totalPlatformCommission,
+      amount: totalPlatformCommission + serviceFee,
       moduleType,
-      description: `Platform Commission from order #${order.id.split('-')[0].toUpperCase()}`,
+      description: `Platform Revenue: Comm(${totalPlatformCommission}) + Fee(${serviceFee}) from order #${order.id.split('-')[0].toUpperCase()}`,
     });
 
     if (riderId) {
       const rWallet = await this.ensureWallet(manager, riderId, 'Rider');
+      
+      // Rider Earnings (Delivery Fees)
       ledgerLines.push({
         walletId: rWallet.id,
         accountTag: 'EARNINGS',
@@ -247,13 +253,27 @@ export class FinanceService {
         description: `Rider Delivery Fee for #${order.id.split('-')[0].toUpperCase()}`,
       });
 
+      // BRANCH 1 & 2: Rider Cash-in-Hand Debt
       if (isCOD) {
+        let riderDebtAmount = 0;
+        let debtDescription = "";
+
+        if (flowMode === 'CASH_ON_PICK') {
+          // Rider ONLY owes the platform its revenue share (since they already paid the merchant)
+          riderDebtAmount = totalPlatformCommission + serviceFee;
+          debtDescription = `Remittance Owed: Comm + Fee for #${order.id.split('-')[0].toUpperCase()} (Cash-on-Pick)`;
+        } else {
+          // Rider owes the FULL total (merchant-credit mode)
+          riderDebtAmount = Number(order.total);
+          debtDescription = `COD Cash Collected (Total) from #${order.id.split('-')[0].toUpperCase()}`;
+        }
+
         ledgerLines.push({
           walletId: rWallet.id,
           accountTag: 'CASH_IN_HAND',
           direction: 'DEBIT',
-          amount: Number(order.total),
-          description: `COD Cash Collected from #${order.id.split('-')[0].toUpperCase()}`,
+          amount: riderDebtAmount,
+          description: debtDescription,
         });
       }
     }
@@ -263,15 +283,16 @@ export class FinanceService {
         accountTag: 'VOUCHER_EXP',
         direction: 'DEBIT',
         amount: Number(order.discountAmount),
-        description: `Platform Coupon Expense for #${order.id.split('-')[0].toUpperCase()} (${order.couponCode})`,
+        description: `Platform Voucher Expense for #${order.id.split('-')[0].toUpperCase()}`,
       });
     }
 
+    // ACID Execution
     return this.executeLedgerTransaction(
       manager,
       'ORDER_SETTLEMENT',
       order.id,
-      `Split engine distribution for order #${order.id.split('-')[0].toUpperCase()}`,
+      `Multi-Split Settlement Logic: ${flowMode}`,
       ledgerLines
     );
   }
@@ -314,7 +335,23 @@ export class FinanceService {
     });
     if (moduleDefault) return moduleDefault;
 
-    return { commissionPercent: 10, minCommission: 0, maxCommission: 0 };
+    // Default Commission Strategy by Vertical (from Settings or Fallback)
+    const settingsKey = `commission_rate_${moduleType}`;
+    const defaultPercent = await this.settingsService.getNumber(settingsKey, 
+      moduleType === 'food' ? 15 : 
+      moduleType === 'mart' ? 10 : 
+      moduleType === 'pharma' ? 5 : 
+      moduleType === 'rashan' ? 7.5 : 10
+    );
+    
+    const minCommission = await this.settingsService.getNumber(`min_commission_${moduleType}`, 0);
+    const maxCommission = await this.settingsService.getNumber(`max_commission_${moduleType}`, 0);
+
+    return { 
+      commissionPercent: defaultPercent, 
+      minCommission: minCommission, 
+      maxCommission: maxCommission 
+    };
   }
 
   calculateCommission(amount: number, config: any): number {
@@ -402,7 +439,13 @@ export class FinanceService {
     // Fetch real order counts for these entities
     const results = await Promise.all(wallets.map(async w => {
       const orderCount = await this.txRepo.manager.getRepository(Order).count({
-        where: userType === 'Rider' ? { riderId: w.userId } : { martId: w.userId, status: 'delivered' }
+        where: userType === 'Rider' 
+          ? { riderId: w.userId } 
+          : [
+              { martId: w.userId, status: 'delivered' },
+              { restaurantId: w.userId, status: 'delivered' },
+              { pharmacyId: w.userId, status: 'delivered' }
+            ]
       });
 
       return {
@@ -418,49 +461,121 @@ export class FinanceService {
 
   async getPortfolioSummary(walletId?: string) {
     if (walletId) {
-       const wallet = await this.walletRepo.findOne({ where: { id: walletId } });
-       return {
-          netBalance: wallet?.balance || 0,
-          cashOutstanding: wallet?.cashInHand || 0,
-       };
+      const wallet = await this.walletRepo.findOne({ where: { id: walletId } });
+      if (!wallet) return null;
+
+      // Calculate totals from ledger
+      const stats = await this.ledgerRepo.createQueryBuilder('l')
+        .where('l.walletId = :walletId', { walletId })
+        .select([
+          'SUM(CASE WHEN l.direction = \'CREDIT\' AND l.accountTag = \'EARNINGS\' THEN l.amount ELSE 0 END) as total_gross',
+          'SUM(CASE WHEN l.direction = \'DEBIT\' AND (l.accountTag = \'EARNINGS\' OR l.accountTag = \'PLATFORM_REV\') THEN l.amount ELSE 0 END) as total_deductions',
+        ])
+        .getRawOne();
+
+      // Handle PostgreSQL case-sensitivity/aliasing in raw queries
+      const gross = Number(stats?.total_gross || stats?.totalgross || 0);
+      const deductions = Number(stats?.total_deductions || stats?.totaldeductions || 0);
+
+      return {
+        netBalance: Number(wallet.balance),
+        cashOutstanding: Number(wallet.cashInHand),
+        totalEarnings: gross,
+        totalCommissions: deductions, 
+        isSuspended: wallet.isSuspended,
+        updatedAt: wallet.updatedAt,
+      };
     }
-    
-    // Global Summary
+
+    // 1. Core Capital Pool Metrics (Platform-Wide)
     const stats = await this.walletRepo.createQueryBuilder('w')
-       .select([
-          'SUM(w.balance) as total_earnings',
-          'SUM(w.cash_in_hand) as total_cash',
-          'COUNT(w.id) as total_wallets'
-       ])
-       .getRawOne();
+      .select([
+        'SUM(CASE WHEN w.balance > 0 THEN w.balance ELSE 0 END) as platform_liability',
+        'SUM(w.cash_in_hand) as cod_risk',
+        'COUNT(w.id) as total_nodes'
+      ])
+      .getRawOne();
 
+    // 2. Platform Revenue Aggregation (Commission + Fees)
     const platform = await this.ledgerRepo.createQueryBuilder('ledger')
-       .where('ledger.accountTag = :tag', { tag: 'PLATFORM_REV' })
-       .select('SUM(ledger.amount)', 'total')
-       .getRawOne();
+      .where('ledger.accountTag = :tag', { tag: 'PLATFORM_REV' })
+      .select('SUM(CASE WHEN ledger.direction = \'CREDIT\' THEN ledger.amount ELSE -ledger.amount END)', 'net_rev')
+      .getRawOne();
 
+    // 3. Vertical Revenue Breakdown (Silo Isolation)
     const verticals = await this.ledgerRepo.createQueryBuilder('l')
-       .where('l.accountTag = :tag', { tag: 'PLATFORM_REV' })
-       .select('l.moduleType', 'module')
-       .addSelect('SUM(l.amount)', 'total')
-       .groupBy('l.moduleType')
-       .getRawMany();
+      .where('l.accountTag = :tag', { tag: 'PLATFORM_REV' })
+      .select('l.moduleType', 'module')
+      .addSelect('SUM(CASE WHEN l.direction = \'CREDIT\' THEN l.amount ELSE -l.amount END)', 'total')
+      .groupBy('l.moduleType')
+      .getRawMany();
 
     const getV = (m: string) => {
-       const match = verticals.find(v => v.module === m || (m === 'food' && v.module === 'restaurant'));
-       return Number(match?.total || 0);
+      const match = verticals.find(v => v.module === m || (m === 'food' && v.module === 'restaurant'));
+      return Number(match?.total || 0);
     };
 
+    // 4. Cash Pipeline Audit (Collected vs Remitted)
+    const pipeline = await this.ledgerRepo.createQueryBuilder('p')
+       .where('p.accountTag = :tag', { tag: 'CASH_IN_HAND' })
+       .select('SUM(CASE WHEN p.direction = \'DEBIT\' THEN p.amount ELSE 0 END)', 'collected')
+       .addSelect('SUM(CASE WHEN p.direction = \'CREDIT\' THEN p.amount ELSE 0 END)', 'remitted')
+       .getRawOne();
+
     return {
-       netBalance: Number(stats.total_earnings || 0),
-       codOutstanding: Number(stats.total_cash || 0),
-       totalCommissions: Number(platform.total || 0),
-       totalEarnings: Number(stats.total_earnings || 0) + Number(stats.total_cash || 0),
-       rashanEarnings: getV('rashan'),
-       martEarnings: getV('mart'),
-       foodEarnings: getV('food'), // getV handles 'restaurant' mapping
-       pharmaEarnings: getV('pharma'),
-       activeWallets: Number(stats.total_wallets || 0),
+      netBalance: Number(stats.platform_liability || 0),
+      codOutstanding: Number(stats.cod_risk || 0),
+      totalCommissions: Number(platform.net_rev || 0),
+      totalEarnings: Number(stats.platform_liability || 0) + Number(stats.cod_risk || 0),
+      cashPipeline: {
+         collected: Number(pipeline.collected || 0),
+         remitted: Number(pipeline.remitted || 0),
+         gap: Number(pipeline.collected || 0) - Number(pipeline.remitted || 0)
+      },
+      rashanEarnings: getV('rashan'),
+      martEarnings: getV('mart'),
+      foodEarnings: getV('food'),
+      pharmaEarnings: getV('pharma'),
+      activeWallets: Number(stats.total_nodes || 0),
     };
+  }
+
+  /**
+   * COMPONENT B: Automated Refund Engine (Contra-Accounting / Reversal)
+   * Enforces Zero-Deletion Policy by programmatically inverting ledger state.
+   */
+  async processOrderRefund(orderId: string, manager: EntityManager) {
+    this.logger.log(`Finance Engine: Commencing Contra-Accounting reversal for Order #${orderId}`);
+
+    // Step 1: Fetch original Order Settlement entries
+    const originalTx = await manager.findOne(FinancialTransaction, {
+      where: { referenceId: orderId, referenceType: 'ORDER_SETTLEMENT' },
+      relations: ['entries'],
+    });
+
+    if (!originalTx) {
+      this.logger.warn(`Refund Aborted: No existing settlement found for order ${orderId}`);
+      return;
+    }
+
+    // Step 2: Generate exact INVERSE contra-entries
+    const contraEntries = originalTx.entries.map(entry => ({
+      walletId: entry.walletId,
+      accountTag: entry.accountTag as any,
+      // INVERSION LOGIC: CREDIT becomes DEBIT, DEBIT becomes CREDIT
+      direction: entry.direction === 'CREDIT' ? 'DEBIT' : 'CREDIT' as any,
+      amount: Number(entry.amount),
+      moduleType: entry.moduleType,
+      description: `Contra-Accounting: Reversal of ${entry.accountTag} for order #${orderId.split('-')[0].toUpperCase()}`,
+    }));
+
+    // Step 3: Atomic execution of the Reversal Transaction
+    return this.executeLedgerTransaction(
+      manager,
+      'ORDER_REFUND',
+      orderId,
+      `Full Financial Reversal (Refund Engine) for order #${orderId}`,
+      contraEntries
+    );
   }
 }

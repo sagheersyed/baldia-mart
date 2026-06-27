@@ -34,7 +34,7 @@ export default function MerchantDashboardScreen({ navigation }: any) {
           ? cmsApi.getPharmacyMedicines(tenantId)
           : cmsApi.getVendorProducts(tenantId),
         cmsApi.getDashboardStats(tenantId),
-        financeApi.getVendorSummary().catch(() => ({ data: null })),
+        financeApi.getVendorSummary(tenantId).catch(() => ({ data: null })),
       ]);
 
       setProducts(prodRes.data ?? []);

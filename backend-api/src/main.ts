@@ -12,6 +12,7 @@ import { getAllowedOrigins, isOriginAllowed } from './common/cors';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 
 async function bootstrap() {
+  process.env.TZ = 'Asia/Karachi';
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
   app.useLogger(app.get(Logger));
   

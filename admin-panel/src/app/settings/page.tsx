@@ -172,10 +172,10 @@ export default function SettingsPage() {
           <div className="card !p-0 overflow-hidden border border-slate-100 shadow-xl shadow-slate-200/20 !rounded-[2.5rem]">
             <div className="bg-slate-950 p-6 border-b border-slate-100 flex items-center gap-3">
               <Shield size={18} className="text-primary-400" />
-              <span className="font-black text-white uppercase tracking-widest text-[10px]">Risk Management (COD Thresholds)</span>
+              <span className="font-black text-white uppercase tracking-widest text-[10px]">Risk Management (COD & Suspension)</span>
             </div>
             <div className="p-8 space-y-8">
-              <div className="grid md:grid-cols-3 gap-8">
+              <div className="grid md:grid-cols-4 gap-6">
                 <SettingsInput 
                   label="Food COD Limit" 
                   icon="Rs" 
@@ -197,10 +197,32 @@ export default function SettingsPage() {
                   onSave={(v: any) => handleUpdate('cod_limit_mart', v)}
                   isSaving={saving === 'cod_limit_mart'}
                 />
+                <SettingsInput 
+                  label="Rider Cash Limit" 
+                  icon="Rs" 
+                  value={settings.rider_cod_threshold} 
+                  onSave={(v: any) => handleUpdate('rider_cod_threshold', v)}
+                  isSaving={saving === 'rider_cod_threshold'}
+                />
               </div>
               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest pl-2">
-                * Orders exceeding these amounts will require online payment method (MPaisa/Card).
+                * Orders exceeding COD limits require online payment. Riders exceeding Cash Limit are auto-suspended.
               </p>
+            </div>
+          </div>
+
+          <div className="card !p-0 overflow-hidden border border-slate-100 shadow-xl shadow-slate-200/20 !rounded-[2.5rem]">
+            <div className="bg-indigo-900/5 p-6 border-b border-slate-100 flex items-center gap-3">
+              <Scale size={18} className="text-indigo-600" />
+              <span className="font-black text-slate-700 uppercase tracking-widest text-[10px]">Monetization & Commission Matrix</span>
+            </div>
+            <div className="p-8 space-y-8">
+              <div className="grid md:grid-cols-4 gap-6">
+                <SettingsInput label="Food (%)" icon="%" value={settings.commission_rate_food} onSave={(v: any) => handleUpdate('commission_rate_food', v)} isSaving={saving === 'commission_rate_food'} />
+                <SettingsInput label="Mart (%)" icon="%" value={settings.commission_rate_mart} onSave={(v: any) => handleUpdate('commission_rate_mart', v)} isSaving={saving === 'commission_rate_mart'} />
+                <SettingsInput label="Pharma (%)" icon="%" value={settings.commission_rate_pharma} onSave={(v: any) => handleUpdate('commission_rate_pharma', v)} isSaving={saving === 'commission_rate_pharma'} />
+                <SettingsInput label="Rashan (%)" icon="%" value={settings.commission_rate_rashan} onSave={(v: any) => handleUpdate('commission_rate_rashan', v)} isSaving={saving === 'commission_rate_rashan'} />
+              </div>
             </div>
           </div>
         </section>

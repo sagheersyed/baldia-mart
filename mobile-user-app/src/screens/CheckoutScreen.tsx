@@ -8,7 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useCart } from '../context/CartContext';
-import { ordersApi, addressesApi, pharmaApi, prescriptionsApi } from '../api/api';
+import { ordersApi, addressesApi, pharmaApi, prescriptionsApi, financeApi } from '../api/api';
 import AddressPickerModal from '../components/AddressPickerModal';
 import {
   AppText, AppButton, AppIconButton, AppBadge,
@@ -50,6 +50,10 @@ export default function CheckoutScreen({ navigation, route }: any) {
   const [couponDiscount, setCouponDiscount] = useState(0);
   const [approvedPrescriptionId, setApprovedPrescriptionId] = useState<string | null>(null);
   const [loadingRx, setLoadingRx] = useState(false);
+
+  const [useWalletBalance, setUseWalletBalance] = useState(false);
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [isFetchingWallet, setIsFetchingWallet] = useState(false);
 
   const requiresRx = mode === 'pharma' && hasPharmaRxItems();
 
@@ -97,10 +101,23 @@ export default function CheckoutScreen({ navigation, route }: any) {
     }
   }, [requiresRx]);
 
+  const fetchWallet = useCallback(async () => {
+    setIsFetchingWallet(true);
+    try {
+      const res = await financeApi.getUserSummary();
+      setWalletBalance(Number(res.data.netBalance) || 0);
+    } catch {
+      // noop
+    } finally {
+      setIsFetchingWallet(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchAddresses();
     fetchPrescription();
-  }, [fetchAddresses, fetchPrescription]);
+    fetchWallet();
+  }, [fetchAddresses, fetchPrescription, fetchWallet]);
 
   const fetchDeliveryFee = useCallback(async (addressId: string, restaurantId?: string, orderType?: string) => {
     setIsLoadingFee(true);
@@ -186,7 +203,8 @@ export default function CheckoutScreen({ navigation, route }: any) {
     }
   };
 
-  const total = (subtotal - couponDiscount) + deliveryFee + multiStopSurcharge;
+  const appliedWalletAmount = useWalletBalance ? Math.min(walletBalance, (subtotal - couponDiscount) + deliveryFee + multiStopSurcharge) : 0;
+  const total = (subtotal - couponDiscount) + deliveryFee + multiStopSurcharge - appliedWalletAmount;
   const totalItems = cart.reduce((sum: number, item: any) => sum + item.quantity, 0);
 
   const handlePlaceOrder = () => {
@@ -256,6 +274,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
             quantity: item.quantity,
           })),
           notes: deliveryNotes,
+          walletAmount: appliedWalletAmount > 0 ? appliedWalletAmount : undefined,
         };
         const res = await pharmaApi.placeOrder(orderData);
         if (res.data && res.data.id) {
@@ -290,6 +309,7 @@ export default function CheckoutScreen({ navigation, route }: any) {
           [mode === 'food' ? 'menuItemId' : 'productId']: item.id,
           quantity: item.quantity,
         })),
+        walletAmount: appliedWalletAmount > 0 ? appliedWalletAmount : undefined,
       };
       const res = await ordersApi.checkout(orderData);
       if (res.data && res.data.id) {
@@ -419,6 +439,28 @@ export default function CheckoutScreen({ navigation, route }: any) {
                   </AppIconButton>
                 )}
               </View>
+            </>
+          )}
+
+          {/* Wallet Balance */}
+          {walletBalance > 0 && (
+            <>
+              <AppText variant="overline" style={styles.sectionLabel}>Wallet balance</AppText>
+              <Pressable 
+                style={[styles.walletCard, useWalletBalance ? { borderColor: accent, backgroundColor: accent + '10' } : null]}
+                onPress={() => setUseWalletBalance(!useWalletBalance)}
+              >
+                <View style={[styles.iconCircle, { backgroundColor: theme.colors.success + '18' }]}>
+                  <Ionicons name="wallet" size={20} color={theme.colors.success} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <AppText variant="bodyStrong">Use Wallet Credits</AppText>
+                  <AppText variant="caption">Available: Rs. {walletBalance.toLocaleString()}</AppText>
+                </View>
+                <View style={[styles.switch, useWalletBalance ? { backgroundColor: accent } : null]}>
+                  <View style={[styles.switchHandle, useWalletBalance ? { alignSelf: 'flex-end' } : null]} />
+                </View>
+              </Pressable>
             </>
           )}
 
@@ -560,6 +602,12 @@ export default function CheckoutScreen({ navigation, route }: any) {
                 </AppText>
               </View>
             ) : null}
+            {appliedWalletAmount > 0 && (
+              <View style={styles.sumRow}>
+                <AppText variant="body" color={theme.colors.success}>Wallet Adjustment</AppText>
+                <AppText variant="bodyStrong" color={theme.colors.success}>- Rs. {Math.round(appliedWalletAmount)}</AppText>
+              </View>
+            )}
             <View style={styles.summaryDivider} />
             <View style={styles.sumRow}>
               <AppText variant="title">Grand total</AppText>
@@ -910,5 +958,23 @@ const styles = StyleSheet.create({
   statusBoxWarning: {
     backgroundColor: theme.colors.warningLight,
     borderColor: theme.colors.warning,
+  },
+  walletCard: {
+    flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md,
+    backgroundColor: theme.colors.surface,
+    padding: theme.spacing.md,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1.5, borderColor: theme.colors.divider,
+    ...theme.shadows.sm,
+  },
+  switch: {
+    width: 44, height: 24, borderRadius: 12,
+    backgroundColor: theme.colors.surfaceMuted,
+    padding: 2, justifyContent: 'center',
+  },
+  switchHandle: {
+    width: 20, height: 20, borderRadius: 10,
+    backgroundColor: '#fff',
+    ...theme.shadows.sm,
   },
 });

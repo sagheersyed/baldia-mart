@@ -28,6 +28,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { SettingsModule } from '../settings/settings.module';
 import { OrdersModule } from '../orders/orders.module';
 import { DeliveryZonesModule } from '../delivery-zones/delivery-zones.module';
+import { FinanceModule } from '../finance/finance.module';
 
 // ── Shared Entities (for queries only) ──────────────────────────
 import { Category } from '../categories/category.entity';
@@ -87,6 +88,7 @@ import { ControlledSubstanceInterceptor } from './compliance/controlled-substanc
     NotificationsModule,
     SettingsModule,
     DeliveryZonesModule,
+    FinanceModule,
     TypeOrmModule.forFeature([
       // Pharma-specific
       Medicine,

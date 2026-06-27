@@ -9,6 +9,8 @@ import { Address } from '../../addresses/address.entity';
 import { Pharmacy } from '../pharmacies/pharmacy.entity';
 import { User } from '../../users/user.entity';
 import { SubOrder } from '../../orders/sub-order.entity';
+import { FinanceService } from '../../finance/finance.service';
+import { Wallet } from '../../wallets/wallet.entity';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { SettingsService } from '../../settings/settings.service';
 import { PharmaciesService } from '../pharmacies/pharmacies.service';
@@ -45,6 +47,8 @@ export class PharmaOrdersService {
     private readonly ordersService: OrdersService,
     @Inject(forwardRef(() => OrdersGateway))
     private readonly ordersGateway: OrdersGateway,
+    @Inject(forwardRef(() => FinanceService))
+    private readonly financeService: FinanceService,
   ) {}
 
   async placeOrder(userId: string, dto: {
@@ -61,6 +65,7 @@ export class PharmaOrdersService {
     prescriptionId?: string;
     paymentMethod: string;
     notes?: string;
+    walletAmount?: number;
   }) {
     if (!dto.items?.length) throw new BadRequestException('Cart is empty');
 
@@ -193,14 +198,30 @@ export class PharmaOrdersService {
     const totalDeliveryFee = maxDeliveryFee;
     const totalDistance = furthestDistance;
 
-    const total = subtotal + totalDeliveryFee;
+    // --- WALLET BALANCE APPLICATION ---
+    let walletDebit = 0;
+    const walletAmount = dto.walletAmount;
+    if (walletAmount && walletAmount > 0) {
+       const userWallet = await this.orderRepo.manager.findOne(Wallet, {
+         where: { userId, userType: 'User' }
+       });
+       
+       if (!userWallet || Number(userWallet.balance) < walletAmount) {
+         throw new BadRequestException('Insufficient wallet balance to cover the requested amount.');
+       }
+       
+       walletDebit = walletAmount;
+    }
+
+    const total = Math.max(0, subtotal + totalDeliveryFee - walletDebit);
 
     // Detect Priority and Cold Chain
     const isEmergency = medicines.some(m => m.isEmergency);
     const isColdChain = medicines.some(m => m.isColdChain);
 
-    // 5. Create Main Order
-    const order = this.orderRepo.create({
+    // 5. Create Main Order (Wrap in transaction)
+    return await this.orderRepo.manager.transaction(async (manager) => {
+    const order = manager.create(Order, {
       userId,
       addressId: dto.addressId,
       orderType: 'pharma',
@@ -212,13 +233,33 @@ export class PharmaOrdersService {
       subtotal,
       deliveryFee: totalDeliveryFee,
       deliveryDistanceKm: totalDistance,
+      walletAdjustment: walletDebit,
       total,
       notes: dto.notes,
       prescriptionId: dto.prescriptionId,
       pharmacyId: primaryPharma.id,
     });
 
-    const savedOrder = await this.orderRepo.save(order);
+    const savedOrder = await manager.save(order);
+
+    // --- TRIGGER WALLET DEBIT LEDGER ENTRY ---
+    if (walletDebit > 0) {
+      const uWallet = await manager.findOne(Wallet, { where: { userId, userType: 'User' } });
+      await this.financeService.executeLedgerTransaction(
+        manager,
+        'ORDER_PAYMENT',
+        savedOrder.id,
+        `Wallet balance applied to Pharma order #${savedOrder.id.split('-')[0].toUpperCase()}`,
+        [{
+          walletId: uWallet?.id,
+          accountTag: 'EARNINGS',
+          direction: 'DEBIT',
+          amount: walletDebit,
+          moduleType: 'pharma',
+          description: `Paid for order #${savedOrder.id.split('-')[0].toUpperCase()} via wallet`
+        }]
+      );
+    }
     
     // 5.5 Create Sub-Orders for each pharmacy and Reserve Inventory
     const subOrders: any[] = [];
@@ -234,14 +275,14 @@ export class PharmaOrdersService {
         return sum + price * item.quantity;
       }, 0);
 
-      const subOrder = this.subOrderRepo.create({
+      const subOrder = manager.create(SubOrder, {
         orderId: savedOrder.id,
         pharmacyId: pId,
         status: 'pending',
         subtotal: pSubtotal,
         pickupSequence: sequence++,
       });
-      const savedSub = await this.subOrderRepo.save(subOrder);
+      const savedSub = await manager.save(subOrder);
       subOrders.push(savedSub);
 
       // Link items and Reserve Stock
@@ -270,7 +311,7 @@ export class PharmaOrdersService {
         }
 
         // Create Order Item linked to this sub-order
-        const orderItem = this.orderItemRepo.create({
+        const orderItem = manager.create(OrderItem, {
           orderId: savedOrder.id,
           subOrderId: savedSub.id,
           medicineId: isManual ? undefined : item.medicineId, 
@@ -280,12 +321,12 @@ export class PharmaOrdersService {
           imageUrl: imageUrl,
           status: 'active'
         });
-        await this.orderItemRepo.save(orderItem);
+        await manager.save(orderItem);
       }
     }
 
     // 6. Notify
-    const user = await this.userRepo.findOne({ where: { id: userId }, select: ['fcmToken'] });
+    const user = await manager.findOne(User, { where: { id: userId }, select: ['fcmToken'] });
     if (user?.fcmToken) {
       await this.notificationsService.sendToUser(
         userId, 
@@ -305,6 +346,7 @@ export class PharmaOrdersService {
     }
 
     return savedOrder;
+    });
   }
 
   async getMyOrders(userId: string) {

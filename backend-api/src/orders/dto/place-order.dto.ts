@@ -43,4 +43,8 @@ export class PlaceOrderDto {
   @ValidateNested({ each: true })
   @Type(() => CheckoutItemDto)
   items?: CheckoutItemDto[];
+
+  @IsOptional()
+  @IsNumber()
+  walletAmount?: number;
 }

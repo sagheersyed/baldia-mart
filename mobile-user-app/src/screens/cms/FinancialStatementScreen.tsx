@@ -26,9 +26,10 @@ export default function FinancialStatementScreen({ navigation }: any) {
 
   const loadData = useCallback(async () => {
     try {
+      if (!activeTenant?.tenantId) return;
       const [sumRes, stmtRes] = await Promise.all([
-        financeApi.getVendorSummary(),
-        financeApi.getVendorStatement(),
+        financeApi.getVendorSummary(activeTenant.tenantId),
+        financeApi.getVendorStatement(activeTenant.tenantId),
       ]);
       setSummary(sumRes.data);
       setStatement(stmtRes.data);

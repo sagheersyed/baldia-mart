@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, NotFoundException, UnauthorizedException, ForbiddenException, Query, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, UnauthorizedException, ForbiddenException, Query, Inject, forwardRef, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, Between } from 'typeorm';
 import { InjectQueue } from '@nestjs/bullmq';
@@ -25,9 +25,12 @@ import { UsersService } from '../users/users.service';
 import { PharmaciesService } from '../pharma/pharmacies/pharmacies.service';
 import { CouponsService } from '../coupons/coupons.service';
 import { CacheService } from '../cache/cache.service';
+import { FinanceService } from '../finance/finance.service';
+import { Wallet } from '../wallets/wallet.entity';
 
 @Injectable()
 export class OrdersService {
+  private readonly logger = new Logger(OrdersService.name);
   constructor(
     @InjectRepository(Order) private ordersRepository: Repository<Order>,
     @InjectRepository(OrderItem) private orderItemsRepository: Repository<OrderItem>,
@@ -52,6 +55,8 @@ export class OrdersService {
     private pharmaciesService: PharmaciesService,
     private couponsService: CouponsService,
     private cacheService: CacheService,
+    @Inject(forwardRef(() => FinanceService))
+    private financeService: FinanceService,
   ) { }
 
   private isBusinessOpen(openingTime: string | null, closingTime: string | null): boolean {
@@ -80,7 +85,8 @@ export class OrdersService {
     items?: any[], 
     orderType: string = 'mart', 
     restaurantId?: string,
-    promoCode?: string
+    promoCode?: string,
+    walletAmount?: number
   ): Promise<Order> {
     console.log('--- PlaceOrder Debug ---');
     console.log('UserId:', userId);
@@ -391,20 +397,37 @@ export class OrdersService {
       if (brandItem) orderBrandId = brandItem.product.brandId;
     }
 
-    const finalTotal = Math.max(0, subtotal - discountAmount + finalDeliveryFee);
+    const finalTotalInitial = Math.max(0, subtotal - discountAmount + finalDeliveryFee);
 
     // --- COD Limit Enforcement ---
     if (paymentMethod.toLowerCase() === 'cod') {
       const limitKey = orderType === 'pharma' ? 'cod_limit_pharma' : (orderType === 'food' ? 'cod_limit_food' : 'cod_limit_mart');
       const codLimit = await this.settingsService.getNumber(limitKey, orderType === 'mart' ? 5000 : 2000);
       
-      if (finalTotal > codLimit) {
+      if (finalTotalInitial > codLimit) {
         throw new BadRequestException(
           `Cash on Delivery (COD) is only available for orders up to Rs. ${codLimit.toLocaleString()}. ` +
-          `Your total is Rs. ${finalTotal.toLocaleString()}. Please use an online payment method or reduce items.`
+          `Your total is Rs. ${finalTotalInitial.toLocaleString()}. Please use an online payment method or reduce items.`
         );
       }
     }
+
+    // --- WALLET BALANCE APPLICATION ---
+    let walletDebit = 0;
+    if (walletAmount && walletAmount > 0) {
+       const userWallet = await transactionalManager.findOne(Wallet, {
+         where: { userId, userType: 'User' },
+         lock: { mode: 'pessimistic_write' }
+       });
+       
+       if (!userWallet || Number(userWallet.balance) < walletAmount) {
+         throw new BadRequestException('Insufficient wallet balance to cover the requested amount.');
+       }
+       
+       walletDebit = walletAmount;
+    }
+
+    const finalTotal = Math.max(0, subtotal - discountAmount + finalDeliveryFee - walletDebit);
 
     const order = new Order();
     Object.assign(order, {
@@ -416,6 +439,7 @@ export class OrdersService {
       subtotal,
       deliveryFee: finalDeliveryFee,
       discountAmount,
+      walletAdjustment: walletDebit,
       couponCode: appliedCouponCode,
       total: finalTotal,
       paymentMethod,
@@ -424,6 +448,25 @@ export class OrdersService {
       orderType,
     });
     const savedOrder = await transactionalManager.getRepository(Order).save(order);
+
+    // --- TRIGGER WALLET DEBIT LEDGER ENTRY ---
+    if (walletDebit > 0) {
+      const uWallet = await transactionalManager.findOne(Wallet, { where: { userId, userType: 'User' } });
+      await this.financeService.executeLedgerTransaction(
+        transactionalManager,
+        'ORDER_PAYMENT',
+        savedOrder.id,
+        `Wallet balance applied to order #${savedOrder.id.split('-')[0].toUpperCase()}`,
+        [{
+          walletId: uWallet?.id,
+          accountTag: 'EARNINGS',
+          direction: 'DEBIT',
+          amount: walletDebit,
+          moduleType: orderType,
+          description: `Paid for order #${savedOrder.id.split('-')[0].toUpperCase()} via wallet`
+        }]
+      );
+    }
 
     // --- INCREMENT COUPON USAGE ---
     if (appliedCouponCode) {
@@ -979,6 +1022,32 @@ export class OrdersService {
           }
         }
       }
+    }
+
+    // If order is cancelled, trigger contra-accounting (Refund wallet adjustment)
+    if (status === 'cancelled' && oldStatus !== 'cancelled') {
+        if (Number(order.walletAdjustment) > 0) {
+          await this.ordersRepository.manager.transaction(async (manager) => {
+             const uWallet = await manager.findOne(Wallet, { where: { userId: order.userId, userType: 'User' } });
+             if (uWallet) {
+               await this.financeService.executeLedgerTransaction(
+                 manager,
+                 'ORDER_REFUND',
+                 order.id,
+                 `Refund for cancelled order #${order.id.split('-')[0].toUpperCase()}`,
+                 [{
+                   walletId: uWallet.id,
+                   accountTag: 'EARNINGS',
+                   direction: 'CREDIT',
+                   amount: Number(order.walletAdjustment),
+                   moduleType: order.orderType,
+                   description: `Wallet refund for order #${order.id.split('-')[0].toUpperCase()}`
+                 }]
+               );
+               this.logger.log(`✅ Refund processed for order #${order.id.split('-')[0].toUpperCase()}: Rs. ${order.walletAdjustment}`);
+             }
+          });
+        }
     }
 
     // Emit real-time update — notify both user AND rider

@@ -465,6 +465,7 @@ export const pharmaApi = {
     prescriptionId?: string;
     paymentMethod: string;
     notes?: string;
+    walletAmount?: number;
   }) => api.post('/pharma/orders', data),
   getMyOrders: () => api.get('/pharma/orders/my'),
   getOrderDetails: (id: string) => api.get(`/pharma/orders/${id}`),
@@ -660,8 +661,10 @@ export const cmsApi = {
 export const financeApi = {
   getUserSummary: () => api.get('/finance/user/summary'),
   getUserStatement: () => api.get('/finance/user/statement'),
-  getVendorSummary: () => api.get('/finance/vendor/summary'),
-  getVendorStatement: () => api.get('/finance/vendor/statement'),
+  getVendorSummary: (tenantId: string) => 
+    api.get('/finance/vendor/summary', tenantHeaders(tenantId)),
+  getVendorStatement: (tenantId: string) => 
+    api.get('/finance/vendor/statement', tenantHeaders(tenantId)),
   getRiderSummary: () => api.get('/finance/rider/summary'),
   getRiderStatement: () => api.get('/finance/rider/statement'),
   getPlatformSummary: () => api.get('/finance/admin/platform-summary'),

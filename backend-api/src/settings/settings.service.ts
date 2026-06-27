@@ -89,6 +89,7 @@ export class SettingsService implements OnModuleInit {
     await this.seedDefault('cod_limit_pharma', '2000');
     await this.seedDefault('cod_limit_food', '2000');
     await this.seedDefault('cod_limit_mart', '5000');
+    await this.seedDefault('platform_service_fee', '15');
   }
 
   private async seedDefault(key: string, value: string) {
@@ -161,6 +162,17 @@ export class SettingsService implements OnModuleInit {
       settingsRecord[s.key] = s.value;
     }
     return settingsRecord;
+  }
+
+  async get(key: string, defaultValue: any): Promise<any> {
+    const val = await this.getByKey(key);
+    if (!val) return defaultValue;
+    
+    // Auto-typing for convenience
+    if (val.toLowerCase() === 'true') return true;
+    if (val.toLowerCase() === 'false') return false;
+    if (!isNaN(Number(val))) return Number(val);
+    return val;
   }
 
   async getByKey(key: string, defaultValue?: string): Promise<string | null> {

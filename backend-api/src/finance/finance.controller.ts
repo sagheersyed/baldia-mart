@@ -1,6 +1,6 @@
 import {
   Controller, Get, Post, Body, Query, UseGuards, Param,
-  Req, Inject, forwardRef,
+  Req, Inject, forwardRef, BadRequestException,
 } from '@nestjs/common';
 import { FinanceService } from './finance.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -13,6 +13,8 @@ import { SettingsService } from '../settings/settings.service';
 import { Order } from '../orders/order.entity';
 import { WalletsService } from '../wallets/wallets.service';
 import { AdminRoleGuard } from '../auth/admin-role.guard';
+import { TenantGuard } from '../cms/guards/tenant.guard';
+import { TenantRoles } from '../cms/decorators/tenant-roles.decorator';
 
 @Controller('finance')
 @UseGuards(JwtAuthGuard)
@@ -109,37 +111,53 @@ export class FinanceController {
   // ── Vendor & Rider Endpoints ──────────────────────────────────
 
   @Get('vendor/summary')
+  @UseGuards(JwtAuthGuard, TenantGuard)
+  @TenantRoles('owner', 'manager')
   async getVendorSummary(@Req() req: any) {
-    const wallet = await this.walletRepo.findOne({ where: { userId: req.user.id, userType: 'Vendor' } });
-    if (!wallet) return null;
-    return {
-      balance: wallet.balance,
-      updatedAt: wallet.updatedAt
-    };
+    const vendorId = req.tenantUser.tenant?.entityId;
+    if (!vendorId) throw new BadRequestException('No vendor linked to this tenant context.');
+
+    const wallet = await this.walletRepo.findOne({ where: { userId: vendorId, userType: 'Vendor' } });
+    if (!wallet) return { netBalance: 0, totalEarnings: 0, totalCommissions: 0 };
+
+    return this.financeService.getPortfolioSummary(wallet.id);
+  }
+
+  @Get('vendor/statement')
+  @UseGuards(JwtAuthGuard, TenantGuard)
+  @TenantRoles('owner', 'manager')
+  async getVendorStatement(@Req() req: any) {
+    const vendorId = req.tenantUser.tenant?.entityId;
+    if (!vendorId) throw new BadRequestException('No vendor linked to this tenant context.');
+
+    const wallet = await this.walletRepo.findOne({ where: { userId: vendorId, userType: 'Vendor' } });
+    if (!wallet) return [];
+
+    return this.financeService.getWalletStatement(wallet.id);
   }
 
   @Get('rider/summary')
   async getRiderSummary(@Req() req: any) {
     const wallet = await this.walletRepo.findOne({ where: { userId: req.user.id, userType: 'Rider' } });
-    if (!wallet) return null;
+    if (!wallet) return { netBalance: 0, codOutstanding: 0, totalEarnings: 0, limit: 5000 };
 
+    const summary = await this.financeService.getPortfolioSummary(wallet.id);
     const threshold = await this.settingsService.getNumber('rider_cod_threshold', 5000);
 
     return {
-      netBalance: Number(wallet.balance),
+      ...summary,
       codOutstanding: Number(wallet.cashInHand),
-      isSuspended: wallet.isSuspended,
       limit: threshold,
-      totalEarnings: Number(wallet.balance) + Number(wallet.cashInHand)
     };
   }
 
   @Get('user/summary')
   async getUserSummary(@Req() req: any) {
     const wallet = await this.walletRepo.findOne({ where: { userId: req.user.id, userType: 'User' } });
-    if (!wallet) return { balance: 0 };
+    if (!wallet) return { balance: 0, netBalance: 0 };
     return {
       balance: Number(wallet.balance),
+      netBalance: Number(wallet.balance),
       updatedAt: wallet.updatedAt
     };
   }
