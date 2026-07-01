@@ -117,12 +117,12 @@ export default function FinanceDashboard() {
           trend="+12.4%"
         />
         <MetricCard 
-          title="Resto/Mart GMV" 
-          value={summary ? summary.totalEarnings - summary.rashanEarnings : 0} 
-          icon={<ShoppingBag className="text-blue-600" size={20} />}
+          title="Platform Liability" 
+          value={summary?.netBalance} 
+          icon={<Wallet className="text-blue-600" size={20} />}
           color="blue"
-          label="Standard Retail Volume"
-          trend="+8.1%"
+          label="Owed to vendors & riders"
+          trend="Tracked"
         />
         <MetricCard 
           title="Bulk Rashan Hub" 
@@ -140,6 +140,23 @@ export default function FinanceDashboard() {
           label="Cash currently in hand"
           trend="Critical"
         />
+      </div>
+
+      {/* Cash Pipeline Audit (SRS 3.C.2) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        {[
+          { label: 'COD Collected', value: summary?.cashPipeline?.collected || 0, icon: <ArrowDownCircle size={18} />, color: 'bg-blue-50 text-blue-600' },
+          { label: 'COD Remitted', value: summary?.cashPipeline?.remitted || 0, icon: <ArrowUpCircle size={18} />, color: 'bg-emerald-50 text-emerald-600' },
+          { label: 'Pipeline Gap', value: summary?.cashPipeline?.gap || 0, icon: <ShieldCheck size={18} />, color: (summary?.cashPipeline?.gap || 0) > 1000 ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600' },
+        ].map((item, idx) => (
+          <div key={idx} className="p-8 rounded-[2rem] bg-white border border-slate-100 shadow-lg shadow-slate-200/20 flex items-center gap-6 hover:shadow-2xl transition-all">
+            <div className={`p-4 rounded-2xl ${item.color}`}>{item.icon}</div>
+            <div>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{item.label}</p>
+              <p className="text-2xl font-black text-slate-900 tracking-tighter mt-1">Rs. {Number(item.value).toLocaleString()}</p>
+            </div>
+          </div>
+        ))}
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-10">
@@ -222,31 +239,32 @@ export default function FinanceDashboard() {
              </div>
           </div>
 
-          {/* Vertical Distribution Breakdown */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-             {[
-               { name: 'Mart', value: summary?.martEarnings || 0, icon: <ShoppingBag size={18} />, color: 'primary' },
-               { name: 'Food', value: summary?.foodEarnings || 0, icon: <Users size={18} />, color: 'orange' },
-               { name: 'Pharma', value: summary?.pharmaEarnings || 0, icon: <Pill size={18} />, color: 'teal' }
-             ].map((v, i) => (
-                <div key={v.name} className="card !p-8 bg-white border border-slate-100 hover:border-primary-100 transition-all group overflow-hidden">
-                   <div className="flex items-center justify-between mb-4 relative z-10">
-                      <div className={`p-2.5 rounded-xl ${i === 0 ? 'bg-primary-50 text-primary-600' : i === 1 ? 'bg-orange-50 text-orange-600' : 'bg-teal-50 text-teal-600'}`}>
-                         {v.icon}
-                      </div>
-                      <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest underline decoration-2 underline-offset-4">Vertical {i+1}</span>
-                   </div>
-                   <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest relative z-10">{v.name} Revenue</h4>
-                   <div className="mt-4 flex items-end gap-2 relative z-10">
-                      <p className="text-2xl font-black text-slate-900 tracking-tighter">Rs. {Number(v.value).toLocaleString()}</p>
-                      <span className="text-[10px] font-bold text-emerald-500 pb-1">Verified Audit</span>
-                   </div>
-                   <div className="mt-4 h-1.5 bg-slate-100 rounded-full overflow-hidden relative z-10">
-                      <div className={`h-full ${i === 0 ? 'bg-primary-500' : i === 1 ? 'bg-orange-500' : 'bg-teal-500'} rounded-full`} style={{ width: `${Math.min(100, (v.value / (summary?.totalEarnings || 1)) * 100)}%` }} />
-                   </div>
-                </div>
-             ))}
-          </div>
+          {/* Vertical Distribution Breakdown (SRS 3.C.2) */}
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {[
+                { name: 'Mart', value: summary?.martEarnings || 0, icon: <ShoppingBag size={18} />, bgColor: 'bg-primary-50 text-primary-600', barColor: 'bg-primary-500' },
+                { name: 'Food', value: summary?.foodEarnings || 0, icon: <Users size={18} />, bgColor: 'bg-orange-50 text-orange-600', barColor: 'bg-orange-500' },
+                { name: 'Pharma', value: summary?.pharmaEarnings || 0, icon: <Pill size={18} />, bgColor: 'bg-teal-50 text-teal-600', barColor: 'bg-teal-500' },
+                { name: 'Rashan', value: summary?.rashanEarnings || 0, icon: <Boxes size={18} />, bgColor: 'bg-amber-50 text-amber-600', barColor: 'bg-amber-500' },
+              ].map((v, i) => (
+                 <div key={v.name} className="card !p-8 bg-white border border-slate-100 hover:border-primary-100 transition-all group overflow-hidden">
+                    <div className="flex items-center justify-between mb-4 relative z-10">
+                       <div className={`p-2.5 rounded-xl ${v.bgColor}`}>
+                          {v.icon}
+                       </div>
+                       <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest underline decoration-2 underline-offset-4">Vertical {i+1}</span>
+                    </div>
+                    <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest relative z-10">{v.name} Revenue</h4>
+                    <div className="mt-4 flex items-end gap-2 relative z-10">
+                       <p className="text-2xl font-black text-slate-900 tracking-tighter">Rs. {Number(v.value).toLocaleString()}</p>
+                       <span className="text-[10px] font-bold text-emerald-500 pb-1">Verified Audit</span>
+                    </div>
+                    <div className="mt-4 h-1.5 bg-slate-100 rounded-full overflow-hidden relative z-10">
+                       <div className={`h-full ${v.barColor} rounded-full`} style={{ width: `${Math.min(100, (v.value / (summary?.totalEarnings || 1)) * 100)}%` }} />
+                    </div>
+                 </div>
+              ))}
+           </div>
         </div>
 
         {/* Tactical Intel & Payouts */}

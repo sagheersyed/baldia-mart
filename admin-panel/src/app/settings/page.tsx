@@ -218,11 +218,30 @@ export default function SettingsPage() {
             </div>
             <div className="p-8 space-y-8">
               <div className="grid md:grid-cols-4 gap-6">
+                <SettingsInput label="Platform Fee (₨)" icon="Rs" value={settings.platform_service_fee} onSave={(v: any) => handleUpdate('platform_service_fee', v)} isSaving={saving === 'platform_service_fee'} />
+                <div className="md:col-span-3" />
+              </div>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest pl-2">
+                Commission Rates by Vertical (%)
+              </p>
+              <div className="grid md:grid-cols-4 gap-6">
                 <SettingsInput label="Food (%)" icon="%" value={settings.commission_rate_food} onSave={(v: any) => handleUpdate('commission_rate_food', v)} isSaving={saving === 'commission_rate_food'} />
                 <SettingsInput label="Mart (%)" icon="%" value={settings.commission_rate_mart} onSave={(v: any) => handleUpdate('commission_rate_mart', v)} isSaving={saving === 'commission_rate_mart'} />
                 <SettingsInput label="Pharma (%)" icon="%" value={settings.commission_rate_pharma} onSave={(v: any) => handleUpdate('commission_rate_pharma', v)} isSaving={saving === 'commission_rate_pharma'} />
                 <SettingsInput label="Rashan (%)" icon="%" value={settings.commission_rate_rashan} onSave={(v: any) => handleUpdate('commission_rate_rashan', v)} isSaving={saving === 'commission_rate_rashan'} />
               </div>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest pl-2">
+                Commission Bounds — Min / Max per Vertical (₨)
+              </p>
+              <div className="grid md:grid-cols-4 gap-6">
+                <SettingsInput label="Min Food" icon="Rs" value={settings.min_commission_food} onSave={(v: any) => handleUpdate('min_commission_food', v)} isSaving={saving === 'min_commission_food'} />
+                <SettingsInput label="Max Food" icon="Rs" value={settings.max_commission_food} onSave={(v: any) => handleUpdate('max_commission_food', v)} isSaving={saving === 'max_commission_food'} />
+                <SettingsInput label="Min Mart" icon="Rs" value={settings.min_commission_mart} onSave={(v: any) => handleUpdate('min_commission_mart', v)} isSaving={saving === 'min_commission_mart'} />
+                <SettingsInput label="Max Mart" icon="Rs" value={settings.max_commission_mart} onSave={(v: any) => handleUpdate('max_commission_mart', v)} isSaving={saving === 'max_commission_mart'} />
+              </div>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest pl-2">
+                * Set min/max to 0 to disable bounds. Changes take effect on the next order settlement instantly.
+              </p>
             </div>
           </div>
         </section>

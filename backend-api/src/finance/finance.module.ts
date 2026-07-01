@@ -10,6 +10,12 @@ import { Wallet } from '../wallets/wallet.entity';
 
 import { FinanceController } from './finance.controller';
 import { FinanceTasks } from './finance.tasks';
+import {
+  PremiumFinancialLedgerEntry,
+  PremiumCommissionConfig,
+  FinanceManagementService,
+  FinancePremiumController,
+} from './finance-engine-premium';
 
 import { SettingsModule } from '../settings/settings.module';
 import { WalletsModule } from '../wallets/wallets.module';
@@ -25,13 +31,15 @@ import { forwardRef } from '@nestjs/common';
       SettlementPeriod,
       DailyFinancialSnapshot,
       Wallet,
+      PremiumFinancialLedgerEntry,
+      PremiumCommissionConfig,
     ]),
     SettingsModule,
     forwardRef(() => WalletsModule),
     forwardRef(() => CmsModule),
   ],
-  controllers: [FinanceController],
-  providers: [FinanceService, FinanceTasks],
-  exports: [FinanceService],
+  controllers: [FinanceController, FinancePremiumController],
+  providers: [FinanceService, FinanceTasks, FinanceManagementService],
+  exports: [FinanceService, FinanceManagementService],
 })
 export class FinanceModule {}

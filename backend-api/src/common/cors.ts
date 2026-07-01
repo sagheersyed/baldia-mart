@@ -1,8 +1,8 @@
 const DEFAULT_ORIGINS = [
   'http://localhost:3000',
   'http://localhost:3001',
-  'http://192.168.100.142:3000',
-  'http://192.168.100.142:3001',
+  'https://5faf-125-209-125-98.ngrok-free.app',
+  'http://192.168.0.240:3001',
 ];
 
 function normalizeOrigin(value: string): string {

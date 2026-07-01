@@ -12,6 +12,14 @@ import { financeApi } from '../api/api';
 import { AppText, AppIconButton } from '../components/ui';
 import { theme } from '../theme/theme';
 
+const formatPKR = (val: any): string => {
+  const num = Number(val);
+  if (isNaN(num) || val === null || val === undefined) {
+    return '0.00';
+  }
+  return num.toLocaleString('en-PK', { minimumFractionDigits: 1, maximumFractionDigits: 2 });
+};
+
 export default function RiderStatementScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -83,10 +91,10 @@ export default function RiderStatementScreen({ navigation }: any) {
             variant="bodyStrong" 
             color={isCredit ? '#16A34A' : '#EF4444'}
           >
-            {isCredit ? '+' : '-'} Rs. {amount.toLocaleString()}
+            {isCredit ? '+' : '-'} Rs. {formatPKR(amount)}
           </AppText>
           <AppText variant="caption" color={theme.colors.textMuted}>
-            Bal: Rs. {Number(item.runningBalance).toLocaleString()}
+            Bal: Rs. {formatPKR(item.runningBalance)}
           </AppText>
         </View>
       </View>
@@ -120,18 +128,18 @@ export default function RiderStatementScreen({ navigation }: any) {
             >
               <AppText variant="caption" color="rgba(255,255,255,0.7)">Available for Withdrawal</AppText>
               <AppText variant="h1" color="#fff" style={styles.balanceText}>
-                Rs. {summary?.netBalance?.toLocaleString() ?? '0'}
+                Rs. {formatPKR(summary?.netBalance)}
               </AppText>
               
               <View style={styles.balanceStats}>
                 <View style={styles.bStat}>
                   <AppText variant="caption" color="rgba(255,255,255,0.7)">Total Earned</AppText>
-                  <AppText variant="bodyStrong" color="#fff">Rs. {summary?.totalEarnings?.toLocaleString() ?? '0'}</AppText>
+                  <AppText variant="bodyStrong" color="#fff">Rs. {formatPKR(summary?.totalEarnings)}</AppText>
                 </View>
                 <View style={styles.bDivider} />
                 <View style={styles.bStat}>
                   <AppText variant="caption" color="rgba(255,255,255,0.7)">COD Outstanding</AppText>
-                  <AppText variant="bodyStrong" color="#fff">Rs. {summary?.codOutstanding?.toLocaleString() ?? '0'}</AppText>
+                  <AppText variant="bodyStrong" color="#fff">Rs. {formatPKR(summary?.codOutstanding)}</AppText>
                 </View>
               </View>
             </LinearGradient>

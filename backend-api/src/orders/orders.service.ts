@@ -1024,17 +1024,18 @@ export class OrdersService {
       }
     }
 
-    // If order is cancelled, trigger contra-accounting (Refund wallet adjustment)
+    // If order is cancelled, trigger contra-accounting (Full Financial Reversal)
     if (status === 'cancelled' && oldStatus !== 'cancelled') {
-        if (Number(order.walletAdjustment) > 0) {
-          await this.ordersRepository.manager.transaction(async (manager) => {
+        await this.ordersRepository.manager.transaction(async (manager) => {
+          // 1. Refund user wallet credits (if wallet was used at checkout)
+          if (Number(order.walletAdjustment) > 0) {
              const uWallet = await manager.findOne(Wallet, { where: { userId: order.userId, userType: 'User' } });
              if (uWallet) {
                await this.financeService.executeLedgerTransaction(
                  manager,
                  'ORDER_REFUND',
                  order.id,
-                 `Refund for cancelled order #${order.id.split('-')[0].toUpperCase()}`,
+                 `Wallet credit refund for cancelled order #${order.id.split('-')[0].toUpperCase()}`,
                  [{
                    walletId: uWallet.id,
                    accountTag: 'EARNINGS',
@@ -1044,10 +1045,18 @@ export class OrdersService {
                    description: `Wallet refund for order #${order.id.split('-')[0].toUpperCase()}`
                  }]
                );
-               this.logger.log(`✅ Refund processed for order #${order.id.split('-')[0].toUpperCase()}: Rs. ${order.walletAdjustment}`);
+               this.logger.log(`✅ Wallet refund processed for order #${order.id.split('-')[0].toUpperCase()}: Rs. ${order.walletAdjustment}`);
              }
-          });
-        }
+          }
+
+          // 2. Full Contra-Accounting: Reverse ALL settlement ledger lines
+          //    (vendor earnings, rider COD debt, platform revenue)
+          //    Only applies if the order was already settled (delivered then cancelled)
+          if (oldStatus === 'delivered') {
+            await this.financeService.processOrderRefund(order.id, manager);
+            this.logger.log(`✅ Full contra-accounting reversal for delivered order #${order.id.split('-')[0].toUpperCase()}`);
+          }
+        });
     }
 
     // Emit real-time update — notify both user AND rider

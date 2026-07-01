@@ -1,5 +1,5 @@
 config:
-  target: " http://192.168.100.142:3000/api/v1"
+  target: " https://5faf-125-209-125-98.ngrok-free.app/api/v1"
   phases:
     - duration: 60
       arrivalRate: 5

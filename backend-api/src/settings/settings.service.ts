@@ -90,6 +90,20 @@ export class SettingsService implements OnModuleInit {
     await this.seedDefault('cod_limit_food', '2000');
     await this.seedDefault('cod_limit_mart', '5000');
     await this.seedDefault('platform_service_fee', '15');
+
+    // Commission Rate Defaults (SRS v3 — Vertical Defaults)
+    await this.seedDefault('commission_rate_food', '15');
+    await this.seedDefault('commission_rate_mart', '10');
+    await this.seedDefault('commission_rate_pharma', '5');
+    await this.seedDefault('commission_rate_rashan', '7.5');
+    await this.seedDefault('min_commission_food', '0');
+    await this.seedDefault('min_commission_mart', '0');
+    await this.seedDefault('min_commission_pharma', '0');
+    await this.seedDefault('min_commission_rashan', '0');
+    await this.seedDefault('max_commission_food', '0');
+    await this.seedDefault('max_commission_mart', '0');
+    await this.seedDefault('max_commission_pharma', '0');
+    await this.seedDefault('max_commission_rashan', '0');
   }
 
   private async seedDefault(key: string, value: string) {

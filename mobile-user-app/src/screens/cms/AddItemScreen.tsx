@@ -139,7 +139,7 @@ export default function AddItemScreen({ navigation }: any) {
     return (
       <View style={styles.card}>
         <Image
-          source={item.imageUrl ? { uri: item.imageUrl } : require('../../../assets/placeholder.png')}
+          source={item.imageUrl ? { uri: item.imageUrl } : require('../../../assets/placeholder.jpg')}
           style={styles.image}
           resizeMode="contain"
         />
@@ -258,7 +258,7 @@ export default function AddItemScreen({ navigation }: any) {
             {selectedItem && (
               <View style={styles.modalInfo}>
                 <Image
-                  source={selectedItem.imageUrl ? { uri: selectedItem.imageUrl } : require('../../../assets/placeholder.png')}
+                  source={selectedItem.imageUrl ? { uri: selectedItem.imageUrl } : require('../../../assets/placeholder.jpg')}
                   style={styles.modalImage}
                   resizeMode="contain"
                 />

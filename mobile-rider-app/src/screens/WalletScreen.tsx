@@ -11,6 +11,14 @@ import { financeApi, ridersApi } from '../api/api';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
+const formatPKR = (val: any): string => {
+  const num = Number(val);
+  if (isNaN(num) || val === null || val === undefined) {
+    return '0.00';
+  }
+  return num.toLocaleString('en-PK', { minimumFractionDigits: 1, maximumFractionDigits: 2 });
+};
+
 export default function WalletScreen({ navigation }: any) {
   const [summary, setSummary] = useState<any>(null);
   const [statement, setStatement] = useState<any[]>([]);
@@ -76,9 +84,9 @@ export default function WalletScreen({ navigation }: any) {
         </View>
         <View style={{ alignItems: 'flex-end' }}>
           <Text style={[styles.txnAmount, { color: isCredit ? SUCCESS : '#EF4444' }]}>
-            {isCredit ? '+' : '-'} Rs {amount.toLocaleString()}
+            {isCredit ? '+' : '-'} Rs. {formatPKR(amount)}
           </Text>
-          <Text style={styles.txnBal}>Bal: Rs {Number(item.runningBalance).toLocaleString()}</Text>
+          <Text style={styles.txnBal}>Bal: Rs. {formatPKR(item.runningBalance)}</Text>
         </View>
       </View>
     );
@@ -119,18 +127,18 @@ export default function WalletScreen({ navigation }: any) {
                 start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
               >
                 <Text style={styles.heroLabel}>Available for Withdrawal</Text>
-                <Text style={styles.heroVal}>Rs {currentBal.toLocaleString()}</Text>
+                <Text style={styles.heroVal}>Rs. {formatPKR(currentBal)}</Text>
                 
                 <View style={styles.heroDivider} />
                 
                 <View style={styles.heroStats}>
                   <View style={styles.hStatCol}>
                     <Text style={styles.hStatLabel}>Lifetime Total</Text>
-                    <Text style={styles.hStatVal}>Rs {Number(summary?.totalEarnings || 0).toLocaleString()}</Text>
+                    <Text style={styles.hStatVal}>Rs. {formatPKR(summary?.totalEarnings)}</Text>
                   </View>
                   <View style={styles.hStatCol}>
                     <Text style={styles.hStatLabel}>Today's Earnings</Text>
-                    <Text style={styles.hStatVal}>Rs {Number(stats?.todayEarnings || 0).toLocaleString()}</Text>
+                    <Text style={styles.hStatVal}>Rs. {formatPKR(stats?.todayEarnings)}</Text>
                   </View>
                 </View>
               </LinearGradient>
@@ -139,21 +147,21 @@ export default function WalletScreen({ navigation }: any) {
               <View style={styles.healthRow}>
                  <View style={[styles.healthCard, { borderColor: codOwed > (summary?.limit || 5000) * 0.8 ? '#EF4444' : '#E2E8F0' }]}>
                     <Text style={styles.healthLabel}>Cash Limit</Text>
-                    <Text style={styles.healthVal}>Rs {Number(summary?.limit || 5000).toLocaleString()}</Text>
+                    <Text style={styles.healthVal}>Rs. {formatPKR(summary?.limit || 5000)}</Text>
                     <View style={styles.healthProgress}>
                        <View style={[styles.healthBar, { 
-                          width: `${Math.min(100, (codOwed / (summary?.limit || 5000)) * 100)}%`,
-                          backgroundColor: codOwed > (summary?.limit || 5000) * 0.8 ? '#EF4444' : SUCCESS
+                           width: `${Math.min(100, (codOwed / (summary?.limit || 5000)) * 100)}%`,
+                           backgroundColor: codOwed > (summary?.limit || 5000) * 0.8 ? '#EF4444' : SUCCESS
                        }]} />
                     </View>
                     <Text style={styles.healthSub}>
-                       {codOwed > 0 ? `Rs ${(summary?.limit - codOwed).toLocaleString()} remaining` : 'Limit is fully available'}
+                       {codOwed > 0 ? `Rs. ${formatPKR((summary?.limit || 5000) - codOwed)} remaining` : 'Limit is fully available'}
                     </Text>
                  </View>
 
                  <View style={styles.healthCard}>
                     <Text style={styles.healthLabel}>Held Cash (COD)</Text>
-                    <Text style={[styles.healthVal, { color: codOwed > 0 ? '#EF4444' : '#1E1E1E' }]}>Rs {codOwed.toLocaleString()}</Text>
+                    <Text style={[styles.healthVal, { color: codOwed > 0 ? '#EF4444' : '#1E1E1E' }]}>Rs. {formatPKR(codOwed)}</Text>
                     <TouchableOpacity style={styles.infoBtn} onPress={() => {}}>
                        <Ionicons name="information-circle-outline" size={14} color="#64748B" />
                        <Text style={styles.infoText}>How to remit?</Text>
@@ -168,7 +176,7 @@ export default function WalletScreen({ navigation }: any) {
                   <View style={{ flex: 1, marginLeft: 12 }}>
                     <Text style={[styles.warningTitle, { color: '#fff' }]}>ACCOUNT SUSPENDED</Text>
                     <Text style={[styles.warningText, { color: 'rgba(255,255,255,0.8)' }]}>
-                      Your cash limit has been exceeded. Please remit Rs {codOwed.toLocaleString()} to reactivate your account.
+                      Your cash limit has been exceeded. Please remit Rs. {formatPKR(codOwed)} to reactivate your account.
                     </Text>
                   </View>
                 </View>

@@ -370,14 +370,24 @@ export class FinanceService {
     const ledgerStats = await this.ledgerRepo.createQueryBuilder('entry')
       .where('entry.createdAt BETWEEN :start AND :end', { start: dayStart, end: dayEnd })
       .select([
-        'SUM(CASE WHEN entry.accountTag = \'PLATFORM_REV\' THEN entry.amount ELSE 0 END) as commissions',
+        'SUM(CASE WHEN entry.accountTag = \'PLATFORM_REV\' AND entry.direction = \'CREDIT\' THEN entry.amount ELSE 0 END) as commissions',
         'SUM(CASE WHEN entry.accountTag = \'EARNINGS\' AND entry.direction = \'CREDIT\' THEN entry.amount ELSE 0 END) as payouts',
         'SUM(CASE WHEN entry.accountTag = \'CASH_IN_HAND\' AND entry.direction = \'DEBIT\' THEN entry.amount ELSE 0 END) as cod_collected',
-        'SUM(CASE WHEN entry.moduleType = \'mart\' AND entry.accountTag = \'PLATFORM_REV\' THEN entry.amount ELSE 0 END) as mart_rev',
-        'SUM(CASE WHEN (entry.moduleType = \'food\' OR entry.moduleType = \'restaurant\') AND entry.accountTag = \'PLATFORM_REV\' THEN entry.amount ELSE 0 END) as food_rev',
-        'SUM(CASE WHEN entry.moduleType = \'pharma\' AND entry.accountTag = \'PLATFORM_REV\' THEN entry.amount ELSE 0 END) as pharma_rev',
-        'SUM(CASE WHEN entry.moduleType = \'rashan\' AND entry.accountTag = \'PLATFORM_REV\' THEN entry.amount ELSE 0 END) as rashan_rev',
+        'SUM(CASE WHEN entry.accountTag = \'CASH_IN_HAND\' AND entry.direction = \'CREDIT\' THEN entry.amount ELSE 0 END) as cod_remitted',
+        'SUM(CASE WHEN entry.moduleType = \'mart\' AND entry.accountTag = \'PLATFORM_REV\' AND entry.direction = \'CREDIT\' THEN entry.amount ELSE 0 END) as mart_rev',
+        'SUM(CASE WHEN (entry.moduleType = \'food\' OR entry.moduleType = \'restaurant\') AND entry.accountTag = \'PLATFORM_REV\' AND entry.direction = \'CREDIT\' THEN entry.amount ELSE 0 END) as food_rev',
+        'SUM(CASE WHEN entry.moduleType = \'pharma\' AND entry.accountTag = \'PLATFORM_REV\' AND entry.direction = \'CREDIT\' THEN entry.amount ELSE 0 END) as pharma_rev',
+        'SUM(CASE WHEN entry.moduleType = \'rashan\' AND entry.accountTag = \'PLATFORM_REV\' AND entry.direction = \'CREDIT\' THEN entry.amount ELSE 0 END) as rashan_rev',
+        'SUM(CASE WHEN entry.accountTag = \'VOUCHER_EXP\' THEN entry.amount ELSE 0 END) as voucher_expense',
       ])
+      .getRawOne();
+
+    // Refund totals from ORDER_REFUND transactions
+    const refundStats = await this.txRepo.createQueryBuilder('tx')
+      .where('tx.referenceType = :type', { type: 'ORDER_REFUND' })
+      .andWhere('tx.createdAt BETWEEN :start AND :end', { start: dayStart, end: dayEnd })
+      .leftJoin('tx.entries', 'entry')
+      .select('SUM(CASE WHEN entry.accountTag = \'PLATFORM_REV\' AND entry.direction = \'DEBIT\' THEN entry.amount ELSE 0 END)', 'total_refunds')
       .getRawOne();
 
     const orderStats = await this.txRepo.manager.getRepository(Order).createQueryBuilder('o')
@@ -389,6 +399,7 @@ export class FinanceService {
         'SUM(o.total) as gross',
         'SUM(o.deliveryFee) as delivery',
         'SUM(o.discountAmount) as discounts',
+        'SUM(CASE WHEN o.status = \'delivered\' AND o.paymentMethod != \'cod\' AND o.paymentMethod != \'cash_on_delivery\' THEN o.total ELSE 0 END) as online_payments',
       ])
       .getRawOne();
 
@@ -403,8 +414,11 @@ export class FinanceService {
       totalPayouts: Number(ledgerStats.payouts || 0),
       totalDeliveryFees: Number(orderStats.delivery || 0),
       totalDiscounts: Number(orderStats.discounts || 0),
+      totalRefunds: Number(refundStats?.total_refunds || 0),
       codCollected: Number(ledgerStats.cod_collected || 0),
-      netRevenue: Number(ledgerStats.commissions || 0), // Profit = platform commissions
+      codRemitted: Number(ledgerStats.cod_remitted || 0),
+      onlinePayments: Number(orderStats.online_payments || 0),
+      netRevenue: Number(ledgerStats.commissions || 0),
       martRevenue: Number(ledgerStats.mart_rev || 0),
       foodRevenue: Number(ledgerStats.food_rev || 0),
       pharmaRevenue: Number(ledgerStats.pharma_rev || 0),

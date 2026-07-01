@@ -63,7 +63,7 @@ const BrandStrip = memo(function BrandStrip({
             <Image
               source={{ uri }}
               style={styles.img}
-              contentFit="contain"
+              contentFit="cover"
               cachePolicy="memory-disk"
               transition={150}
               onError={() => setImageErrors(prev => ({ ...prev, [item.id]: true }))}
