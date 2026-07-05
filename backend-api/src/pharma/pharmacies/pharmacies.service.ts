@@ -215,34 +215,53 @@ export class PharmaciesService {
     lat?: number,
     lng?: number,
   ): Promise<Pharmacy | null> {
-    const qb = this.inventoryRepo
-      .createQueryBuilder('inv')
-      .innerJoinAndSelect('inv.pharmacy', 'p')
-      .where('inv.medicine_id = :medicineId', { medicineId })
-      .andWhere('inv.is_available = true')
-      .andWhere('inv.is_quarantined = false')
-      .andWhere('(inv.stock_quantity - inv.reserved_quantity) >= :qty', { qty: quantity })
-      .andWhere('p.is_active = true AND p.is_verified = true AND p.is_open = true');
+    const buildQuery = (useZoneFilter: boolean) => {
+      const qb = this.inventoryRepo
+        .createQueryBuilder('inv')
+        .innerJoinAndSelect('inv.pharmacy', 'p')
+        .where('inv.medicine_id = :medicineId', { medicineId })
+        .andWhere('inv.is_available = true')
+        .andWhere('inv.is_quarantined = false')
+        .andWhere('(inv.stock_quantity - inv.reserved_quantity) >= :qty', { qty: quantity })
+        .andWhere('p.is_active = true AND p.is_verified = true AND p.is_open = true');
 
-    // Filter by Zone if provided (Strict Enforcement for fulfillment)
+      // Strict zone match (primary attempt)
+      if (useZoneFilter && zoneId) {
+        qb.andWhere('p.zone_id = :zoneId', { zoneId });
+      }
+
+      // Cold-chain compliance
+      if (requiresColdChain) {
+        qb.andWhere('p.has_cold_chain_support = true');
+      }
+
+      // Sort by proximity if coordinates provided
+      if (lat && lng) {
+        qb.addOrderBy(
+          `(6371 * acos(cos(radians(${lat})) * cos(radians(p.latitude)) * cos(radians(p.longitude) - radians(${lng})) + sin(radians(${lat})) * sin(radians(p.latitude))))`,
+          'ASC',
+        );
+      }
+
+      return qb;
+    };
+
+    // Primary: try exact zone match
+    const strictResult = await buildQuery(true).getOne();
+    if (strictResult?.pharmacy) return strictResult.pharmacy;
+
+    // Fallback: if two overlapping zones cover the same area (e.g. Saeedabad + Baldia Town),
+    // a pharmacy may be registered under the inactive zone while the customer's address
+    // resolves to the currently active zone. In that case, fall back to searching all active/verified/open pharmacies.
     if (zoneId) {
-      qb.andWhere('p.zone_id = :zoneId', { zoneId });
-    }
-
-    // Ensure cold-chain compliance if the medicine requires it
-    if (requiresColdChain) {
-      qb.andWhere('p.has_cold_chain_support = true');
-    }
-
-    if (lat && lng) {
-      qb.addOrderBy(
-        `(6371 * acos(cos(radians(${lat})) * cos(radians(p.latitude)) * cos(radians(p.longitude) - radians(${lng})) + sin(radians(${lat})) * sin(radians(p.latitude))))`,
-        'ASC',
+      this.logger.warn(
+        `No pharmacy found for zone=${zoneId}. Falling back to general search (overlapping zones scenario).`
       );
+      const fallbackResult = await buildQuery(false).getOne();
+      return fallbackResult?.pharmacy || null;
     }
 
-    const result = await qb.getOne();
-    return result?.pharmacy || null;
+    return null;
   }
 
   // ── Onboarding ────────────────────────────────────────────────

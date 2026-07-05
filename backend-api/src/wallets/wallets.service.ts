@@ -7,7 +7,9 @@ import { WithdrawalRequest } from './withdrawal-request.entity';
 import { WalletSettlement } from './wallet-settlement.entity';
 import { Order } from '../orders/order.entity';
 import { Rider } from '../riders/rider.entity';
+import { User } from '../users/user.entity';
 import { FinanceService } from '../finance/finance.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { Inject, forwardRef } from '@nestjs/common';
 
 @Injectable()
@@ -21,6 +23,7 @@ export class WalletsService {
     private withdrawalRepository: Repository<WithdrawalRequest>,
     @Inject(forwardRef(() => FinanceService))
     private financeService: FinanceService,
+    private notificationsService: NotificationsService,
   ) {}
 
   async getWallet(userId: string, userType: 'Rider' | 'Vendor' | 'User'): Promise<Wallet> {
@@ -143,6 +146,24 @@ export class WalletsService {
       { vendorType: 'Vendor' }
     );
 
+    // Join with Restaurant table for dining details
+    query.leftJoinAndMapOne(
+      'wallet.restaurant',
+      'restaurants',
+      'restaurant',
+      'restaurant.id = wallet.userId AND wallet.userType = :restaurantUserType',
+      { restaurantUserType: 'Vendor' }
+    );
+
+    // Join with Pharmacy table for drug seller details
+    query.leftJoinAndMapOne(
+      'wallet.pharmacy',
+      'pharmacies',
+      'pharmacy',
+      'pharmacy.id = wallet.userId AND wallet.userType = :pharmacyUserType',
+      { pharmacyUserType: 'Vendor' }
+    );
+
     query.orderBy('wallet.updatedAt', 'DESC');
     return query.getMany();
   }
@@ -242,7 +263,7 @@ export class WalletsService {
         type = 'DEBIT';
       }
 
-      return this.adjustBalance(
+      const updatedWallet = await this.adjustBalance(
         manager, 
         wallet.userId, 
         wallet.userType as 'Rider'|'Vendor'|'User', 
@@ -252,6 +273,35 @@ export class WalletsService {
         undefined,
         auditData
       );
+
+      // Send push notification to user / rider / merchant
+      try {
+        if (wallet.userType === 'Rider') {
+          const rider = await manager.getRepository(Rider).findOne({ where: { id: wallet.userId } }) as any;
+          if (rider && rider.fcmToken) {
+            await this.notificationsService.sendToRider(
+              wallet.userId,
+              rider.fcmToken,
+              'Wallet Adjusted 💼',
+              `Your platform balance has been manually adjusted: Rs. ${amount} (${type.toLowerCase()}ed). Ref: ${auditData.referenceId}`
+            );
+          }
+        } else {
+          const user = await manager.getRepository(User).findOne({ where: { id: wallet.userId } }) as any;
+          if (user && user.fcmToken) {
+            await this.notificationsService.sendToUser(
+              wallet.userId,
+              user.fcmToken,
+              'Wallet Adjusted 💼',
+              `Your platform balance has been manually adjusted: Rs. ${amount} (${type.toLowerCase()}ed). Ref: ${auditData.referenceId}`
+            );
+          }
+        }
+      } catch (err: any) {
+        console.error(`Failed to send manual settle notification: ${err.message}`);
+      }
+
+      return updatedWallet;
     });
   }
 }

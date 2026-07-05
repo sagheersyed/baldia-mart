@@ -102,7 +102,7 @@ export class AnalyticsService {
       const cursor = new Date(periodStart);
       while (cursor <= periodEnd) {
         const d = new Date(cursor);
-        
+
         const formattedLabel = d.toLocaleDateString('en-US', { month: 'short' }) + ' ' + d.getDate().toString().padStart(2, '0');
         const existing = chartStats.find(s => s.date === formattedLabel);
 
@@ -160,12 +160,28 @@ export class AnalyticsService {
           .andWhere('o.createdAt <= :end', { end: periodEnd })
           .getRawOne(),
 
-        // 2. Top Medicines
-        this.orderRepository.manager.getRepository('Medicine').find({
-          order: { soldCount: 'DESC' },
-          take: 10,
-          where: { isActive: true },
-        }),
+        // 2. Top Medicines (dynamically aggregated from delivered order items)
+        this.orderRepository.createQueryBuilder('o')
+          .innerJoin('o.items', 'i')
+          .innerJoin('i.medicine', 'm')
+          .select('m.id', 'id')
+          .addSelect('m.name', 'name')
+          .addSelect('m.genericName', 'genericName')
+          .addSelect('m.imageUrl', 'imageUrl')
+          .addSelect('m.mrp', 'price')
+          .addSelect('SUM(i.quantity)', 'soldCount')
+          .where('o.orderType = :type', { type: 'pharma' })
+          .andWhere('o.status = :status', { status: 'delivered' })
+          .andWhere('o.createdAt >= :start', { start: periodStart })
+          .andWhere('o.createdAt <= :end', { end: periodEnd })
+          .groupBy('m.id')
+          .addGroupBy('m.name')
+          .addGroupBy('m.genericName')
+          .addGroupBy('m.imageUrl')
+          .addGroupBy('m.mrp')
+          .orderBy('SUM(i.quantity)', 'DESC')
+          .limit(10)
+          .getRawMany(),
 
         // 3. Prescription Conversion
         this.orderRepository.manager.getRepository('Prescription').createQueryBuilder('rx')
@@ -220,7 +236,7 @@ export class AnalyticsService {
           .addSelect('COUNT(*)', 'count')
           .groupBy('q.status')
           .getRawMany();
-        
+
         const qAccepted = Number(qStats.find((s: any) => s.status === 'accepted')?.count || 0);
         const qRejected = Number(qStats.find((s: any) => s.status === 'rejected')?.count || 0);
         const qExpired = Number(qStats.find((s: any) => s.status === 'expired')?.count || 0);
@@ -251,7 +267,14 @@ export class AnalyticsService {
 
       return {
         revenue: Number(totalPharmaRevenue?.total) || 0,
-        topMedicines,
+        topMedicines: topMedicines.map((m: any) => ({
+          id: m.id,
+          name: m.name,
+          genericName: m.genericName,
+          imageUrl: m.imageUrl,
+          price: Number(m.price) || 0,
+          soldCount: Number(m.soldCount) || 0,
+        })),
         prescriptions: {
           total: totalRx,
           approved: rxApproved,

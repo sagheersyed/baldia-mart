@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BASE_URL, fetchWithAuth, getErrorMessage, parseApiError } from '@/lib/api';
 import { format } from 'date-fns';
 import { showToast } from '@/hooks/useToast';
 import {
   Wallet, ArrowUpRight, ArrowDownLeft, CheckCircle2, XCircle,
-  Clock, Search, RefreshCw, Banknote, History, AlertCircle, CreditCard, X,
+  Clock, Search, RefreshCw, Banknote, History, AlertCircle, CreditCard, X, ArrowUpCircle,
 } from 'lucide-react';
 import { LoadingState, ErrorState } from '@/components/PageState';
 
@@ -34,6 +34,12 @@ export default function WalletsPage() {
   const [submitting,         setSubmitting]         = useState(false);
   const [requestToApprove,   setRequestToApprove]   = useState<any>(null);
   const [approvalReferenceId,setApprovalReferenceId]= useState('');
+  const [reconType,          setReconType]          = useState<'balance' | 'cash'>('balance');
+  const [withdrawTarget,     setWithdrawTarget]     = useState<any>(null);
+  const [withdrawAmount,     setWithdrawAmount]     = useState('');
+  const [withdrawBank,       setWithdrawBank]       = useState('');
+  const [withdrawAccNo,      setWithdrawAccNo]      = useState('');
+  const [withdrawAccName,    setWithdrawAccName]    = useState('');
 
   const loadData = async () => {
     setLoading(true); setError(null);
@@ -62,18 +68,31 @@ export default function WalletsPage() {
     if (!selectedWallet || !settlementAmount || !referenceId) return;
     setSubmitting(true);
     try {
-      const res = await fetchWithAuth(`${BASE_URL}/wallets/settle-manual`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          walletId: selectedWallet.id, 
-          amount: parseFloat(settlementAmount), 
-          description: settlementDesc || 'Platform reconciliation', 
-          referenceId 
-        }),
-      });
+      let res;
+      if (reconType === 'cash') {
+        res = await fetchWithAuth(`${BASE_URL}/finance/admin/reconcile-cash`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            riderId: selectedWallet.userId, 
+            amount: parseFloat(settlementAmount), 
+            referenceId 
+          }),
+        });
+      } else {
+        res = await fetchWithAuth(`${BASE_URL}/wallets/settle-manual`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            walletId: selectedWallet.id, 
+            amount: parseFloat(settlementAmount), 
+            description: settlementDesc || 'Platform reconciliation', 
+            referenceId 
+          }),
+        });
+      }
       if (res.ok) {
-        setSelectedWallet(null); setSettlementAmount(''); setSettlementDesc(''); setReferenceId('');
+        setSelectedWallet(null); setSettlementAmount(''); setSettlementDesc(''); setReferenceId(''); setReconType('balance');
         showToast({ title: 'Capital reconciled successfully', variant: 'success' }); loadData();
       } else {
         showToast({ title: await parseApiError(res, 'Reconciliation failed'), variant: 'error' });
@@ -119,13 +138,40 @@ export default function WalletsPage() {
     } finally { setSubmitting(false); }
   };
 
+  const handleWithdrawRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!withdrawTarget || !withdrawAmount) return;
+    setSubmitting(true);
+    try {
+      const res = await fetchWithAuth(`${BASE_URL}/wallets/admin/withdraw-request`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: withdrawTarget.userId,
+          userType: withdrawTarget.userType,
+          amount: parseFloat(withdrawAmount),
+          bankName: withdrawBank,
+          accountNumber: withdrawAccNo,
+          accountName: withdrawAccName,
+        }),
+      });
+      if (res.ok) {
+        setWithdrawTarget(null); setWithdrawAmount(''); setWithdrawBank(''); setWithdrawAccNo(''); setWithdrawAccName('');
+        showToast({ title: 'Withdrawal request created — pending approval', variant: 'success' }); loadData();
+      } else {
+        showToast({ title: await parseApiError(res, 'Failed to create request'), variant: 'error' });
+      }
+    } catch (err) {
+      showToast({ title: getErrorMessage(err, 'Request failed'), variant: 'error' });
+    } finally { setSubmitting(false); }
+  };
+
   const platformLiability     = walletsData.reduce((a, w) => a + (Number(w.balance) > 0 ? Number(w.balance) : 0), 0);
   const outstandingCredit     = walletsData.reduce((a, w) => a + (Number(w.balance) < 0 ? Math.abs(Number(w.balance)) : 0), 0);
   const pendingCashoutAmount  = requestsData.reduce((a, r) => a + Number(r.amount), 0);
 
   const filteredWallets = walletsData.filter(w => {
     const s = searchTerm.toLowerCase();
-    const name = (w.rider?.name || w.user?.name || '').toLowerCase();
+    const name = (w.rider?.name || w.vendor?.name || w.restaurant?.name || w.pharmacy?.name || w.user?.name || '').toLowerCase();
     return name.includes(s) || (w.userId || '').toLowerCase().includes(s);
   });
 
@@ -220,48 +266,76 @@ export default function WalletsPage() {
                   <th className="px-10 py-6">ENTITY PROFILE</th>
                   <th className="px-10 py-6">ACCOUNT TYPE</th>
                   <th className="px-10 py-6">NET BALANCE</th>
+                  <th className="px-10 py-6">CASH IN HAND</th>
+                  <th className="px-10 py-6">STATUS</th>
                   <th className="px-10 py-6">SYNC DATE</th>
                   <th className="px-10 py-6 text-right">ACTION</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {filteredWallets.map(w => (
-                  <tr key={w.id} className="hover:bg-slate-50/80 transition-colors group">
-                    <td className="px-10 py-6">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-2xl bg-slate-900 flex items-center justify-center text-white font-black text-sm italic shadow-lg shadow-slate-900/10">
-                          {(w.rider?.name?.[0] || w.user?.name?.[0] || 'X').toUpperCase()}
-                        </div>
-                        <div>
-                          <p className="text-sm font-black text-slate-900 tracking-tighter uppercase italic">{w.rider?.name || w.vendor?.name || w.user?.name || 'Unknown Entity'}</p>
-                          <p className="text-[10px] text-slate-400 font-bold tracking-widest uppercase mt-0.5">UID: {w.userId?.slice(-8).toUpperCase()}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-10 py-6">
-                      <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black tracking-[0.2em] uppercase border ${w.userType === 'Rider' ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-purple-50 text-purple-600 border-purple-100'}`}>
-                        {w.userType}
-                      </span>
-                    </td>
+                {filteredWallets.map(w => {
+                  const entityName = w.rider?.name || w.vendor?.name || w.restaurant?.name || w.pharmacy?.name || w.user?.name || 'Unknown Entity';
+                  const moduleLabel = w.userType === 'Rider' ? 'Rider' : w.restaurant?.id ? 'Restaurant' : w.pharmacy?.id ? 'Pharmacy' : w.vendor?.id ? 'Mart Vendor' : w.userType;
+                  const badgeStyle = w.userType === 'Rider' ? 'bg-blue-50 text-blue-600 border-blue-100' : w.restaurant?.id ? 'bg-rose-50 text-rose-600 border-rose-100' : w.pharmacy?.id ? 'bg-teal-50 text-teal-600 border-teal-100' : 'bg-purple-50 text-purple-600 border-purple-100';
+                  return (
+                   <tr key={w.id} className="hover:bg-slate-50/80 transition-colors group">
+                     <td className="px-10 py-6">
+                       <div className="flex items-center gap-4">
+                         <div className="w-12 h-12 rounded-2xl bg-slate-900 flex items-center justify-center text-white font-black text-sm italic shadow-lg shadow-slate-900/10">
+                           {(entityName[0] || 'X').toUpperCase()}
+                         </div>
+                         <div>
+                           <p className="text-sm font-black text-slate-900 tracking-tighter uppercase italic">{entityName}</p>
+                           <p className="text-[10px] text-slate-400 font-bold tracking-widest uppercase mt-0.5">UID: {w.userId?.slice(-8).toUpperCase()}</p>
+                         </div>
+                       </div>
+                     </td>
+                     <td className="px-10 py-6">
+                       <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black tracking-[0.2em] uppercase border ${badgeStyle}`}>
+                         {moduleLabel}
+                       </span>
+                     </td>
                     <td className="px-10 py-6">
                       <p className={`text-xl font-black italic tracking-tighter ${Number(w.balance) < 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
                         RS. {Number(w.balance).toLocaleString()}
                       </p>
                       <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1 italic">{Number(w.balance) < 0 ? 'PLATFORM CREDIT' : 'CLEARANCE READY'}</p>
                     </td>
+                    <td className="px-10 py-6">
+                      {w.userType === 'Rider' ? (
+                        <>
+                          <p className={`text-lg font-black italic tracking-tighter ${Number(w.cashInHand) > 0 ? 'text-amber-600' : 'text-slate-300'}`}>
+                            RS. {Number(w.cashInHand || 0).toLocaleString()}
+                          </p>
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1 italic">COD LIABILITY</p>
+                        </>
+                      ) : (
+                        <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">N/A</span>
+                      )}
+                    </td>
+                    <td className="px-10 py-6">
+                      {w.isSuspended ? (
+                        <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-xl text-[9px] font-black tracking-[0.2em] uppercase bg-rose-50 text-rose-600 border border-rose-100">
+                          <AlertCircle size={12} /> SUSPENDED
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-xl text-[9px] font-black tracking-[0.2em] uppercase bg-emerald-50 text-emerald-600 border border-emerald-100">
+                          <CheckCircle2 size={12} /> ACTIVE
+                        </span>
+                      )}
+                    </td>
                     <td className="px-10 py-6 text-[11px] font-black text-slate-400 uppercase tracking-widest">
                        {safeFormat(w.updatedAt, 'MMM dd, yyyy')}
                     </td>
-                    <td className="px-10 py-6 text-right">
-                       <button
-                         onClick={() => setSelectedWallet(w)}
-                         className="w-12 h-12 bg-white border border-slate-100 rounded-2xl flex items-center justify-center text-slate-400 hover:text-emerald-600 hover:shadow-xl transition-all active:scale-90"
-                       >
-                         <Banknote size={18} />
-                       </button>
-                    </td>
-                  </tr>
-                ))}
+                     <td className="px-10 py-6 text-right">
+                        <div className="flex justify-end gap-3">
+                          <button onClick={() => setSelectedWallet(w)} title="Manual Settlement" className="w-12 h-12 bg-white border border-slate-100 rounded-2xl flex items-center justify-center text-slate-400 hover:text-emerald-600 hover:shadow-xl transition-all active:scale-90"><Banknote size={18} /></button>
+                          {w.userType === 'Vendor' && Number(w.balance) > 0 && (<button onClick={() => { setWithdrawTarget(w); setWithdrawAmount(''); setWithdrawBank(''); setWithdrawAccNo(''); setWithdrawAccName(''); }} title="Create Withdrawal Request" className="w-12 h-12 bg-white border border-slate-100 rounded-2xl flex items-center justify-center text-slate-400 hover:text-blue-600 hover:shadow-xl transition-all active:scale-90"><ArrowUpCircle size={18} /></button>)}
+                        </div>
+                     </td>
+                   </tr>
+                  );
+                })}
               </tbody>
             </table>
           ) : (
@@ -337,7 +411,7 @@ export default function WalletsPage() {
                           <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Entity reconciliation · Global Ledger</p>
                        </div>
                     </div>
-                    <button onClick={() => setSelectedWallet(null)} className="p-4 bg-slate-50 text-slate-300 hover:text-slate-900 rounded-full transition-all active:rotate-90">
+                    <button onClick={() => { setSelectedWallet(null); setReconType('balance'); }} className="p-4 bg-slate-50 text-slate-300 hover:text-slate-900 rounded-full transition-all active:rotate-90">
                        <X size={24} />
                     </button>
                  </div>
@@ -348,10 +422,47 @@ export default function WalletsPage() {
                        <p className="text-xl font-black italic uppercase tracking-tight">{selectedWallet.rider?.name || selectedWallet.vendor?.name || selectedWallet.user?.name || 'Merchant'}</p>
                     </div>
                     <div className="text-right">
-                       <p className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em] mb-3">Live Balance</p>
-                       <p className={`text-2xl font-black tracking-tighter ${Number(selectedWallet.balance) < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>RS. {Number(selectedWallet.balance).toLocaleString()}</p>
+                       {selectedWallet.userType === 'Rider' ? (
+                         <div className="flex gap-6 justify-end">
+                           <div>
+                              <p className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em] mb-2 text-right">Net Balance</p>
+                              <p className={`text-xl font-black tracking-tighter ${Number(selectedWallet.balance) < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>RS. {Number(selectedWallet.balance).toLocaleString()}</p>
+                           </div>
+                           <div className="border-l border-white/10 pl-6">
+                              <p className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em] mb-2 text-right">Held COD Cash</p>
+                              <p className="text-xl font-black tracking-tighter text-amber-500 font-mono">RS. {Number(selectedWallet.cashInHand || 0).toLocaleString()}</p>
+                           </div>
+                         </div>
+                       ) : (
+                         <>
+                            <p className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em] mb-3">Live Balance</p>
+                            <p className={`text-2xl font-black tracking-tighter ${Number(selectedWallet.balance) < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>RS. {Number(selectedWallet.balance).toLocaleString()}</p>
+                         </>
+                       )}
                     </div>
                  </div>
+
+                 {selectedWallet.userType === 'Rider' && (
+                   <div className="space-y-3">
+                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Reconciliation Action</label>
+                     <div className="grid grid-cols-2 gap-4 bg-slate-100 p-1.5 rounded-2xl">
+                        <button
+                          type="button"
+                          onClick={() => setReconType('balance')}
+                          className={`py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${reconType === 'balance' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-400 hover:text-slate-900'}`}
+                        >
+                          Adjust Net Balance
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setReconType('cash')}
+                          className={`py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${reconType === 'cash' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-400 hover:text-slate-900'}`}
+                        >
+                          Clear Held Cash (COD)
+                        </button>
+                     </div>
+                   </div>
+                 )}
 
                  <form onSubmit={handleManualSettle} className="space-y-8">
                     <div className="grid grid-cols-2 gap-8">
@@ -425,6 +536,65 @@ export default function WalletsPage() {
                       {submitting ? <RefreshCw className="animate-spin mx-auto" size={24} /> : 'Execute Disbursement'}
                     </button>
                  </div>
+              </div>
+           </div>
+        </div>
+      )}
+
+      {/* Withdrawal Request Modal for Vendor Wallets */}
+      {withdrawTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 backdrop-blur-2xl bg-slate-950/40 animate-in fade-in duration-300">
+           <div className="bg-white/95 w-full max-w-xl rounded-[4rem] shadow-2xl overflow-hidden border border-white/50 animate-in zoom-in-95 duration-500">
+              <div className="p-12 space-y-10">
+                 <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                       <div className="w-14 h-14 bg-blue-600 rounded-[2rem] flex items-center justify-center text-white shadow-2xl shadow-blue-600/20">
+                          <ArrowUpCircle size={24} />
+                       </div>
+                       <div>
+                          <h2 className="text-2xl font-black text-slate-900 tracking-tighter uppercase italic">Create Withdrawal</h2>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Submit payout request to queue</p>
+                       </div>
+                    </div>
+                    <button onClick={() => setWithdrawTarget(null)} className="p-4 bg-slate-50 text-slate-300 hover:text-slate-900 rounded-full transition-all active:rotate-90">
+                       <X size={24} />
+                    </button>
+                 </div>
+
+                 <div className="bg-slate-950 p-8 rounded-[3rem] text-white flex justify-between items-center">
+                    <div>
+                       <p className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em] mb-2">Entity</p>
+                       <p className="text-lg font-black italic uppercase tracking-tight">{withdrawTarget.rider?.name || withdrawTarget.vendor?.name || withdrawTarget.restaurant?.name || withdrawTarget.pharmacy?.name || 'Unknown'}</p>
+                    </div>
+                    <div className="text-right">
+                       <p className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em] mb-2">Available</p>
+                       <p className="text-2xl font-black tracking-tighter text-emerald-400">RS. {Number(withdrawTarget.balance).toLocaleString()}</p>
+                    </div>
+                 </div>
+
+                 <form onSubmit={handleWithdrawRequest} className="space-y-6">
+                    <div className="grid grid-cols-2 gap-6">
+                       <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Amount (RS.)</label>
+                          <input type="number" required max={withdrawTarget.balance} value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)} className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black italic focus:ring-4 focus:ring-blue-500/10 outline-none" placeholder="0.00" />
+                       </div>
+                       <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Bank Name</label>
+                          <input type="text" value={withdrawBank} onChange={e => setWithdrawBank(e.target.value)} className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black focus:ring-4 focus:ring-blue-500/10 outline-none" placeholder="HBL / Meezan / JazzCash" />
+                       </div>
+                       <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Account Number</label>
+                          <input type="text" value={withdrawAccNo} onChange={e => setWithdrawAccNo(e.target.value)} className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black focus:ring-4 focus:ring-blue-500/10 outline-none" placeholder="XXXX-XXXXXXX-XXXX" />
+                       </div>
+                       <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Account Name</label>
+                          <input type="text" value={withdrawAccName} onChange={e => setWithdrawAccName(e.target.value)} className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black focus:ring-4 focus:ring-blue-500/10 outline-none" placeholder="Full legal name" />
+                       </div>
+                    </div>
+                    <button type="submit" disabled={submitting} className="w-full h-18 py-5 bg-blue-600 text-white rounded-[2.5rem] font-black tracking-[0.4em] uppercase text-[11px] hover:bg-blue-700 transition-all shadow-2xl shadow-blue-600/30 active:scale-95 disabled:opacity-50">
+                       {submitting ? <RefreshCw className="animate-spin mx-auto" size={24} /> : 'Queue Withdrawal Request'}
+                    </button>
+                 </form>
               </div>
            </div>
         </div>

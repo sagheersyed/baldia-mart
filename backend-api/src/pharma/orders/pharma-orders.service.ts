@@ -100,7 +100,7 @@ export class PharmaOrdersService {
       Number(address.longitude)
     );
     if (!zoneRes.isValid || !zoneRes.zone) {
-      throw new BadRequestException('Baldia Pharma services are not currently available in your delivery area.');
+      throw new BadRequestException('Delivery not available. Location not in any active delivery zone.');
     }
     const zoneId = zoneRes.zone.id;
 
@@ -146,9 +146,22 @@ export class PharmaOrdersService {
 
     // If there are only manual items, we need a fallback pharmacy in that zone
     if (pharmaMap.size === 0 && manualItems.length > 0) {
-      const defaultPharma = await this.pharmacyRepo.findOne({
+      // First try exact zone match
+      let defaultPharma = await this.pharmacyRepo.findOne({
         where: { zoneId, isActive: true, isVerified: true, isOpen: true }
       });
+
+      // Fallback: overlapping zones scenario — use proximity instead
+      if (!defaultPharma && address.latitude && address.longitude) {
+        this.logger.warn(`No pharmacy in zone ${zoneId} for manual items. Falling back to proximity search.`);
+        const nearby = await this.pharmaciesService.findNearby(
+          Number(address.latitude),
+          Number(address.longitude),
+          10
+        );
+        defaultPharma = nearby[0] || null;
+      }
+
       if (!defaultPharma) {
         throw new BadRequestException('No pharmacy available in your delivery area to fulfill this prescription.');
       }
@@ -225,6 +238,7 @@ export class PharmaOrdersService {
       userId,
       addressId: dto.addressId,
       orderType: 'pharma',
+      cashFlowMode: 'CASH_ON_PICK', // Pharma: rider pays merchant upfront, only owes platform share
       status: 'pending',
       priority: isEmergency ? 'high' : 'standard',
       isColdChain,

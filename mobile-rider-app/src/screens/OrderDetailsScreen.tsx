@@ -217,6 +217,28 @@ export default function OrderDetailsScreen({ route, navigation }: any) {
             <Text style={styles.totalLabel}>Total Bill (COD)</Text>
             <Text style={styles.totalVal}>Rs. {order?.total || 0}</Text>
           </View>
+
+          {/* Rider Earnings Breakdown */}
+          <View style={{ marginTop: 14, padding: 14, backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0' }}>
+            <Text style={{ fontSize: 12, fontWeight: '800', color: '#475569', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>💰 Your Earnings</Text>
+            <View style={styles.totalRow}>
+              <Text style={{ fontSize: 13, color: '#64748B' }}>Delivery Fee</Text>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#10B981' }}>+ Rs. {Number(order.deliveryFee || 0)}</Text>
+            </View>
+            {Number(order.riderCommission || 0) > 0 && (
+              <View style={[styles.totalRow, { marginTop: 4 }]}>
+                <Text style={{ fontSize: 13, color: '#64748B' }}>Platform Commission</Text>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#EF4444' }}>- Rs. {Number(order.riderCommission || 0)}</Text>
+              </View>
+            )}
+            <View style={{ height: 1, backgroundColor: '#E2E8F0', marginVertical: 8 }} />
+            <View style={styles.totalRow}>
+              <Text style={{ fontSize: 14, fontWeight: '800', color: '#1E293B' }}>Net Earnings</Text>
+              <Text style={{ fontSize: 15, fontWeight: '900', color: '#10B981' }}>
+                Rs. {(Number(order.deliveryFee || 0) - Number(order.riderCommission || 0)).toFixed(0)}
+              </Text>
+            </View>
+          </View>
           
           {/* Phase 20: Rider Pharma Incentives UI */}
           {order.orderType === 'pharma' && (

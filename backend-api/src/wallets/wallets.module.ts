@@ -8,11 +8,13 @@ import { WithdrawalRequest } from './withdrawal-request.entity';
 import { WalletSettlement } from './wallet-settlement.entity';
 
 import { FinanceModule } from '../finance/finance.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Wallet, WalletTransaction, WithdrawalRequest, WalletSettlement]),
     forwardRef(() => FinanceModule),
+    NotificationsModule,
   ],
   providers: [WalletsService],
   controllers: [WalletsController],

@@ -41,7 +41,8 @@ export default function WalletScreen({ navigation }: any) {
     const isCredit = item.direction === 'CREDIT';
     const amount = Number(item.amount);
     const date = new Date(item.createdAt);
-    const orderRef = item.orderId ? item.orderId.split('-')[0].toUpperCase() : null;
+    const orderId = item.transaction?.referenceType === 'ORDER_SETTLEMENT' ? item.transaction?.referenceId : null;
+    const orderRef = orderId ? orderId.split('-')[0].toUpperCase() : null;
 
     let iconName: keyof typeof Ionicons.glyphMap = 'cash-outline';
     let iconColor = theme.colors.success;

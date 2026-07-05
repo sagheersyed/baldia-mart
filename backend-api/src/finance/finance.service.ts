@@ -1,6 +1,6 @@
-import { Injectable, Logger, BadRequestException, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, EntityManager } from 'typeorm';
+import { Repository, EntityManager, MoreThan } from 'typeorm';
 import { FinancialTransaction } from './entities/financial-transaction.entity';
 import { FinancialLedgerEntry } from './entities/financial-ledger-entry.entity';
 import { CommissionConfig } from './entities/commission-config.entity';
@@ -10,6 +10,7 @@ import { Order } from '../orders/order.entity';
 
 import { SettingsService } from '../settings/settings.service';
 import { WalletsService } from '../wallets/wallets.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class FinanceService {
@@ -29,6 +30,7 @@ export class FinanceService {
     private settingsService: SettingsService,
     @Inject(forwardRef(() => WalletsService))
     private readonly walletsService: WalletsService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async onModuleInit() {
@@ -40,14 +42,19 @@ export class FinanceService {
   async healOrphanedSettlements() {
     // This will try to settle any 'delivered' order. 
     // WalletsService.processOrderSettlement already has idempotency via WalletSettlement table.
-    // Since I manually deleted the markers via psql, this will pick them up.
+    // Scale query down to only check recent orders (last 7 days) to minimize node startup footprint.
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - 7);
     
     const orders = await this.txRepo.manager.getRepository(Order).find({
-      where: { status: 'delivered' },
+      where: { 
+        status: 'delivered',
+        createdAt: MoreThan(cutoffDate),
+      },
       relations: ['items', 'items.product', 'items.menuItem', 'items.medicine', 'subOrders', 'subOrders.vendor', 'subOrders.restaurant', 'subOrders.pharmacy', 'restaurant', 'pharmacy']
     });
 
-    this.logger.log(`Found ${orders.length} delivered orders. Re-verifying ledger entries...`);
+    this.logger.log(`Found ${orders.length} remote recent delivered orders. Re-verifying ledger entries...`);
     
     let healed = 0;
     for (const order of orders) {
@@ -159,17 +166,69 @@ export class FinanceService {
   /**
    * TASK 2-C: Multi-Vendor App Split Engine
    */
-  async processOrderSettlement(order: Order, manager: EntityManager) {
+  /**
+   * TASK 2-C: Multi-Vendor App Split Engine
+   */
+  async processOrderSettlement(orderOrId: Order | string, manager: EntityManager) {
+    let order: Order;
+    if (typeof orderOrId === 'string') {
+      const found = await manager.getRepository(Order).findOne({
+        where: { id: orderOrId },
+        relations: [
+          'items',
+          'items.product',
+          'items.menuItem',
+          'items.medicine',
+          'subOrders',
+          'subOrders.vendor',
+          'subOrders.restaurant',
+          'subOrders.pharmacy',
+          'restaurant',
+          'pharmacy',
+          'address'
+        ]
+      });
+      if (!found) throw new NotFoundException(`Order with ID ${orderOrId} not found`);
+      order = found;
+    } else {
+      order = orderOrId;
+      if (!order.subOrders || order.subOrders.length === 0) {
+        const found = await manager.getRepository(Order).findOne({
+          where: { id: order.id },
+          relations: [
+            'items',
+            'items.product',
+            'items.menuItem',
+            'items.medicine',
+            'subOrders',
+            'subOrders.vendor',
+            'subOrders.restaurant',
+            'subOrders.pharmacy',
+            'restaurant',
+            'pharmacy',
+            'address'
+          ]
+        });
+        if (found) {
+          order = found;
+        }
+      }
+    }
+
     const isCOD = order.paymentMethod?.toLowerCase() === 'cod' || order.paymentMethod?.toLowerCase() === 'cash_on_delivery';
     const riderId = order.riderId;
     const moduleType = order.orderType;
     const flowMode = order.cashFlowMode || 'MERCHANT_CREDIT';
 
-    // 1. Fetch Dynamic Platform Service Fee from Settings
+    // 1. Fetch Dynamic Parameters from Settings
     const serviceFee = await this.settingsService.getNumber('platform_service_fee', 15);
+    const codThreshold = await this.settingsService.getNumber('rider_cod_threshold', 5000);
 
     const ledgerLines: any[] = [];
-    const riderTakeHome = Number(order.deliveryFee) + (order.orderType === 'pharma' ? 50 : 0);
+    
+    // Check flags like isColdChain for rider pharmaceutical bonus (+Rs. 50)
+    const activeBonus = order.isColdChain ? 50 : 0;
+    const riderTakeHome = Number(order.deliveryFee) + activeBonus;
 
     let totalVendorPayout = 0;
     let totalPlatformCommission = 0;
@@ -188,16 +247,16 @@ export class FinanceService {
 
     this.logger.log(`Finance Engine: Processing ${flowMode} settlement for #${order.id.split('-')[0].toUpperCase()} (COD: ${isCOD})`);
 
-    // --- PHASE 2 REFACTOR: Split-Payment & Commission Logic ---
+    // 2. Loop segments/suborders to compute vendor payouts & platform commissions
     for (const sh of stakeholders) {
       if (!sh.id) continue;
       
       const config = await this.getCommissionRate(sh.type, sh.id, moduleType);
       const commission = this.calculateCommission(sh.subtotal, config);
-      const vendorNet = sh.subtotal - commission;
+      const vendorShare = sh.subtotal - commission;
 
       totalPlatformCommission += commission;
-      totalVendorPayout += vendorNet;
+      totalVendorPayout += vendorShare;
 
       const vWallet = await this.ensureWallet(manager, sh.id, 'Vendor');
       
@@ -206,18 +265,18 @@ export class FinanceService {
           walletId: vWallet.id,
           accountTag: 'EARNINGS',
           direction: 'CREDIT',
-          amount: vendorNet,
+          amount: vendorShare,
           moduleType,
           description: `Vendor Payout for #${order.id.split('-')[0].toUpperCase()} (${config.commissionPercent}% comm)`,
         });
       } else {
-        // CASH_ON_PICK: Rider paid vendor upfront. 
-        // We log the earnings and the corresponding cash receipt to keep ledger balanced and reports accurate.
+        // CASH_ON_PICK: Rider counter payment model
+        // Log transaction history, but net wallet impact is zero
         ledgerLines.push({
           walletId: vWallet.id,
           accountTag: 'EARNINGS',
           direction: 'CREDIT',
-          amount: vendorNet,
+          amount: vendorShare,
           moduleType,
           description: `Gross Sale for #${order.id.split('-')[0].toUpperCase()} (Cash-on-Pick)`,
         });
@@ -225,18 +284,20 @@ export class FinanceService {
           walletId: vWallet.id,
           accountTag: 'EARNINGS',
           direction: 'DEBIT',
-          amount: vendorNet,
+          amount: vendorShare,
           moduleType,
-          description: `Rider Cash-on-Pick Payment for #${order.id.split('-')[0].toUpperCase()}`,
+          description: `Rider Cash-on-Pick counter-payment for #${order.id.split('-')[0].toUpperCase()}`,
         });
       }
     }
+
+    const platformShare = totalPlatformCommission + serviceFee;
 
     // Platform Revenue Impact (Commission + Service Fee)
     ledgerLines.push({
       accountTag: 'PLATFORM_REV',
       direction: 'CREDIT',
-      amount: totalPlatformCommission + serviceFee,
+      amount: platformShare,
       moduleType,
       description: `Platform Revenue: Comm(${totalPlatformCommission}) + Fee(${serviceFee}) from order #${order.id.split('-')[0].toUpperCase()}`,
     });
@@ -244,37 +305,66 @@ export class FinanceService {
     if (riderId) {
       const rWallet = await this.ensureWallet(manager, riderId, 'Rider');
       
-      // Rider Earnings (Delivery Fees)
+      const riderCommRate = await this.settingsService.getNumber('commission_rate_rider', 0);
+      const riderCommission = Number(((riderTakeHome * riderCommRate) / 100).toFixed(2));
+      const finalRiderPayment = Number((riderTakeHome - riderCommission).toFixed(2));
+
+      // Rider get earnings (delivery base fee + cold chain bonus - commission)
       ledgerLines.push({
         walletId: rWallet.id,
         accountTag: 'EARNINGS',
         direction: 'CREDIT',
-        amount: riderTakeHome,
-        description: `Rider Delivery Fee for #${order.id.split('-')[0].toUpperCase()}`,
+        amount: finalRiderPayment,
+        description: `Rider Delivery Fee for #${order.id.split('-')[0].toUpperCase()}${order.isColdChain ? ' (inc. Cold Chain Bonus)' : ''}${riderCommission > 0 ? ` minus ${riderCommRate}% commission` : ''}`,
       });
 
-      // BRANCH 1 & 2: Rider Cash-in-Hand Debt
-      if (isCOD) {
-        let riderDebtAmount = 0;
-        let debtDescription = "";
-
-        if (flowMode === 'CASH_ON_PICK') {
-          // Rider ONLY owes the platform its revenue share (since they already paid the merchant)
-          riderDebtAmount = totalPlatformCommission + serviceFee;
-          debtDescription = `Remittance Owed: Comm + Fee for #${order.id.split('-')[0].toUpperCase()} (Cash-on-Pick)`;
-        } else {
-          // Rider owes the FULL total (merchant-credit mode)
-          riderDebtAmount = Number(order.total);
-          debtDescription = `COD Cash Collected (Total) from #${order.id.split('-')[0].toUpperCase()}`;
-        }
-
+      if (riderCommission > 0) {
         ledgerLines.push({
-          walletId: rWallet.id,
-          accountTag: 'CASH_IN_HAND',
-          direction: 'DEBIT',
-          amount: riderDebtAmount,
-          description: debtDescription,
+          accountTag: 'PLATFORM_REV',
+          direction: 'CREDIT',
+          amount: riderCommission,
+          description: `Platform Commission (${riderCommRate}%) on Rider Delivery Fee for #${order.id.split('-')[0].toUpperCase()}`,
         });
+      }
+
+      if (isCOD) {
+        if (flowMode === 'CASH_ON_PICK') {
+          // Rider ONLY owes platform share
+          ledgerLines.push({
+            walletId: rWallet.id,
+            accountTag: 'CASH_IN_HAND',
+            direction: 'DEBIT',
+            amount: platformShare,
+            description: `Remittance Owed: Platform Share for #${order.id.split('-')[0].toUpperCase()} (Cash-on-Pick)`,
+          });
+
+          // Automated Balancing Mechanism: DEBIT earnings and CREDIT cashInHand
+          ledgerLines.push({
+            walletId: rWallet.id,
+            accountTag: 'EARNINGS',
+            direction: 'DEBIT',
+            amount: platformShare,
+            description: `Auto-Balancing Mechanism: Platform Share settled from earnings for #${order.id.split('-')[0].toUpperCase()} (Cash-on-Pick)`,
+          });
+          
+          ledgerLines.push({
+            walletId: rWallet.id,
+            accountTag: 'CASH_IN_HAND',
+            direction: 'CREDIT',
+            amount: platformShare,
+            description: `Auto-Balancing Mechanism: Cash-in-hand liability adjusted for #${order.id.split('-')[0].toUpperCase()} (Cash-on-Pick)`,
+          });
+
+        } else {
+          // MERCHANT_CREDIT: Rider owes full cash collected
+          ledgerLines.push({
+            walletId: rWallet.id,
+            accountTag: 'CASH_IN_HAND',
+            direction: 'DEBIT',
+            amount: Number(order.total),
+            description: `COD Cash Collected (Total) from #${order.id.split('-')[0].toUpperCase()}`,
+          });
+        }
       }
     }
 
@@ -287,7 +377,7 @@ export class FinanceService {
       });
     }
 
-    // ACID Execution
+    // ACID execution
     return this.executeLedgerTransaction(
       manager,
       'ORDER_SETTLEMENT',
@@ -301,7 +391,7 @@ export class FinanceService {
     const wallet = await manager.findOne(Wallet, { where: { userId: riderId, userType: 'Rider' } });
     if (!wallet) throw new BadRequestException('Rider wallet not found');
 
-    return this.executeLedgerTransaction(
+    const result = await this.executeLedgerTransaction(
       manager,
       'CASH_RECONCILIATION',
       referenceId,
@@ -316,6 +406,24 @@ export class FinanceService {
         }
       ]
     );
+
+    // Push notification trigger
+    try {
+      const riderRepo = manager.getRepository('Rider');
+      const rider = await riderRepo.findOne({ where: { id: riderId } }) as any;
+      if (rider && rider.fcmToken) {
+        await this.notificationsService.sendToRider(
+          riderId,
+          rider.fcmToken,
+          'Cash Remitted Successfully 💰',
+          `Your cash-in-hand balance has been reduced by Rs. ${amount}. Transaction reference ID: ${referenceId}.`
+        );
+      }
+    } catch (err: any) {
+      this.logger.error(`Failed to send cash remittance notification for rider ${riderId}: ${err.message}`);
+    }
+
+    return result;
   }
 
   async getCommissionRate(

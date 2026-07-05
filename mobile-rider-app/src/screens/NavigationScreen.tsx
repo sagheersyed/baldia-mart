@@ -728,7 +728,7 @@ export default function NavigationScreen({ navigation, route }: any) {
 
                 {/* Active Items */}
                 {group.active.map((item: any, idx: number) => {
-                  const itemName = item.product?.name || item.menuItem?.name || 'Item';
+                  const itemName = item.medicine?.name || item.product?.name || item.menuItem?.name || item.productName || 'Item';
                   return (
                     <View key={idx} style={[styles.itemRow, { justifyContent: 'space-between' }]}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
@@ -747,7 +747,7 @@ export default function NavigationScreen({ navigation, route }: any) {
 
                 {/* Missing Items */}
                 {group.missing.map((item: any, idx: number) => {
-                  const itemName = item.product?.name || item.menuItem?.name || 'Item';
+                  const itemName = item.medicine?.name || item.product?.name || item.menuItem?.name || item.productName || 'Item';
                   return (
                     <View key={`miss-${idx}`} style={[styles.itemRow, { justifyContent: 'space-between', opacity: 0.5 }]}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>

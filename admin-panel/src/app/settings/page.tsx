@@ -224,11 +224,12 @@ export default function SettingsPage() {
               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest pl-2">
                 Commission Rates by Vertical (%)
               </p>
-              <div className="grid md:grid-cols-4 gap-6">
+              <div className="grid md:grid-cols-5 gap-6">
                 <SettingsInput label="Food (%)" icon="%" value={settings.commission_rate_food} onSave={(v: any) => handleUpdate('commission_rate_food', v)} isSaving={saving === 'commission_rate_food'} />
                 <SettingsInput label="Mart (%)" icon="%" value={settings.commission_rate_mart} onSave={(v: any) => handleUpdate('commission_rate_mart', v)} isSaving={saving === 'commission_rate_mart'} />
                 <SettingsInput label="Pharma (%)" icon="%" value={settings.commission_rate_pharma} onSave={(v: any) => handleUpdate('commission_rate_pharma', v)} isSaving={saving === 'commission_rate_pharma'} />
                 <SettingsInput label="Rashan (%)" icon="%" value={settings.commission_rate_rashan} onSave={(v: any) => handleUpdate('commission_rate_rashan', v)} isSaving={saving === 'commission_rate_rashan'} />
+                <SettingsInput label="Rider (%)" icon="%" value={settings.commission_rate_rider} onSave={(v: any) => handleUpdate('commission_rate_rider', v)} isSaving={saving === 'commission_rate_rider'} />
               </div>
               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest pl-2">
                 Commission Bounds — Min / Max per Vertical (₨)

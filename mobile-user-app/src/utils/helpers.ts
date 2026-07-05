@@ -38,3 +38,11 @@ export const isBusinessOpen = (openingTime: string | null | undefined, closingTi
   }
 };
 
+export const formatPKR = (amount: number | string | undefined | null): string => {
+  const parsed = Number(amount);
+  if (amount === undefined || amount === null || Number.isNaN(parsed)) {
+    return 'Rs. 0';
+  }
+  return `Rs. ${parsed.toLocaleString()}`;
+};
+

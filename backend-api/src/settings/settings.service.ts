@@ -96,6 +96,7 @@ export class SettingsService implements OnModuleInit {
     await this.seedDefault('commission_rate_mart', '10');
     await this.seedDefault('commission_rate_pharma', '5');
     await this.seedDefault('commission_rate_rashan', '7.5');
+    await this.seedDefault('commission_rate_rider', '0');
     await this.seedDefault('min_commission_food', '0');
     await this.seedDefault('min_commission_mart', '0');
     await this.seedDefault('min_commission_pharma', '0');
@@ -166,6 +167,7 @@ export class SettingsService implements OnModuleInit {
       cod_limit_pharma: getNum('cod_limit_pharma', 2000),
       cod_limit_food: getNum('cod_limit_food', 2000),
       cod_limit_mart: getNum('cod_limit_mart', 5000),
+      commission_rate_rider: getNum('commission_rate_rider', 0),
     };
   }
 

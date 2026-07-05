@@ -20,6 +20,7 @@ import {
 import { SettingsModule } from '../settings/settings.module';
 import { WalletsModule } from '../wallets/wallets.module';
 import { CmsModule } from '../cms/cms.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { forwardRef } from '@nestjs/common';
 
 @Module({
@@ -37,6 +38,7 @@ import { forwardRef } from '@nestjs/common';
     SettingsModule,
     forwardRef(() => WalletsModule),
     forwardRef(() => CmsModule),
+    NotificationsModule,
   ],
   controllers: [FinanceController, FinancePremiumController],
   providers: [FinanceService, FinanceTasks, FinanceManagementService],

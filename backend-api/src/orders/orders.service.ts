@@ -351,7 +351,7 @@ export class OrdersService {
     // Dynamic Delivery Fee
     const pricing = await this.calculateDeliveryFeeFromCoords(Number(address.latitude), Number(address.longitude), pickupLat, pickupLng, orderType);
     if (!pricing.isValid) {
-      throw new BadRequestException(`Delivery not available: ${pricing.message}`);
+      throw new BadRequestException(pricing.message);
     }
     const finalDeliveryFee = pricing.deliveryFee + multiStopSurcharge;
 
@@ -429,6 +429,11 @@ export class OrdersService {
 
     const finalTotal = Math.max(0, subtotal - discountAmount + finalDeliveryFee - walletDebit);
 
+    // ── TRANSACTION GATE: Determine initial status based on payment method ──
+    const isOnlinePayment = paymentMethod.toLowerCase() !== 'cod';
+    const initialStatus = isOnlinePayment ? 'payment_pending' : 'pending';
+    const initialPaymentStatus = isOnlinePayment ? 'awaiting_gateway' : 'pending';
+
     const order = new Order();
     Object.assign(order, {
       userId,
@@ -443,9 +448,12 @@ export class OrdersService {
       couponCode: appliedCouponCode,
       total: finalTotal,
       paymentMethod,
+      paymentStatus: initialPaymentStatus,
+      status: initialStatus,
       deliveryDistanceKm: pricing.distance,
       notes,
       orderType,
+      cashFlowMode: orderType === 'pharma' ? 'CASH_ON_PICK' : 'MERCHANT_CREDIT',
     });
     const savedOrder = await transactionalManager.getRepository(Order).save(order);
 
@@ -553,19 +561,24 @@ export class OrdersService {
     // 9. Record History
     await transactionalManager.getRepository(OrderHistory).save(transactionalManager.getRepository(OrderHistory).create({ 
       orderId: savedOrder.id, 
-      status: 'pending', 
-      notes: 'Order placed with atomic stock decrement' 
+      status: initialStatus, 
+      notes: isOnlinePayment 
+        ? 'Order created — awaiting payment gateway confirmation' 
+        : 'Order placed with atomic stock decrement' 
     }));
 
     return savedOrder;
     });
 
-    // 9. Dispatch via Queue (Async)
-    await this.ordersQueue.add('dispatch_order', { orderId: resultOrder.id }, {
-      attempts: 3,
-      backoff: { type: 'exponential', delay: 5000 },
-      removeOnComplete: true,
-    });
+    // ── TRANSACTION GATE: Only dispatch COD orders immediately ──
+    // Online payment orders wait in 'payment_pending' until handleCallback confirms.
+    if (paymentMethod.toLowerCase() === 'cod') {
+      await this.ordersQueue.add('dispatch_order', { orderId: resultOrder.id }, {
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 5000 },
+        removeOnComplete: true,
+      });
+    }
 
     return resultOrder;
   }
@@ -683,11 +696,15 @@ export class OrdersService {
       .leftJoinAndSelect('order.items', 'items')
       .leftJoinAndSelect('items.product', 'product')
       .leftJoinAndSelect('items.menuItem', 'menuItem')
+      .leftJoinAndSelect('items.medicine', 'medicine')
       .leftJoinAndSelect('order.address', 'address')
       .leftJoinAndSelect('order.user', 'user')
       .leftJoinAndSelect('order.restaurant', 'restaurant')
+      .leftJoinAndSelect('order.pharmacy', 'pharmacy')
       .leftJoinAndSelect('order.subOrders', 'subOrders')
       .leftJoinAndSelect('subOrders.restaurant', 'subOrderRestaurant')
+      .leftJoinAndSelect('subOrders.vendor', 'subOrderVendor')
+      .leftJoinAndSelect('subOrders.pharmacy', 'subOrderPharmacy')
       .where('order.status = :status', { status: 'pending' });
 
     if (riderId) {
@@ -1669,7 +1686,7 @@ export class OrdersService {
           return {
             isValid: false,
             deliveryFee: 0,
-            message: 'Baldia Pharma services are not currently available in your delivery area.',
+            message: 'Delivery not available. Location not in any active delivery zone.',
           };
         }
 
@@ -1679,7 +1696,10 @@ export class OrdersService {
             const bestPharma = await this.pharmaciesService.findBestPharmacy(
               item.medicineId || item.id, 
               item.quantity || 1,
-              zoneRes.zone.id
+              zoneRes.zone.id,
+              false,
+              address.latitude ? Number(address.latitude) : undefined,
+              address.longitude ? Number(address.longitude) : undefined
             );
             if (!bestPharma) {
               const medicineRepo = this.ordersRepository.manager.getRepository('Medicine');
@@ -1735,16 +1755,21 @@ export class OrdersService {
     const realDistance = this.deliveryZonesService.calculateDistance(custLat, custLng, pickupLat, pickupLng);
 
     // Strict Enforcement: If NOT in a zone OR distance exceeds max radius
-    if (!validation.isValid || realDistance > maxRad) {
-      const reason = !validation.isValid 
-        ? 'Location not in any active delivery zone.' 
-        : `Distance (${realDistance.toFixed(1)}km) exceeds maximum service radius of ${maxRad}km.`;
-      
+    if (!validation.isValid) {
       return {
         isValid: false,
         deliveryFee: 0,
         distance: realDistance,
-        message: `Delivery not available: ${reason}`,
+        message: 'Delivery not available. Location not in any active delivery zone.',
+      };
+    }
+
+    if (realDistance > maxRad) {
+      return {
+        isValid: false,
+        deliveryFee: 0,
+        distance: realDistance,
+        message: `Delivery not available. Distance (${realDistance.toFixed(1)}km) exceeds maximum service radius of ${maxRad}km.`,
       };
     }
 

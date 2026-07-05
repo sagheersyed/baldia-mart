@@ -11,6 +11,7 @@ import { format, subDays } from 'date-fns';
 import { financeApi } from '../api/api';
 import { AppText, AppIconButton, AppBadge } from '../components/ui';
 import { theme } from '../theme/theme';
+import { formatPKR } from '../utils/helpers';
 
 export default function PlatformFinancialsScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
@@ -62,7 +63,7 @@ export default function PlatformFinancialsScreen({ navigation }: any) {
         </View>
         <View style={{ flex: 1, paddingHorizontal: 16 }}>
           <View style={styles.snapMain}>
-             <AppText variant="bodyStrong">Rs. {Number(item.netRevenue).toLocaleString()}</AppText>
+             <AppText variant="bodyStrong">Rs. {Number(item.netRevenue || 0).toLocaleString()}</AppText>
              {prevItem && (
                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                  <Ionicons name={growth >= 0 ? 'caret-up' : 'caret-down'} size={12} color={growth >= 0 ? '#16A34A' : '#EF4444'} />
@@ -71,7 +72,7 @@ export default function PlatformFinancialsScreen({ navigation }: any) {
              )}
           </View>
           <AppText variant="caption" color={theme.colors.textMuted}>
-            {item.totalOrders} Orders • Rs. {Number(item.grossRevenue).toLocaleString()} GMV
+            {item.totalOrders || 0} Orders • Rs. {Number(item.grossRevenue || 0).toLocaleString()} GMV
           </AppText>
         </View>
         <Ionicons name="chevron-forward" size={16} color={theme.colors.divider} />
@@ -108,7 +109,7 @@ export default function PlatformFinancialsScreen({ navigation }: any) {
                 <View style={{ flex: 1 }}>
                   <AppText variant="caption" color="rgba(255,255,255,0.7)">Total Commissions</AppText>
                   <AppText variant="h1" color="#fff" style={styles.heroValue}>
-                    Rs. {summary?.totalCommissions?.toLocaleString() ?? '0'}
+                    {formatPKR(summary?.totalCommissions)}
                   </AppText>
                 </View>
                 <View style={styles.heroIcon}>
@@ -119,12 +120,12 @@ export default function PlatformFinancialsScreen({ navigation }: any) {
               <View style={styles.heroStats}>
                 <View style={styles.hStat}>
                   <AppText variant="caption" color="rgba(255,255,255,0.7)">GMV</AppText>
-                  <AppText variant="bodyStrong" color="#fff">Rs. {summary?.totalEarnings?.toLocaleString() ?? '0'}</AppText>
+                  <AppText variant="bodyStrong" color="#fff">{formatPKR(summary?.totalEarnings)}</AppText>
                 </View>
                 <View style={styles.hDivider} />
                 <View style={styles.hStat}>
                   <AppText variant="caption" color="rgba(255,255,255,0.7)">COD Outstanding</AppText>
-                  <AppText variant="bodyStrong" color="#fff">Rs. {summary?.codOutstanding?.toLocaleString() ?? '0'}</AppText>
+                  <AppText variant="bodyStrong" color="#fff">{formatPKR(summary?.codOutstanding)}</AppText>
                 </View>
               </View>
             </LinearGradient>
@@ -132,7 +133,7 @@ export default function PlatformFinancialsScreen({ navigation }: any) {
             <View style={styles.grid}>
               <View style={styles.gridCard}>
                  <AppText variant="caption" color={theme.colors.textSecondary}>Net Platform Balance</AppText>
-                 <AppText variant="h3" color={theme.colors.textPrimary}>Rs. {summary?.netBalance?.toLocaleString() ?? '0'}</AppText>
+                 <AppText variant="h3" color={theme.colors.textPrimary}>{formatPKR(summary?.netBalance)}</AppText>
               </View>
               <View style={styles.gridCard}>
                  <AppText variant="caption" color={theme.colors.textSecondary}>Active Period</AppText>

@@ -13,7 +13,7 @@ export class FinanceTasks {
    * Generates financial snapshots for the previous day.
    * Runs daily at 00:05 AM.
    */
-  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT) // Runs at 00:00:00
+  @Cron('5 0 * * *') // Runs at 00:05 AM every day (offset to avoid midnight restart races)
   async handleDailySnapshots() {
     this.logger.log('Starting daily financial snapshot generation...');
     
@@ -23,8 +23,16 @@ export class FinanceTasks {
     try {
       const snapshot = await this.financeService.generateDailySnapshot(yesterday);
       this.logger.log(`Daily snapshot generated for ${yesterday.toISOString().split('T')[0]}: ID=${snapshot.id}`);
-    } catch (error) {
-      this.logger.error('Failed to generate daily financial snapshot', error.stack);
+    } catch (error: any) {
+      // Unique-key violation = snapshot already exists for this date; silently skip
+      const isAlreadyDone =
+        error?.code === '23505' ||
+        (typeof error?.message === 'string' && error.message.toLowerCase().includes('duplicate'));
+      if (isAlreadyDone) {
+        this.logger.warn(`Snapshot for ${yesterday.toISOString().split('T')[0]} already exists — skipping duplicate.`);
+      } else {
+        this.logger.error('Failed to generate daily financial snapshot', error.stack);
+      }
     }
   }
 

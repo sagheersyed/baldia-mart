@@ -40,7 +40,23 @@ export default function FinancialStatementScreen({ navigation }: any) {
         financeApi.getVendorStatement(activeTenant.tenantId),
       ]);
       setSummary(sumRes.data);
-      setStatement(stmtRes.data);
+
+      let currentEarningsBal = Number(sumRes.data?.netBalance || 0);
+      const enriched = (stmtRes.data || []).map((item: any) => {
+        const amt = Number(item.amount);
+        const runningVal = currentEarningsBal;
+        if (item.direction === 'CREDIT') {
+          currentEarningsBal -= amt;
+        } else {
+          currentEarningsBal += amt;
+        }
+        return {
+          ...item,
+          runningBalance: runningVal,
+        };
+      });
+
+      setStatement(enriched);
     } catch (e) {
       console.warn('[FinanceStatement] Load error', e);
     } finally {
@@ -62,7 +78,8 @@ export default function FinancialStatementScreen({ navigation }: any) {
     const isCredit = item.direction === 'CREDIT';
     const amount = Number(item.amount);
     const date = new Date(item.createdAt);
-    const orderRef = item.orderId ? item.orderId.split('-')[0].toUpperCase() : null;
+    const orderId = item.transaction?.referenceType === 'ORDER_SETTLEMENT' ? item.transaction?.referenceId : null;
+    const orderRef = orderId ? orderId.split('-')[0].toUpperCase() : null;
 
     return (
       <View style={styles.txnRow}>

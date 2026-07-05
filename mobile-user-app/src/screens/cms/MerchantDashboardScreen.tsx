@@ -10,6 +10,7 @@ import { cmsApi, financeApi } from '../../api/api';
 import { AppText } from '../../components/ui';
 import { theme } from '../../theme/theme';
 import { useIsFocused } from '@react-navigation/native';
+import { formatPKR } from '../../utils/helpers';
 
 export default function MerchantDashboardScreen({ navigation }: any) {
   const { activeTenant, exitMerchantMode } = useCmsStore();
@@ -106,7 +107,7 @@ export default function MerchantDashboardScreen({ navigation }: any) {
           <View style={styles.insightsRow}>
             <View style={styles.insightCard}>
               <AppText variant="caption" color={theme.colors.textMuted}>Today's Revenue</AppText>
-              <AppText variant="h2" color={theme.colors.textPrimary}>Rs. {dashboardStats?.todayRevenue?.toLocaleString() ?? '0'}</AppText>
+              <AppText variant="h2" color={theme.colors.textPrimary}>{formatPKR(dashboardStats?.todayRevenue)}</AppText>
               <View style={styles.insightTrend}>
                 <Ionicons name="trending-up" size={14} color="#16A34A" />
                 <AppText variant="badge" color="#16A34A" style={{ marginLeft: 2 }}>{dashboardStats?.todayRevenue > 0 ? '+Recently' : 'No Sales'}</AppText>
@@ -134,7 +135,7 @@ export default function MerchantDashboardScreen({ navigation }: any) {
             <View style={styles.financeHeader}>
               <View>
                 <AppText variant="caption" color={theme.colors.textMuted}>Net Balance</AppText>
-                <AppText variant="h1" color={theme.colors.textPrimary}>Rs. {financeSummary?.netBalance?.toLocaleString() ?? '0'}</AppText>
+                <AppText variant="h1" color={theme.colors.textPrimary}>{formatPKR(financeSummary?.netBalance)}</AppText>
               </View>
               <View style={[styles.financeBadge, { backgroundColor: color }]}>
                 <Ionicons name="wallet-outline" size={20} color="#fff" />
@@ -143,12 +144,12 @@ export default function MerchantDashboardScreen({ navigation }: any) {
             <View style={styles.financeStats}>
               <View style={styles.finStat}>
                 <AppText variant="caption" color={theme.colors.textMuted}>Total Earnings</AppText>
-                <AppText variant="bodyStrong">Rs. {financeSummary?.totalEarnings?.toLocaleString() ?? '0'}</AppText>
+                <AppText variant="bodyStrong">{formatPKR(financeSummary?.totalEarnings)}</AppText>
               </View>
               <View style={styles.finDivider} />
               <View style={styles.finStat}>
                 <AppText variant="caption" color={theme.colors.textMuted}>Commission</AppText>
-                <AppText variant="bodyStrong">Rs. {financeSummary?.totalCommissions?.toLocaleString() ?? '0'}</AppText>
+                <AppText variant="bodyStrong">{formatPKR(financeSummary?.totalCommissions)}</AppText>
               </View>
             </View>
           </Pressable>
@@ -232,7 +233,7 @@ export default function MerchantDashboardScreen({ navigation }: any) {
                 <View style={[styles.dot, { backgroundColor: isAvailable ? '#16A34A' : '#EF4444' }]} />
                 <View style={{ flex: 1 }}>
                   <AppText variant="bodyStrong">{name}</AppText>
-                  <AppText variant="caption" color={theme.colors.textMuted}>Rs. {item.price ?? item.sellingPrice ?? item.priceOverride}</AppText>
+                  <AppText variant="caption" color={theme.colors.textMuted}>{formatPKR(item.sellingPrice ?? item.price ?? item.priceOverride ?? item.medicine?.mrp ?? item.product?.price)}</AppText>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color={theme.colors.textMuted} />
               </Pressable>

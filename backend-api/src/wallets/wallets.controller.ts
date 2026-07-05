@@ -50,6 +50,12 @@ export class WalletsController {
     return this.walletsService.createWithdrawalRequest(user.id, userType, body);
   }
 
+  @Post('admin/withdraw-request')
+  @UseGuards(AdminRoleGuard)
+  async adminCreateWithdrawalRequest(@Body() body: any) {
+    return this.walletsService.createWithdrawalRequest(body.userId, body.userType, body);
+  }
+
   @Get('withdraw-requests/pending')
   @UseGuards(AdminRoleGuard)
   async getPendingWithdrawals() {

@@ -1,8 +1,11 @@
 import { Injectable, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { Payment } from './payment.entity';
 import { Order } from '../orders/order.entity';
+import { OrderHistory } from '../orders/order-history.entity';
 import {
   buildJazzCashPayload,
   getJazzCashFormUrl,
@@ -25,6 +28,10 @@ export class PaymentsService {
     private paymentsRepo: Repository<Payment>,
     @InjectRepository(Order)
     private ordersRepo: Repository<Order>,
+    @InjectRepository(OrderHistory)
+    private orderHistoryRepo: Repository<OrderHistory>,
+    @InjectQueue('orders')
+    private ordersQueue: Queue,
   ) { }
 
   /**
@@ -186,6 +193,46 @@ export class PaymentsService {
     await this.paymentsRepo.save(payment);
 
     this.logger.log(`[${provider}] Payment ${merchantRef} → ${payment.status} (code: ${responseCode})`);
+
+    // ── TRANSACTION GATE: Activate and dispatch order on successful payment verification ──
+    const order = await this.ordersRepo.findOne({ where: { id: payment.orderId } });
+    if (order) {
+      if (isSuccess) {
+        if (order.status === 'payment_pending') {
+          order.status = 'pending';
+          order.paymentStatus = 'paid';
+          await this.ordersRepo.save(order);
+
+          const history = this.orderHistoryRepo.create({
+            orderId: order.id,
+            status: 'pending',
+            notes: `Payment confirmed via callback (${provider}). Initiating dispatch process.`
+          });
+          await this.orderHistoryRepo.save(history);
+
+          // Add to BullMQ queue to trigger dispatcher
+          await this.ordersQueue.add('dispatch_order', { orderId: order.id }, {
+            attempts: 3,
+            backoff: { type: 'exponential', delay: 5000 },
+            removeOnComplete: true,
+          });
+
+          this.logger.log(`[Transaction Gate] Order ${order.id} payment verified. Enqueued dispatch.`);
+        }
+      } else {
+        if (order.status === 'payment_pending') {
+          order.paymentStatus = 'failed';
+          await this.ordersRepo.save(order);
+
+          const history = this.orderHistoryRepo.create({
+            orderId: order.id,
+            status: 'payment_pending',
+            notes: `Payment failure callback (${provider}). status: ${responseCode} - ${responseMessage}`
+          });
+          await this.orderHistoryRepo.save(history);
+        }
+      }
+    }
 
     return payment;
   }

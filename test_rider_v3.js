@@ -5,7 +5,7 @@ const phone = '+923114106131';
 const data = JSON.stringify({ phoneNumber: phone, role: 'rider' });
 
 const options = {
-  hostname: ' https://5faf-125-209-125-98.ngrok-free.app',
+  hostname: ' http://192.168.100.142',
   port: 3000,
   path: '/api/v1/auth/check-status',
   method: 'POST',

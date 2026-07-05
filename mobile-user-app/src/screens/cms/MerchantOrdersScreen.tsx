@@ -9,6 +9,7 @@ import { useCmsStore } from '../../store/cmsStore';
 import { cmsApi } from '../../api/api';
 import { AppText } from '../../components/ui';
 import { theme } from '../../theme/theme';
+import { formatPKR } from '../../utils/helpers';
 
 const TABS = [
   { key: 'active', label: 'Active', statuses: 'pending,confirmed,preparing,ready_for_pickup' },
@@ -108,7 +109,7 @@ export default function MerchantOrdersScreen({ navigation, route }: any) {
         <View style={styles.customerRow}>
           <Ionicons name="person-circle-outline" size={20} color={theme.colors.textSecondary} />
           <AppText variant="body" style={{ marginLeft: 6 }}>{item.user?.name || 'Customer'}</AppText>
-          <AppText variant="price" style={{ marginLeft: 'auto' }}>Rs. {Number(item.total).toLocaleString()}</AppText>
+          <AppText variant="price" style={{ marginLeft: 'auto' }}>{formatPKR(item.total)}</AppText>
         </View>
 
         {activeTab === 'active' && (
@@ -233,7 +234,7 @@ export default function MerchantOrdersScreen({ navigation, route }: any) {
                         <AppText variant="captionStrong" color={theme.colors.primary}>{it.quantity}x</AppText>
                       </View>
                       <AppText variant="body" style={{ flex: 1, marginLeft: 12 }}>{itName}</AppText>
-                      <AppText variant="bodyStrong">Rs. {(Number(it.price) * it.quantity).toLocaleString()}</AppText>
+                      <AppText variant="bodyStrong">{formatPKR(Number(it.priceAtTime || it.price || 0) * it.quantity)}</AppText>
                     </View>
                   );
                 })}
@@ -243,11 +244,11 @@ export default function MerchantOrdersScreen({ navigation, route }: any) {
               <View style={[styles.section, { borderBottomWidth: 0 }]}>
                 <View style={styles.totalRow}>
                   <AppText variant="body" color={theme.colors.textSecondary}>Subtotal</AppText>
-                  <AppText variant="bodyStrong">Rs. {Number(selectedOrder?.total).toLocaleString()}</AppText>
+                  <AppText variant="bodyStrong">{formatPKR(selectedOrder?.subtotal ?? selectedOrder?.total)}</AppText>
                 </View>
                 <View style={[styles.totalRow, { marginTop: 8 }]}>
                   <AppText variant="h3">Total Revenue</AppText>
-                  <AppText variant="h3" color={theme.colors.primary}>Rs. {Number(selectedOrder?.total).toLocaleString()}</AppText>
+                  <AppText variant="h3" color={theme.colors.primary}>{formatPKR(selectedOrder?.total)}</AppText>
                 </View>
               </View>
 

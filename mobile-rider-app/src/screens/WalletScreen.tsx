@@ -25,6 +25,7 @@ export default function WalletScreen({ navigation }: any) {
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [showRemitModal, setShowRemitModal] = useState(false);
 
   const ACCENT = '#FF4500'; 
   const SUCCESS = '#10B981';
@@ -37,7 +38,41 @@ export default function WalletScreen({ navigation }: any) {
         ridersApi.getStats().catch(() => ({ data: null })),
       ]);
       setSummary(sumRes.data);
-      setStatement(stmtRes.data);
+
+      let currentEarningsBal = Number(sumRes.data?.netBalance || 0);
+      let currentCashBal = Number(sumRes.data?.codOutstanding || 0);
+
+      const enriched = (stmtRes.data || []).map((item: any) => {
+        const amt = Number(item.amount);
+        const isEarnings = item.accountTag === 'EARNINGS';
+        const isCash = item.accountTag === 'CASH_IN_HAND';
+
+        let runningVal = 0;
+        if (isEarnings) {
+          runningVal = currentEarningsBal;
+          if (item.direction === 'CREDIT') {
+            currentEarningsBal -= amt;
+          } else {
+            currentEarningsBal += amt;
+          }
+        } else if (isCash) {
+          runningVal = currentCashBal;
+          if (item.direction === 'DEBIT') {
+            currentCashBal -= amt;
+          } else {
+            currentCashBal += amt;
+          }
+        } else {
+          runningVal = currentEarningsBal;
+        }
+
+        return {
+          ...item,
+          runningBalance: runningVal,
+        };
+      });
+
+      setStatement(enriched);
       setStats(statsRes.data);
     } catch (e) {
       console.error('WalletScreen fetch error', e);
@@ -55,20 +90,21 @@ export default function WalletScreen({ navigation }: any) {
     const isCredit = item.direction === 'CREDIT';
     const amount = Number(item.amount);
     const date = new Date(item.createdAt);
-    const orderRef = item.orderId ? item.orderId.split('-')[0].toUpperCase() : null;
+    const orderId = item.transaction?.referenceType === 'ORDER_SETTLEMENT' ? item.transaction?.referenceId : null;
+    const orderRef = orderId ? orderId.split('-')[0].toUpperCase() : null;
 
     let iconName: keyof typeof Ionicons.glyphMap = 'cash-outline';
     let iconColor = SUCCESS;
     let iconBg = '#DCFCE7';
 
-    if (item.entryType === 'COD_COLLECTION') {
+    if (item.accountTag === 'CASH_IN_HAND') {
        iconName = 'wallet-outline';
-       iconColor = '#EF4444';
-       iconBg = '#FEE2E2';
-    } else if (item.entryType === 'RIDER_DELIVERY_FEE') {
+       iconColor = isCredit ? SUCCESS : '#EF4444';
+       iconBg = isCredit ? '#DCFCE7' : '#FEE2E2';
+    } else if (item.accountTag === 'EARNINGS') {
        iconName = 'bicycle-outline';
-       iconColor = SUCCESS;
-       iconBg = '#DCFCE7';
+       iconColor = isCredit ? SUCCESS : '#EF4444';
+       iconBg = isCredit ? '#DCFCE7' : '#FEE2E2';
     }
 
     return (
@@ -98,6 +134,8 @@ export default function WalletScreen({ navigation }: any) {
 
   const currentBal = Number(summary?.netBalance || 0);
   const codOwed = Number(summary?.codOutstanding || 0);
+  const totalCommissions = Number(summary?.totalCommissions || 0);
+  const totalRemittanceDue = codOwed + totalCommissions;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -160,14 +198,39 @@ export default function WalletScreen({ navigation }: any) {
                  </View>
 
                  <View style={styles.healthCard}>
-                    <Text style={styles.healthLabel}>Held Cash (COD)</Text>
-                    <Text style={[styles.healthVal, { color: codOwed > 0 ? '#EF4444' : '#1E1E1E' }]}>Rs. {formatPKR(codOwed)}</Text>
-                    <TouchableOpacity style={styles.infoBtn} onPress={() => {}}>
-                       <Ionicons name="information-circle-outline" size={14} color="#64748B" />
-                       <Text style={styles.infoText}>How to remit?</Text>
-                    </TouchableOpacity>
-                 </View>
-              </View>
+                     <Text style={styles.healthLabel}>Held Cash (COD)</Text>
+                     <Text style={[styles.healthVal, { color: codOwed > 0 ? '#EF4444' : '#1E1E1E' }]}>Rs. {formatPKR(codOwed)}</Text>
+                     <TouchableOpacity style={styles.infoBtn} onPress={() => setShowRemitModal(true)}>
+                        <Ionicons name="information-circle-outline" size={14} color="#64748B" />
+                        <Text style={styles.infoText}>How to remit?</Text>
+                     </TouchableOpacity>
+                  </View>
+               </View>
+
+               {/* Commission & Remittance Breakdown */}
+               <View style={styles.remitCard}>
+                  <Text style={styles.remitTitle}>💰 Platform Settlement</Text>
+                  <View style={styles.remitRow}>
+                     <Text style={styles.remitLabel}>COD Cash Held</Text>
+                     <Text style={styles.remitVal}>Rs. {formatPKR(codOwed)}</Text>
+                  </View>
+                  <View style={styles.remitRow}>
+                     <Text style={styles.remitLabel}>Commission Deducted</Text>
+                     <Text style={styles.remitVal}>Rs. {formatPKR(totalCommissions)}</Text>
+                  </View>
+                  <View style={[styles.remitRow, styles.remitTotalRow]}>
+                     <Text style={styles.remitTotalLabel}>Total Amount to Pay</Text>
+                     <Text style={[styles.remitTotalVal, { color: totalRemittanceDue > 0 ? '#EF4444' : SUCCESS }]}>
+                        Rs. {formatPKR(totalRemittanceDue)}
+                     </Text>
+                  </View>
+                  {totalRemittanceDue > 0 && (
+                     <TouchableOpacity style={styles.remitBtn} onPress={() => setShowRemitModal(true)}>
+                        <Ionicons name="wallet-outline" size={16} color="#fff" />
+                        <Text style={styles.remitBtnText}>Remit Now</Text>
+                     </TouchableOpacity>
+                  )}
+               </View>
 
               {/* Suspension Warning */}
               {summary?.isSuspended && (
@@ -208,6 +271,52 @@ export default function WalletScreen({ navigation }: any) {
         }
         contentContainerStyle={{ paddingBottom: 40 }}
       />
+
+      {/* Remittance Instructions Modal */}
+      {showRemitModal && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>💳 How to Remit Cash</Text>
+            <Text style={styles.modalDesc}>
+              Clear your outstanding balance using any of these methods:
+            </Text>
+
+            <View style={styles.modalOption}>
+              <Text style={styles.modalOptionIcon}>📱</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalOptionTitle}>JazzCash / EasyPaisa</Text>
+                <Text style={styles.modalOptionDesc}>Transfer to the platform account. Share screenshot with admin.</Text>
+              </View>
+            </View>
+
+            <View style={styles.modalOption}>
+              <Text style={styles.modalOptionIcon}>🏢</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalOptionTitle}>Office Deposit</Text>
+                <Text style={styles.modalOptionDesc}>Visit the Baldia Mart office. Admin will reconcile instantly.</Text>
+              </View>
+            </View>
+
+            <View style={styles.modalOption}>
+              <Text style={styles.modalOptionIcon}>🔄</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalOptionTitle}>Auto-Deduct</Text>
+                <Text style={styles.modalOptionDesc}>Future delivery earnings will auto-offset your COD balance.</Text>
+              </View>
+            </View>
+
+            <View style={[styles.modalHighlight, { marginTop: 16 }]}>
+              <Text style={styles.modalHighlightText}>
+                Your account will reactivate automatically once your balance is cleared.
+              </Text>
+            </View>
+
+            <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setShowRemitModal(false)}>
+              <Text style={styles.modalCloseTxt}>Got It</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -279,4 +388,52 @@ const styles = StyleSheet.create({
 
   emptyWrap: { alignItems: 'center', padding: 60, marginTop: 40 },
   emptyTxt: { color: '#aaa', fontSize: 14, marginTop: 12 },
+
+  // Remittance Card
+  remitCard: {
+    backgroundColor: '#fff', borderRadius: 20, padding: 20, marginTop: 16,
+    borderWidth: 1, borderColor: '#FDE68A',
+    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 2,
+  },
+  remitTitle: { fontSize: 14, fontWeight: '800', color: '#92400E', marginBottom: 14 },
+  remitRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  remitLabel: { fontSize: 13, color: '#78716C' },
+  remitVal: { fontSize: 13, fontWeight: '700', color: '#1C1917' },
+  remitTotalRow: { borderTopWidth: 1, borderTopColor: '#E7E5E4', paddingTop: 10, marginTop: 4 },
+  remitTotalLabel: { fontSize: 14, fontWeight: '800', color: '#1C1917' },
+  remitTotalVal: { fontSize: 16, fontWeight: '900' },
+  remitBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: '#FF4500', borderRadius: 14, paddingVertical: 14, marginTop: 14,
+  },
+  remitBtnText: { color: '#fff', fontSize: 14, fontWeight: '800' },
+
+  // Remit Modal
+  modalOverlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 100,
+    backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    padding: 24, paddingBottom: 40,
+  },
+  modalTitle: { fontSize: 20, fontWeight: '900', color: '#1A1A1A', marginBottom: 8 },
+  modalDesc: { fontSize: 13, color: '#666', marginBottom: 20 },
+  modalOption: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F1F5F9',
+  },
+  modalOptionIcon: { fontSize: 28 },
+  modalOptionTitle: { fontSize: 14, fontWeight: '700', color: '#1A1A1A' },
+  modalOptionDesc: { fontSize: 12, color: '#888', marginTop: 2 },
+  modalHighlight: {
+    backgroundColor: '#F0FDF4', borderRadius: 12, padding: 14,
+    borderWidth: 1, borderColor: '#DCFCE7',
+  },
+  modalHighlightText: { fontSize: 12, color: '#166534', fontWeight: '600', textAlign: 'center' },
+  modalCloseBtn: {
+    marginTop: 16, backgroundColor: '#1A1A1A', borderRadius: 14,
+    paddingVertical: 14, alignItems: 'center',
+  },
+  modalCloseTxt: { color: '#fff', fontSize: 15, fontWeight: '800' },
 });

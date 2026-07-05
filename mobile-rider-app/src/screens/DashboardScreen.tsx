@@ -6,9 +6,42 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker, Circle } from 'react-native-maps';
 import * as Location from 'expo-location';
+import * as TaskManager from 'expo-task-manager';
 import { useNetInfo } from '@react-native-community/netinfo';
 import { socket, ordersApi, ridersApi, settingsApi, connectSocket } from '../api/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const LOCATION_TASK_NAME = 'background-location-task';
+
+TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }: any) => {
+  if (error) {
+    console.error('[BackgroundLocation] Task error:', error);
+    return;
+  }
+  if (data) {
+    const { locations } = data;
+    const loc = locations[0];
+    if (loc) {
+      try {
+        const storedRider = await AsyncStorage.getItem('user');
+        const isOnlineVal = await AsyncStorage.getItem('isOnline');
+        if (storedRider && isOnlineVal === 'true') {
+          const parsedRider = JSON.parse(storedRider);
+          if (!socket.connected) {
+            connectSocket();
+          }
+          socket.emit('updateLocation', {
+            riderId: parsedRider.id,
+            lat: loc.coords.latitude,
+            lng: loc.coords.longitude
+          });
+        }
+      } catch (err) {
+        console.error('[BackgroundLocation] Error in task:', err);
+      }
+    }
+  }
+});
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const DEFAULT_REGION = { latitude: 24.91522600, longitude: 66.96431980, latitudeDelta: 0.05, longitudeDelta: 0.05 };
@@ -73,14 +106,109 @@ export default function DashboardScreen({ navigation }: any) {
   const [incomingOrder, setIncomingOrder] = useState<any>(null);
   const sheetY = useRef(new Animated.Value(350)).current;
   const [sheetVisible, setSheetVisible] = useState(false);
+  const fetchOrdersTimer = useRef<NodeJS.Timeout | null>(null);
+
+  const syncRiderStatus = async (online: boolean, coords?: any) => {
+    try {
+      const data: any = { isOnline: online };
+      if (coords) {
+        data.currentLat = coords.latitude.toString();
+        data.currentLng = coords.longitude.toString();
+      }
+      await ridersApi.updateProfile(data);
+    } catch (e) {
+      console.error('Failed to sync rider status:', e);
+    }
+  };
+
+  // ── Data fetchers ────────────────────────────────────────────────────
+  const fetchRiderInfo = async () => {
+    try {
+      const [profileRes, statsRes] = await Promise.all([ridersApi.getMe(), ridersApi.getStats()]);
+      setRider(profileRes.data);
+      await AsyncStorage.setItem('user', JSON.stringify(profileRes.data));
+      setStats(statsRes.data);
+    } catch (e) { console.error('fetchRiderInfo error', e); }
+  };
+
+  const fetchOrders = useCallback(async () => {
+    try {
+      const [pendingRes, activeRes, statsRes] = await Promise.all([
+        ordersApi.getPending(),
+        ordersApi.getActive(),
+        ridersApi.getStats(),
+      ]);
+      setPendingOrders(pendingRes.data || []);
+      setActiveOrders(activeRes.data || []);
+      setStats(statsRes.data);
+    } catch (e) { console.error('fetchOrders error', e); }
+  }, []);
+
+  const debouncedFetchOrders = useCallback(() => {
+    if (fetchOrdersTimer.current) {
+      clearTimeout(fetchOrdersTimer.current);
+    }
+    fetchOrdersTimer.current = setTimeout(() => {
+      fetchOrders();
+    }, 500);
+  }, [fetchOrders]);
+
+  const fetchMartLocations = async () => {
+    try {
+      const res = await settingsApi.getPublicSettings();
+      if (res.data.mart_locations) {
+        setMartLocations([
+          { id: 'all', name: 'All Orders', address: 'Show orders from everywhere' },
+          ...res.data.mart_locations,
+        ]);
+      }
+    } catch (e) {}
+  };
+
+  const loadSelectedMart = async () => {
+    try {
+      const saved = await AsyncStorage.getItem('selectedMart');
+      if (saved) setSelectedMart(JSON.parse(saved));
+    } catch (e) {}
+  };
 
   // ── Location tracking ───────────────────────────────────────────────
   useEffect(() => {
     let locationSubscription: Location.LocationSubscription | null = null;
     
     (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') return;
+      const { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
+      if (fgStatus !== 'granted') return;
+      
+      try {
+        const { status: bgStatus } = await Location.requestBackgroundPermissionsAsync();
+        if (bgStatus !== 'granted') {
+          console.warn('Background location permission not granted');
+        }
+      } catch (err) {
+        console.error('Error requesting background location permission', err);
+      }
+
+      // ── Immediate location fix on going online ────────────────────────
+      // The watchPositionAsync only fires after 15m movement; a new rider
+      // who just turned online won't have any stored coordinates yet.
+      // Grab the current position immediately and push it so acceptOrder works.
+      if (isOnline && rider?.id) {
+        try {
+          const immediate = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          setRiderLoc(immediate.coords);
+          // Push to Redis via socket
+          socket.emit('updateLocation', {
+            riderId: rider.id,
+            lat: immediate.coords.latitude,
+            lng: immediate.coords.longitude
+          });
+          // Also persist to DB so the fallback path in acceptOrder works
+          syncRiderStatus(true, immediate.coords);
+        } catch (err) {
+          console.error('Failed to get immediate location fix:', err);
+        }
+      }
       
       locationSubscription = await Location.watchPositionAsync(
         { accuracy: Location.Accuracy.High, distanceInterval: 15 },
@@ -98,6 +226,32 @@ export default function DashboardScreen({ navigation }: any) {
           }
         },
       );
+
+      if (isOnline) {
+        try {
+          await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
+            accuracy: Location.Accuracy.High,
+            distanceInterval: 15,
+            deferredUpdatesDistance: 15,
+            foregroundService: {
+              notificationTitle: "Baldia Mart Rider",
+              notificationBody: "Tracking your location for active deliveries",
+              notificationColor: "#FF4500"
+            }
+          });
+        } catch (err) {
+          console.error('Error starting location updates', err);
+        }
+      } else {
+        try {
+          const hasStarted = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME);
+          if (hasStarted) {
+            await Location.stopLocationUpdatesAsync(LOCATION_TASK_NAME);
+          }
+        } catch (err) {
+          console.error('Error stopping location updates', err);
+        }
+      }
     })();
     
     return () => {
@@ -131,14 +285,14 @@ export default function DashboardScreen({ navigation }: any) {
     const onOrderCancelled = ({ orderId }: any) => {
       Vibration.vibrate([100, 500, 100, 500, 100, 500]);
       Alert.alert('Order Cancelled 🛑', `Order #${(orderId || '').slice(0, 8).toUpperCase()} was cancelled.`);
-      fetchOrders();
+      debouncedFetchOrders();
     };
 
     socket.on('connect', onConnect);
     socket.on('newOrder', onNewOrder);
     socket.on('orderAccepted', onOrderAccepted);
     socket.on('orderCancelled', onOrderCancelled);
-    socket.on('orderUpdated', fetchOrders);
+    socket.on('orderUpdated', debouncedFetchOrders);
 
     fetchOrders();
     if (!rider) fetchRiderInfo();
@@ -148,9 +302,12 @@ export default function DashboardScreen({ navigation }: any) {
       socket.off('newOrder', onNewOrder);
       socket.off('orderAccepted', onOrderAccepted);
       socket.off('orderCancelled', onOrderCancelled);
-      socket.off('orderUpdated', fetchOrders);
+      socket.off('orderUpdated', debouncedFetchOrders);
+      if (fetchOrdersTimer.current) {
+        clearTimeout(fetchOrdersTimer.current);
+      }
     };
-  }, [isOnline, rider?.id, isNetworkOffline]);
+  }, [isOnline, rider?.id, isNetworkOffline, debouncedFetchOrders, fetchOrders]);
 
   useEffect(() => {
     const checkActiveOrder = async () => {
@@ -171,59 +328,7 @@ export default function DashboardScreen({ navigation }: any) {
     syncRiderStatus(isOnline);
   }, []);
 
-  const syncRiderStatus = async (online: boolean, coords?: any) => {
-    try {
-      const data: any = { isOnline: online };
-      if (coords) {
-        data.currentLat = coords.latitude.toString();
-        data.currentLng = coords.longitude.toString();
-      }
-      await ridersApi.updateProfile(data);
-    } catch (e) {
-      console.error('Failed to sync rider status:', e);
-    }
-  };
 
-  // ── Data fetchers ────────────────────────────────────────────────────
-  const fetchRiderInfo = async () => {
-    try {
-      const [profileRes, statsRes] = await Promise.all([ridersApi.getMe(), ridersApi.getStats()]);
-      setRider(profileRes.data);
-      setStats(statsRes.data);
-    } catch (e) { console.error('fetchRiderInfo error', e); }
-  };
-
-  const fetchOrders = useCallback(async () => {
-    try {
-      const [pendingRes, activeRes, statsRes] = await Promise.all([
-        ordersApi.getPending(),
-        ordersApi.getActive(),
-        ridersApi.getStats(),
-      ]);
-      setPendingOrders(pendingRes.data || []);
-      setActiveOrders(activeRes.data || []);
-      setStats(statsRes.data);
-    } catch (e) { console.error('fetchOrders error', e); }
-  }, []);
-
-  const fetchMartLocations = async () => {
-    try {
-      const res = await settingsApi.getPublicSettings();
-      if (res.data.mart_locations) {
-        setMartLocations([
-          { id: 'all', name: 'All Orders', address: 'Show orders from everywhere' },
-          ...res.data.mart_locations,
-        ]);
-      }
-    } catch (e) {}
-  };
-
-  const loadSelectedMart = async () => {
-    try {
-      const saved = await AsyncStorage.getItem('selectedMart');
-      if (saved) setSelectedMart(JSON.parse(saved));
-    } catch (e) {}
-  };
 
   const handleSelectMart = async (mart: any) => {
     setSelectedMart(mart);
@@ -303,8 +408,9 @@ export default function DashboardScreen({ navigation }: any) {
           {/* Online Switch */}
           <Switch
             value={isOnline}
-            onValueChange={(val) => {
+            onValueChange={async (val) => {
               setIsOnline(val);
+              await AsyncStorage.setItem('isOnline', String(val));
               syncRiderStatus(val, riderLoc);
             }}
             trackColor={{ false: '#444', true: '#FF4500' }}

@@ -16,7 +16,7 @@ import { MenuItem } from '../../menu-items/menu-item.entity';
 import { PharmacyInventory } from '../../pharma/pharmacies/pharmacy-inventory.entity';
 import { ChangeRequest } from '../entities/change-request.entity';
 import * as bcrypt from 'bcryptjs';
-import { Between, In } from 'typeorm';
+import { Between, In, Not } from 'typeorm';
 
 /**
  * Admin-only endpoints for managing tenants (businesses) and their memberships.
@@ -241,10 +241,15 @@ export class TenantController {
 
     const todayRevenue = todayOrders.reduce((sum, o) => sum + Number(o.total), 0);
 
+    const activeOrderFilter: any = {};
+    if (tenant.type === 'grocery' || tenant.type === 'mart') activeOrderFilter.martId = entityId;
+    else if (tenant.type === 'food' || tenant.type === 'restaurant') activeOrderFilter.restaurantId = entityId;
+    else if (tenant.type === 'pharma' || tenant.type === 'pharmacy') activeOrderFilter.pharmacyId = entityId;
+
     const activeOrders = await this.orderRepo.count({
       where: {
-        ...orderFilter,
-        status: In(['pending', 'confirmed', 'out_for_delivery'])
+        ...activeOrderFilter,
+        status: Not(In(['delivered', 'cancelled']))
       }
     });
 
