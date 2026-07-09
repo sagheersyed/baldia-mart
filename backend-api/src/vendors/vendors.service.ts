@@ -44,7 +44,7 @@ export class VendorsService {
       if (!v.isOpen || !v.isActive || vp.stockQty <= 0) return false;
       
       // Strict Hierarchical Business Hour Check (Vendor -> Category -> Brand -> Product)
-      if (!this.isBusinessOpen(v.openingTime, v.closingTime)) return false;
+      if (!this.isBusinessOpen(v.openingTime, v.closingTime, (v as any).offDays, (v as any).fridayOpeningTime, (v as any).fridayClosingTime)) return false;
       if (c && !this.isBusinessOpen(c.openingTime, c.closingTime)) return false;
       if (b && !this.isBusinessOpen(b.openingTime, b.closingTime)) return false;
       if (p && !this.isBusinessOpen(p.openingTime, p.closingTime)) return false;
@@ -91,7 +91,7 @@ export class VendorsService {
         const v = vp.vendor;
         const p = vp.product;
         if (!v || !v.isOpen || !v.isActive || vp.stockQty <= 0) return false;
-        if (!this.isBusinessOpen(v.openingTime, v.closingTime)) return false;
+        if (!this.isBusinessOpen(v.openingTime, v.closingTime, (v as any).offDays, (v as any).fridayOpeningTime, (v as any).fridayClosingTime)) return false;
         if (p?.category && !this.isBusinessOpen(p.category.openingTime, p.category.closingTime)) return false;
         if (p?.brand && !this.isBusinessOpen(p.brand.openingTime, p.brand.closingTime)) return false;
         if (p && !this.isBusinessOpen(p.openingTime, p.closingTime)) return false;
@@ -111,12 +111,40 @@ export class VendorsService {
     return result;
   }
 
-  private isBusinessOpen(openingTime: string | null, closingTime: string | null): boolean {
-    if (!openingTime || !closingTime) return true;
+  private isBusinessOpen(
+    openingTime: string | null,
+    closingTime: string | null,
+    offDays?: string | null,
+    fridayOpeningTime?: string | null,
+    fridayClosingTime?: string | null,
+  ): boolean {
     try {
       const now = new Date();
-      const [openH, openM] = openingTime.split(':').map(Number);
-      const [closeH, closeM] = closingTime.split(':').map(Number);
+      const currentDay = now.getDay().toString(); // '0' (Sunday) - '6' (Saturday)
+      
+      // Check if today is a full day off
+      if (offDays) {
+        const offDaysList = offDays.split(',').map(d => d.trim().toLowerCase());
+        const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+        const currentDayName = dayNames[now.getDay()];
+        if (offDaysList.includes(currentDay) || offDaysList.includes(currentDayName)) {
+          return false;
+        }
+      }
+
+      let openTimeStr = openingTime;
+      let closeTimeStr = closingTime;
+
+      // On Fridays (day 5), override opening/closing times if Friday-specific times are set
+      if (currentDay === '5') {
+        if (fridayOpeningTime) openTimeStr = fridayOpeningTime;
+        if (fridayClosingTime) closeTimeStr = fridayClosingTime;
+      }
+
+      if (!openTimeStr || !closeTimeStr) return true;
+
+      const [openH, openM] = openTimeStr.split(':').map(Number);
+      const [closeH, closeM] = closeTimeStr.split(':').map(Number);
       const openTime = new Date(now); openTime.setHours(openH, openM, 0, 0);
       const closeTime = new Date(now); closeTime.setHours(closeH, closeM, 0, 0);
       if (closeTime < openTime) {
@@ -162,9 +190,10 @@ export class VendorsService {
   }
 
   // ── CRUD ────────────────────────────────────────────────────────────────────
-  async findAll(): Promise<Vendor[]> {
+  async findAll(includeInactive = false): Promise<Vendor[]> {
+    const where = includeInactive ? {} : { isActive: true };
     return this.vendorsRepository.find({
-      where: { isActive: true },
+      where,
       relations: ['vendorProducts', 'vendorProducts.product'],
       order: { averageRating: 'DESC' },
     });

@@ -110,7 +110,7 @@ export default function RestaurantsPage() {
   const fetchRestaurants = async () => {
     setLoading(true);
     try {
-      const res = await fetchWithAuth(API_URL);
+      const res = await fetchWithAuth(`${API_URL}?all=true`);
       if (!res.ok) throw new Error(await parseApiError(res, 'Failed to fetch restaurants'));
       const data = await res.json();
       setRestaurants(Array.isArray(data) ? data : []);
@@ -214,6 +214,21 @@ export default function RestaurantsPage() {
       showToast({ title: 'Menu item deleted', variant: 'success' });
     } catch (err) {
       showToast({ title: getErrorMessage(err, 'Failed to delete menu item'), variant: 'error' });
+    }
+  };
+
+  const handleToggleActive = async (restaurant: Restaurant) => {
+    try {
+      const res = await fetchWithAuth(`${API_URL}/${restaurant.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isActive: !restaurant.isActive }),
+      });
+      if (!res.ok) throw new Error(await parseApiError(res, 'Failed to update status'));
+      fetchRestaurants();
+      showToast({ title: `Restaurant ${!restaurant.isActive ? 'activated' : 'deactivated'}`, variant: 'success' });
+    } catch (err) {
+      showToast({ title: getErrorMessage(err, 'Failed to update status'), variant: 'error' });
     }
   };
 
@@ -327,6 +342,17 @@ export default function RestaurantsPage() {
                       className="flex items-center gap-2 bg-orange-50 hover:bg-orange-100 text-orange-600 px-4 py-2 rounded-xl font-bold text-sm transition-all"
                     >
                       <Plus size={14} /> Add Menu Item
+                    </button>
+                    <button
+                      onClick={() => handleToggleActive(restaurant)}
+                      title={restaurant.isActive ? 'Deactivate restaurant' : 'Activate restaurant'}
+                      className={`px-3 py-2 rounded-xl font-bold text-xs transition-all ${
+                        restaurant.isActive
+                          ? 'bg-green-50 text-green-600 hover:bg-red-50 hover:text-red-600'
+                          : 'bg-red-50 text-red-600 hover:bg-green-50 hover:text-green-600'
+                      }`}
+                    >
+                      {restaurant.isActive ? 'Active' : 'Reactivate'}
                     </button>
                     <button onClick={() => openEditRestaurant(restaurant)} className="p-2 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all">
                       <Pencil size={18} />

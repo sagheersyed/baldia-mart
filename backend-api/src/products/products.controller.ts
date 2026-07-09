@@ -127,6 +127,13 @@ export class ProductsController {
     return this.productsService.findByBrand(brandId, page, limit);
   }
 
+  // ── Admin-only: full inventory for vendor product pickers (no cache, no isActive filter) ──
+  @Get('all')
+  @UseGuards(AuthGuard('jwt'), AdminRoleGuard)
+  async listAll() {
+    return this.productsService.findAllForAdmin();
+  }
+
   @Get(':id')
   async getById(@Param('id') id: string) {
     return this.productsService.findById(id);

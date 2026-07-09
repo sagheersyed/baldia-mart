@@ -190,6 +190,42 @@ export class TenantController {
     return { success: true };
   }
 
+  @Get(':tenantId/profile')
+  @UseGuards(JwtAuthGuard, TenantGuard)
+  @TenantRoles('owner', 'manager', 'staff', 'pharmacist', 'assistant_pharmacist')
+  async getMyStoreProfile(@Req() req: any) {
+    const tenantId = req.tenantId;
+    const tenant = await this.tenantRepo.findOneOrFail({ where: { id: tenantId } });
+    const entityId = tenant.entityId;
+
+    let details: any = {};
+    if (entityId) {
+      if (tenant.type === 'grocery' || tenant.type === 'mart') {
+        const VendorEntity = (await import('../../vendors/vendor.entity')).Vendor;
+        details = await this.tenantRepo.manager.getRepository(VendorEntity).findOne({ where: { id: entityId } }) || {};
+      } else if (tenant.type === 'food' || tenant.type === 'restaurant') {
+        const RestaurantEntity = (await import('../../restaurants/restaurant.entity')).Restaurant;
+        details = await this.tenantRepo.manager.getRepository(RestaurantEntity).findOne({ where: { id: entityId } }) || {};
+      } else if (tenant.type === 'pharma' || tenant.type === 'pharmacy') {
+        const PharmacyEntity = (await import('../../pharma/pharmacies/pharmacy.entity')).Pharmacy;
+        details = await this.tenantRepo.manager.getRepository(PharmacyEntity).findOne({ where: { id: entityId } }) || {};
+      }
+    }
+
+    return {
+      ...tenant,
+      openingTime: details.openingTime || details.openingHours || '',
+      closingTime: details.closingTime || '',
+      offDays: details.offDays || '',
+      fridayOpeningTime: details.fridayOpeningTime || '',
+      fridayClosingTime: details.fridayClosingTime || '',
+      address: details.address || '',
+      location: details.location || '',
+      latitude: details.latitude !== undefined ? Number(details.latitude) : (details.lat !== undefined ? Number(details.lat) : null),
+      longitude: details.longitude !== undefined ? Number(details.longitude) : (details.lng !== undefined ? Number(details.lng) : null),
+    };
+  }
+
   @Patch(':tenantId/profile')
   @UseGuards(JwtAuthGuard, TenantGuard)
   @TenantRoles('owner', 'manager')

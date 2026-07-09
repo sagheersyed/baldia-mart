@@ -323,7 +323,7 @@ export default function FinanceDashboard() {
                   <div key={w.id} onClick={() => window.location.href = '/wallets'} className="flex items-center justify-between p-4 bg-slate-50/50 border border-slate-100 rounded-2xl hover:bg-white hover:shadow-md transition-all cursor-pointer">
                      <div className="min-w-0">
                         <p className="text-xs font-black text-slate-800 uppercase truncate">
-                          {w.user?.name || w.rider?.name || w.vendor?.name || `User ${w.userId.slice(-4)}`}
+                          {w.user?.name || w.rider?.name || w.vendor?.name || (w.userId ? `User ${w.userId.slice(-4)}` : (w.wallet?.userId ? `User ${w.wallet.userId.slice(-4)}` : 'User'))}
                         </p>
                         <p className="text-[10px] text-slate-400 font-bold mt-1 uppercase tracking-tighter">{w.bankName || 'Wallet'} · {w.accountNumber || 'Check details'}</p>
                      </div>

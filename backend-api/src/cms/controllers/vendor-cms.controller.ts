@@ -12,6 +12,7 @@ import { Repository } from 'typeorm';
 import { VendorProduct } from '../../vendors/vendor-product.entity';
 import { Tenant } from '../entities/tenant.entity';
 import { Product } from '../../products/product.entity';
+import { Vendor } from '../../vendors/vendor.entity';
 
 /**
  * Vendor CMS — endpoints for grocery/mart vendors to manage their products.
@@ -30,6 +31,8 @@ export class VendorCmsController {
     private readonly tenantRepo: Repository<Tenant>,
     @InjectRepository(Product)
     private readonly productRepo: Repository<Product>,
+    @InjectRepository(Vendor)
+    private readonly vendorRepo: Repository<Vendor>,
   ) {}
 
   /** Get all master products that are NOT currently in this vendor's store. */
@@ -230,6 +233,79 @@ export class VendorCmsController {
         ...dto,
         isActive: true,
       },
+      requestedBy: req.user.id,
+      submitImmediately: true,
+    });
+  }
+
+  /** Request to update vendor profile (hours, location). */
+  @Post('profile/update')
+  @TenantRoles('owner', 'manager')
+  async updateProfile(
+    @Req() req: any,
+    @Body() dto: {
+      openingTime?: string;
+      closingTime?: string;
+      offDays?: string;
+      fridayOpeningTime?: string;
+      fridayClosingTime?: string;
+      address?: string;
+      location?: string;
+      lat?: number;
+      lng?: number;
+    },
+  ) {
+    const tenant = await this.tenantRepo.findOne({ where: { id: req.tenantId } });
+    const vendor = tenant?.entityId
+      ? await this.vendorRepo.findOne({ where: { id: tenant.entityId } })
+      : null;
+
+    const patches: any[] = [];
+    if (dto.openingTime !== undefined) {
+      patches.push({ op: 'replace', path: '/openingTime', value: dto.openingTime, oldValue: vendor?.openingTime });
+    }
+    if (dto.closingTime !== undefined) {
+      patches.push({ op: 'replace', path: '/closingTime', value: dto.closingTime, oldValue: vendor?.closingTime });
+    }
+    if (dto.offDays !== undefined) {
+      patches.push({ op: 'replace', path: '/offDays', value: dto.offDays, oldValue: (vendor as any)?.offDays });
+    }
+    if (dto.fridayOpeningTime !== undefined) {
+      patches.push({ op: 'replace', path: '/fridayOpeningTime', value: dto.fridayOpeningTime, oldValue: (vendor as any)?.fridayOpeningTime });
+    }
+    if (dto.fridayClosingTime !== undefined) {
+      patches.push({ op: 'replace', path: '/fridayClosingTime', value: dto.fridayClosingTime, oldValue: (vendor as any)?.fridayClosingTime });
+    }
+    if (dto.address !== undefined) {
+      patches.push({ op: 'replace', path: '/address', value: dto.address, oldValue: vendor?.address });
+    }
+    if (dto.location !== undefined) {
+      patches.push({ op: 'replace', path: '/location', value: dto.location, oldValue: vendor?.location });
+    }
+    if (dto.lat !== undefined) {
+      patches.push({ op: 'replace', path: '/lat', value: dto.lat, oldValue: vendor?.lat });
+    }
+    if (dto.lng !== undefined) {
+      patches.push({ op: 'replace', path: '/lng', value: dto.lng, oldValue: vendor?.lng });
+    }
+
+    return this.crService.create({
+      tenantId: req.tenantId,
+      entityType: 'Vendor',
+      entityId: tenant?.entityId,
+      actionType: 'UPDATE',
+      patchData: patches,
+      preChangeSnapshot: vendor ? {
+        openingTime: vendor.openingTime,
+        closingTime: vendor.closingTime,
+        offDays: (vendor as any).offDays,
+        fridayOpeningTime: (vendor as any).fridayOpeningTime,
+        fridayClosingTime: (vendor as any).fridayClosingTime,
+        address: vendor.address,
+        location: vendor.location,
+        lat: vendor.lat,
+        lng: vendor.lng,
+      } : null,
       requestedBy: req.user.id,
       submitImmediately: true,
     });

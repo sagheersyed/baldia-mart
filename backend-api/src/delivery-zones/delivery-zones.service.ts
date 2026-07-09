@@ -52,32 +52,62 @@ export class DeliveryZonesService {
   // GPS drift tolerance — accounts for GPS inaccuracy in dense/indoor areas
   private readonly GPS_DRIFT_BUFFER_KM = 0.5;
 
-  async validateAddressInZone(lat: number, lng: number): Promise<{ isValid: boolean, distance: number, zone?: DeliveryZone, maxRadius?: number }> {
-    const activeZones = await this.findAllActive();
+  async validateAddressInZone(lat: number, lng: number): Promise<{ isValid: boolean, distance: number, zone?: DeliveryZone, zones?: DeliveryZone[], maxRadius?: number }> {
+    const result = await this.validateAddressInAllZones(lat, lng);
+    if (!result.isValid || result.zones.length === 0) {
+      return { isValid: false, distance: result.minDistance, maxRadius: result.maxRadius };
+    }
+    // Return first (closest) matching zone for backward compat, but also expose all zones
+    const best = result.zones[0];
+    return {
+      isValid: true,
+      distance: result.minDistance,
+      zone: best,
+      zones: result.zones,
+    };
+  }
 
-    console.log(`Validating coordinates (${lat}, ${lng}) against ${activeZones.length} active zones`);
+  /**
+   * Returns ALL active zones the coordinate falls within, sorted by distance (closest first).
+   * Use this when a vendor/pharmacy location may overlap multiple zones.
+   */
+  async validateAddressInAllZones(lat: number, lng: number): Promise<{
+    isValid: boolean;
+    zones: DeliveryZone[];
+    minDistance: number;
+    maxRadius: number;
+  }> {
+    const activeZones = await this.findAllActive();
 
     if (activeZones.length === 0) {
       console.warn('NO ACTIVE DELIVERY ZONES FOUND IN DATABASE — all orders will be blocked');
-      return { isValid: false, distance: -1, maxRadius: 0 };
+      return { isValid: false, zones: [], minDistance: -1, maxRadius: 0 };
     }
 
     let maxRadius = 0;
+    const matchingZones: Array<{ zone: DeliveryZone; distance: number }> = [];
+
     for (const zone of activeZones) {
       const effectiveRadius = Number(zone.radiusKm) + this.GPS_DRIFT_BUFFER_KM;
       if (effectiveRadius > maxRadius) maxRadius = effectiveRadius;
 
       const distance = this.calculateDistance(lat, lng, Number(zone.centerLat), Number(zone.centerLng));
-      console.log(
-        `Zone "${zone.name}": distance=${distance.toFixed(2)}km, ` +
-        `radius=${zone.radiusKm}km (+${this.GPS_DRIFT_BUFFER_KM}km buffer = ${effectiveRadius}km)`
-      );
 
       if (distance <= effectiveRadius) {
-        return { isValid: true, distance, zone };
+        matchingZones.push({ zone, distance });
       }
     }
 
-    return { isValid: false, distance: -1, maxRadius };
+    // Sort by distance ascending (closest zone first)
+    matchingZones.sort((a, b) => a.distance - b.distance);
+
+    const minDistance = matchingZones.length > 0 ? matchingZones[0].distance : -1;
+
+    return {
+      isValid: matchingZones.length > 0,
+      zones: matchingZones.map(m => m.zone),
+      minDistance,
+      maxRadius,
+    };
   }
 }

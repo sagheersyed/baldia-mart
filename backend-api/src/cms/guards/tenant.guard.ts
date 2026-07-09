@@ -58,9 +58,14 @@ export class TenantGuard implements CanActivate {
 
     // ── Check tenant status ──
     if (membership.tenant && membership.tenant.status !== 'active') {
-      throw new ForbiddenException(
-        `This business is currently ${membership.tenant.status}. Operations are not allowed.`,
-      );
+      const isManageableStatus = ['inactive', 'onboarding'].includes(membership.tenant.status);
+      const isPrivilegedRole = ['owner', 'manager'].includes(membership.role);
+      
+      if (!(isManageableStatus && isPrivilegedRole)) {
+        throw new ForbiddenException(
+          `This business is currently ${membership.tenant.status}. Operations are not allowed.`,
+        );
+      }
     }
 
     // ── Check roles ──

@@ -1,0 +1,62 @@
+# Business CMS — Mobile App Integration Walkthrough
+
+## Summary
+Integrated the multi-tenant Business CMS into the React Native mobile app. Each vendor/restaurant/pharmacy now has an isolated CMS. A logged-in user who is a tenant member sees a **"My Business"** banner on the Profile screen and can switch to Merchant Mode to manage their store's catalog.
+
+---
+
+## Seeding Test Accounts
+We seeded test owner accounts for all active grocery stores, restaurants, and pharmacies in the database. 
+All accounts are configured with the default MPIN **`123456`** so you can log in instantly.
+
+### Test Merchant Users
+| Store Name | Tenant Type | Phone Number | MPIN |
+| :--- | :--- | :--- | :--- |
+| **Bismillah Milk Shop** | grocery | `+923000000001` | `123456` |
+| **Illahi Chicken Shop** | grocery | `+923000000002` | `123456` |
+| **Bashar Chicken** | grocery | `+923000000003` | `123456` |
+| **Kashif Beef Shop** | grocery | `+923000000004` | `123456` |
+| **Bala Store** | grocery | `+923000000005` | `123456` |
+| **Sarmad Store** | grocery | `+923000000006` | `123456` |
+| **Baldia Super Market** | grocery | `+923000000007` | `123456` |
+| **Iqbal Nihari** | restaurant | `+923000000101` | `123456` |
+| **Cheif Resturant** | restaurant | `+923000000102` | `123456` |
+| **AO Spicy Restaurant** | restaurant | `+923000000103` | `123456` |
+| **Dera Eat Zone** | restaurant | `+923000000104` | `123456` |
+| **Hunger Bytes** | restaurant | `+923000000105` | `123456` |
+| **Baldia Town Pharmacy** | pharmacy | `+923000000201` | `123456` |
+| **Al-Jaddah** | pharmacy | `+923000000202` | `123456` |
+| **Al-Jaddah** | pharmacy | `+923000000203` | `123456` |
+| **Baldia Life Care** | pharmacy | `+923000000204` | `123456` |
+
+---
+
+## Tenant Isolation Logic & Module Scoping
+Each merchant only sees their own store type and products. This is by design:
+1. **Grocery Merchants** (`grocery`) see and update their specific store products. Brand names are now loaded and displayed next to products.
+2. **Restaurant Merchants** (`restaurant`) see and update their menu items.
+3. **Pharmacy Merchants** (`pharmacy`) see and update their specific pharmacy medicines.
+4. **Dual Mode / Multi-business**: If a phone number is linked to multiple tenants (e.g. both a restaurant and a grocery store), they will see multiple business cards under the **"MY BUSINESS"** section on their Profile tab. Tapping on a card opens that specific business's isolated CMS context.
+
+---
+
+## Changes Made
+
+### Backend — Data Seeding & Relations
+- **Multi-Tenant Users Seeded**: Ran `scratch/seed_multi_vertical_users.js` to create the test merchant users.
+- **Product Relations**: Updated `VendorCmsController` to include `'product.brand'` so that product brands are loaded and returned in the API.
+
+### Mobile App — API & Screen Updates
+- **API Endpoints Correction**: Corrected `/cms/restaurant/menu` endpoints to the official `/cms/restaurant/menu-items` backend path in `api.ts`.
+- **Pharmacy Support Added**: Added `getPharmacyMedicines`, `updatePharmacyStock`, and `requestPharmacyPriceUpdate` helper methods to `api.ts`.
+- **ProductCatalogScreen.tsx**:
+  - Implemented dynamic loading for `pharmacy` medicines.
+  - Enabled brand name rendering under product names.
+  - Conditionally hid the availability toggle for pharmacy items (since the backend enforces strict moderation rules for pharmacy and does not expose a direct availability toggle endpoint).
+- **EditProductScreen.tsx**:
+  - Added support for routing params for pharmacy.
+  - Integrated stock and price updates using pharmacy-specific CMS endpoints.
+
+
+
+https://35d8-175-107-236-228.ngrok-free.app

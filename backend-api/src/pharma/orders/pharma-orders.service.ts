@@ -94,15 +94,16 @@ export class PharmaOrdersService {
       }
     }
 
-    // 2.5 Zone Validation (Architectural Fix)
-    const zoneRes = await this.deliveryZonesService.validateAddressInZone(
-      Number(address.latitude), 
+    // 2.5 Zone Validation — collect ALL overlapping active zones (supports multi-zone coverage)
+    const zoneResult = await this.deliveryZonesService.validateAddressInAllZones(
+      Number(address.latitude),
       Number(address.longitude)
     );
-    if (!zoneRes.isValid || !zoneRes.zone) {
+    if (!zoneResult.isValid || zoneResult.zones.length === 0) {
       throw new BadRequestException('Delivery not available. Location not in any active delivery zone.');
     }
-    const zoneId = zoneRes.zone.id;
+    const allZoneIds = zoneResult.zones.map(z => z.id);
+    const primaryZoneId = allZoneIds[0]; // closest zone, used for manual-item fallback
 
     // 3. Rx Validation
     const rxRequired = medicines.some(m => m.requiresPrescription);
@@ -125,11 +126,12 @@ export class PharmaOrdersService {
 
     for (const item of standardItems) {
       const med = medicines.find(m => m.id === item.medicineId);
-      const bestPharma = await this.pharmaciesService.findBestPharmacy(
-        item.medicineId, 
+      // Pass ALL overlapping zone IDs so pharmacies in any of them are considered
+      const bestPharma = await this.pharmaciesService.findBestPharmacyInZones(
+        item.medicineId,
         item.quantity,
-        zoneId,
-        med?.isColdChain || false, // Senior Pharmacist's safety requirement
+        allZoneIds,
+        med?.isColdChain || false,
         address.latitude ? Number(address.latitude) : undefined,
         address.longitude ? Number(address.longitude) : undefined
       );
@@ -146,14 +148,16 @@ export class PharmaOrdersService {
 
     // If there are only manual items, we need a fallback pharmacy in that zone
     if (pharmaMap.size === 0 && manualItems.length > 0) {
-      // First try exact zone match
+      // Try any of the overlapping zones (IN filter)
       let defaultPharma = await this.pharmacyRepo.findOne({
-        where: { zoneId, isActive: true, isVerified: true, isOpen: true }
+        where: allZoneIds.length > 0
+          ? { zoneId: allZoneIds[0], isActive: true, isVerified: true, isOpen: true }
+          : { isActive: true, isVerified: true, isOpen: true }
       });
 
-      // Fallback: overlapping zones scenario — use proximity instead
+      // Fallback: proximity search if no zone match
       if (!defaultPharma && address.latitude && address.longitude) {
-        this.logger.warn(`No pharmacy in zone ${zoneId} for manual items. Falling back to proximity search.`);
+        this.logger.warn(`No pharmacy in zones [${allZoneIds.join(', ')}] for manual items. Falling back to proximity search.`);
         const nearby = await this.pharmaciesService.findNearby(
           Number(address.latitude),
           Number(address.longitude),

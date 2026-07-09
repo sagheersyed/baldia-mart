@@ -181,6 +181,14 @@ export default function WalletScreen({ navigation }: any) {
                 </View>
               </LinearGradient>
 
+              <TouchableOpacity
+                style={styles.withdrawBtn}
+                onPress={() => navigation.navigate('Withdrawal')}
+              >
+                <Ionicons name="cash-outline" size={18} color="#fff" />
+                <Text style={styles.withdrawBtnText}>Request Withdrawal</Text>
+              </TouchableOpacity>
+
               {/* Financial Health Row */}
               <View style={styles.healthRow}>
                  <View style={[styles.healthCard, { borderColor: codOwed > (summary?.limit || 5000) * 0.8 ? '#EF4444' : '#E2E8F0' }]}>
@@ -337,6 +345,20 @@ const styles = StyleSheet.create({
     borderRadius: 24, padding: 24,
     shadowColor: '#FF4500', shadowOpacity: 0.3, shadowRadius: 15, elevation: 12,
   },
+  withdrawBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FF4500',
+    paddingVertical: 14,
+    borderRadius: 16,
+    marginTop: 16,
+    shadowColor: '#FF4500',
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  withdrawBtnText: { color: '#fff', fontSize: 14, fontWeight: '800', marginLeft: 8 },
   heroLabel: { color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: '600' },
   heroVal: { color: '#fff', fontSize: 36, fontWeight: '900', marginVertical: 8 },
   heroDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.15)', marginVertical: 16 },

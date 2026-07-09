@@ -554,6 +554,9 @@ export const cmsApi = {
   getDashboardStats: (tenantId: string) =>
     api.get(`/cms/tenants/${tenantId}/dashboard`, tenantHeaders(tenantId)),
   
+  getStoreProfile: (tenantId: string) =>
+    api.get(`/cms/tenants/${tenantId}/profile`, tenantHeaders(tenantId)),
+  
   updateStoreProfile: (tenantId: string, data: any) =>
     api.patch(`/cms/tenants/${tenantId}/profile`, data, tenantHeaders(tenantId)),
 
@@ -656,6 +659,28 @@ export const cmsApi = {
   
   updateMerchantOrderStatus: (tenantId: string, orderId: string, status: string) =>
     api.put(`/cms/orders/${orderId}/status`, { status }, tenantHeaders(tenantId)),
+
+  // Store Schedule & Location Update (routes to admin-moderated change request)
+  updateStoreSchedule: (tenantId: string, vertical: string, data: {
+    openingTime?: string;
+    closingTime?: string;
+    offDays?: string;
+    fridayOpeningTime?: string;
+    fridayClosingTime?: string;
+    address?: string;
+    location?: string;
+    lat?: number;
+    lng?: number;
+    latitude?: number;
+    longitude?: number;
+  }) => {
+    const path = vertical === 'restaurant'
+      ? '/cms/restaurant/profile/update'
+      : vertical === 'pharmacy'
+      ? '/cms/pharmacy/profile/update'
+      : '/cms/vendor/profile/update';
+    return api.post(path, data, tenantHeaders(tenantId));
+  },
 };
 
 export const financeApi = {
@@ -670,6 +695,13 @@ export const financeApi = {
   getPlatformSummary: () => api.get('/finance/admin/platform-summary'),
   getDailySnapshots: (from?: string, to?: string) => 
     api.get('/finance/admin/daily-snapshots', { params: { from, to } }),
+};
+
+export const walletsApi = {
+  getMyWallet: (tenantId?: string) => 
+    api.get('/wallets/my-wallet', tenantId ? tenantHeaders(tenantId) : undefined),
+  requestWithdrawal: (data: { amount: number; bankName?: string; accountNumber?: string; accountName?: string }, tenantId?: string) =>
+    api.post('/wallets/withdraw-request', data, tenantId ? tenantHeaders(tenantId) : undefined),
 };
 
 export const couponsApi = {

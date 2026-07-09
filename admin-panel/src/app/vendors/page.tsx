@@ -95,7 +95,7 @@ export default function VendorsPage() {
   const fetchVendors = async () => {
     setLoading(true);
     try {
-      const res = await fetchWithAuth(API_URL);
+      const res = await fetchWithAuth(`${API_URL}?all=true`);
       const data = await res.json();
       setVendors(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -105,7 +105,7 @@ export default function VendorsPage() {
 
   const fetchProducts = async () => {
     try {
-      const res = await fetchWithAuth(PRODUCTS_API);
+      const res = await fetchWithAuth(`${PRODUCTS_API}/all`);
       if (res.ok) {
         const data = await res.json();
         setProducts(Array.isArray(data) ? data : (data.data && Array.isArray(data.data) ? data.data : []));
@@ -199,6 +199,21 @@ export default function VendorsPage() {
       const res = await fetchWithAuth(`${API_URL}/${id}`, { method: 'DELETE' });
       if (res.ok) { fetchVendors(); showToast({ title: 'Node Removed', variant: 'success' }); }
     } catch (err) { console.error(err); }
+  };
+
+  const handleToggleVendorActive = async (vendor: Vendor) => {
+    try {
+      const res = await fetchWithAuth(`${API_URL}/${vendor.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isActive: !vendor.isActive }),
+      });
+      if (!res.ok) throw new Error(await parseApiError(res, 'Failed to update status'));
+      fetchVendors();
+      showToast({ title: `Vendor ${!vendor.isActive ? 'activated' : 'deactivated'}`, variant: 'success' });
+    } catch (err) {
+      showToast({ title: getErrorMessage(err, 'Failed to update status'), variant: 'error' });
+    }
   };
 
   const openEditVendor = (v: Vendor) => {
@@ -334,6 +349,17 @@ export default function VendorsPage() {
                        </div>
                        
                        <div className="flex gap-2">
+                          <button
+                             onClick={() => handleToggleVendorActive(vendor)}
+                             title={vendor.isActive ? 'Deactivate vendor' : 'Activate vendor'}
+                             className={`px-3 py-2 rounded-xl font-bold text-[9px] uppercase tracking-widest transition-all ${
+                               vendor.isActive
+                                 ? 'bg-emerald-50 text-emerald-600 hover:bg-rose-50 hover:text-rose-600'
+                                 : 'bg-rose-50 text-rose-600 hover:bg-emerald-50 hover:text-emerald-600'
+                             }`}
+                           >
+                             {vendor.isActive ? 'Active' : 'Reactivate'}
+                           </button>
                           <button onClick={() => openEditVendor(vendor)} className="w-12 h-12 flex items-center justify-center bg-slate-50 hover:bg-indigo-50 hover:text-indigo-600 rounded-2xl border border-slate-100 transition-all">
                              <Pencil size={18} />
                           </button>

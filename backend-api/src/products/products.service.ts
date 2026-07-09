@@ -68,6 +68,14 @@ export class ProductsService {
   // ─────────────────────────────────────────────────────────────
   // READ (with Redis cache)
   // ─────────────────────────────────────────────────────────────
+  /** Admin-only: returns all products (active + inactive) without any cache — for vendor product pickers */
+  async findAllForAdmin(): Promise<Product[]> {
+    return this.productRepository.find({
+      relations: ['category', 'brand'],
+      order: { name: 'ASC' },
+    });
+  }
+
   async findAllActive(page?: number, limit?: number): Promise<any> {
     const p = Number(page) || 1;
     const l = Number(limit) || 20;
@@ -206,7 +214,7 @@ export class ProductsService {
 
   async list(query: ProductListQuery): Promise<PaginatedResult<Product>> {
     const page = Math.max(1, Number(query.page) || 1);
-    const limit = Math.min(50, Math.max(1, Number(query.limit) || 20));
+    const limit = Math.min(1000, Math.max(1, Number(query.limit) || 20));
 
     const qb = this.buildBaseQuery();
 

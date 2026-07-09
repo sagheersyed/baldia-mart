@@ -48,7 +48,7 @@ export class PharmaciesService {
 
   async findNearby(lat: number, lng: number, radiusKm = 5): Promise<Pharmacy[]> {
     // Haversine-based proximity search using existing DeliveryZone pattern
-    return this.pharmacyRepo
+    const pharmacies = await this.pharmacyRepo
       .createQueryBuilder('p')
       .where('p.is_active = true AND p.is_verified = true AND p.is_open = true')
       .andWhere(
@@ -62,6 +62,8 @@ export class PharmaciesService {
       .setParameters({ lat, lng })
       .take(20)
       .getMany();
+
+    return pharmacies.filter(p => p.is24Hours || this.isBusinessOpen(p.openingTime, p.closingTime, p.offDays, p.fridayOpeningTime, p.fridayClosingTime));
   }
 
   async findById(id: string): Promise<Pharmacy> {
@@ -202,15 +204,76 @@ export class PharmaciesService {
     });
   }
 
+  private isBusinessOpen(
+    openingTime: string | null,
+    closingTime: string | null,
+    offDays?: string | null,
+    fridayOpeningTime?: string | null,
+    fridayClosingTime?: string | null,
+  ): boolean {
+    try {
+      const now = new Date();
+      const currentDay = now.getDay().toString(); // '0' (Sunday) - '6' (Saturday)
+      
+      // Check if today is a full day off
+      if (offDays) {
+        const offDaysList = offDays.split(',').map(d => d.trim().toLowerCase());
+        const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+        const currentDayName = dayNames[now.getDay()];
+        if (offDaysList.includes(currentDay) || offDaysList.includes(currentDayName)) {
+          return false;
+        }
+      }
+
+      let openTimeStr = openingTime;
+      let closeTimeStr = closingTime;
+
+      // On Fridays (day 5), override opening/closing times if Friday-specific times are set
+      if (currentDay === '5') {
+        if (fridayOpeningTime) openTimeStr = fridayOpeningTime;
+        if (fridayClosingTime) closeTimeStr = fridayClosingTime;
+      }
+
+      if (!openTimeStr || !closeTimeStr) return true;
+
+      const [openH, openM] = openTimeStr.split(':').map(Number);
+      const [closeH, closeM] = closeTimeStr.split(':').map(Number);
+      const openTime = new Date(now); openTime.setHours(openH, openM, 0, 0);
+      const closeTime = new Date(now); closeTime.setHours(closeH, closeM, 0, 0);
+      if (closeTime < openTime) {
+        return now >= openTime || now <= closeTime;
+      }
+      return now >= openTime && now <= closeTime;
+    } catch (e) {
+      return true;
+    }
+  }
+
   /**
-   * Find the best pharmacy for an order based on availability + proximity + ZONE.
-   * A Senior Pharmacist approach: Only fulfill from the user's delivery zone 
-   * to ensure cold-chain maintenance and local regulation compliance.
+   * Find the best pharmacy (backward-compat single-zone wrapper).
+   * Delegates to findBestPharmacyInZones with all overlapping zone IDs.
    */
   async findBestPharmacy(
     medicineId: string,
     quantity: number,
-    zoneId?: string, // Made optional for anonymous availability checks
+    zoneId?: string,
+    requiresColdChain: boolean = false,
+    lat?: number,
+    lng?: number,
+  ): Promise<Pharmacy | null> {
+    const zoneIds = zoneId ? [zoneId] : [];
+    return this.findBestPharmacyInZones(medicineId, quantity, zoneIds, requiresColdChain, lat, lng);
+  }
+
+  /**
+   * Multi-zone pharmacy finder.
+   * Accepts ALL zone IDs the customer overlaps with (handles overlapping zone coverage).
+   * Tries strict IN-filter zone match first, then falls back to proximity-only.
+   */
+  async findBestPharmacyInZones(
+    medicineId: string,
+    quantity: number,
+    zoneIds: string[],
     requiresColdChain: boolean = false,
     lat?: number,
     lng?: number,
@@ -225,17 +288,15 @@ export class PharmaciesService {
         .andWhere('(inv.stock_quantity - inv.reserved_quantity) >= :qty', { qty: quantity })
         .andWhere('p.is_active = true AND p.is_verified = true AND p.is_open = true');
 
-      // Strict zone match (primary attempt)
-      if (useZoneFilter && zoneId) {
-        qb.andWhere('p.zone_id = :zoneId', { zoneId });
+      // Multi-zone IN filter
+      if (useZoneFilter && zoneIds.length > 0) {
+        qb.andWhere('p.zone_id IN (:...zoneIds)', { zoneIds });
       }
 
-      // Cold-chain compliance
       if (requiresColdChain) {
         qb.andWhere('p.has_cold_chain_support = true');
       }
 
-      // Sort by proximity if coordinates provided
       if (lat && lng) {
         qb.addOrderBy(
           `(6371 * acos(cos(radians(${lat})) * cos(radians(p.latitude)) * cos(radians(p.longitude) - radians(${lng})) + sin(radians(${lat})) * sin(radians(p.latitude))))`,
@@ -246,19 +307,30 @@ export class PharmaciesService {
       return qb;
     };
 
-    // Primary: try exact zone match
-    const strictResult = await buildQuery(true).getOne();
-    if (strictResult?.pharmacy) return strictResult.pharmacy;
+    const checkOpen = (p: Pharmacy) => {
+      if (p.is24Hours) return true;
+      return this.isBusinessOpen(p.openingTime, p.closingTime, p.offDays, p.fridayOpeningTime, p.fridayClosingTime);
+    };
 
-    // Fallback: if two overlapping zones cover the same area (e.g. Saeedabad + Baldia Town),
-    // a pharmacy may be registered under the inactive zone while the customer's address
-    // resolves to the currently active zone. In that case, fall back to searching all active/verified/open pharmacies.
-    if (zoneId) {
+    // Primary: strict multi-zone match
+    if (zoneIds.length > 0) {
+      const strictResults = await buildQuery(true).getMany();
+      for (const inv of strictResults) {
+        if (inv.pharmacy && checkOpen(inv.pharmacy)) {
+          return inv.pharmacy;
+        }
+      }
       this.logger.warn(
-        `No pharmacy found for zone=${zoneId}. Falling back to general search (overlapping zones scenario).`
+        `No open pharmacy found for zones=[${zoneIds.join(', ')}]. Falling back to proximity-only search.`
       );
-      const fallbackResult = await buildQuery(false).getOne();
-      return fallbackResult?.pharmacy || null;
+    }
+
+    // Fallback: proximity-only (last resort for overlapping / unregistered zone scenarios)
+    const fallbackResults = await buildQuery(false).getMany();
+    for (const inv of fallbackResults) {
+      if (inv.pharmacy && checkOpen(inv.pharmacy)) {
+        return inv.pharmacy;
+      }
     }
 
     return null;

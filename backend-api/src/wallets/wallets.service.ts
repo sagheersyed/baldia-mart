@@ -165,13 +165,77 @@ export class WalletsService {
     );
 
     query.orderBy('wallet.updatedAt', 'DESC');
-    return query.getMany();
+    const wallets = await query.getMany();
+
+    // Enrich wallets where entity profiles are missing due to user-level vendor mapping
+    for (const wallet of wallets) {
+      const w = wallet as any;
+      if (w.userType === 'Vendor') {
+        if (!w.vendor && !w.restaurant && !w.pharmacy) {
+          // 1. Fetch User details for fallback name
+          const userRepo = this.walletsRepository.manager.getRepository('User');
+          const user = await userRepo.findOne({ where: { id: w.userId } });
+          if (user) {
+            w.user = user;
+          }
+
+          // 2. Resolve associated store storefront via tenant_users linking
+          try {
+            const tenantUserRepo = this.walletsRepository.manager.getRepository('TenantUser');
+            const memberships = await tenantUserRepo.find({
+              where: { userId: w.userId },
+              relations: ['tenant'],
+            }) as any[];
+
+            for (const membership of memberships) {
+              const tenant = membership.tenant;
+              if (tenant && tenant.entityId) {
+                if (tenant.type === 'restaurant') {
+                  const restaurantRepo = this.walletsRepository.manager.getRepository('Restaurant');
+                  w.restaurant = await restaurantRepo.findOne({ where: { id: tenant.entityId } });
+                } else if (tenant.type === 'pharmacy') {
+                  const pharmacyRepo = this.walletsRepository.manager.getRepository('Pharmacy');
+                  w.pharmacy = await pharmacyRepo.findOne({ where: { id: tenant.entityId } });
+                } else if (tenant.type === 'mart') {
+                  const vendorRepo = this.walletsRepository.manager.getRepository('Vendor');
+                  w.vendor = await vendorRepo.findOne({ where: { id: tenant.entityId } });
+                }
+              }
+            }
+          } catch (e) {
+            // Silence sub-query issues during resolution
+          }
+        }
+      }
+    }
+
+    return wallets;
+  }
+
+  async getWalletWithTenantFallback(userId: string, userType: 'Rider' | 'Vendor' | 'User', tenantId?: string): Promise<Wallet> {
+    let finalUserId = userId;
+    let finalUserType = userType;
+
+    if (tenantId) {
+      const TenantUserEntity = (await import('../cms/entities/tenant-user.entity')).TenantUser;
+      const membership = await this.walletsRepository.manager.getRepository(TenantUserEntity).findOne({
+        where: { tenantId, userId },
+        relations: ['tenant']
+      }) as any;
+
+      if (membership?.tenant?.entityId) {
+        finalUserId = membership.tenant.entityId;
+        finalUserType = 'Vendor';
+      }
+    }
+
+    return this.getWallet(finalUserId, finalUserType as any);
   }
 
   // --- Withdrawal Request Workflow ---
 
-  async createWithdrawalRequest(userId: string, userType: string, data: { amount: number; bankName?: string; accountNumber?: string; accountName?: string }) {
-    const wallet = await this.getWallet(userId, userType as any);
+  async createWithdrawalRequest(userId: string, userType: string, data: { amount: number; bankName?: string; accountNumber?: string; accountName?: string }, tenantId?: string) {
+    const wallet = await this.getWalletWithTenantFallback(userId, userType as any, tenantId);
     
     if (Number(wallet.balance) < Number(data.amount)) {
       throw new BadRequestException('Insufficient balance for withdrawal');
@@ -190,11 +254,75 @@ export class WalletsService {
   }
 
   async getPendingWithdrawals() {
-    return this.withdrawalRepository.find({
+    const requests = await this.withdrawalRepository.find({
       where: { status: 'PENDING' },
       relations: ['wallet'],
       order: { createdAt: 'DESC' }
     });
+
+    for (const req of requests) {
+      if (req.wallet) {
+        const wObj = req.wallet as any;
+        const reqObj = req as any;
+
+        if (wObj.userType === 'Rider') {
+          const riderRepo = this.walletsRepository.manager.getRepository('Rider');
+          const rider = await riderRepo.findOne({ where: { id: wObj.userId } });
+          wObj.rider = rider;
+          reqObj.rider = rider;
+        } else if (wObj.userType === 'User') {
+          const userRepo = this.walletsRepository.manager.getRepository('User');
+          const user = await userRepo.findOne({ where: { id: wObj.userId } });
+          wObj.user = user;
+          reqObj.user = user;
+        } else if (wObj.userType === 'Vendor') {
+          try {
+            const tenantUserRepo = this.walletsRepository.manager.getRepository('TenantUser');
+            const memberships = await tenantUserRepo.find({
+              where: { userId: wObj.userId },
+              relations: ['tenant'],
+            }) as any[];
+
+            for (const membership of memberships) {
+              const tenant = membership.tenant;
+              if (tenant && tenant.entityId) {
+                if (tenant.type === 'restaurant') {
+                  const restaurantRepo = this.walletsRepository.manager.getRepository('Restaurant');
+                  const rest = await restaurantRepo.findOne({ where: { id: tenant.entityId } });
+                  wObj.restaurant = rest;
+                  wObj.vendor = rest;
+                  reqObj.restaurant = rest;
+                  reqObj.vendor = rest;
+                } else if (tenant.type === 'pharmacy') {
+                  const pharmacyRepo = this.walletsRepository.manager.getRepository('Pharmacy');
+                  const pharm = await pharmacyRepo.findOne({ where: { id: tenant.entityId } });
+                  wObj.pharmacy = pharm;
+                  wObj.vendor = pharm;
+                  reqObj.pharmacy = pharm;
+                  reqObj.vendor = pharm;
+                } else if (tenant.type === 'mart') {
+                  const vendorRepo = this.walletsRepository.manager.getRepository('Vendor');
+                  const vend = await vendorRepo.findOne({ where: { id: tenant.entityId } });
+                  wObj.vendor = vend;
+                  reqObj.vendor = vend;
+                }
+              }
+            }
+
+            if (!wObj.vendor && !wObj.restaurant && !wObj.pharmacy) {
+              const vendorRepo = this.walletsRepository.manager.getRepository('Vendor');
+              const vend = await vendorRepo.findOne({ where: { id: wObj.userId } });
+              wObj.vendor = vend;
+              reqObj.vendor = vend;
+            }
+          } catch (e) {
+            // Silence sub-query issues during resolution
+          }
+        }
+      }
+    }
+
+    return requests;
   }
 
   async approveWithdrawal(requestId: string, adminId: string, referenceId: string, notes?: string) {

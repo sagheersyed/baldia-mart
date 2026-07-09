@@ -22,6 +22,7 @@ import WalletScreen from './src/screens/WalletScreen';
 import OrderChatScreen from './src/screens/OrderChatScreen';
 import RiderSettingsScreen from './src/screens/RiderSettingsScreen';
 import ChangeMpinScreen from './src/screens/ChangeMpinScreen';
+import WithdrawalScreen from './src/screens/WithdrawalScreen';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { setAuthToken, authApi } from './src/api/api';
@@ -89,6 +90,7 @@ function AppInner() {
             <Stack.Screen name="RiderSettings" component={RiderSettingsScreen} />
             <Stack.Screen name="ChangeMpin" component={ChangeMpinScreen} />
             <Stack.Screen name="WalletDetail" component={WalletScreen} />
+            <Stack.Screen name="Withdrawal" component={WithdrawalScreen} />
             <Stack.Screen name="OrderChat" component={OrderChatScreen} options={{ headerShown: true, headerStyle: { backgroundColor: '#1E1E1E' }, headerTintColor: '#fff' }} />
           </>
         )}

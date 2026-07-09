@@ -4,6 +4,7 @@ import { File, Paths } from 'expo-file-system';
 
 function getReceiptHTML(order: any) {
   const isFood = order.orderType === 'food';
+  const isPharma = order.orderType === 'pharma';
   const orderIdShort = (order.id || '').slice(0, 8).toUpperCase();
   const dateDisplayStr = new Date(order.createdAt).toLocaleDateString();
   const timeStr = new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -42,21 +43,23 @@ function getReceiptHTML(order: any) {
           <div class="logo">BALDIA MART</div>
           <div class="receipt-title">Official Order Receipt</div>
         </div>
-
+ 
         <div class="info-section">
-          <div class="info-box">
-            <div class="info-label">Order Details</div>
-            <div class="info-value">#${orderIdShort}</div>
-            <div class="info-label">Date & Time</div>
-            <div class="info-value">${dateDisplayStr} at ${timeStr}</div>
-            <div class="info-label">Payment Method</div>
-            <div class="info-value">${(order.paymentMethod || 'COD').toUpperCase()}</div>
-          </div>
-          <div class="info-box">
-            <div class="info-label">Customer</div>
-            <div class="info-value">${order.user?.name || 'Customer'}</div>
-            <div class="info-label">Delivery Address</div>
-            <div class="info-value">${order.address?.streetAddress || 'Local Area'}</div>
+          <div class="info-section">
+            <div class="info-box">
+              <div class="info-label">Order Details</div>
+              <div class="info-value">#${orderIdShort}</div>
+              <div class="info-label">Date & Time</div>
+              <div class="info-value">${dateDisplayStr} at ${timeStr}</div>
+              <div class="info-label">Payment Method</div>
+              <div class="info-value">${(order.paymentMethod || 'COD').toUpperCase()}</div>
+            </div>
+            <div class="info-box">
+              <div class="info-label">Customer</div>
+              <div class="info-value">${order.user?.name || 'Customer'}</div>
+              <div class="info-label">Delivery Address</div>
+              <div class="info-value">${order.address?.streetAddress || 'Local Area'}</div>
+            </div>
           </div>
         </div>
 
@@ -70,14 +73,24 @@ function getReceiptHTML(order: any) {
             </tr>
           </thead>
           <tbody>
-            ${order.items.map((item: any) => `
+            ${order.items.map((item: any) => {
+              let name = 'Item';
+              if (isFood) {
+                name = item.menuItem?.name || item.productName || 'Dish';
+              } else if (isPharma) {
+                name = item.medicine?.name || item.productName || 'Medicine';
+              } else {
+                name = item.product?.name || item.productName || 'Item';
+              }
+              return `
               <tr>
-                <td>${isFood ? (item.menuItem?.name || 'Dish') : (item.product?.name || 'Item')}</td>
+                <td>${name}</td>
                 <td class="text-right">${item.quantity}</td>
                 <td class="text-right">Rs. ${item.priceAtTime}</td>
                 <td class="text-right">Rs. ${Number(item.priceAtTime) * item.quantity}</td>
               </tr>
-            `).join('')}
+              `;
+            }).join('')}
           </tbody>
         </table>
 

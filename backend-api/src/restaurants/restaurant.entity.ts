@@ -35,6 +35,15 @@ export class Restaurant {
   @Column({ name: 'closing_time', nullable: true })
   closingTime: string; // e.g., '23:00'
 
+  @Column({ name: 'off_days', nullable: true })
+  offDays: string; // e.g. '0,6' (Sunday and Saturday off)
+
+  @Column({ name: 'friday_opening_time', nullable: true })
+  fridayOpeningTime: string;
+
+  @Column({ name: 'friday_closing_time', nullable: true })
+  fridayClosingTime: string;
+
   @Column({ type: 'text', nullable: true })
   location: string;
 

@@ -224,6 +224,12 @@ export class PharmacyCmsController {
       closingTime?: string;
       is24Hours?: boolean;
       phoneNumber?: string;
+      offDays?: string;
+      fridayOpeningTime?: string;
+      fridayClosingTime?: string;
+      address?: string;
+      latitude?: number;
+      longitude?: number;
     },
   ) {
     const tenant = await this.tenantRepo.findOne({ where: { id: req.tenantId } });
@@ -244,6 +250,24 @@ export class PharmacyCmsController {
     if (dto.phoneNumber !== undefined) {
       patches.push({ op: 'replace', path: '/phoneNumber', value: dto.phoneNumber, oldValue: pharmacy?.phoneNumber });
     }
+    if (dto.offDays !== undefined) {
+      patches.push({ op: 'replace', path: '/offDays', value: dto.offDays, oldValue: (pharmacy as any)?.offDays });
+    }
+    if (dto.fridayOpeningTime !== undefined) {
+      patches.push({ op: 'replace', path: '/fridayOpeningTime', value: dto.fridayOpeningTime, oldValue: (pharmacy as any)?.fridayOpeningTime });
+    }
+    if (dto.fridayClosingTime !== undefined) {
+      patches.push({ op: 'replace', path: '/fridayClosingTime', value: dto.fridayClosingTime, oldValue: (pharmacy as any)?.fridayClosingTime });
+    }
+    if (dto.address !== undefined) {
+      patches.push({ op: 'replace', path: '/address', value: dto.address, oldValue: pharmacy?.address });
+    }
+    if (dto.latitude !== undefined) {
+      patches.push({ op: 'replace', path: '/latitude', value: dto.latitude, oldValue: pharmacy?.latitude });
+    }
+    if (dto.longitude !== undefined) {
+      patches.push({ op: 'replace', path: '/longitude', value: dto.longitude, oldValue: pharmacy?.longitude });
+    }
 
     return this.crService.create({
       tenantId: req.tenantId,
@@ -256,6 +280,12 @@ export class PharmacyCmsController {
         closingTime: pharmacy.closingTime,
         is24Hours: pharmacy.is24Hours,
         phoneNumber: pharmacy.phoneNumber,
+        offDays: (pharmacy as any).offDays,
+        fridayOpeningTime: (pharmacy as any).fridayOpeningTime,
+        fridayClosingTime: (pharmacy as any).fridayClosingTime,
+        address: pharmacy.address,
+        latitude: pharmacy.latitude,
+        longitude: pharmacy.longitude,
       } : null,
       requestedBy: req.user.id,
       submitImmediately: true,

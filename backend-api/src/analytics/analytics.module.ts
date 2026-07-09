@@ -6,9 +6,10 @@ import { Order } from '../orders/order.entity';
 import { User } from '../users/user.entity';
 import { Rider } from '../riders/rider.entity';
 import { Prescription } from '../pharma/prescriptions/prescription.entity';
+import { Medicine } from '../pharma/medicines/medicine.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Order, User, Rider, Prescription])],
+  imports: [TypeOrmModule.forFeature([Order, User, Rider, Prescription, Medicine])],
   controllers: [AnalyticsController],
   providers: [AnalyticsService],
 })

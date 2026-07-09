@@ -161,6 +161,16 @@ export default function FinancialStatementScreen({ navigation }: any) {
               </AppText>
             </View>
 
+            <Pressable
+              style={[styles.withdrawBtn, { backgroundColor: color }]}
+              onPress={() => navigation.navigate('Withdrawal')}
+            >
+              <Ionicons name="cash-outline" size={18} color="#fff" />
+              <AppText variant="bodyStrong" color="#fff" style={{ marginLeft: 8 }}>
+                Request Withdrawal
+              </AppText>
+            </Pressable>
+
             <AppText variant="title" style={styles.listTitle}>Transaction History</AppText>
           </View>
         }
@@ -220,6 +230,18 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginTop: 16,
     alignItems: 'center',
+  },
+  withdrawBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 14,
+    marginTop: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   listTitle: { marginTop: 24, marginBottom: 8 },
   txnRow: {

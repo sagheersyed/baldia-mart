@@ -10,8 +10,8 @@ export class RestaurantsController {
   constructor(private readonly restaurantsService: RestaurantsService) {}
 
   @Get()
-  findAll() {
-    return this.restaurantsService.findAll();
+  findAll(@Query('all') all?: string) {
+    return this.restaurantsService.findAll(all === 'true');
   }
 
   /**

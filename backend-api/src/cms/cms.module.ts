@@ -12,6 +12,7 @@ import { AuditLog } from './entities/audit-log.entity';
 
 // Vertical entities needed by merge service & CMS controllers
 import { VendorProduct } from '../vendors/vendor-product.entity';
+import { Vendor } from '../vendors/vendor.entity';
 import { MenuItem } from '../menu-items/menu-item.entity';
 import { Restaurant } from '../restaurants/restaurant.entity';
 import { PharmacyMedicine } from '../pharma/pharmacies/pharmacy-medicine.entity';
@@ -55,6 +56,7 @@ import { TenantGuard } from './guards/tenant.guard';
       AuditLog,
       // Vertical entities (for CMS controllers & merge service)
       VendorProduct,
+      Vendor,
       MenuItem,
       Restaurant,
       PharmacyMedicine,

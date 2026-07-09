@@ -15,12 +15,12 @@ export class WalletsController {
   @Get('my-wallet')
   async getMyWallet(@Req() req) {
     const user = req.user as any;
-    const userId = user.id;
+    const tenantId = req.headers['x-tenant-id'];
     let userType: 'Rider' | 'Vendor' | 'User' = 'User';
     if (user.role === 'rider') userType = 'Rider';
     else if (user.role === 'vendor' || user.role === 'restaurant') userType = 'Vendor';
     
-    const wallet = await this.walletsService.getWallet(userId, userType);
+    const wallet = await this.walletsService.getWalletWithTenantFallback(user.id, userType, tenantId);
     const history = await this.walletsService.getWalletHistory(wallet.id);
 
     return { wallet, history };
@@ -46,8 +46,11 @@ export class WalletsController {
   @Post('withdraw-request')
   async createWithdrawalRequest(@Req() req, @Body() body: CreateWithdrawalRequestDto) {
     const user = req.user as any;
-    const userType = user.role.charAt(0).toUpperCase() + user.role.slice(1);
-    return this.walletsService.createWithdrawalRequest(user.id, userType, body);
+    const tenantId = req.headers['x-tenant-id'];
+    let userType: 'Rider' | 'Vendor' | 'User' = 'User';
+    if (user.role === 'rider') userType = 'Rider';
+    else if (user.role === 'vendor' || user.role === 'restaurant') userType = 'Vendor';
+    return this.walletsService.createWithdrawalRequest(user.id, userType, body, tenantId);
   }
 
   @Post('admin/withdraw-request')

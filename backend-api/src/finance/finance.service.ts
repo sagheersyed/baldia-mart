@@ -37,6 +37,65 @@ export class FinanceService {
     this.logger.log('Finance Engine initialized. Checking for orphaned settlements...');
     // We don't want to block the app start, so we run this in background
     this.healOrphanedSettlements().catch(err => this.logger.error('Failed to heal settlements:', err));
+    this.catchUpSnapshots().catch(err => this.logger.error('Failed to catch up snapshots:', err));
+  }
+
+  async catchUpSnapshots() {
+    this.logger.log('Checking for missing daily snapshots...');
+    try {
+      const earliestLedger = await this.ledgerRepo.findOne({
+        order: { createdAt: 'ASC' },
+      });
+      if (!earliestLedger) {
+        this.logger.log('No ledger entries found. Skipping snapshot catch-up.');
+        return;
+      }
+      
+      const startDate = new Date(earliestLedger.createdAt);
+      startDate.setHours(0, 0, 0, 0);
+      
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      yesterday.setHours(0, 0, 0, 0);
+      
+      this.logger.log(`Scanning for snapshots from ${startDate.toISOString().split('T')[0]} to ${yesterday.toISOString().split('T')[0]}...`);
+      
+      let currentDate = new Date(startDate);
+      let createdCount = 0;
+      
+      while (currentDate <= yesterday) {
+        const dateStr = currentDate.toISOString().split('T')[0];
+        
+        const exists = await this.snapshotRepo.findOne({
+          where: { snapshotDate: currentDate },
+        });
+        
+        if (!exists) {
+          try {
+            await this.generateDailySnapshot(currentDate);
+            createdCount++;
+          } catch (err: any) {
+            const isAlreadyDone =
+              err?.code === '23505' ||
+              (typeof err?.message === 'string' && err.message.toLowerCase().includes('duplicate'));
+            if (!isAlreadyDone) {
+              this.logger.error(`Failed to generate snapshot for ${dateStr}:`, err);
+            }
+          }
+        }
+        
+        currentDate.setDate(currentDate.getDate() + 1);
+        currentDate.setHours(0, 0, 0, 0);
+      }
+      
+      if (createdCount > 0) {
+        this.logger.log(`Snapshot catch-up complete. Generated ${createdCount} missing snapshots.`);
+      } else {
+        this.logger.log('All daily snapshots are up-to-date.');
+      }
+    } catch (err) {
+      this.logger.error('Error during snapshot catch-up:', err);
+    }
   }
 
   async healOrphanedSettlements() {
@@ -552,8 +611,9 @@ export class FinanceService {
       const { Rider } = await import('../riders/rider.entity'); // Dynamic import to avoid cycles if any
       query.leftJoinAndMapOne('w.profile', Rider, 'r', 'r.id = w.userId');
     } else {
-      const { Vendor } = await import('../vendors/vendor.entity');
-      query.leftJoinAndMapOne('w.profile', Vendor, 'v', 'v.id = w.userId');
+      query.leftJoinAndMapOne('w.vendor', 'vendors', 'vendor', 'vendor.id = w.userId');
+      query.leftJoinAndMapOne('w.restaurant', 'restaurants', 'restaurant', 'restaurant.id = w.userId');
+      query.leftJoinAndMapOne('w.pharmacy', 'pharmacies', 'pharmacy', 'pharmacy.id = w.userId');
     }
 
     const wallets = await query.orderBy('w.balance', 'DESC').take(limit).getMany();
@@ -570,9 +630,28 @@ export class FinanceService {
             ]
       });
 
+      let entityName = 'Unknown Merchant';
+      if (userType === 'Rider') {
+        entityName = (w as any).profile?.name || `Rider #${w.userId.slice(-4)}`;
+      } else {
+        const wObj = w as any;
+        const profile = wObj.vendor || wObj.restaurant || wObj.pharmacy;
+        if (profile?.name) {
+          entityName = profile.name;
+        } else {
+          try {
+            const userRepo = this.walletRepo.manager.getRepository('User');
+            const user = await userRepo.findOne({ where: { id: w.userId } });
+            if (user) {
+              entityName = user.name || 'Unknown Merchant';
+            }
+          } catch (e) {}
+        }
+      }
+
       return {
         walletId: w.id,
-        entityName: (w as any).profile?.name || (userType === 'Rider' ? `Rider #${w.userId.slice(-4)}` : 'Unknown Merchant'),
+        entityName,
         totalRevenue: Number(w.balance) + Number(w.cashInHand),
         totalOrders: orderCount,
       };

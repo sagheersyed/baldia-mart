@@ -10,9 +10,10 @@ export class RestaurantsService {
     private restaurantRepository: Repository<Restaurant>,
   ) {}
 
-  async findAll(): Promise<Restaurant[]> {
+  async findAll(includeInactive = false): Promise<Restaurant[]> {
+    const where = includeInactive ? {} : { isActive: true };
     return this.restaurantRepository.find({
-      where: { isActive: true },
+      where,
       order: { name: 'ASC' },
       relations: ['menuItems'],
     });

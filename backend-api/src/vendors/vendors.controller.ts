@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Put, Delete, Param, Body, UseGuards, Patch,
+  Controller, Get, Post, Put, Delete, Param, Body, UseGuards, Patch, Query,
 } from '@nestjs/common';
 import { VendorsService } from './vendors.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -14,8 +14,8 @@ export class VendorsController {
   constructor(private readonly vendorsService: VendorsService) {}
 
   @Get()
-  findAll() {
-    return this.vendorsService.findAll();
+  findAll(@Query('all') all?: string) {
+    return this.vendorsService.findAll(all === 'true');
   }
 
   @Get(':id')

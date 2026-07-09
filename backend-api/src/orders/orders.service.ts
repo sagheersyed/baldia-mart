@@ -59,12 +59,40 @@ export class OrdersService {
     private financeService: FinanceService,
   ) { }
 
-  private isBusinessOpen(openingTime: string | null, closingTime: string | null): boolean {
-    if (!openingTime || !closingTime) return true;
+  private isBusinessOpen(
+    openingTime: string | null,
+    closingTime: string | null,
+    offDays?: string | null,
+    fridayOpeningTime?: string | null,
+    fridayClosingTime?: string | null,
+  ): boolean {
     try {
       const now = new Date();
-      const [openH, openM] = openingTime.split(':').map(Number);
-      const [closeH, closeM] = closingTime.split(':').map(Number);
+      const currentDay = now.getDay().toString(); // '0' (Sunday) - '6' (Saturday)
+      
+      // Check if today is a full day off
+      if (offDays) {
+        const offDaysList = offDays.split(',').map(d => d.trim().toLowerCase());
+        const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+        const currentDayName = dayNames[now.getDay()];
+        if (offDaysList.includes(currentDay) || offDaysList.includes(currentDayName)) {
+          return false;
+        }
+      }
+
+      let openTimeStr = openingTime;
+      let closeTimeStr = closingTime;
+
+      // On Fridays (day 5), override opening/closing times if Friday-specific times are set
+      if (currentDay === '5') {
+        if (fridayOpeningTime) openTimeStr = fridayOpeningTime;
+        if (fridayClosingTime) closeTimeStr = fridayClosingTime;
+      }
+
+      if (!openTimeStr || !closeTimeStr) return true;
+
+      const [openH, openM] = openTimeStr.split(':').map(Number);
+      const [closeH, closeM] = closeTimeStr.split(':').map(Number);
       const openTime = new Date(now); openTime.setHours(openH, openM, 0, 0);
       const closeTime = new Date(now); closeTime.setHours(closeH, closeM, 0, 0);
       if (closeTime < openTime) {
@@ -261,39 +289,16 @@ export class OrdersService {
       distinctRestaurants = Array.from(restoMap.values());
 
       if (distinctRestaurants.length > 0) {
-        // Validate operating hours for ALL involved restaurants
         for (const restaurant of distinctRestaurants) {
-          if (restaurant.openingHours) {
-            try {
-              const [openStr, closeStr] = restaurant.openingHours.split('-').map((s: string) => s.trim());
-              const parseTime = (timeStr: string) => {
-                const match = timeStr.match(/(\d+):(\d+)(?:\s*(AM|PM))?/i);
-                if (!match) return null;
-                let hours = parseInt(match[1], 10);
-                const minutes = parseInt(match[2], 10);
-                const period = match[3]?.toUpperCase();
-                if (period === 'PM' && hours !== 12) hours += 12;
-                if (period === 'AM' && hours === 12) hours = 0;
-                const d = new Date();
-                d.setHours(hours, minutes, 0, 0);
-                return d;
-              };
-              const openTime = parseTime(openStr);
-              const closeTime = parseTime(closeStr);
-              const now = new Date();
-
-              if (openTime && closeTime) {
-                if (closeTime < openTime) {
-                  if (now < openTime && now > closeTime) {
-                    throw new BadRequestException(`Restaurant ${restaurant.name} is currently closed.`);
-                  }
-                } else if (now < openTime || now > closeTime) {
-                  throw new BadRequestException(`Restaurant ${restaurant.name} is currently closed.`);
-                }
-              }
-            } catch (e) {
-              if (e instanceof BadRequestException) throw e;
-            }
+          const isOpen = this.isBusinessOpen(
+            restaurant.openingTime || null,
+            restaurant.closingTime || null,
+            (restaurant as any).offDays || null,
+            (restaurant as any).fridayOpeningTime || null,
+            (restaurant as any).fridayClosingTime || null,
+          );
+          if (!isOpen) {
+            throw new BadRequestException(`Restaurant ${restaurant.name} is currently closed.`);
           }
         }
 
@@ -361,7 +366,7 @@ export class OrdersService {
     if (orderType === 'mart' && martId && isUuid(martId)) {
       try {
         const vendor = await transactionalManager.getRepository(Vendor).findOne({ where: { id: martId } }) as any;
-        if (vendor && !this.isBusinessOpen(vendor.openingTime, vendor.closingTime)) {
+        if (vendor && !this.isBusinessOpen(vendor.openingTime, vendor.closingTime, vendor.offDays, vendor.fridayOpeningTime, vendor.fridayClosingTime)) {
           throw new BadRequestException(`Fulfillment center '${vendor.name}' is currently closed.`);
         }
       } catch (err) {

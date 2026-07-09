@@ -144,6 +144,74 @@ export class RestaurantCmsController {
     });
   }
 
+  /** Request to update restaurant profile (hours, days off, location). */
+  @Post('profile/update')
+  @TenantRoles('owner', 'manager')
+  async updateProfile(
+    @Req() req: any,
+    @Body() dto: {
+      openingTime?: string;
+      closingTime?: string;
+      offDays?: string;
+      fridayOpeningTime?: string;
+      fridayClosingTime?: string;
+      location?: string;
+      latitude?: number;
+      longitude?: number;
+    },
+  ) {
+    const tenant = await this.tenantRepo.findOne({ where: { id: req.tenantId } });
+    const restaurant = tenant?.entityId
+      ? await this.restaurantRepo.findOne({ where: { id: tenant.entityId } })
+      : null;
+
+    const patches: any[] = [];
+    if (dto.openingTime !== undefined) {
+      patches.push({ op: 'replace', path: '/openingTime', value: dto.openingTime, oldValue: restaurant?.openingTime });
+    }
+    if (dto.closingTime !== undefined) {
+      patches.push({ op: 'replace', path: '/closingTime', value: dto.closingTime, oldValue: restaurant?.closingTime });
+    }
+    if (dto.offDays !== undefined) {
+      patches.push({ op: 'replace', path: '/offDays', value: dto.offDays, oldValue: (restaurant as any)?.offDays });
+    }
+    if (dto.fridayOpeningTime !== undefined) {
+      patches.push({ op: 'replace', path: '/fridayOpeningTime', value: dto.fridayOpeningTime, oldValue: (restaurant as any)?.fridayOpeningTime });
+    }
+    if (dto.fridayClosingTime !== undefined) {
+      patches.push({ op: 'replace', path: '/fridayClosingTime', value: dto.fridayClosingTime, oldValue: (restaurant as any)?.fridayClosingTime });
+    }
+    if (dto.location !== undefined) {
+      patches.push({ op: 'replace', path: '/location', value: dto.location, oldValue: restaurant?.location });
+    }
+    if (dto.latitude !== undefined) {
+      patches.push({ op: 'replace', path: '/latitude', value: dto.latitude, oldValue: restaurant?.latitude });
+    }
+    if (dto.longitude !== undefined) {
+      patches.push({ op: 'replace', path: '/longitude', value: dto.longitude, oldValue: restaurant?.longitude });
+    }
+
+    return this.crService.create({
+      tenantId: req.tenantId,
+      entityType: 'Restaurant',
+      entityId: tenant?.entityId,
+      actionType: 'UPDATE',
+      patchData: patches,
+      preChangeSnapshot: restaurant ? {
+        openingTime: restaurant.openingTime,
+        closingTime: restaurant.closingTime,
+        offDays: (restaurant as any).offDays,
+        fridayOpeningTime: (restaurant as any).fridayOpeningTime,
+        fridayClosingTime: (restaurant as any).fridayClosingTime,
+        location: restaurant.location,
+        latitude: restaurant.latitude,
+        longitude: restaurant.longitude,
+      } : null,
+      requestedBy: req.user.id,
+      submitImmediately: true,
+    });
+  }
+
   /** List change request history for this restaurant. */
   @Get('change-requests')
   @TenantRoles('owner', 'manager')

@@ -5,6 +5,7 @@ import { Order } from '../orders/order.entity';
 import { User } from '../users/user.entity';
 import { Rider } from '../riders/rider.entity';
 import { Prescription } from '../pharma/prescriptions/prescription.entity';
+import { Medicine } from '../pharma/medicines/medicine.entity';
 
 @Injectable()
 export class AnalyticsService {
@@ -15,6 +16,8 @@ export class AnalyticsService {
     private userRepository: Repository<User>,
     @InjectRepository(Rider)
     private riderRepository: Repository<Rider>,
+    @InjectRepository(Medicine)
+    private medicineRepository: Repository<Medicine>,
   ) { }
 
   private resolveDateRange(range?: string, startDate?: string, endDate?: string): { start: Date; end: Date; labelFormat: 'weekday' | 'date' } {
@@ -160,16 +163,16 @@ export class AnalyticsService {
           .andWhere('o.createdAt <= :end', { end: periodEnd })
           .getRawOne(),
 
-        // 2. Top Medicines (dynamically aggregated from delivered order items)
+        // 2. Top Medicines (aggregated from delivered order items; falls back to soldCount)
         this.orderRepository.createQueryBuilder('o')
-          .innerJoin('o.items', 'i')
+          .innerJoin('o.items', 'i', 'i.medicineId IS NOT NULL')
           .innerJoin('i.medicine', 'm')
           .select('m.id', 'id')
           .addSelect('m.name', 'name')
           .addSelect('m.genericName', 'genericName')
           .addSelect('m.imageUrl', 'imageUrl')
           .addSelect('m.mrp', 'price')
-          .addSelect('SUM(i.quantity)', 'soldCount')
+          .addSelect('SUM(CAST(i.quantity AS NUMERIC))', 'soldCount')
           .where('o.orderType = :type', { type: 'pharma' })
           .andWhere('o.status = :status', { status: 'delivered' })
           .andWhere('o.createdAt >= :start', { start: periodStart })
@@ -179,7 +182,7 @@ export class AnalyticsService {
           .addGroupBy('m.genericName')
           .addGroupBy('m.imageUrl')
           .addGroupBy('m.mrp')
-          .orderBy('SUM(i.quantity)', 'DESC')
+          .orderBy('SUM(CAST(i.quantity AS NUMERIC))', 'DESC')
           .limit(10)
           .getRawMany(),
 
@@ -265,15 +268,30 @@ export class AnalyticsService {
         avgDeliveryMinutes = Math.round(Number(avgResult?.avgMinutes) || 0);
       } catch (e) { console.warn('Avg delivery time query failed (non-critical):', e); }
 
+      // Fallback: if no delivered pharma order items in range, use medicine.soldCount column
+      let resolvedTopMedicines: any[] = topMedicines;
+      if (resolvedTopMedicines.length === 0) {
+        const fallbackMeds = await this.medicineRepository.find({
+          where: { isActive: true },
+          order: { soldCount: 'DESC' },
+          take: 10,
+          select: ['id', 'name', 'genericName', 'imageUrl', 'mrp', 'soldCount'],
+        });
+        resolvedTopMedicines = fallbackMeds.map(m => ({
+          id: m.id, name: m.name, genericName: m.genericName,
+          imageUrl: m.imageUrl, price: m.mrp, soldCount: m.soldCount,
+        }));
+      }
+
       return {
         revenue: Number(totalPharmaRevenue?.total) || 0,
-        topMedicines: topMedicines.map((m: any) => ({
+        topMedicines: resolvedTopMedicines.map((m: any) => ({
           id: m.id,
           name: m.name,
-          genericName: m.genericName,
-          imageUrl: m.imageUrl,
-          price: Number(m.price) || 0,
-          soldCount: Number(m.soldCount) || 0,
+          genericName: m.genericName ?? m.genericname,
+          imageUrl: m.imageUrl ?? m.imageurl,
+          price: Number(m.price ?? m.mrp) || 0,
+          soldCount: Number(m.soldCount ?? m.soldcount) || 0,
         })),
         prescriptions: {
           total: totalRx,

@@ -133,6 +133,8 @@ export const settingsApi = {
 
 export const walletsApi = {
   getMyWallet: () => api.get('/wallets/my-wallet'),
+  requestWithdrawal: (data: { amount: number; bankName?: string; accountNumber?: string; accountName?: string }) =>
+    api.post('/wallets/withdraw-request', data),
 };
 
 export const financeApi = {

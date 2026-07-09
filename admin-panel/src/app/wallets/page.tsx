@@ -361,13 +361,17 @@ export default function WalletsPage() {
                       <p className="text-2xl font-black text-slate-900 tracking-tighter">RS. {Number(req.amount).toLocaleString()}</p>
                     </td>
                     <td className="px-10 py-6">
-                      <div className="flex items-center gap-3">
-                         <div className="p-3 bg-slate-900 rounded-xl text-white shadow-lg"><CreditCard size={14} /></div>
-                         <div>
-                            <p className="text-xs font-black text-slate-900 uppercase tracking-tighter leading-none">{req.bankName}</p>
-                            <p className="text-[10px] text-slate-400 font-bold mt-1.5">{req.accountNumber}</p>
-                         </div>
-                      </div>
+                       <div className="flex items-center gap-3">
+                          <div className="p-3 bg-slate-900 rounded-xl text-white shadow-lg"><CreditCard size={14} /></div>
+                          <div>
+                             <p className="text-xs font-black text-slate-900 uppercase tracking-tighter leading-none">{req.bankName}</p>
+                             <p className="text-[10px] text-slate-500 font-bold mt-1">Acc: {req.accountNumber}</p>
+                             {req.accountName && <p className="text-[10px] text-slate-400 font-bold mt-0.5">Holder: {req.accountName}</p>}
+                             <p className="text-[9px] text-emerald-600 font-black mt-1 uppercase tracking-widest">
+                               By: {req.user?.name || req.rider?.name || req.vendor?.name || req.wallet?.user?.name || req.wallet?.rider?.name || req.wallet?.vendor?.name || 'Unknown'}
+                             </p>
+                          </div>
+                       </div>
                     </td>
                     <td className="px-10 py-6 text-[11px] font-black text-slate-400 uppercase">
                       {safeFormat(req.createdAt, 'MMM dd, HH:mm')}
