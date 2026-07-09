@@ -19,10 +19,27 @@ interface OrderItem {
   quantity: number | string; 
   priceAtTime: number | string; 
   status: string;
-  product?: { id: string; name: string; imageUrl: string };
-  medicine?: { id: string; name: string; imageUrl: string };
-  menuItem?: { id: string; name: string; imageUrl: string };
+  product?: { id: string; name: string; imageUrl?: string; brand?: { imageUrl?: string; logoUrl?: string }; category?: { imageUrl?: string } };
+  medicine?: { id: string; name: string; imageUrl?: string };
+  menuItem?: { id: string; name: string; imageUrl?: string };
 }
+
+/** Fallback: product image → brand image → category image → '' */
+const getOrderItemImage = (item: OrderItem): string => {
+  // Menu item
+  if (item.menuItem?.imageUrl?.trim()) return item.menuItem.imageUrl;
+  // Medicine
+  if (item.medicine?.imageUrl?.trim()) return item.medicine.imageUrl;
+  // Mart product with full fallback
+  const p = item.product;
+  if (p) {
+    if (p.imageUrl?.trim()) return p.imageUrl;
+    if (p.brand?.imageUrl?.trim()) return p.brand.imageUrl!;
+    if (p.brand?.logoUrl?.trim()) return p.brand.logoUrl!;
+    if (p.category?.imageUrl?.trim()) return p.category.imageUrl!;
+  }
+  return '';
+};
 interface Order {
   id: string; status: string; total: number; deliveryFee: number; subtotal: number;
   notes?: string; createdAt: string; paymentMethod: string;

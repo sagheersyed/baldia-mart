@@ -80,7 +80,7 @@ const CuisineChip = React.memo(function CuisineChip({
 const RestaurantCard = React.memo(function RestaurantCard({ resto, onPress }: any) {
   const cover = normalizeUrl(resto.coverUrl || resto.imageUrl);
   const logo  = normalizeUrl(resto.logoUrl);
-  const open  = isBusinessOpen(resto.openingTime, resto.closingTime);
+  const open  = isBusinessOpen(resto);
   const fee   = resto.deliveryFee != null ? Math.round(Number(resto.deliveryFee)) : null;
   const eta   = resto.deliveryTime || resto.openingHours || '20-35 min';
   const sponsored = !!resto.sponsored || !!resto.isAd;
@@ -281,7 +281,7 @@ export default function FoodScreen({ navigation }: any) {
           return false;
         }
         // Toggles
-        if (toggles.open && !isBusinessOpen(r.openingTime, r.closingTime)) return false;
+        if (toggles.open && !isBusinessOpen(r)) return false;
         if (toggles.free && !(Number(r.deliveryFee) === 0 || r.freeDelivery)) return false;
         if (toggles.deals && !r.discountText && !r.hasDeal) return false;
 
@@ -300,8 +300,8 @@ export default function FoodScreen({ navigation }: any) {
         return true;
       })
       .sort((a: any, b: any) => {
-        const aOpen = isBusinessOpen(a.openingTime, a.closingTime);
-        const bOpen = isBusinessOpen(b.openingTime, b.closingTime);
+        const aOpen = isBusinessOpen(a);
+        const bOpen = isBusinessOpen(b);
         if (aOpen !== bOpen) return aOpen ? -1 : 1;
 
         if (activeSort === 'rating') return Number(b.rating || 0) - Number(a.rating || 0);

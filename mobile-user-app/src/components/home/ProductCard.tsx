@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import AppText from '../ui/AppText';
 import FavouriteButton from '../ui/FavouriteButton';
-import { isBusinessOpen } from '../../utils/helpers';
+import { isBusinessOpen, getProductImage } from '../../utils/helpers';
 import { normalizeUrl } from '../../api/api';
 import { useTheme } from '../../context/ThemeContext';
 import SleekExpandModal from '../animations/SleekExpandModal';
@@ -112,9 +112,9 @@ const ProductCard = memo(function ProductCard({
   const isLowStock = stock !== undefined ? (stock > 0 && stock <= 5) : false;
 
   const businessClosed = useMemo(() => {
-    const productOpen = isBusinessOpen(product.openingTime, product.closingTime);
-    const brandOpen = !product.brand || isBusinessOpen(product.brand?.openingTime, product.brand?.closingTime);
-    const catOpen = !product.category || isBusinessOpen(product.category?.openingTime, product.category?.closingTime);
+    const productOpen = isBusinessOpen(product);
+    const brandOpen = !product.brand || isBusinessOpen(product.brand);
+    const catOpen = !product.category || isBusinessOpen(product.category);
     return !productOpen || !brandOpen || !catOpen;
   }, [product]);
 
@@ -131,9 +131,10 @@ const ProductCard = memo(function ProductCard({
   const subline = product.weight || product.unit || product.brand?.name || product.category?.name;
   const maxedOut = product.maxQuantityPerOrder ? cartQty >= product.maxQuantityPerOrder : false;
 
+  const rawImgUri = getProductImage(product, DEFAULT_IMAGES.product);
   const imgUri = imageError
     ? DEFAULT_IMAGES.product
-    : (normalizeUrl(product.imageUrl ?? (product as any).image_url) || DEFAULT_IMAGES.product);
+    : (normalizeUrl(rawImgUri) || DEFAULT_IMAGES.product);
 
   const handleCardPress = () => {
     cardRef.current?.measure((x, y, w, h, px, py) => {

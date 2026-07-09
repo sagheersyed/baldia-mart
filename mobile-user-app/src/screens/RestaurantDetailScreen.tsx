@@ -11,7 +11,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { restaurantsApi, menuItemsApi, normalizeUrl } from '../api/api';
 import { useCart } from '../context/CartContext';
 import { useFavourites } from '../hooks/useFavourites';
-import { formatRatingCount, isBusinessOpen } from '../utils/helpers';
+import { formatRatingCount, isBusinessOpen, getBusinessCloseReason } from '../utils/helpers';
 
 import HomeSkeleton from '../components/home/HomeSkeleton';
 import {
@@ -39,7 +39,7 @@ const MenuItemRow = memo(function MenuItemRow({
 }) {
   const finalPrice = Number(item.price) - Number(item.discount || 0);
   const oldPrice = Number(item.discount || 0) > 0 ? Number(item.price) : undefined;
-  const itemClosed = !isBusinessOpen(item.openingTime, item.closingTime);
+  const itemClosed = !isBusinessOpen(item);
   const isClosed = restaurantClosed || itemClosed;
   const blocked = isClosed || (item.stockQuantity != null && item.stockQuantity <= 0);
   const imgUri = normalizeUrl(item.imageUrl);
@@ -136,7 +136,7 @@ export default function RestaurantDetailScreen({ route, navigation }: any) {
   const [error, setError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
-  const isOpen = isBusinessOpen(restaurant?.openingTime, restaurant?.closingTime);
+  const isOpen = isBusinessOpen(restaurant);
 
   const loadData = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true);
@@ -332,7 +332,7 @@ export default function RestaurantDetailScreen({ route, navigation }: any) {
               <View style={{ flex: 1 }}>
                 <AppText variant="bodyStrong" color={theme.colors.danger}>Currently closed</AppText>
                 <AppText variant="caption">
-                  {restaurant?.openingHours || `${restaurant?.openingTime} – ${restaurant?.closingTime}`}
+                  {getBusinessCloseReason(restaurant)}
                 </AppText>
               </View>
             </View>

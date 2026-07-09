@@ -8,17 +8,26 @@ import { LoadingState, ErrorState, EmptyState } from '@/components/PageState';
 import { showToast } from '@/hooks/useToast';
 import Pagination from '@/components/Pagination';
 
-interface Category { id: string; name: string; section?: string }
-interface Brand { id: string; name: string }
+interface Category { id: string; name: string; imageUrl?: string; section?: string }
+interface Brand { id: string; name: string; imageUrl?: string; logoUrl?: string }
 interface Product {
   id: string; name: string; description: string; price: number; discount: number;
   stockQuantity: number; imageUrl: string; categoryId: string; brandId?: string;
-  category: { name: string; section?: string }; brand?: { name: string };
+  category: { name: string; imageUrl?: string; section?: string }; brand?: { name: string; imageUrl?: string; logoUrl?: string };
   isActive: boolean; maxQuantityPerOrder: number; openingTime?: string; closingTime?: string;
   isFeatured?: boolean; isBestSeller?: boolean; isDeal?: boolean;
   discountPercent?: number | null; unit?: string | null; weight?: string | null;
   tags?: string[] | null; sortOrder?: number;
 }
+
+/** Fallback: product image → brand image → category image → null */
+const getProductImage = (prod: Product): string | null => {
+  if (prod.imageUrl?.trim()) return prod.imageUrl;
+  if (prod.brand?.imageUrl?.trim()) return prod.brand.imageUrl!;
+  if (prod.brand?.logoUrl?.trim()) return prod.brand.logoUrl!;
+  if (prod.category?.imageUrl?.trim()) return prod.category.imageUrl!;
+  return null;
+};
 
 const API_URL = `${BASE_URL}/products`;
 const CAT_URL = `${BASE_URL}/categories`;
@@ -219,13 +228,16 @@ export default function ProductsPage() {
           <div key={prod.id} className="card flex flex-col">
             {/* Image Section */}
             <div className="relative aspect-square overflow-hidden bg-slate-50 border-b border-slate-100 shrink-0">
-              {prod.imageUrl ? (
-                <img src={prod.imageUrl} alt={prod.name} className="w-full h-full object-cover transition-transform duration-500 hover:scale-110" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-slate-200">
-                  <Package size={48} />
-                </div>
-              )}
+              {(() => {
+                const imgSrc = getProductImage(prod);
+                return imgSrc ? (
+                  <img src={imgSrc} alt={prod.name} className="w-full h-full object-cover transition-transform duration-500 hover:scale-110" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-slate-200">
+                    <Package size={48} />
+                  </div>
+                );
+              })()}
               
               {/* Status Overlay */}
               <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 max-w-[80%]">

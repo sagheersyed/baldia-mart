@@ -34,7 +34,7 @@ const StoreCard = memo(function StoreCard({
 }: StoreCardProps) {
   const cover = normalizeUrl(store.coverUrl || store.imageUrl);
   const logo = normalizeUrl(store.logoUrl || store.imageUrl);
-  const isOpen = isBusinessOpen(store.openingTime, store.closingTime);
+  const isOpen = isBusinessOpen(store);
 
   const eta = store.deliveryTime || '15-40 min';
   const fee = store.deliveryFee != null ? `Rs.${Math.round(Number(store.deliveryFee))}` : null;
