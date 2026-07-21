@@ -9,6 +9,7 @@ export default function OrderDetailsScreen({ route, navigation }: any) {
   const { orderId } = route.params;
   const { settings } = useSettings();
   const [order, setOrder] = useState<any>(null);
+  const [cashFlowInfo, setCashFlowInfo] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [accepting, setAccepting] = useState(false);
 
@@ -32,8 +33,12 @@ export default function OrderDetailsScreen({ route, navigation }: any) {
 
   const fetchOrderDetails = async () => {
     try {
-      const res = await ordersApi.getById(orderId);
+      const [res, cfRes] = await Promise.all([
+        ordersApi.getById(orderId),
+        ordersApi.getCashFlowInfo(orderId).catch(() => ({ data: null })),
+      ]);
       setOrder(res.data);
+      setCashFlowInfo(cfRes.data);
     } catch (e) {
       console.error('Fetch order error:', e);
       Alert.alert('Error', 'Could not load order details.');
@@ -260,6 +265,41 @@ export default function OrderDetailsScreen({ route, navigation }: any) {
             </View>
           )}
         </View>
+
+        {cashFlowInfo && order.status !== 'delivered' && order.status !== 'cancelled' && (
+          <View style={[styles.section, { borderWidth: 2, borderColor: cashFlowInfo.isCashOnPick ? '#10B981' : '#F59E0B' }]}>
+            <Text style={styles.sectionTitle}>
+              {cashFlowInfo.isCashOnPick ? '💵 Cash on Pick' : '💳 Merchant Credit'}
+            </Text>
+            {cashFlowInfo.stops?.map((stop: any, idx: number) => (
+              <View key={stop.subOrderId || idx} style={{ marginBottom: 10 }}>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#334155' }}>
+                  {cashFlowInfo.stops.length > 1 ? `Stop ${idx + 1}: ` : ''}{stop.merchantName}
+                </Text>
+                {cashFlowInfo.isCashOnPick && (
+                  <Text style={{ fontSize: 14, color: '#047857', fontWeight: '800', marginTop: 4 }}>
+                    Pay shop: Rs. {Number(stop.amountToPay || 0).toLocaleString()}
+                  </Text>
+                )}
+              </View>
+            ))}
+            {cashFlowInfo.isCOD && (
+              <View style={{ marginTop: 8, padding: 12, backgroundColor: '#F0FDF4', borderRadius: 10 }}>
+                <Text style={{ fontSize: 13, color: '#166534', fontWeight: '700' }}>
+                  Collect from customer: Rs. {Number(cashFlowInfo.customerCollectAmount || 0).toLocaleString()}
+                </Text>
+              </View>
+            )}
+            <View style={{ marginTop: 10, padding: 12, backgroundColor: '#FFFBEB', borderRadius: 10, flexDirection: 'row', gap: 8 }}>
+              <Ionicons name="warning-outline" size={18} color="#B45309" />
+              <Text style={{ flex: 1, fontSize: 12, color: '#92400E', lineHeight: 18 }}>
+                {cashFlowInfo.isCashOnPick
+                  ? 'You owe platform commission + service fee only — not the full order total.'
+                  : 'You collect the full order amount and remit to the platform.'}
+              </Text>
+            </View>
+          </View>
+        )}
 
         <View style={styles.infoBox}>
           <Ionicons name="information-circle-outline" size={20} color="#666" />

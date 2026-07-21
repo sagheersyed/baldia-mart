@@ -106,8 +106,21 @@ export class Order {
   @Column({ name: 'order_type', default: 'mart' })
   orderType: string; // mart, food, rashan, pharma
 
-  @Column({ name: 'cash_flow_mode', default: 'MERCHANT_CREDIT' })
+  @Column({ name: 'cash_flow_mode', default: 'CASH_ON_PICK' })
   cashFlowMode: 'MERCHANT_CREDIT' | 'CASH_ON_PICK';
+
+  /** Rider cash payment at pickup for single-stop orders (CASH_ON_PICK mode). */
+  @Column({ name: 'pickup_payment_status', default: 'pending' })
+  pickupPaymentStatus: 'pending' | 'confirmed';
+
+  @Column('decimal', { name: 'pickup_payment_amount', precision: 10, scale: 2, nullable: true })
+  pickupPaymentAmount: number;
+
+  @Column({ name: 'pickup_payment_confirmed_at', type: 'timestamp', nullable: true })
+  pickupPaymentConfirmedAt: Date;
+
+  @Column({ name: 'pickup_payment_confirmed_by', type: 'uuid', nullable: true })
+  pickupPaymentConfirmedBy: string;
 
   // ── Monthly Rashan Bulk Order Fields ──────────────────────────────────────
   @Column({ name: 'bulk_list_text', type: 'text', nullable: true })

@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException, NotFoundException, UnauthorizedException, ForbiddenException, Query, Inject, forwardRef, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In, Between } from 'typeorm';
+import { Repository, In, Between, EntityManager } from 'typeorm';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { Order } from './order.entity';
@@ -21,6 +21,8 @@ import { WalletsService } from '../wallets/wallets.service';
 import { Product } from '../products/product.entity';
 import { Address } from '../addresses/address.entity';
 import { Vendor } from '../vendors/vendor.entity';
+import { Restaurant } from '../restaurants/restaurant.entity';
+import { Pharmacy } from '../pharma/pharmacies/pharmacy.entity';
 import { UsersService } from '../users/users.service';
 import { PharmaciesService } from '../pharma/pharmacies/pharmacies.service';
 import { CouponsService } from '../coupons/coupons.service';
@@ -458,7 +460,7 @@ export class OrdersService {
       deliveryDistanceKm: pricing.distance,
       notes,
       orderType,
-      cashFlowMode: orderType === 'pharma' ? 'CASH_ON_PICK' : 'MERCHANT_CREDIT',
+      cashFlowMode: 'CASH_ON_PICK', // Resolved after sub-orders are created
     });
     const savedOrder = await transactionalManager.getRepository(Order).save(order);
 
@@ -542,6 +544,11 @@ export class OrdersService {
 
     // 6. Split into Sub-Orders
     await this.syncSubOrdersInternal(transactionalManager, savedOrder.id);
+
+    // 6b. Resolve cash flow mode from merchant credit policies
+    const merchantIds = await this.extractMerchantIds(transactionalManager, savedOrder.id);
+    savedOrder.cashFlowMode = await this.resolveCashFlowMode(transactionalManager, merchantIds);
+    await transactionalManager.getRepository(Order).save(savedOrder);
 
     // 7. Clear Cart
     if (!items) {
@@ -964,6 +971,7 @@ export class OrdersService {
       .leftJoinAndSelect('order.rider', 'rider')
       .leftJoinAndSelect('order.user', 'user')
       .leftJoinAndSelect('order.restaurant', 'restaurant')
+      .leftJoinAndSelect('order.pharmacy', 'pharmacy')
       .leftJoinAndSelect('order.subOrders', 'subOrders')
       .leftJoinAndSelect('subOrders.restaurant', 'subOrderRestaurant')
       .leftJoinAndSelect('subOrders.vendor', 'subOrderVendor')
@@ -1001,13 +1009,20 @@ export class OrdersService {
   }
 
   async updateStatus(id: string, status: string, coldChainPhotoUrl?: string): Promise<Order> {
-    const order = await this.ordersRepository.findOne({ where: { id } });
+    const order = await this.ordersRepository.findOne({
+      where: { id },
+      relations: ['subOrders'],
+    });
     if (!order) throw new NotFoundException('Order not found');
 
     const oldStatus = order.status;
     if (oldStatus === 'cancelled') {
       throw new BadRequestException('Cannot update status of a cancelled order');
     }
+
+    // Pickup payment guard for CASH_ON_PICK transitions
+    await this.assertPickupPaymentForStatusTransition(order, oldStatus, status);
+
     order.status = status;
 
     if (coldChainPhotoUrl) {
@@ -1921,12 +1936,24 @@ export class OrdersService {
     }
   }
 
-  async updateSubOrderStatus(subOrderId: string, status: string): Promise<SubOrder> {
+  async updateSubOrderStatus(subOrderId: string, status: string, riderId?: string): Promise<SubOrder> {
     const subOrder = await this.subOrdersRepository.findOne({
       where: { id: subOrderId },
-      relations: ['order']
+      relations: ['order', 'order.subOrders']
     });
     if (!subOrder) throw new NotFoundException('Sub-order not found');
+
+    if (riderId && subOrder.order?.riderId && subOrder.order.riderId !== riderId) {
+      throw new ForbiddenException('Only the assigned rider can update this sub-order');
+    }
+
+    if (status === 'picked_up' && subOrder.order?.cashFlowMode === 'CASH_ON_PICK') {
+      if (subOrder.pickupPaymentStatus !== 'confirmed') {
+        throw new BadRequestException(
+          `Confirm shop payment of Rs. ${Number(subOrder.subtotal).toFixed(0)} before marking as picked up`
+        );
+      }
+    }
 
     subOrder.status = status;
     const updatedSubOrder = await this.subOrdersRepository.save(subOrder);
@@ -2036,6 +2063,242 @@ export class OrdersService {
       order: { createdAt: 'ASC' },
       relations: ['replyTo']
     });
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // CASH-ON-PICK: Rider pays merchant at pickup
+  // ═══════════════════════════════════════════════════════════════
+
+  /**
+   * Resolves cash flow mode from merchant policies.
+   * Default: CASH_ON_PICK (rider pays at shop). MERCHANT_CREDIT only if ALL merchants allow credit.
+   */
+  async resolveCashFlowMode(
+    manager: EntityManager,
+    merchants: { type: 'vendor' | 'restaurant' | 'pharmacy'; id: string }[],
+  ): Promise<'CASH_ON_PICK' | 'MERCHANT_CREDIT'> {
+    if (!merchants.length) return 'CASH_ON_PICK';
+
+    for (const m of merchants) {
+      let allowsCredit = false;
+      if (m.type === 'vendor') {
+        const v = await manager.findOne(Vendor, { where: { id: m.id } });
+        allowsCredit = v?.allowsCreditOrders ?? false;
+      } else if (m.type === 'restaurant') {
+        const r = await manager.findOne(Restaurant, { where: { id: m.id } });
+        allowsCredit = r?.allowsCreditOrders ?? false;
+      } else if (m.type === 'pharmacy') {
+        const p = await manager.findOne(Pharmacy, { where: { id: m.id } });
+        allowsCredit = p?.allowsCreditOrders ?? false;
+      }
+      if (!allowsCredit) return 'CASH_ON_PICK';
+    }
+    return 'MERCHANT_CREDIT';
+  }
+
+  private async extractMerchantIds(manager: EntityManager, orderId: string) {
+    const order = await manager.findOne(Order, {
+      where: { id: orderId },
+      relations: ['subOrders'],
+    });
+    if (!order) return [];
+
+    const merchants: { type: 'vendor' | 'restaurant' | 'pharmacy'; id: string }[] = [];
+
+    if (order.subOrders?.length) {
+      for (const sub of order.subOrders) {
+        if (sub.vendorId) merchants.push({ type: 'vendor', id: sub.vendorId });
+        if (sub.restaurantId) merchants.push({ type: 'restaurant', id: sub.restaurantId });
+        if (sub.pharmacyId) merchants.push({ type: 'pharmacy', id: sub.pharmacyId });
+      }
+    } else {
+      if (order.martId) merchants.push({ type: 'vendor', id: order.martId });
+      if (order.restaurantId) merchants.push({ type: 'restaurant', id: order.restaurantId });
+      if (order.pharmacyId) merchants.push({ type: 'pharmacy', id: order.pharmacyId });
+    }
+
+    // Deduplicate
+    const seen = new Set<string>();
+    return merchants.filter(m => {
+      const key = `${m.type}:${m.id}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+
+  /**
+   * Rider confirms cash payment to merchant at pickup.
+   */
+  async confirmPickupPayment(
+    orderId: string,
+    riderId: string,
+    dto: { subOrderId?: string; amountPaid: number },
+  ) {
+    const order = await this.ordersRepository.findOne({
+      where: { id: orderId },
+      relations: ['subOrders'],
+    });
+    if (!order) throw new NotFoundException('Order not found');
+    if (order.riderId !== riderId) throw new ForbiddenException('Only the assigned rider can confirm pickup payment');
+    if (order.cashFlowMode !== 'CASH_ON_PICK') {
+      throw new BadRequestException('Pickup payment confirmation is only required for Cash-on-Pick orders');
+    }
+
+    if (dto.subOrderId) {
+      const subOrder = order.subOrders?.find(s => s.id === dto.subOrderId);
+      if (!subOrder) throw new NotFoundException('Sub-order not found');
+
+      if (subOrder.pickupPaymentStatus === 'confirmed') {
+        return { success: true, message: 'Already confirmed', subOrder };
+      }
+
+      const expected = Number(subOrder.subtotal);
+      if (Math.abs(Number(dto.amountPaid) - expected) > 1) {
+        throw new BadRequestException(`Expected shop payment of Rs. ${expected.toFixed(0)}`);
+      }
+
+      subOrder.pickupPaymentStatus = 'confirmed';
+      subOrder.pickupPaymentAmount = Number(dto.amountPaid);
+      subOrder.pickupPaymentConfirmedAt = new Date();
+      subOrder.pickupPaymentConfirmedBy = riderId;
+      const saved = await this.subOrdersRepository.save(subOrder);
+
+      this.ordersGateway.server.to(`order_${orderId}`).emit('pickupPaymentConfirmed', {
+        orderId,
+        subOrderId: dto.subOrderId,
+        amountPaid: dto.amountPaid,
+      });
+      this.ordersGateway.server.to('admin_room').emit('pickupPaymentConfirmed', {
+        orderId,
+        subOrderId: dto.subOrderId,
+        amountPaid: dto.amountPaid,
+      });
+
+      return { success: true, message: 'Shop payment confirmed', subOrder: saved };
+    }
+
+    // Single-stop order (no sub-orders)
+    if (order.pickupPaymentStatus === 'confirmed') {
+      return { success: true, message: 'Already confirmed', order };
+    }
+
+    const expected = Number(order.subtotal);
+    if (Math.abs(Number(dto.amountPaid) - expected) > 1) {
+      throw new BadRequestException(`Expected shop payment of Rs. ${expected.toFixed(0)}`);
+    }
+
+    order.pickupPaymentStatus = 'confirmed';
+    order.pickupPaymentAmount = Number(dto.amountPaid);
+    order.pickupPaymentConfirmedAt = new Date();
+    order.pickupPaymentConfirmedBy = riderId;
+    const savedOrder = await this.ordersRepository.save(order);
+
+    this.ordersGateway.server.to(`order_${orderId}`).emit('pickupPaymentConfirmed', {
+      orderId,
+      amountPaid: dto.amountPaid,
+    });
+    this.ordersGateway.server.to('admin_room').emit('pickupPaymentConfirmed', {
+      orderId,
+      amountPaid: dto.amountPaid,
+    });
+
+    return { success: true, message: 'Shop payment confirmed', order: savedOrder };
+  }
+
+  /**
+   * Returns cash flow instructions for rider UI.
+   */
+  async getOrderCashFlowInfo(orderId: string, riderId: string) {
+    const order = await this.getOrderById(orderId, riderId, 'rider');
+    const serviceFee = await this.settingsService.getNumber('platform_service_fee', 15);
+
+    const isCOD = ['cod', 'cash_on_delivery'].includes(order.paymentMethod?.toLowerCase());
+    const isCashOnPick = order.cashFlowMode === 'CASH_ON_PICK';
+
+    const stops = (order.subOrders?.length
+      ? order.subOrders.map(sub => ({
+          subOrderId: sub.id,
+          merchantName:
+            (sub as any).restaurant?.name ||
+            (sub as any).vendor?.name ||
+            (sub as any).pharmacy?.name ||
+            'Shop',
+          amountToPay: Number(sub.subtotal),
+          pickupPaymentStatus: sub.pickupPaymentStatus,
+          status: sub.status,
+        }))
+      : [{
+          subOrderId: null,
+          merchantName:
+            (order as any).restaurant?.name ||
+            (order as any).pharmacy?.name ||
+            (order.orderType === 'rashan' ? 'Wholesale Market' : 'Baldia Mart'),
+          amountToPay: Number(order.subtotal),
+          pickupPaymentStatus: order.pickupPaymentStatus,
+          status: order.status,
+        }]
+    );
+
+    return {
+      cashFlowMode: order.cashFlowMode,
+      isCashOnPick,
+      isCOD,
+      orderSubtotal: Number(order.subtotal),
+      orderTotal: Number(order.total),
+      deliveryFee: Number(order.deliveryFee),
+      platformServiceFee: serviceFee,
+      customerCollectAmount: isCOD ? Number(order.total) : 0,
+      riderOwesPlatform: isCashOnPick && isCOD ? 'platform_share_only' : (isCOD ? 'full_total' : 'none'),
+      stops,
+      instructions: isCashOnPick
+        ? {
+            pickup: 'Pay shop subtotal in cash from your pocket before picking up items',
+            delivery: isCOD
+              ? `Collect Rs. ${Number(order.total)} from customer. You only owe platform commission + service fee.`
+              : 'Deliver to customer (prepaid order)',
+          }
+        : {
+            pickup: 'Pick up items on credit — no payment needed at shop',
+            delivery: isCOD
+              ? `Collect Rs. ${Number(order.total)} from customer (full order amount)`
+              : 'Deliver to customer (prepaid order)',
+          },
+    };
+  }
+
+  private async assertPickupPaymentForStatusTransition(
+    order: Order,
+    oldStatus: string,
+    newStatus: string,
+  ) {
+    if (order.cashFlowMode !== 'CASH_ON_PICK') return;
+
+    const requiresPickupConfirmation = (
+      (newStatus === 'out_for_delivery' && ['preparing', 'ready_for_pickup', 'picked_up'].includes(oldStatus)) ||
+      (newStatus === 'picked_up') ||
+      (newStatus === 'in_transit' && oldStatus === 'picked_up') ||
+      newStatus === 'delivered'
+    );
+
+    if (!requiresPickupConfirmation) return;
+
+    const subOrders = order.subOrders?.length
+      ? order.subOrders
+      : await this.subOrdersRepository.find({ where: { orderId: order.id } });
+
+    if (subOrders.length > 0) {
+      const pending = subOrders.filter(s => s.pickupPaymentStatus !== 'confirmed');
+      if (pending.length > 0) {
+        throw new BadRequestException(
+          `Confirm shop payment for all ${pending.length} remaining stop(s) before proceeding`
+        );
+      }
+    } else if (order.pickupPaymentStatus !== 'confirmed') {
+      throw new BadRequestException(
+        `Confirm shop payment of Rs. ${Number(order.subtotal).toFixed(0)} before proceeding`
+      );
+    }
   }
 }
 

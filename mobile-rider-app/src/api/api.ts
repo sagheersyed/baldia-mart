@@ -7,10 +7,10 @@ export const socket = io(ENV.SOCKET_URL, {
   autoConnect: false,
   transports: ['polling', 'websocket'],
   reconnection: true,
-  reconnectionAttempts: Infinity,
+  reconnectionAttempts: 10,
   reconnectionDelay: 2000,
   reconnectionDelayMax: 10000,
-  timeout: 20000,
+  timeout: 15000,
   extraHeaders: {
     'ngrok-skip-browser-warning': 'true',
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'
@@ -25,6 +25,10 @@ socket.on('disconnect', (reason) => {
 });
 
 export const connectSocket = () => {
+  const token =
+    (socket.auth as { token?: string } | undefined)?.token ||
+    api.defaults.headers.common['Authorization'];
+  if (!token) return;
   if (!socket.connected) {
     console.log('[RiderSocket] Connecting to', ENV.SOCKET_URL);
     socket.connect();
@@ -80,9 +84,8 @@ export const setAuthToken = (token: string | null) => {
   } else {
     delete api.defaults.headers.common['Authorization'];
     socket.auth = {};
-    if (socket.connected) socket.disconnect();
+    socket.disconnect();
     AsyncStorage.removeItem('riderToken');
-    connectSocket(); // Reconnect to continue receiving public events
   }
 };
 
@@ -97,7 +100,6 @@ export const authApi = {
     api.post('/auth/rider/verify-otp', { phoneNumber: normalizePhone(phoneNumber), otpCode }),
   login: (firebaseToken: string) => api.post('/auth/login', { firebaseToken }),
   getMe: () => api.get('/auth/me'),
-  changeMpin: (data: { oldMpin: string; newMpin: string }) => api.post('/auth/change-mpin', data),
 };
 
 export const ordersApi = {
@@ -109,6 +111,9 @@ export const ordersApi = {
     api.patch(`/orders/${orderId}/rider-status`, { status, coldChainPhotoUrl }),
   updateSubOrderStatus: (subOrderId: string, status: string) =>
     api.patch(`/orders/sub-orders/${subOrderId}/status`, { status }),
+  confirmPickupPayment: (orderId: string, data: { subOrderId?: string; amountPaid: number }) =>
+    api.post(`/orders/${orderId}/confirm-pickup-payment`, data),
+  getCashFlowInfo: (orderId: string) => api.get(`/orders/${orderId}/cash-flow-info`),
   removeItem: (orderId: string, itemId: string, reason?: string) => 
     api.delete(`/orders/${orderId}/items/${itemId}`, { data: { reason } }),
   releaseOrder: (orderId: string, reason: string) => 
@@ -133,8 +138,6 @@ export const settingsApi = {
 
 export const walletsApi = {
   getMyWallet: () => api.get('/wallets/my-wallet'),
-  requestWithdrawal: (data: { amount: number; bankName?: string; accountNumber?: string; accountName?: string }) =>
-    api.post('/wallets/withdraw-request', data),
 };
 
 export const financeApi = {

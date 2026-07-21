@@ -16,7 +16,7 @@ import { WalletsService } from '../wallets/wallets.service';
 import { AdminRoleGuard } from '../auth/admin-role.guard';
 import { TenantGuard } from '../cms/guards/tenant.guard';
 import { TenantRoles } from '../cms/decorators/tenant-roles.decorator';
-import { ManualAdjustmentDto, CreateCommissionConfigDto } from './dto/finance-ops.dto';
+import { ManualAdjustmentDto, CreateCommissionConfigDto, RecordMerchantCommissionPaymentDto } from './dto/finance-ops.dto';
 
 @Controller('finance')
 @UseGuards(JwtAuthGuard)
@@ -50,6 +50,35 @@ export class FinanceController {
     return this.entityManager.transaction(async manager => {
       return this.financeService.reconcileRiderCash(body.riderId, body.amount, body.referenceId, manager);
     });
+  }
+
+  /**
+   * Record merchant commission payment (Cash-on-Pick — merchant pays platform).
+   */
+  @Post('admin/record-merchant-commission-payment')
+  @UseGuards(AdminRoleGuard)
+  async recordMerchantCommissionPayment(@Body() dto: RecordMerchantCommissionPaymentDto) {
+    return this.entityManager.transaction(async manager => {
+      return this.financeService.recordMerchantCommissionPayment(
+        dto.vendorId,
+        dto.amount,
+        dto.referenceId,
+        dto.description,
+        manager,
+      );
+    });
+  }
+
+  /**
+   * Get commission payable for a vendor entity.
+   */
+  @Get('admin/vendor-commission-payable/:vendorId')
+  @UseGuards(AdminRoleGuard)
+  async getVendorCommissionPayable(@Param('vendorId', ParseUUIDPipe) vendorId: string) {
+    const wallet = await this.walletRepo.findOne({ where: { userId: vendorId, userType: 'Vendor' } });
+    if (!wallet) return { commissionPayable: 0, walletId: null };
+    const commissionPayable = await this.financeService.getCommissionPayableForWallet(wallet.id);
+    return { commissionPayable, walletId: wallet.id };
   }
 
   /**

@@ -1,4 +1,5 @@
 import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { settingsApi, socket, connectSocket } from '../api/api';
 
 interface Settings {
@@ -64,7 +65,9 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     refreshSettings();
-    connectSocket();
+    AsyncStorage.getItem('riderToken').then(token => {
+      if (token) connectSocket();
+    });
 
     // Register on connect (fires every time socket reconnects)
     socket.off('connect', _onRiderSocketConnect);

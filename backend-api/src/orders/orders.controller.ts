@@ -6,6 +6,7 @@ import { PlaceOrderDto } from './dto/place-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { AssignRiderDto } from './dto/assign-rider.dto';
 import { AddItemToOrderDto } from './dto/add-item-to-order.dto';
+import { ConfirmPickupPaymentDto } from './dto/confirm-pickup-payment.dto';
 import { Request } from 'express';
 
 import { CleanupService } from './cleanup.service';
@@ -136,6 +137,24 @@ export class OrdersController {
     return this.ordersService.acceptOrder(id, user.id);
   }
 
+  @Get(':id/cash-flow-info')
+  async getCashFlowInfo(@Req() req: Request, @Param('id', ParseUUIDPipe) id: string) {
+    const user = req.user as any;
+    if (user.role !== 'rider') throw new ForbiddenException('Only riders can access cash flow info');
+    return this.ordersService.getOrderCashFlowInfo(id, user.id);
+  }
+
+  @Post(':id/confirm-pickup-payment')
+  async confirmPickupPayment(
+    @Req() req: Request,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: ConfirmPickupPaymentDto,
+  ) {
+    const user = req.user as any;
+    if (user.role !== 'rider') throw new ForbiddenException('Only riders can confirm pickup payment');
+    return this.ordersService.confirmPickupPayment(id, user.id, body);
+  }
+
   @Get(':id')
   async getOrder(@Req() req: Request, @Param('id', ParseUUIDPipe) id: string) {
     const user = req.user as any;
@@ -240,10 +259,13 @@ export class OrdersController {
   }
   @Patch('sub-orders/:subOrderId/status')
   async updateSubOrderStatus(
+    @Req() req: Request,
     @Param('subOrderId', ParseUUIDPipe) subOrderId: string,
     @Body('status') status: string,
   ) {
-    return this.ordersService.updateSubOrderStatus(subOrderId, status);
+    const user = req.user as any;
+    if (user.role !== 'rider') throw new ForbiddenException('Only riders can update sub-order status');
+    return this.ordersService.updateSubOrderStatus(subOrderId, status, user.id);
   }
 
   @Get(':id/chat')

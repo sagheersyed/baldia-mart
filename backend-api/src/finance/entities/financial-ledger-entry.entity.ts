@@ -35,11 +35,12 @@ export class FinancialLedgerEntry {
     name: 'account_tag',
     type: 'enum',
     enum: [
-      'EARNINGS',      // Withdraw-able balance
-      'CASH_IN_HAND',  // Physical cash held (Riders)
-      'PLATFORM_REV',  // Platform revenue account
-      'TAX_PAYABLE',   // Government tax account
-      'VOUCHER_EXP',   // Promotion expenses
+      'EARNINGS',           // Withdraw-able balance
+      'CASH_IN_HAND',       // Physical cash held (Riders)
+      'PLATFORM_REV',       // Platform revenue account
+      'COMMISSION_PAYABLE', // Merchant owes platform (Cash-on-Pick orders)
+      'TAX_PAYABLE',        // Government tax account
+      'VOUCHER_EXP',        // Promotion expenses
     ],
     default: 'EARNINGS'
   })

@@ -7,6 +7,7 @@ import { CommissionConfig } from './entities/commission-config.entity';
 import { DailyFinancialSnapshot } from './entities/daily-financial-snapshot.entity';
 import { Wallet } from '../wallets/wallet.entity';
 import { Order } from '../orders/order.entity';
+import { SubOrder } from '../orders/sub-order.entity';
 
 import { SettingsService } from '../settings/settings.service';
 import { WalletsService } from '../wallets/wallets.service';
@@ -139,7 +140,7 @@ export class FinanceService {
     description: string,
     entries: {
       walletId?: string;
-      accountTag: 'EARNINGS' | 'CASH_IN_HAND' | 'PLATFORM_REV' | 'TAX_PAYABLE' | 'VOUCHER_EXP';
+      accountTag: 'EARNINGS' | 'CASH_IN_HAND' | 'PLATFORM_REV' | 'COMMISSION_PAYABLE' | 'TAX_PAYABLE' | 'VOUCHER_EXP';
       direction: 'CREDIT' | 'DEBIT';
       amount: number;
       moduleType?: string;
@@ -277,7 +278,27 @@ export class FinanceService {
     const isCOD = order.paymentMethod?.toLowerCase() === 'cod' || order.paymentMethod?.toLowerCase() === 'cash_on_delivery';
     const riderId = order.riderId;
     const moduleType = order.orderType;
-    const flowMode = order.cashFlowMode || 'MERCHANT_CREDIT';
+    const flowMode = order.cashFlowMode || 'CASH_ON_PICK';
+
+    // Guard: CASH_ON_PICK orders require rider pickup payment confirmation before settlement
+    if (flowMode === 'CASH_ON_PICK') {
+      const subOrders = order.subOrders?.length
+        ? order.subOrders
+        : await manager.getRepository(SubOrder).find({ where: { orderId: order.id } });
+
+      if (subOrders.length > 0) {
+        const unconfirmed = subOrders.filter(s => s.pickupPaymentStatus !== 'confirmed');
+        if (unconfirmed.length > 0) {
+          throw new BadRequestException(
+            `Settlement blocked: ${unconfirmed.length} shop payment(s) not confirmed for order #${order.id.split('-')[0].toUpperCase()}`
+          );
+        }
+      } else if (order.pickupPaymentStatus !== 'confirmed') {
+        throw new BadRequestException(
+          `Settlement blocked: shop payment not confirmed for order #${order.id.split('-')[0].toUpperCase()}`
+        );
+      }
+    }
 
     // 1. Fetch Dynamic Parameters from Settings
     const serviceFee = await this.settingsService.getNumber('platform_service_fee', 15);
@@ -329,24 +350,17 @@ export class FinanceService {
           description: `Vendor Payout for #${order.id.split('-')[0].toUpperCase()} (${config.commissionPercent}% comm)`,
         });
       } else {
-        // CASH_ON_PICK: Rider counter payment model
-        // Log transaction history, but net wallet impact is zero
-        ledgerLines.push({
-          walletId: vWallet.id,
-          accountTag: 'EARNINGS',
-          direction: 'CREDIT',
-          amount: vendorShare,
-          moduleType,
-          description: `Gross Sale for #${order.id.split('-')[0].toUpperCase()} (Cash-on-Pick)`,
-        });
-        ledgerLines.push({
-          walletId: vWallet.id,
-          accountTag: 'EARNINGS',
-          direction: 'DEBIT',
-          amount: vendorShare,
-          moduleType,
-          description: `Rider Cash-on-Pick counter-payment for #${order.id.split('-')[0].toUpperCase()}`,
-        });
+        // CASH_ON_PICK: Rider paid merchant physically at pickup — track commission owed only
+        if (commission > 0) {
+          ledgerLines.push({
+            walletId: vWallet.id,
+            accountTag: 'COMMISSION_PAYABLE',
+            direction: 'DEBIT',
+            amount: commission,
+            moduleType,
+            description: `Platform commission due (Cash-on-Pick) for #${order.id.split('-')[0].toUpperCase()} (${config.commissionPercent}%)`,
+          });
+        }
       }
     }
 
@@ -671,18 +685,25 @@ export class FinanceService {
         .select([
           'SUM(CASE WHEN l.direction = \'CREDIT\' AND l.accountTag = \'EARNINGS\' THEN l.amount ELSE 0 END) as total_gross',
           'SUM(CASE WHEN l.direction = \'DEBIT\' AND (l.accountTag = \'EARNINGS\' OR l.accountTag = \'PLATFORM_REV\') THEN l.amount ELSE 0 END) as total_deductions',
+          'SUM(CASE WHEN l.direction = \'DEBIT\' AND l.accountTag = \'COMMISSION_PAYABLE\' THEN l.amount ELSE 0 END) as commission_payable_debit',
+          'SUM(CASE WHEN l.direction = \'CREDIT\' AND l.accountTag = \'COMMISSION_PAYABLE\' THEN l.amount ELSE 0 END) as commission_payable_credit',
         ])
         .getRawOne();
 
       // Handle PostgreSQL case-sensitivity/aliasing in raw queries
       const gross = Number(stats?.total_gross || stats?.totalgross || 0);
       const deductions = Number(stats?.total_deductions || stats?.totaldeductions || 0);
+      const commissionPayable = Math.max(0,
+        Number(stats?.commission_payable_debit || stats?.commissionpayabledebit || 0) -
+        Number(stats?.commission_payable_credit || stats?.commissionpayablecredit || 0)
+      );
 
       return {
         netBalance: Number(wallet.balance),
         cashOutstanding: Number(wallet.cashInHand),
         totalEarnings: gross,
-        totalCommissions: deductions, 
+        totalCommissions: deductions,
+        commissionPayable,
         isSuspended: wallet.isSuspended,
         updatedAt: wallet.updatedAt,
       };
@@ -723,11 +744,21 @@ export class FinanceService {
        .addSelect('SUM(CASE WHEN p.direction = \'CREDIT\' THEN p.amount ELSE 0 END)', 'remitted')
        .getRawOne();
 
+    // 5. Merchant commission receivable (Cash-on-Pick orders)
+    const merchantCommission = await this.ledgerRepo.createQueryBuilder('c')
+      .where('c.accountTag = :tag', { tag: 'COMMISSION_PAYABLE' })
+      .select('SUM(CASE WHEN c.direction = \'DEBIT\' THEN c.amount ELSE 0 END)', 'owed')
+      .addSelect('SUM(CASE WHEN c.direction = \'CREDIT\' THEN c.amount ELSE 0 END)', 'paid')
+      .getRawOne();
+
     return {
       netBalance: Number(stats.platform_liability || 0),
       codOutstanding: Number(stats.cod_risk || 0),
       totalCommissions: Number(platform.net_rev || 0),
       totalEarnings: Number(stats.platform_liability || 0) + Number(stats.cod_risk || 0),
+      merchantCommissionReceivable: Math.max(0,
+        Number(merchantCommission?.owed || 0) - Number(merchantCommission?.paid || 0)
+      ),
       cashPipeline: {
          collected: Number(pipeline.collected || 0),
          remitted: Number(pipeline.remitted || 0),
@@ -739,6 +770,57 @@ export class FinanceService {
       pharmaEarnings: getV('pharma'),
       activeWallets: Number(stats.total_nodes || 0),
     };
+  }
+
+  /**
+   * Record merchant commission payment (Cash-on-Pick orders).
+   * Credits COMMISSION_PAYABLE on vendor wallet — reduces amount owed to platform.
+   */
+  async recordMerchantCommissionPayment(
+    vendorId: string,
+    amount: number,
+    referenceId: string,
+    description: string | undefined,
+    manager: EntityManager,
+  ) {
+    const wallet = await this.ensureWallet(manager, vendorId, 'Vendor');
+    const payable = await this.getCommissionPayableForWallet(wallet.id, manager);
+
+    if (amount > payable + 0.01) {
+      throw new BadRequestException(
+        `Payment amount Rs. ${amount} exceeds commission payable Rs. ${payable.toFixed(2)}`
+      );
+    }
+
+    return this.executeLedgerTransaction(
+      manager,
+      'MERCHANT_COMMISSION_PAYMENT',
+      referenceId,
+      description || `Merchant commission payment ref ${referenceId}`,
+      [{
+        walletId: wallet.id,
+        accountTag: 'COMMISSION_PAYABLE',
+        direction: 'CREDIT',
+        amount,
+        description: description || `Commission remittance to platform (ref: ${referenceId})`,
+      }],
+    );
+  }
+
+  async getCommissionPayableForWallet(walletId: string, manager?: EntityManager) {
+    const repo = manager ? manager.getRepository(FinancialLedgerEntry) : this.ledgerRepo;
+    const stats = await repo.createQueryBuilder('l')
+      .where('l.walletId = :walletId', { walletId })
+      .andWhere('l.accountTag = :tag', { tag: 'COMMISSION_PAYABLE' })
+      .select([
+        'SUM(CASE WHEN l.direction = \'DEBIT\' THEN l.amount ELSE 0 END) as owed',
+        'SUM(CASE WHEN l.direction = \'CREDIT\' THEN l.amount ELSE 0 END) as paid',
+      ])
+      .getRawOne();
+
+    return Math.max(0,
+      Number(stats?.owed || 0) - Number(stats?.paid || 0)
+    );
   }
 
   /**

@@ -47,5 +47,9 @@ export class CreateRestaurantDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  allowsCreditOrders?: boolean;
 }
 

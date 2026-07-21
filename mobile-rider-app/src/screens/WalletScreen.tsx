@@ -206,8 +206,11 @@ export default function WalletScreen({ navigation }: any) {
                  </View>
 
                  <View style={styles.healthCard}>
-                     <Text style={styles.healthLabel}>Held Cash (COD)</Text>
+                     <Text style={styles.healthLabel}>Platform Settlement Due</Text>
                      <Text style={[styles.healthVal, { color: codOwed > 0 ? '#EF4444' : '#1E1E1E' }]}>Rs. {formatPKR(codOwed)}</Text>
+                     <Text style={styles.healthSub}>
+                       Cash-on-Pick: commission + fee only. Credit orders: full COD collected.
+                     </Text>
                      <TouchableOpacity style={styles.infoBtn} onPress={() => setShowRemitModal(true)}>
                         <Ionicons name="information-circle-outline" size={14} color="#64748B" />
                         <Text style={styles.infoText}>How to remit?</Text>
@@ -219,9 +222,12 @@ export default function WalletScreen({ navigation }: any) {
                <View style={styles.remitCard}>
                   <Text style={styles.remitTitle}>💰 Platform Settlement</Text>
                   <View style={styles.remitRow}>
-                     <Text style={styles.remitLabel}>COD Cash Held</Text>
+                     <Text style={styles.remitLabel}>Settlement Due (COD)</Text>
                      <Text style={styles.remitVal}>Rs. {formatPKR(codOwed)}</Text>
                   </View>
+                  <Text style={{ fontSize: 11, color: '#64748B', marginBottom: 8, lineHeight: 16 }}>
+                    For Cash-on-Pick orders this is platform commission + service fee. For merchant credit orders, remit the full cash collected.
+                  </Text>
                   <View style={styles.remitRow}>
                      <Text style={styles.remitLabel}>Commission Deducted</Text>
                      <Text style={styles.remitVal}>Rs. {formatPKR(totalCommissions)}</Text>

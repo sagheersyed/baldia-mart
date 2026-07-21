@@ -18,6 +18,7 @@ interface Vendor {
   lng?: number;
   isActive: boolean;
   isOpen: boolean;
+  allowsCreditOrders?: boolean;
   openingHours?: string;
   openingTime?: string;
   closingTime?: string;
@@ -53,7 +54,8 @@ const PRODUCTS_API = `${BASE_URL}/products`;
 
 const emptyVendorForm = {
   name: '', type: 'grocery', address: '', location: '', lat: '', lng: '', isOpen: true, isActive: true, 
-  openingHours: '09:00 AM - 11:00 PM', openingTime: '09:00', closingTime: '23:00', zoneId: ''
+  openingHours: '09:00 AM - 11:00 PM', openingTime: '09:00', closingTime: '23:00', zoneId: '',
+  allowsCreditOrders: false,
 };
 
 const emptyVendorProductForm = {
@@ -223,7 +225,8 @@ export default function VendorsPage() {
       location: v.location || '', lat: v.lat ? v.lat.toString() : '', 
       lng: v.lng ? v.lng.toString() : '', isOpen: v.isOpen, isActive: v.isActive,
       openingHours: v.openingHours || '', openingTime: v.openingTime || '',
-      closingTime: v.closingTime || '', zoneId: v.zoneId || ''
+      closingTime: v.closingTime || '', zoneId: v.zoneId || '',
+      allowsCreditOrders: v.allowsCreditOrders ?? false,
     });
     setShowVendorModal(true);
   };
@@ -503,6 +506,18 @@ export default function VendorsPage() {
                            <label className="w-14 h-8 bg-slate-200 rounded-full relative cursor-pointer group">
                               <input type="checkbox" className="hidden peer" checked={vendorForm.isOpen} onChange={e => setVendorForm({ ...vendorForm, isOpen: e.target.checked })} />
                               <div className="absolute left-1 top-1 w-6 h-6 bg-white rounded-full transition-all peer-checked:translate-x-6 peer-checked:bg-indigo-600 shadow-sm" />
+                           </label>
+                        </div>
+                        <div className="flex items-center gap-3 p-4 bg-amber-50 rounded-2xl border border-amber-100">
+                           <input
+                             type="checkbox"
+                             id="allowsCreditOrders"
+                             checked={vendorForm.allowsCreditOrders}
+                             onChange={e => setVendorForm({ ...vendorForm, allowsCreditOrders: e.target.checked })}
+                             className="w-4 h-4"
+                           />
+                           <label htmlFor="allowsCreditOrders" className="text-[10px] font-bold text-amber-900 uppercase tracking-widest cursor-pointer">
+                             Allow Credit Orders (Platform pays — trusted vendors only)
                            </label>
                         </div>
                      </div>

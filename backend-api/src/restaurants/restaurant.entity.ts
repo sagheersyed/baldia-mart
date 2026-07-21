@@ -56,6 +56,10 @@ export class Restaurant {
   @Column({ name: 'is_active', default: true })
   isActive: boolean;
 
+  /** When false (default), rider pays restaurant cash at pickup (CASH_ON_PICK). */
+  @Column({ name: 'allows_credit_orders', default: false })
+  allowsCreditOrders: boolean;
+
   @Column({ type: 'numeric', precision: 3, scale: 2, default: 0 })
   rating: number;
 

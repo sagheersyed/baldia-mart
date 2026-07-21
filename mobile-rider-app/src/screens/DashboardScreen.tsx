@@ -511,6 +511,11 @@ export default function DashboardScreen({ navigation }: any) {
                     {order.orderType === 'food' && <View style={[styles.badge, { backgroundColor: '#FFF5E0' }]}><Text style={[styles.badgeTxt, { color: '#FF8C00' }]}>🍽️</Text></View>}
                     {order.orderType === 'mart' && <View style={[styles.badge, { backgroundColor: '#E8F5E9' }]}><Text style={[styles.badgeTxt, { color: '#2E7D32' }]}>🛒</Text></View>}
                     {order.orderType === 'pharma' && <View style={[styles.badge, { backgroundColor: '#E0F7FA' }]}><Text style={[styles.badgeTxt, { color: '#00838F' }]}>💊</Text></View>}
+                    {(order.cashFlowMode === 'CASH_ON_PICK' || !order.cashFlowMode) && (
+                      <View style={[styles.badge, { backgroundColor: '#D1FAE5' }]}>
+                        <Text style={[styles.badgeTxt, { color: '#047857' }]}>💵 CASH ON PICK</Text>
+                      </View>
+                    )}
                     <Text style={styles.earnings}>Rs {order.total}</Text>
                   </View>
                   <Text style={styles.cardAddr} numberOfLines={1}>📍 {order.address?.streetAddress || 'Local Area'}</Text>
@@ -539,6 +544,11 @@ export default function DashboardScreen({ navigation }: any) {
               </Text>
             </View>
             <Text style={styles.sheetOrderId}>#{(incomingOrder?.id || '').slice(0, 8).toUpperCase()}</Text>
+            {(incomingOrder?.cashFlowMode === 'CASH_ON_PICK' || !incomingOrder?.cashFlowMode) && (
+              <View style={[styles.badge, { backgroundColor: '#D1FAE5', alignSelf: 'flex-start', marginBottom: 8 }]}>
+                <Text style={[styles.badgeTxt, { color: '#047857' }]}>💵 CASH ON PICK — pay shop at pickup</Text>
+              </View>
+            )}
             <View style={styles.sheetRow}>
               <View style={styles.sheetStat}>
                 <Text style={styles.sheetStatVal}>Rs {incomingOrder.total}</Text>

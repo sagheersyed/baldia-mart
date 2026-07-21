@@ -66,5 +66,10 @@ export class CreateVendorDto {
   @IsOptional()
   @IsUUID()
   zoneId?: string;
+
+  /** When true, merchant gives items on credit (MERCHANT_CREDIT). Default false = rider pays at pickup. */
+  @IsOptional()
+  @IsBoolean()
+  allowsCreditOrders?: boolean;
 }
 

@@ -242,7 +242,7 @@ export class PharmaOrdersService {
       userId,
       addressId: dto.addressId,
       orderType: 'pharma',
-      cashFlowMode: 'CASH_ON_PICK', // Pharma: rider pays merchant upfront, only owes platform share
+      cashFlowMode: 'CASH_ON_PICK', // Resolved after sub-orders are created
       status: 'pending',
       priority: isEmergency ? 'high' : 'standard',
       isColdChain,
@@ -342,6 +342,11 @@ export class PharmaOrdersService {
         await manager.save(orderItem);
       }
     }
+
+    // Resolve cash flow mode from pharmacy credit policies
+    const merchantIds = selectedPharmacies.map(p => ({ type: 'pharmacy' as const, id: p.pharmacy.id }));
+    savedOrder.cashFlowMode = await this.ordersService.resolveCashFlowMode(manager, merchantIds);
+    await manager.save(Order, savedOrder);
 
     // 6. Notify
     const user = await manager.findOne(User, { where: { id: userId }, select: ['fcmToken'] });

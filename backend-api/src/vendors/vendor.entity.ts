@@ -49,6 +49,10 @@ export class Vendor {
   @Column({ name: 'is_active', default: true })
   isActive: boolean;
 
+  /** When false (default), rider pays merchant cash at pickup (CASH_ON_PICK). */
+  @Column({ name: 'allows_credit_orders', default: false })
+  allowsCreditOrders: boolean;
+
   @Column({ name: 'opening_hours', nullable: true })
   openingHours: string; // e.g. "09:00 AM - 11:00 PM"
 

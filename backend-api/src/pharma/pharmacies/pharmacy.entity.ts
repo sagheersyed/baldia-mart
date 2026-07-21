@@ -88,6 +88,10 @@ export class Pharmacy {
   @Column({ name: 'is_active', default: false })
   isActive: boolean; // Admin-controlled activation
 
+  /** When false (default), rider pays pharmacy cash at pickup (CASH_ON_PICK). */
+  @Column({ name: 'allows_credit_orders', default: false })
+  allowsCreditOrders: boolean;
+
   @Column({ name: 'is_verified', default: false })
   isVerified: boolean; // License verification complete
 

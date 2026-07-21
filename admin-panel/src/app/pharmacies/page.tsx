@@ -28,6 +28,7 @@ interface Pharmacy {
   longitude?: number;
   zoneId?: string;
   hasColdChainSupport: boolean;
+  allowsCreditOrders?: boolean;
 }
 
 interface DeliveryZone {
@@ -52,7 +53,8 @@ const emptyPharmacyForm = {
   hasColdChainSupport: false,
   zoneId: '',
   latitude: '',
-  longitude: ''
+  longitude: '',
+  allowsCreditOrders: false,
 };
 
 export default function PharmaciesPage() {
@@ -178,7 +180,8 @@ export default function PharmaciesPage() {
       hasColdChainSupport: p.hasColdChainSupport || false,
       zoneId: p.zoneId || '',
       latitude: p.latitude?.toString() || '',
-      longitude: p.longitude?.toString() || ''
+      longitude: p.longitude?.toString() || '',
+      allowsCreditOrders: p.allowsCreditOrders ?? false,
     });
     setShowModal(true);
   };
@@ -413,6 +416,10 @@ export default function PharmaciesPage() {
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" checked={form.hasColdChainSupport} onChange={e => setForm({ ...form, hasColdChainSupport: e.target.checked })} className="w-6 h-6 accent-cyan-600" />
                     <span className="font-bold text-cyan-700">❄️ Cold Chain Support</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer col-span-full p-4 bg-amber-50 rounded-2xl border border-amber-100">
+                    <input type="checkbox" checked={form.allowsCreditOrders} onChange={e => setForm({ ...form, allowsCreditOrders: e.target.checked })} className="w-6 h-6 accent-amber-600" />
+                    <span className="font-bold text-amber-900">Allow Credit Orders (platform pays — trusted pharmacies only)</span>
                   </label>
                 </div>
               </div>

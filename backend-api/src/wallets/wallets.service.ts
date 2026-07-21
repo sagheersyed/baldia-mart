@@ -207,6 +207,9 @@ export class WalletsService {
           }
         }
       }
+      if (w.userType === 'Vendor') {
+        w.commissionPayable = await this.financeService.getCommissionPayableForWallet(w.id);
+      }
     }
 
     return wallets;

@@ -55,7 +55,7 @@ export class ManualAdjustmentDto {
   referenceId?: string;
 
   @IsOptional()
-  @IsEnum(['EARNINGS', 'CASH_IN_HAND', 'PLATFORM_REV', 'TAX_PAYABLE', 'VOUCHER_EXP'])
+  @IsEnum(['EARNINGS', 'CASH_IN_HAND', 'PLATFORM_REV', 'COMMISSION_PAYABLE', 'TAX_PAYABLE', 'VOUCHER_EXP'])
   accountTag?: string;
 }
 
@@ -69,4 +69,20 @@ export class ReconcileCashDto {
 
   @IsString()
   referenceId: string;
+}
+
+export class RecordMerchantCommissionPaymentDto {
+  @IsUUID()
+  vendorId: string;
+
+  @IsNumber()
+  @Min(0.01)
+  amount: number;
+
+  @IsString()
+  referenceId: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
 }

@@ -22,6 +22,7 @@ interface Restaurant {
   zoneId?: string;
   zone?: DeliveryZone;
   menuItems?: MenuItem[];
+  allowsCreditOrders?: boolean;
 }
 
 interface DeliveryZone {
@@ -61,13 +62,15 @@ interface RestaurantForm {
   longitude: string;
   zoneId: string;
   isActive: boolean;
+  allowsCreditOrders: boolean;
 }
 
 const emptyRestaurantForm: RestaurantForm = {
   name: '', description: '', logoUrl: '', cuisineType: '',
   openingHours: '', openingTime: '', closingTime: '',
   location: '', latitude: '', longitude: '', zoneId: '',
-  isActive: true
+  isActive: true,
+  allowsCreditOrders: false,
 };
 
 const emptyMenuItemForm = {
@@ -242,7 +245,8 @@ export default function RestaurantsPage() {
       latitude: r.latitude ? r.latitude.toString() : '',
       longitude: r.longitude ? r.longitude.toString() : '',
       zoneId: r.zoneId || '',
-      isActive: r.isActive
+      isActive: r.isActive,
+      allowsCreditOrders: r.allowsCreditOrders ?? false,
     });
     setShowRestaurantModal(true);
   };
@@ -481,6 +485,18 @@ export default function RestaurantsPage() {
                   onChange={e => setRestaurantForm({ ...restaurantForm, isActive: e.target.checked })} 
                 />
                 <label htmlFor="isActive" className="text-sm font-bold text-gray-700 cursor-pointer">Restaurant is Active (Visible to Customers)</label>
+              </div>
+              <div className="flex items-center gap-3 bg-amber-50 p-4 rounded-2xl border border-amber-100">
+                <input
+                  type="checkbox"
+                  id="allowsCreditOrders"
+                  className="w-5 h-5 rounded-lg border-amber-300 text-amber-600 focus:ring-amber-500"
+                  checked={restaurantForm.allowsCreditOrders}
+                  onChange={e => setRestaurantForm({ ...restaurantForm, allowsCreditOrders: e.target.checked })}
+                />
+                <label htmlFor="allowsCreditOrders" className="text-sm font-bold text-amber-900 cursor-pointer">
+                  Allow Credit Orders (platform pays — trusted restaurants only)
+                </label>
               </div>
               <div className="pt-2">
                 <button type="submit" disabled={isSubmitting} className="w-full h-14 bg-gradient-to-br from-orange-500 to-red-500 text-white rounded-2xl font-black text-lg hover:shadow-lg transition-all disabled:opacity-60">

@@ -52,6 +52,19 @@ export class SubOrder {
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
   subtotal: number;
 
+  /** Rider cash payment to merchant at pickup (CASH_ON_PICK mode). */
+  @Column({ name: 'pickup_payment_status', default: 'pending' })
+  pickupPaymentStatus: 'pending' | 'confirmed';
+
+  @Column('decimal', { name: 'pickup_payment_amount', precision: 10, scale: 2, nullable: true })
+  pickupPaymentAmount: number;
+
+  @Column({ name: 'pickup_payment_confirmed_at', type: 'timestamp', nullable: true })
+  pickupPaymentConfirmedAt: Date;
+
+  @Column({ name: 'pickup_payment_confirmed_by', type: 'uuid', nullable: true })
+  pickupPaymentConfirmedBy: string;
+
   @Column({ type: 'int', nullable: true })
   estimatedPrepTimeMinutes: number;
 

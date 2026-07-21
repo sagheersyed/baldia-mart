@@ -40,6 +40,10 @@ export default function WalletsPage() {
   const [withdrawBank,       setWithdrawBank]       = useState('');
   const [withdrawAccNo,      setWithdrawAccNo]      = useState('');
   const [withdrawAccName,    setWithdrawAccName]    = useState('');
+  const [commissionTarget,   setCommissionTarget]   = useState<any>(null);
+  const [commissionAmount,   setCommissionAmount]   = useState('');
+  const [commissionRefId,    setCommissionRefId]    = useState('');
+  const [commissionDesc,     setCommissionDesc]     = useState('');
 
   const loadData = async () => {
     setLoading(true); setError(null);
@@ -116,6 +120,36 @@ export default function WalletsPage() {
       }
     } catch (err) {
       showToast({ title: getErrorMessage(err, 'Liquidity block error'), variant: 'error' });
+    } finally { setSubmitting(false); }
+  };
+
+  const handleCommissionPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!commissionTarget || !commissionAmount || !commissionRefId) return;
+    setSubmitting(true);
+    try {
+      const res = await fetchWithAuth(`${BASE_URL}/finance/admin/record-merchant-commission-payment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vendorId: commissionTarget.userId,
+          amount: parseFloat(commissionAmount),
+          referenceId: commissionRefId,
+          description: commissionDesc || undefined,
+        }),
+      });
+      if (res.ok) {
+        setCommissionTarget(null);
+        setCommissionAmount('');
+        setCommissionRefId('');
+        setCommissionDesc('');
+        showToast({ title: 'Commission payment recorded', variant: 'success' });
+        loadData();
+      } else {
+        showToast({ title: await parseApiError(res, 'Commission payment failed'), variant: 'error' });
+      }
+    } catch (err) {
+      showToast({ title: getErrorMessage(err, 'Commission payment failed'), variant: 'error' });
     } finally { setSubmitting(false); }
   };
 
@@ -267,6 +301,7 @@ export default function WalletsPage() {
                   <th className="px-10 py-6">ACCOUNT TYPE</th>
                   <th className="px-10 py-6">NET BALANCE</th>
                   <th className="px-10 py-6">CASH IN HAND</th>
+                  <th className="px-10 py-6">COMM. PAYABLE</th>
                   <th className="px-10 py-6">STATUS</th>
                   <th className="px-10 py-6">SYNC DATE</th>
                   <th className="px-10 py-6 text-right">ACTION</th>
@@ -314,6 +349,18 @@ export default function WalletsPage() {
                       )}
                     </td>
                     <td className="px-10 py-6">
+                      {w.userType === 'Vendor' ? (
+                        <>
+                          <p className={`text-lg font-black italic tracking-tighter ${Number(w.commissionPayable) > 0 ? 'text-amber-600' : 'text-slate-300'}`}>
+                            RS. {Number(w.commissionPayable || 0).toLocaleString()}
+                          </p>
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1 italic">OWED TO PLATFORM</p>
+                        </>
+                      ) : (
+                        <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">N/A</span>
+                      )}
+                    </td>
+                    <td className="px-10 py-6">
                       {w.isSuspended ? (
                         <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-xl text-[9px] font-black tracking-[0.2em] uppercase bg-rose-50 text-rose-600 border border-rose-100">
                           <AlertCircle size={12} /> SUSPENDED
@@ -330,6 +377,9 @@ export default function WalletsPage() {
                      <td className="px-10 py-6 text-right">
                         <div className="flex justify-end gap-3">
                           <button onClick={() => setSelectedWallet(w)} title="Manual Settlement" className="w-12 h-12 bg-white border border-slate-100 rounded-2xl flex items-center justify-center text-slate-400 hover:text-emerald-600 hover:shadow-xl transition-all active:scale-90"><Banknote size={18} /></button>
+                          {w.userType === 'Vendor' && Number(w.commissionPayable) > 0 && (
+                            <button onClick={() => { setCommissionTarget(w); setCommissionAmount(String(w.commissionPayable)); setCommissionRefId(''); setCommissionDesc(''); }} title="Record Commission Payment" className="w-12 h-12 bg-white border border-slate-100 rounded-2xl flex items-center justify-center text-slate-400 hover:text-amber-600 hover:shadow-xl transition-all active:scale-90"><CreditCard size={18} /></button>
+                          )}
                           {w.userType === 'Vendor' && Number(w.balance) > 0 && (<button onClick={() => { setWithdrawTarget(w); setWithdrawAmount(''); setWithdrawBank(''); setWithdrawAccNo(''); setWithdrawAccName(''); }} title="Create Withdrawal Request" className="w-12 h-12 bg-white border border-slate-100 rounded-2xl flex items-center justify-center text-slate-400 hover:text-blue-600 hover:shadow-xl transition-all active:scale-90"><ArrowUpCircle size={18} /></button>)}
                         </div>
                      </td>
@@ -601,6 +651,47 @@ export default function WalletsPage() {
                  </form>
               </div>
            </div>
+        </div>
+      )}
+
+      {/* Merchant Commission Payment Modal */}
+      {commissionTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 backdrop-blur-2xl bg-slate-950/40 animate-in fade-in duration-300">
+          <div className="bg-white/95 w-full max-w-xl rounded-[4rem] shadow-2xl overflow-hidden border border-white/50 animate-in zoom-in-95 duration-500">
+            <div className="p-12 space-y-8">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-black text-slate-900 tracking-tighter uppercase italic">Commission Payment</h2>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Cash-on-Pick merchant remittance</p>
+                </div>
+                <button onClick={() => setCommissionTarget(null)} className="p-4 bg-slate-50 text-slate-300 hover:text-slate-900 rounded-full"><X size={24} /></button>
+              </div>
+              <div className="bg-amber-50 p-6 rounded-3xl border border-amber-100">
+                <p className="text-[10px] font-black text-amber-700 uppercase tracking-widest">Commission Payable</p>
+                <p className="text-3xl font-black text-amber-900 mt-1">RS. {Number(commissionTarget.commissionPayable || 0).toLocaleString()}</p>
+                <p className="text-xs text-amber-800 mt-2">{commissionTarget.vendor?.name || commissionTarget.restaurant?.name || commissionTarget.pharmacy?.name || 'Merchant'}</p>
+              </div>
+              <form onSubmit={handleCommissionPayment} className="space-y-6">
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Amount (RS.)</label>
+                    <input type="number" required min="0.01" max={commissionTarget.commissionPayable} value={commissionAmount} onChange={e => setCommissionAmount(e.target.value)} className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Reference ID</label>
+                    <input type="text" required value={commissionRefId} onChange={e => setCommissionRefId(e.target.value)} className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black" placeholder="JazzCash / Bank ref" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Notes (optional)</label>
+                  <input type="text" value={commissionDesc} onChange={e => setCommissionDesc(e.target.value)} className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black" placeholder="Weekly commission settlement" />
+                </div>
+                <button type="submit" disabled={submitting} className="w-full py-5 bg-amber-600 text-white rounded-[2.5rem] font-black uppercase tracking-widest text-[11px] hover:bg-amber-700 disabled:opacity-50">
+                  {submitting ? 'Recording...' : 'Record Payment'}
+                </button>
+              </form>
+            </div>
+          </div>
         </div>
       )}
     </div>

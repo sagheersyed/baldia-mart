@@ -60,6 +60,20 @@ export default function SocketListener() {
       }
     });
 
+    // ── Pickup Payment Confirmed (Cash-on-Pick) ─────────────────────────────
+    socket.on('pickupPaymentConfirmed', (data: any) => {
+      console.log('[Admin] pickupPaymentConfirmed:', data);
+      showToast({
+        title: 'Shop Payment Confirmed',
+        message: `Order #${data.orderId?.slice(0, 8)} — Rs ${data.amountPaid} paid at pickup`,
+        variant: 'success',
+      });
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('refreshOrders'));
+      }
+    });
+
     // ── Settings Updated — reflect immediately in Admin UI ───────────────────
     socket.on('settings_updated', () => {
       console.log('[Admin] settings_updated received');

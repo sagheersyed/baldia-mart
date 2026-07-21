@@ -129,6 +129,7 @@ export default function NavigationScreen({ navigation, route }: any) {
   const [isLocationBlocked, setIsLocationBlocked] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [expandedChecklist, setExpandedChecklist] = useState(true);
+  const [cashFlowInfo, setCashFlowInfo] = useState<any>(null);
 
   // Guard: prevents double-navigation when rider self-releases order
   // (submitReason navigates away AND backend emits 'pending' status via socket)
@@ -233,6 +234,11 @@ export default function NavigationScreen({ navigation, route }: any) {
           }
         }
 
+        try {
+          const cashFlowRes = await ordersApi.getCashFlowInfo(orderId);
+          if (cashFlowRes.data) setCashFlowInfo(cashFlowRes.data);
+        } catch (_) { /* non-critical */ }
+
         // 2. Location Handling (Non-blocking init)
         const { status: locPerm } = await Location.requestForegroundPermissionsAsync();
         if (locPerm !== 'granted') {
@@ -259,12 +265,17 @@ export default function NavigationScreen({ navigation, route }: any) {
         }
       } catch (e: any) {
         console.error('NavigationScreen init error:', e);
+        const msg = e.response?.data?.message || e.message || 'Failed to load navigation data.';
         if (e.response?.status === 401 || e.response?.status === 403) {
           await AsyncStorage.removeItem('activeOrderId');
-          navigation.replace('Main');
+          Alert.alert(
+            e.response?.status === 403 ? 'Access Denied' : 'Session Expired',
+            msg,
+            [{ text: 'OK', onPress: () => navigation.replace('Main') }],
+          );
           return;
         }
-        Alert.alert('Error', 'Failed to load navigation data.');
+        Alert.alert('Error', msg);
       } finally {
         setLoading(false);
       }
@@ -330,11 +341,15 @@ export default function NavigationScreen({ navigation, route }: any) {
 
   const refreshOrder = useCallback(async () => {
     try {
-      const res = await ordersApi.getById(orderId);
-      if (res.data) {
-        setOrder(res.data);
-        setStatus(res.data.status);
+      const [orderRes, cashFlowRes] = await Promise.all([
+        ordersApi.getById(orderId),
+        ordersApi.getCashFlowInfo(orderId).catch(() => null),
+      ]);
+      if (orderRes.data) {
+        setOrder(orderRes.data);
+        setStatus(orderRes.data.status);
       }
+      if (cashFlowRes?.data) setCashFlowInfo(cashFlowRes.data);
     } catch (e) { console.warn('Refresh order failed', e); }
   }, [orderId]);
 
@@ -399,19 +414,48 @@ export default function NavigationScreen({ navigation, route }: any) {
 
     // --- COD CASH COLLECTION WORKFLOW ---
     if (nextStatus === 'delivered' && order?.paymentMethod === 'cod') {
-      Alert.alert(
-        '💵 Collect Cash',
-        `Please collect Rs. ${order.total} from the customer before completing the delivery.`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'I have Collected Cash',
-            onPress: () => completeDelivery(nextStatus),
-            style: 'default'
-          }
-        ]
-      );
+      const isCashOnPick = order?.cashFlowMode === 'CASH_ON_PICK' || cashFlowInfo?.isCashOnPick;
+      const collectMsg = isCashOnPick
+        ? `Collect Rs. ${order.total} from the customer.\n\n✅ You already paid the shop.\n⚠️ You only owe platform commission + fee to Baldia Mart (not the full order).`
+        : `Please collect Rs. ${order.total} from the customer before completing the delivery.`;
+      Alert.alert('💵 Collect Cash', collectMsg, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'I have Collected Cash', onPress: () => completeDelivery(nextStatus), style: 'default' },
+      ]);
       return;
+    }
+
+    // --- CASH-ON-PICK: Confirm shop payment before leaving pickup phase ---
+    const isCashOnPick = order?.cashFlowMode === 'CASH_ON_PICK' || cashFlowInfo?.isCashOnPick;
+    const leavingPickup = ['out_for_delivery', 'picked_up', 'in_transit'].includes(nextStatus);
+    if (isCashOnPick && leavingPickup) {
+      const hasSubOrders = order?.subOrders?.length > 0;
+      if (!hasSubOrders && order?.pickupPaymentStatus !== 'confirmed') {
+        const amount = Number(order.subtotal);
+        Alert.alert(
+          '💵 Pay Shop First',
+          `Pay Rs. ${amount} to the shop in cash from your pocket, then confirm.`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'I Paid the Shop',
+              onPress: async () => {
+                try {
+                  setUpdatingStatus(true);
+                  await ordersApi.confirmPickupPayment(orderId, { amountPaid: amount });
+                  await completeDelivery(nextStatus);
+                  await refreshOrder();
+                } catch (e: any) {
+                  Alert.alert('Error', e.response?.data?.message || 'Failed to confirm shop payment');
+                } finally {
+                  setUpdatingStatus(false);
+                }
+              },
+            },
+          ]
+        );
+        return;
+      }
     }
 
     // Process immediately if not COD or not final delivery stage
@@ -430,7 +474,7 @@ export default function NavigationScreen({ navigation, route }: any) {
       //   ]);
       // }
     } catch (e) {
-      Alert.alert('Error', 'Could not update order status.');
+      Alert.alert('Error', (e as any)?.response?.data?.message || 'Could not update order status.');
     } finally {
       setUpdatingStatus(false);
     }
@@ -482,11 +526,39 @@ export default function NavigationScreen({ navigation, route }: any) {
     setReasonModalVisible(true);
   };
 
-  const handlePickUpSubOrder = async (subOrderId: string) => {
+  const handlePickUpSubOrder = async (subOrderId: string, amountToPay: number) => {
+    const sub = order?.subOrders?.find((s: any) => s.id === subOrderId);
+    const isCashOnPick = order?.cashFlowMode === 'CASH_ON_PICK' || cashFlowInfo?.isCashOnPick;
+
+    if (isCashOnPick && sub?.pickupPaymentStatus !== 'confirmed') {
+      Alert.alert(
+        '💵 Pay Shop First',
+        `Pay Rs. ${amountToPay} to this shop in cash from your pocket, then confirm pickup.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'I Paid the Shop',
+            onPress: async () => {
+              try {
+                await ordersApi.confirmPickupPayment(orderId, { subOrderId, amountPaid: amountToPay });
+                await ordersApi.updateSubOrderStatus(subOrderId, 'picked_up');
+                await refreshOrder();
+              } catch (e: any) {
+                Alert.alert('Error', e.response?.data?.message || 'Failed to confirm shop payment');
+              }
+            },
+          },
+        ]
+      );
+      return;
+    }
+
     try {
       await ordersApi.updateSubOrderStatus(subOrderId, 'picked_up');
       await refreshOrder();
-    } catch (e) { Alert.alert('Error', 'Failed to update stop status.'); }
+    } catch (e: any) {
+      Alert.alert('Error', e.response?.data?.message || 'Failed to update stop status.');
+    }
   };
 
   // ── External maps ───────────────────────────────────────────────────
@@ -680,6 +752,31 @@ export default function NavigationScreen({ navigation, route }: any) {
           )}
         </View>
 
+        {/* Cash-on-Pick Payment Banner */}
+        {(order?.cashFlowMode === 'CASH_ON_PICK' || cashFlowInfo?.isCashOnPick) && isPickupPhase && (
+          <View style={styles.cashOnPickBox}>
+            <View style={styles.cashOnPickHeader}>
+              <Text style={{ fontSize: 18 }}>💵</Text>
+              <Text style={styles.cashOnPickTitle}>Cash on Pick — Pay Shop First</Text>
+            </View>
+            <Text style={styles.cashOnPickMsg}>
+              Pay the shop subtotal in cash before picking up. Platform commission is paid separately by the merchant.
+            </Text>
+            {(cashFlowInfo?.stops || []).map((stop: any, idx: number) => (
+              <View key={idx} style={styles.cashOnPickStop}>
+                <Text style={styles.cashOnPickStopName}>{stop.merchantName}</Text>
+                <Text style={styles.cashOnPickStopAmt}>Rs. {stop.amountToPay}</Text>
+                <Text style={[
+                  styles.cashOnPickStatus,
+                  stop.pickupPaymentStatus === 'confirmed' ? styles.cashOnPickConfirmed : styles.cashOnPickPending,
+                ]}>
+                  {stop.pickupPaymentStatus === 'confirmed' ? '✓ Paid' : 'Pending'}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+
         {/* Cold Chain Reminder */}
         {order.isColdChain && (
           <View style={styles.coldChainBox}>
@@ -716,11 +813,21 @@ export default function NavigationScreen({ navigation, route }: any) {
               <View key={gIdx} style={{ marginBottom: 15 }}>
                 <View style={styles.groupHeader}>
                   <Text style={styles.groupName}>{gName}</Text>
-                  {group.subOrderId && group.status !== 'picked_up' && group.status !== 'delivered' && group.active.length > 0 && (
-                    <TouchableOpacity style={styles.pickupChip} onPress={() => handlePickUpSubOrder(group.subOrderId)}>
-                      <Text style={styles.pickupChipTxt}>PICKED UP ✓</Text>
-                    </TouchableOpacity>
-                  )}
+                  {group.subOrderId && group.status !== 'picked_up' && group.status !== 'delivered' && group.active.length > 0 && (() => {
+                    const sub = order.subOrders?.find((s: any) => s.id === group.subOrderId);
+                    const isCashOnPick = order?.cashFlowMode === 'CASH_ON_PICK';
+                    const needsPay = isCashOnPick && sub?.pickupPaymentStatus !== 'confirmed';
+                    return (
+                      <TouchableOpacity
+                        style={styles.pickupChip}
+                        onPress={() => handlePickUpSubOrder(group.subOrderId, Number(sub?.subtotal || 0))}
+                      >
+                        <Text style={styles.pickupChipTxt}>
+                          {needsPay ? `PAY Rs.${Number(sub?.subtotal || 0)} & PICK UP` : 'PICKED UP ✓'}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })()}
                   {group.status === 'picked_up' && (
                     <View style={styles.pickedChip}><Text style={styles.pickedChipTxt}>✅ DONE</Text></View>
                   )}
@@ -986,6 +1093,23 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '900',
   },
+  cashOnPickBox: {
+    backgroundColor: '#FEF3C7',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+  },
+  cashOnPickHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
+  cashOnPickTitle: { fontSize: 13, fontWeight: '800', color: '#92400E', marginLeft: 6 },
+  cashOnPickMsg: { fontSize: 11, color: '#78350F', lineHeight: 16, marginBottom: 8 },
+  cashOnPickStop: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4, gap: 8 },
+  cashOnPickStopName: { flex: 1, fontSize: 12, fontWeight: '700', color: '#78350F' },
+  cashOnPickStopAmt: { fontSize: 12, fontWeight: '900', color: '#92400E' },
+  cashOnPickStatus: { fontSize: 10, fontWeight: '800', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  cashOnPickConfirmed: { backgroundColor: '#D1FAE5', color: '#065F46' },
+  cashOnPickPending: { backgroundColor: '#FEE2E2', color: '#991B1B' },
   coldChainBox: {
     backgroundColor: '#E0F2F1',
     borderRadius: 12,

@@ -43,12 +43,16 @@ const getOrderItemImage = (item: OrderItem): string => {
 interface Order {
   id: string; status: string; total: number; deliveryFee: number; subtotal: number;
   notes?: string; createdAt: string; paymentMethod: string;
+  cashFlowMode?: 'CASH_ON_PICK' | 'MERCHANT_CREDIT';
+  pickupPaymentStatus?: string;
+  pickupPaymentAmount?: number;
+  pickupPaymentConfirmedAt?: string;
   user: { id: string; name: string; phoneNumber: string };
   rider?: { id: string; name: string; phoneNumber: string };
   address: { streetAddress: string; city: string };
   items: OrderItem[];
   orderType: string; martId?: string;
-  subOrders?: { id: string; status: string; restaurantId: string; restaurant?: { name: string; location: string; zoneId?: string } }[];
+  subOrders?: { id: string; status: string; subtotal?: number; pickupPaymentStatus?: string; pickupPaymentAmount?: number; pickupPaymentConfirmedAt?: string; restaurantId: string; restaurant?: { name: string; location: string; zoneId?: string } }[];
   orderHistory?: { id: string; status: string; notes: string; createdAt: string }[];
   releaseCount?: number;
   discountAmount?: number;
@@ -67,6 +71,13 @@ function StatusBadge({ status }: { status: string }) {
     out_for_delivery: 'badge-orange', delivered: 'badge-green', cancelled: 'badge-red',
   };
   return <span className={map[status.toLowerCase()] ?? 'badge-gray'}>{status.replace(/_/g, ' ')}</span>;
+}
+
+function CashFlowBadge({ mode }: { mode?: string }) {
+  if (mode === 'MERCHANT_CREDIT') {
+    return <span className="badge-blue text-[9px]">Credit Order</span>;
+  }
+  return <span className="badge-green text-[9px]">Cash on Pick</span>;
 }
 
 const calcDist = (la1: number, lo1: number, la2: number, lo2: number) => {
@@ -93,6 +104,12 @@ export default function OrdersPage() {
 
   useEffect(() => { fetchRiders(); fetchZones(); }, []);
   useEffect(() => { void fetchOrders(page); }, [page]);
+
+  useEffect(() => {
+    const onRefresh = () => { void fetchOrders(page); };
+    window.addEventListener('refreshOrders', onRefresh);
+    return () => window.removeEventListener('refreshOrders', onRefresh);
+  }, [page]);
   
   useEffect(() => {
     if (page !== 1) setPage(1);
@@ -276,6 +293,7 @@ export default function OrdersPage() {
                               <div className="flex items-center gap-3">
                                  <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${selectedOrder?.id === order.id ? 'text-white/40' : 'text-slate-300'}`}>TXN://{order.id.slice(0, 8).toUpperCase()}</span>
                                  <StatusBadge status={order.status} />
+                                 <CashFlowBadge mode={order.cashFlowMode || 'CASH_ON_PICK'} />
                               </div>
                               <h4 className={`text-2xl font-black italic uppercase tracking-tighter leading-none ${selectedOrder?.id === order.id ? 'text-white' : 'text-slate-800'}`}>{order.user?.name || 'Anonymous Entity'}</h4>
                               <div className={`flex items-center gap-4 text-[10px] font-bold uppercase tracking-widest ${selectedOrder?.id === order.id ? 'text-white/60' : 'text-slate-400'}`}>
@@ -451,6 +469,54 @@ export default function OrdersPage() {
                            <span className="text-[10px] font-black uppercase tracking-widest">{selectedOrder.paymentMethod}</span>
                         </div>
                      </div>
+                  </div>
+
+                  {/* Cash Flow & Pickup Audit */}
+                  <div className="p-8 bg-amber-50/50 rounded-[2.5rem] border border-amber-100 space-y-4">
+                    <div className="flex items-center gap-3">
+                      <ShieldCheck size={18} className="text-amber-600" />
+                      <h5 className="text-[10px] font-black text-amber-800 uppercase tracking-[0.3em]">Cash Flow Audit</h5>
+                      <CashFlowBadge mode={selectedOrder.cashFlowMode || 'CASH_ON_PICK'} />
+                    </div>
+                    {selectedOrder.subOrders && selectedOrder.subOrders.length > 0 ? (
+                      selectedOrder.subOrders.map(sub => (
+                        <div key={sub.id} className="flex justify-between items-center p-4 bg-white rounded-2xl border border-amber-100">
+                          <div>
+                            <p className="text-xs font-black text-slate-800">{sub.restaurant?.name || 'Shop'}</p>
+                            <p className="text-[10px] text-slate-400 uppercase">
+                              Subtotal Rs. {Number(sub.subtotal || 0).toLocaleString()}
+                              {sub.pickupPaymentAmount != null && ` · Paid Rs. ${Number(sub.pickupPaymentAmount).toLocaleString()}`}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-lg ${sub.pickupPaymentStatus === 'confirmed' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                              {sub.pickupPaymentStatus === 'confirmed' ? 'Shop Paid' : 'Pending'}
+                            </span>
+                            {sub.pickupPaymentConfirmedAt && (
+                              <p className="text-[9px] text-slate-400 mt-1">{format(new Date(sub.pickupPaymentConfirmedAt), 'MMM dd, HH:mm')}</p>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="flex justify-between items-center p-4 bg-white rounded-2xl border border-amber-100">
+                        <div>
+                          <p className="text-xs font-black text-slate-800">Single-stop pickup</p>
+                          <p className="text-[10px] text-slate-400 uppercase">
+                            Subtotal Rs. {Number(selectedOrder.subtotal).toLocaleString()}
+                            {selectedOrder.pickupPaymentAmount != null && ` · Paid Rs. ${Number(selectedOrder.pickupPaymentAmount).toLocaleString()}`}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                        <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-lg ${selectedOrder.pickupPaymentStatus === 'confirmed' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                          {selectedOrder.pickupPaymentStatus === 'confirmed' ? 'Shop Paid' : 'Pending'}
+                        </span>
+                        {selectedOrder.pickupPaymentConfirmedAt && (
+                          <p className="text-[9px] text-slate-400 mt-1">{format(new Date(selectedOrder.pickupPaymentConfirmedAt), 'MMM dd, HH:mm')}</p>
+                        )}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Activity Log System */}

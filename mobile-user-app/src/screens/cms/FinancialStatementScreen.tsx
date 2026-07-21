@@ -76,6 +76,7 @@ export default function FinancialStatementScreen({ navigation }: any) {
 
   const renderTransaction = ({ item }: { item: any }) => {
     const isCredit = item.direction === 'CREDIT';
+    const isCommissionPayable = item.accountTag === 'COMMISSION_PAYABLE';
     const amount = Number(item.amount);
     const date = new Date(item.createdAt);
     const orderId = item.transaction?.referenceType === 'ORDER_SETTLEMENT' ? item.transaction?.referenceId : null;
@@ -83,11 +84,11 @@ export default function FinancialStatementScreen({ navigation }: any) {
 
     return (
       <View style={styles.txnRow}>
-        <View style={[styles.txnIcon, { backgroundColor: isCredit ? '#DCFCE7' : '#FEE2E2' }]}>
+        <View style={[styles.txnIcon, { backgroundColor: isCommissionPayable ? '#FEF3C7' : isCredit ? '#DCFCE7' : '#FEE2E2' }]}>
           <Ionicons 
-            name={isCredit ? 'arrow-down-outline' : 'arrow-up-outline'} 
+            name={isCommissionPayable ? 'cash-outline' : isCredit ? 'arrow-down-outline' : 'arrow-up-outline'} 
             size={18} 
-            color={isCredit ? '#16A34A' : '#EF4444'} 
+            color={isCommissionPayable ? '#D97706' : isCredit ? '#16A34A' : '#EF4444'} 
           />
         </View>
         <View style={{ flex: 1 }}>
@@ -157,9 +158,23 @@ export default function FinancialStatementScreen({ navigation }: any) {
             <View style={styles.noticeBox}>
               <Ionicons name="information-circle-outline" size={18} color="#4F46E5" />
               <AppText variant="caption" color="#4F46E5" style={{ flex: 1, marginLeft: 8 }}>
-                Settlements are processed weekly. Ensure your linked bank account is active.
+                {Number(summary?.commissionPayable || 0) > 0
+                  ? `You owe Rs. ${formatPKR(summary.commissionPayable)} platform commission from Cash-on-Pick orders. Pay via admin panel.`
+                  : 'Settlements are processed weekly. Ensure your linked bank account is active.'}
               </AppText>
             </View>
+
+            {Number(summary?.commissionPayable || 0) > 0 && (
+              <View style={[styles.noticeBox, { backgroundColor: '#FEF3C7', borderColor: '#FCD34D' }]}>
+                <Ionicons name="cash-outline" size={18} color="#92400E" />
+                <View style={{ flex: 1, marginLeft: 8 }}>
+                  <AppText variant="bodyStrong" color="#92400E">Commission Payable</AppText>
+                  <AppText variant="caption" color="#78350F">
+                    Rs. {formatPKR(summary.commissionPayable)} — from orders where rider paid you in cash at pickup.
+                  </AppText>
+                </View>
+              </View>
+            )}
 
             <Pressable
               style={[styles.withdrawBtn, { backgroundColor: color }]}

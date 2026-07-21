@@ -17,6 +17,7 @@ import {
 import { InjectRepository, InjectConnection } from '@nestjs/typeorm';
 import { Repository, EntityManager, Connection } from 'typeorm';
 import { Order } from '../orders/order.entity';
+import { SubOrder } from '../orders/sub-order.entity';
 import { Coupon, DiscountType } from '../coupons/coupon.entity';
 import { Wallet } from '../wallets/wallet.entity';
 import { SettingsService } from '../settings/settings.service';
@@ -354,7 +355,28 @@ export class FinanceManagementService {
       const isCOD = order.paymentMethod?.toLowerCase() === 'cod' || order.paymentMethod?.toLowerCase() === 'cash_on_delivery';
       const riderId = order.riderId;
       const moduleType = order.orderType as any;
-      const flowMode = order.cashFlowMode || 'MERCHANT_CREDIT';
+      const flowMode = order.cashFlowMode || 'CASH_ON_PICK';
+
+      // Guard: CASH_ON_PICK orders require rider pickup payment confirmation before settlement
+      if (flowMode === 'CASH_ON_PICK') {
+        const subOrders = order.subOrders?.length
+          ? order.subOrders
+          : await manager.getRepository(SubOrder).find({ where: { orderId: order.id } });
+
+        if (subOrders.length > 0) {
+          const unconfirmed = subOrders.filter(s => s.pickupPaymentStatus !== 'confirmed');
+          if (unconfirmed.length > 0) {
+            throw new BadRequestException(
+              `Settlement blocked: ${unconfirmed.length} shop payment(s) not confirmed for order #${order.id.slice(-6).toUpperCase()}`
+            );
+          }
+        } else if (order.pickupPaymentStatus !== 'confirmed') {
+          throw new BadRequestException(
+            `Settlement blocked: shop payment not confirmed for order #${order.id.slice(-6).toUpperCase()}`
+          );
+        }
+      }
+
       const serviceFee = await this.settingsService.getNumber('platform_service_fee', 15);
       const transactionGroupId = this.connection.manager.create(PremiumFinancialLedgerEntry).id; // Use generated UUID as parent log
 
@@ -406,23 +428,17 @@ export class FinanceManagementService {
             description: `Store payout for Order #${order.id.slice(-6).toUpperCase()} net of commission`,
           });
         } else if (flowMode === 'CASH_ON_PICK') {
-          // Option 2: Counter payment upfront. Double entries show zero balance mutation but track historic earnings.
-          ledgerEntries.push({
-            walletId: vWallet.id,
-            accountTag: 'VENDOR_WALLETS',
-            direction: 'CREDIT',
-            amount: vendorShare,
-            moduleType,
-            description: `Gross Sale counter payout for Order #${order.id.slice(-6).toUpperCase()}`,
-          });
-          ledgerEntries.push({
-            walletId: vWallet.id,
-            accountTag: 'VENDOR_WALLETS',
-            direction: 'DEBIT',
-            amount: vendorShare,
-            moduleType,
-            description: `Upfront Cash Counter Payment received from Rider for #${order.id.slice(-6).toUpperCase()}`,
-          });
+          // Rider paid merchant at pickup — track commission owed to platform only
+          if (comm > 0) {
+            ledgerEntries.push({
+              walletId: vWallet.id,
+              accountTag: 'COMMISSION_PAYABLE',
+              direction: 'DEBIT',
+              amount: comm,
+              moduleType,
+              description: `Platform commission due (Cash-on-Pick) for Order #${order.id.slice(-6).toUpperCase()}`,
+            });
+          }
         }
       }
 
@@ -451,23 +467,47 @@ export class FinanceManagementService {
 
         // Cash flow options for cash in hand COD values
         if (isCOD) {
-          let riderDebt = 0;
           if (flowMode === 'CASH_ON_PICK') {
-            // Rider paid counter and collects full customer cash; liability is platform charge share
-            riderDebt = totalAdminCommission + serviceFee;
+            const platformShare = totalAdminCommission + serviceFee;
+
+            ledgerEntries.push({
+              walletId: rWallet.id,
+              accountTag: 'CASH_IN_HAND',
+              direction: 'DEBIT',
+              amount: platformShare,
+              moduleType,
+              description: `Remittance Owed: Platform Share for Order #${order.id.slice(-6).toUpperCase()} (Cash-on-Pick)`,
+            });
+
+            // Auto-balancing: net rider liability to platform share only
+            ledgerEntries.push({
+              walletId: rWallet.id,
+              accountTag: 'RIDER_EARNINGS',
+              direction: 'DEBIT',
+              amount: platformShare,
+              moduleType,
+              description: `Auto-Balancing: Platform share settled from earnings for Order #${order.id.slice(-6).toUpperCase()} (Cash-on-Pick)`,
+            });
+
+            ledgerEntries.push({
+              walletId: rWallet.id,
+              accountTag: 'CASH_IN_HAND',
+              direction: 'CREDIT',
+              amount: platformShare,
+              moduleType,
+              description: `Auto-Balancing: Cash-in-hand liability adjusted for Order #${order.id.slice(-6).toUpperCase()} (Cash-on-Pick)`,
+            });
           } else {
             // Merchant credit flow: rider collects 100% of order totals
-            riderDebt = Number(order.total);
+            ledgerEntries.push({
+              walletId: rWallet.id,
+              accountTag: 'CASH_IN_HAND',
+              direction: 'DEBIT',
+              amount: Number(order.total),
+              moduleType,
+              description: `Rider cash collection liability on Order #${order.id.slice(-6).toUpperCase()}`,
+            });
           }
-
-          ledgerEntries.push({
-            walletId: rWallet.id,
-            accountTag: 'CASH_IN_HAND',
-            direction: 'DEBIT',
-            amount: riderDebt,
-            moduleType,
-            description: `Rider cash collection liability on Order #${order.id.slice(-6).toUpperCase()}`,
-          });
         }
       }
 

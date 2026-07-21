@@ -5,7 +5,7 @@ import {
   DollarSign, TrendingUp, Wallet, ArrowDownCircle, ArrowUpCircle, 
   Search, Calendar, Filter, Download, ArrowRight, Activity, Clock,
   Users, ShoppingBag, BarChart3, ChevronUp, ChevronDown, Award,
-  Pill, Bike, ShieldCheck, Boxes
+  Pill, Bike, ShieldCheck, Boxes, Store
 } from 'lucide-react';
 import { fetchWithAuth, BASE_URL } from '@/lib/api';
 import { format, subDays, parseISO } from 'date-fns';
@@ -139,6 +139,14 @@ export default function FinanceDashboard() {
           color="rose"
           label="Cash currently in hand"
           trend="Critical"
+        />
+        <MetricCard 
+          title="Merchant Commission Due" 
+          value={summary?.merchantCommissionReceivable} 
+          icon={<Store className="text-amber-500" size={20} />}
+          color="amber"
+          label="Cash-on-Pick unpaid commission"
+          trend="Receivable"
         />
       </div>
 
