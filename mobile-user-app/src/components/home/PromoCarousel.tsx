@@ -1,5 +1,4 @@
 import React, { memo } from 'react';
-import { View, StyleSheet } from 'react-native';
 import BannerCarousel from '../BannerCarousel';
 
 interface PromoCarouselProps {
@@ -10,27 +9,21 @@ interface PromoCarouselProps {
 const FALLBACK_BANNER = {
   id: 'mart-fallback',
   title: 'Welcome to BaldiaMart',
-  subtitle: 'Get 20% off on your first order. Use code: FIRST20',
-  tagLabel: '🎉 New Users',
-  backgroundColor: '#FF4500',
+  subtitle: 'Get 20% off your first order',
+  tagLabel: 'NEW USER',
+  backgroundColor: '#FF5A1F',
   textColor: '#fff',
 };
 
 const PromoCarousel = memo(function PromoCarousel({ banners, onPress }: PromoCarouselProps) {
   return (
-    <View style={styles.wrap}>
-      <BannerCarousel
-        banners={banners}
-        autoScrollInterval={5000}
-        fallbackBanner={FALLBACK_BANNER}
-        onPress={onPress}
-      />
-    </View>
+    <BannerCarousel
+      banners={banners}
+      autoScrollInterval={5000}
+      fallbackBanner={FALLBACK_BANNER}
+      onPress={onPress}
+    />
   );
 });
 
 export default PromoCarousel;
-
-const styles = StyleSheet.create({
-  wrap: { marginBottom: 8 },
-});

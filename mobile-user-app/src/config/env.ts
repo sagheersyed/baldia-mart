@@ -7,7 +7,7 @@
 
 import Constants from 'expo-constants';
 
-const DEFAULT_SERVER_BASE = 'http://192.168.100.142:3000';
+const DEFAULT_SERVER_BASE = 'http://192.168.0.241:3000';
 const extra: any = (Constants as any)?.expoConfig?.extra ?? (Constants as any)?.manifest?.extra ?? {};
 const SERVER_BASE: string = ((extra?.SERVER_BASE as string) || DEFAULT_SERVER_BASE).trim();
 

@@ -13,7 +13,7 @@ import {
   normalizeUrl, socket, connectSocket, moduleEventsApi,
 } from '../api/api';
 import { useCart } from '../context/CartContext';
-import { formatRatingCount, getDistanceKm, isBusinessOpen } from '../utils/helpers';
+import { getDistanceKm, isBusinessOpen } from '../utils/helpers';
 
 import HomeHeader from '../components/home/HomeHeader';
 import HomeSearchBar from '../components/home/HomeSearchBar';
@@ -21,7 +21,7 @@ import PromoCarousel from '../components/home/PromoCarousel';
 import CampaignStrip from '../components/home/CampaignStrip';
 import HomeSkeleton from '../components/home/HomeSkeleton';
 import {
-  AppText, AppBadge, EmptyState, ErrorState, SectionHeader,
+  AppText, EmptyState, ErrorState, SectionHeader,
 } from '../components/ui';
 import { theme } from '../theme/theme';
 
@@ -76,92 +76,190 @@ const CuisineChip = React.memo(function CuisineChip({
   );
 });
 
+// ─── Restaurant card helpers ──────────────────────────────────
+const formatCuisine = (raw?: string) => {
+  if (!raw) return '';
+  return raw.split(',').map(s => s.trim()).filter(Boolean).join(' · ');
+};
+
+const getDeliveryLabel = (resto: any) => {
+  if (resto.deliveryTime) return resto.deliveryTime;
+  const min = Number(resto.deliveryEtaMin);
+  if (min > 0) return `${min}-${min + 15} min`;
+  return '25-40 min';
+};
+
+const getReviewLabel = (count?: number | null) => {
+  if (!count) return '';
+  if (count < 100) return `${count} reviews`;
+  const rounded = Math.floor(count / 100) * 100;
+  return `${rounded}+ reviews`;
+};
+
 // ─── Restaurant card ────────────────────────────────────────
 const RestaurantCard = React.memo(function RestaurantCard({ resto, onPress }: any) {
   const cover = normalizeUrl(resto.coverUrl || resto.imageUrl);
-  const logo  = normalizeUrl(resto.logoUrl);
-  const open  = isBusinessOpen(resto);
-  const fee   = resto.deliveryFee != null ? Math.round(Number(resto.deliveryFee)) : null;
-  const eta   = resto.deliveryTime || resto.openingHours || '20-35 min';
+  const logo = normalizeUrl(resto.logoUrl);
+  const open = isBusinessOpen(resto);
+  const fee = resto.deliveryFee != null ? Math.round(Number(resto.deliveryFee)) : null;
+  const deliveryLabel = getDeliveryLabel(resto);
   const sponsored = !!resto.sponsored || !!resto.isAd;
   const freeDelivery = fee === 0 || !!resto.freeDelivery;
   const hasDeal = !!resto.discountText;
+  const rating = Number(resto.rating) || 0;
+  const cuisine = formatCuisine(resto.cuisineType);
+  const reviewLabel = getReviewLabel(resto.ratingCount);
 
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [styles.card, pressed ? { opacity: 0.92 } : null]}
+      style={({ pressed }) => [
+        styles.card,
+        !open && styles.cardClosed,
+        pressed ? styles.cardPressed : null,
+      ]}
     >
       <View style={styles.coverWrap}>
         {cover || logo ? (
           <Image
             source={{ uri: cover || logo! }}
-            style={StyleSheet.absoluteFill}
+            style={[StyleSheet.absoluteFill, !open && styles.coverDimmed]}
             contentFit="cover"
             cachePolicy="memory-disk"
-            transition={180}
+            transition={220}
           />
         ) : (
-          <View style={[StyleSheet.absoluteFill, styles.placeholder]}>
-            <Ionicons name="restaurant" size={36} color="#fff" />
-          </View>
-        )}
-        {!open && (
           <LinearGradient
-            colors={['rgba(15,23,42,0)', 'rgba(15,23,42,0.65)']}
+            colors={['#C62828', '#E53935', '#FF7043']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
             style={StyleSheet.absoluteFill}
-          />
+          >
+            <View style={styles.placeholder}>
+              <Ionicons name="restaurant-outline" size={42} color="rgba(255,255,255,0.92)" />
+            </View>
+          </LinearGradient>
         )}
-        {/* Badges row */}
-        <View style={styles.coverBadges}>
-          {hasDeal && <AppBadge label={resto.discountText || 'DEAL'} variant="discount" />}
-          {freeDelivery && <AppBadge label="FREE DELIVERY" variant="free" />}
-          {sponsored && <AppBadge label="Ad" variant="neutral" />}
+
+        <LinearGradient
+          colors={['rgba(0,0,0,0.02)', 'rgba(0,0,0,0.55)']}
+          locations={[0.35, 1]}
+          style={styles.coverGradient}
+        />
+
+        <View style={styles.coverTopRow}>
+          <View style={styles.coverBadges}>
+            {hasDeal ? (
+              <View style={styles.dealPill}>
+                <AppText variant="badge" color="#fff" style={styles.dealText}>
+                  {resto.discountText || 'DEAL'}
+                </AppText>
+              </View>
+            ) : null}
+            {freeDelivery ? (
+              <View style={styles.freePill}>
+                <AppText variant="badge" color={theme.colors.success} style={styles.dealText}>
+                  FREE DELIVERY
+                </AppText>
+              </View>
+            ) : null}
+            {sponsored ? (
+              <View style={styles.adPill}>
+                <AppText variant="badge" color="#fff" style={styles.dealText}>Ad</AppText>
+              </View>
+            ) : null}
+          </View>
         </View>
-        {!open && (
-          <View style={styles.closedPill}>
-            <AppText variant="badge" color="#fff">CURRENTLY CLOSED</AppText>
-          </View>
-        )}
-        {logo ? (
-          <View style={styles.logoCircle}>
-            <Image source={{ uri: logo }} style={styles.logoImg} contentFit="cover" cachePolicy="memory-disk" />
-          </View>
-        ) : null}
+
+        <View style={styles.coverBottomRow}>
+          {logo ? (
+            <View style={styles.logoCircle}>
+              <Image
+                source={{ uri: logo }}
+                style={styles.logoImg}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+              />
+            </View>
+          ) : (
+            <View style={styles.logoSpacer} />
+          )}
+
+          {!open ? (
+            <View style={styles.closedPill}>
+              <Ionicons name="moon-outline" size={11} color="#fff" />
+              <AppText variant="badge" color="#fff">Closed</AppText>
+            </View>
+          ) : null}
+        </View>
       </View>
 
       <View style={styles.info}>
         <View style={styles.titleRow}>
-          <AppText variant="title" numberOfLines={1} style={{ flex: 1 }}>
+          <AppText variant="title" numberOfLines={1} style={styles.name}>
             {resto.name}
           </AppText>
-          {Number(resto.rating) > 0 && (
-            <View style={styles.rating}>
+          {rating > 0 ? (
+            <View style={styles.ratingChip}>
               <Ionicons name="star" size={12} color="#F59E0B" />
-              <AppText variant="captionStrong" color="#B45309" style={{ marginLeft: 2 }}>
-                {Number(resto.rating).toFixed(1)}
-                <AppText variant="caption">{formatRatingCount(resto.ratingCount)}</AppText>
+              <AppText variant="captionStrong" color={theme.colors.textHeader} style={styles.ratingValue}>
+                {rating.toFixed(1)}
               </AppText>
             </View>
-          )}
+          ) : null}
         </View>
-        {resto.cuisineType ? (
-          <AppText variant="caption" numberOfLines={1}>{resto.cuisineType}</AppText>
+
+        {cuisine ? (
+          <AppText variant="caption" numberOfLines={1} color={theme.colors.textSecondary} style={styles.cuisine}>
+            {cuisine}
+          </AppText>
+        ) : null}
+
+        {reviewLabel ? (
+          <AppText variant="caption" color={theme.colors.textMuted} style={styles.reviews}>
+            {reviewLabel}
+          </AppText>
         ) : null}
 
         <View style={styles.metaRow}>
           <View style={styles.metaItem}>
-            <Ionicons name="time-outline" size={13} color={theme.colors.textSecondary} />
-            <AppText variant="caption">{eta}</AppText>
+            <Ionicons name="time-outline" size={14} color={theme.colors.food} />
+            <AppText variant="captionStrong" color={theme.colors.textPrimary}>
+              {deliveryLabel}
+            </AppText>
           </View>
-          {fee != null && !freeDelivery && (
-            <View style={styles.metaItem}>
-              <Ionicons name="bicycle" size={13} color={theme.colors.textSecondary} />
-              <AppText variant="caption">Rs.{fee}</AppText>
-            </View>
-          )}
+
+          {(freeDelivery || fee != null) ? (
+            <>
+              <View style={styles.metaDot} />
+              {freeDelivery ? (
+                <View style={styles.metaItem}>
+                  <Ionicons name="bicycle-outline" size={14} color={theme.colors.success} />
+                  <AppText variant="captionStrong" color={theme.colors.success}>
+                    Free delivery
+                  </AppText>
+                </View>
+              ) : (
+                <View style={styles.metaItem}>
+                  <Ionicons name="bicycle-outline" size={14} color={theme.colors.textSecondary} />
+                  <AppText variant="captionStrong" color={theme.colors.textPrimary}>
+                    Rs.{fee}
+                  </AppText>
+                </View>
+              )}
+            </>
+          ) : null}
+
           {resto.proLabel ? (
-            <AppBadge label={resto.proLabel} variant="pro" />
+            <>
+              <View style={styles.metaDot} />
+              <View style={styles.proChip}>
+                <Ionicons name="flash" size={11} color={theme.colors.pro} />
+                <AppText variant="badge" color={theme.colors.pro} style={{ fontSize: 9 }}>
+                  {resto.proLabel}
+                </AppText>
+              </View>
+            </>
           ) : null}
         </View>
       </View>
@@ -609,63 +707,178 @@ const styles = StyleSheet.create({
   // Restaurant card
   card: {
     marginHorizontal: theme.spacing.lg,
-    marginBottom: theme.spacing.md,
+    marginBottom: theme.spacing.lg,
     backgroundColor: theme.colors.surface,
-    borderRadius: theme.radius.lg,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: theme.colors.divider,
-    ...theme.shadows.sm,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.border,
+    ...theme.shadows.md,
+  },
+  cardPressed: {
+    opacity: 0.96,
+    transform: [{ scale: 0.992 }],
+  },
+  cardClosed: {
+    opacity: 0.92,
   },
   coverWrap: {
-    height: 140,
+    height: 176,
     backgroundColor: theme.colors.surfaceMuted,
     overflow: 'hidden',
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    position: 'relative',
+  },
+  coverDimmed: {
+    opacity: 0.55,
+  },
+  coverGradient: {
+    ...StyleSheet.absoluteFillObject,
   },
   placeholder: {
-    backgroundColor: theme.colors.food,
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  coverBadges: {
+  coverTopRow: {
     position: 'absolute',
-    top: 10, left: 10,
+    top: 0,
+    left: 0,
+    right: 0,
+    padding: 12,
+  },
+  coverBadges: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 6,
   },
-  closedPill: {
+  coverBottomRow: {
     position: 'absolute',
-    alignSelf: 'center',
-    top: '40%',
-    backgroundColor: 'rgba(15,23,42,0.85)',
-    paddingHorizontal: 14, paddingVertical: 6,
-    borderRadius: theme.radius.pill,
+    left: 12,
+    right: 12,
+    bottom: 12,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+  },
+  dealPill: {
+    backgroundColor: theme.colors.food,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  freePill: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  adPill: {
+    backgroundColor: 'rgba(15,23,42,0.6)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  dealText: {
+    fontSize: 9,
+    letterSpacing: 0.4,
+    fontWeight: '800',
   },
   logoCircle: {
-    position: 'absolute',
-    bottom: 10, right: 10,
-    width: 44, height: 44, borderRadius: 22,
+    width: 48,
+    height: 48,
+    borderRadius: 12,
     backgroundColor: '#fff',
-    alignItems: 'center', justifyContent: 'center',
     overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: '#fff',
     ...theme.shadows.sm,
   },
-  logoImg: { width: 40, height: 40, borderRadius: 20 },
-
-  info: { padding: theme.spacing.md },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, marginBottom: 2 },
-  rating: {
+  logoSpacer: {
+    width: 48,
+  },
+  logoImg: {
+    width: '100%',
+    height: '100%',
+  },
+  closedPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.colors.warningLight,
-    paddingHorizontal: 6, paddingVertical: 2,
+    gap: 4,
+    backgroundColor: 'rgba(15,23,42,0.82)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: theme.radius.pill,
   },
-  metaRow: {
-    marginTop: theme.spacing.sm,
+
+  info: {
+    paddingHorizontal: 14,
+    paddingTop: 14,
+    paddingBottom: 14,
+    borderBottomLeftRadius: 18,
+    borderBottomRightRadius: 18,
+    backgroundColor: theme.colors.surface,
+  },
+  titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.md,
+    gap: 10,
+    marginBottom: 4,
   },
-  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  name: {
+    flex: 1,
+    fontSize: 17,
+    fontWeight: '700',
+    letterSpacing: -0.25,
+    color: theme.colors.textHeader,
+  },
+  ratingChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: theme.colors.warningLight,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: theme.radius.pill,
+  },
+  ratingValue: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  cuisine: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 2,
+  },
+  reviews: {
+    fontSize: 11,
+    marginBottom: 10,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 2,
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  metaDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: theme.colors.textMuted,
+  },
+  proChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: theme.colors.proLight,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: theme.radius.pill,
+  },
 });

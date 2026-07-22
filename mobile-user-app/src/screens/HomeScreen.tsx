@@ -202,7 +202,7 @@ export default function HomeScreen({ navigation }: any) {
         id: 'deals',
         title: 'Deals & Offers',
         icon: 'pricetag',
-        bg: ['#FFE4E1', '#FFD1D1'], fg: theme.colors.discount,
+        bg: '#FEE2E2', fg: '#E11D48',
         badge: 'HOT',
         onPress: () => navigation.navigate('ProductListing', { type: 'deals', title: 'Deals & Offers' }),
       },
@@ -210,28 +210,28 @@ export default function HomeScreen({ navigation }: any) {
         id: 'best',
         title: 'Best Sellers',
         icon: 'trophy',
-        bg: ['#FFF1EA', '#FFE0CF'], fg: theme.colors.primary,
+        bg: '#FFEDD5', fg: theme.colors.primary,
         onPress: () => navigation.navigate('ProductListing', { type: 'best_sellers', title: 'Best Sellers' }),
       },
       {
         id: 'fresh',
         title: 'Fresh Bazaar',
         icon: 'leaf',
-        bg: ['#E8F8EE', '#D1FAE5'], fg: '#10B981',
+        bg: '#D1FAE5', fg: '#059669',
         onPress: () => navigation.navigate('ProductListing', { type: 'newest', title: 'Fresh Bazaar' }),
       },
       {
         id: 'budget',
         title: 'Under Rs.100',
         icon: 'cash',
-        bg: ['#E3EBFF', '#C4D6FF'], fg: '#3B82F6',
+        bg: '#DBEAFE', fg: '#2563EB',
         onPress: () => navigation.navigate('ProductListing', { type: 'budget', maxPrice: 100, title: 'Under Rs.100' }),
       },
       {
         id: 'featured',
         title: 'Featured',
         icon: 'sparkles',
-        bg: ['#F3E8FF', '#E9D5FF'], fg: '#7C3AED',
+        bg: '#EDE9FE', fg: '#7C3AED',
         onPress: () => navigation.navigate('ProductListing', { type: 'featured', title: 'Featured' }),
       },
     ];
@@ -240,7 +240,7 @@ export default function HomeScreen({ navigation }: any) {
         id: 'rashan',
         title: 'Monthly Rashan',
         icon: 'cube',
-        bg: ['#818CF8', '#4F46E5'], fg: '#fff',
+        bg: '#E0E7FF', fg: '#4F46E5',
         onPress: () => navigation.navigate('RashanOrder'),
       });
     }
@@ -251,8 +251,8 @@ export default function HomeScreen({ navigation }: any) {
   const listData = useMemo<ListItem[]>(() => {
     if (!home) return [];
     const items: ListItem[] = [];
-    if (home.banners?.length) items.push({ kind: 'banners', banners: home.banners });
     items.push({ kind: 'services', services: quickServices });
+    if (home.banners?.length) items.push({ kind: 'banners', banners: home.banners });
     if (home.categories?.length) items.push({ kind: 'categories', categories: home.categories });
     if (home.brands?.length) items.push({ kind: 'brands', brands: home.brands });
     if (campaigns.length > 0) items.push({ kind: 'campaigns', campaigns });
@@ -263,10 +263,10 @@ export default function HomeScreen({ navigation }: any) {
 
   const renderItem: ListRenderItem<ListItem> = useCallback(({ item }) => {
     switch (item.kind) {
-      case 'banners':
-        return <PromoCarousel banners={item.banners} onPress={handleBannerPress} />;
       case 'services':
         return <QuickServicesGrid services={item.services} variant="rail" />;
+        case 'banners':
+        return <PromoCarousel banners={item.banners} onPress={handleBannerPress} />;
       case 'categories':
         return <CategoryGrid categories={item.categories} onCategoryPress={handleCategoryPress} />;
       case 'brands':
@@ -380,6 +380,7 @@ export default function HomeScreen({ navigation }: any) {
         keyExtractor={keyExtractor}
         renderItem={renderItem as any}
         contentContainerStyle={styles.listContent}
+        style={styles.list}
         showsVerticalScrollIndicator={false}
         initialNumToRender={4}
         maxToRenderPerBatch={4}
@@ -415,6 +416,7 @@ export default function HomeScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.colors.background },
+  container: { flex: 1, backgroundColor: theme.colors.surface },
+  list: { flex: 1, backgroundColor: theme.colors.background },
   listContent: { paddingBottom: 110, paddingTop: 0 },
 });

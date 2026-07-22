@@ -12,7 +12,7 @@ const resolveMigrationHost = (): string => {
   const host = process.env.DB_HOST || 'localhost';
   // Inside Docker, host.docker.internal reaches the host PG — keep as-is.
   if (process.env.RUNNING_IN_DOCKER === '1') return host;
-  if (host === 'host.docker.internal' || host === '192.168.100.142') {
+  if (host === 'host.docker.internal' || host === '192.168.0.241') {
     return 'localhost';
   }
   return host;

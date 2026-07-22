@@ -4,7 +4,7 @@
  */
 const axios = require('axios');
 
-const BASE = (process.argv[2] || process.env.API_BASE || 'http://192.168.100.142:3000/api/v1').replace(/\/$/, '');
+const BASE = (process.argv[2] || process.env.API_BASE || 'http://192.168.0.241:3000/api/v1').replace(/\/$/, '');
 
 const results = [];
 const pass = (name, detail) => results.push({ ok: true, name, detail });

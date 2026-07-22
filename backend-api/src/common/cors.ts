@@ -1,9 +1,9 @@
 const DEFAULT_ORIGINS = [
   'http://localhost:3000',
   'http://localhost:3001',
-  'http://192.168.100.142',
-  'http://192.168.100.142:3000',
-  'http://192.168.100.142:3001',
+  'http://192.168.0.241',
+  'http://192.168.0.241:3000',
+  'http://192.168.0.241:3001',
 ];
 
 function normalizeOrigin(value: string): string {

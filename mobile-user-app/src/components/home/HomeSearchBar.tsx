@@ -1,6 +1,4 @@
-// HomeSearchBar.tsx — Premium redesign v3
-// Features: Floating card style, branded search icon with tint bg,
-//           orange glow ring inside header, dark mode via ThemeContext
+// HomeSearchBar — Foodpanda-inspired clean search field
 
 import React, { memo } from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
@@ -30,7 +28,7 @@ const HomeSearchBar = memo(function HomeSearchBar({
   const tint = isFood ? theme.colors.food : theme.colors.primary;
 
   const ph = placeholder
-    || (isFood ? 'Search restaurants & dishes…' : 'Search groceries, brands & more…');
+    || (isFood ? 'Search for shops & restaurants' : 'Search for shops & products');
 
   return (
     <View style={[
@@ -44,52 +42,37 @@ const HomeSearchBar = memo(function HomeSearchBar({
         style={({ pressed }) => [
           styles.bar,
           {
-            backgroundColor: theme.colors.surface,
-            borderColor: inHeader ? 'rgba(255,255,255,0.35)' : theme.colors.border,
+            backgroundColor: theme.colors.surfaceMuted,
+            borderColor: theme.colors.border,
           },
-          pressed ? { transform: [{ scale: 0.98 }], opacity: 0.92 } : null,
-          !inHeader ? {
-            shadowColor: theme.colors.isDark ? '#000' : '#0A0F1E',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: theme.colors.isDark ? 0.3 : 0.07,
-            shadowRadius: 12,
-            elevation: 5,
-          } : null,
+          pressed ? { opacity: 0.92 } : null,
         ]}
         android_ripple={{ color: theme.colors.primaryLight, borderless: false }}
       >
-        {/* Branded icon circle */}
-        <View style={[styles.iconCircle, { backgroundColor: tint + '18' }]}>
-          <Ionicons name="search" size={18} color={tint} />
-        </View>
+        <Ionicons name="search" size={18} color={theme.colors.textMuted} />
 
         <AppText
           variant="body"
-          color={inHeader ? 'rgba(118, 112, 112, 0.7)' : theme.colors.textMuted}
+          color={theme.colors.textMuted}
           style={styles.placeholder}
           numberOfLines={1}
         >
           {ph}
         </AppText>
 
-        <View style={styles.rightActions}>
-          {onFilter && (
-            <Pressable
-              onPress={(e) => { e.stopPropagation(); onFilter(); }}
-              style={({ pressed }) => [
-                styles.actionBtn,
-                { backgroundColor: theme.colors.surfaceMuted },
-                pressed ? { transform: [{ scale: 0.9 }] } : null,
-              ]}
-              hitSlop={8}
-            >
-              <Ionicons name="options-outline" size={17} color={tint} />
-            </Pressable>
-          )}
-          <View style={[styles.actionBtn, { backgroundColor: theme.colors.surfaceMuted }]}>
-            <Ionicons name="mic-outline" size={17} color={theme.colors.textSecondary} />
-          </View>
-        </View>
+        <View style={styles.divider} />
+
+        {onFilter ? (
+          <Pressable
+            onPress={(e) => { e.stopPropagation(); onFilter(); }}
+            hitSlop={8}
+            style={styles.trailingBtn}
+          >
+            <Ionicons name="options-outline" size={18} color={tint} />
+          </Pressable>
+        ) : (
+          <Ionicons name="mic-outline" size={18} color={theme.colors.textSecondary} />
+        )}
       </Pressable>
     </View>
   );
@@ -108,44 +91,31 @@ const styles = StyleSheet.create({
   inHeader: {
     paddingHorizontal: 0,
     paddingTop: 10,
-    paddingBottom: 4,
+    paddingBottom: 0,
     marginTop: 0,
     zIndex: 1,
   },
   bar: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 16,
-    borderWidth: 1.5,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    minHeight: 50,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 14,
+    minHeight: 46,
     gap: 10,
-  },
-  iconCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
   },
   placeholder: {
     flex: 1,
-    fontSize: 13.5,
-    fontWeight: '500',
+    fontSize: 14,
+    fontWeight: '400',
   },
-  rightActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+  divider: {
+    width: StyleSheet.hairlineWidth,
+    height: 20,
+    backgroundColor: '#CBD5E1',
   },
-  actionBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
+  trailingBtn: {
+    padding: 2,
   },
 });
 

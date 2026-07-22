@@ -1,7 +1,6 @@
 import React, { memo, useMemo } from 'react';
 import { View, StyleSheet, Pressable, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import AppText from '../ui/AppText';
 import { theme } from '../../theme/theme';
 
@@ -21,8 +20,8 @@ interface Props {
 }
 
 /**
- * Premium bento-style quick service cards. Taller with gradient icon circles
- * and contrasting badge chips. FoodPanda Pandamart-inspired.
+ * Foodpanda / Pandamart-style quick service cards —
+ * white surfaces, soft tinted icon wells, thin borders.
  */
 const QuickServicesGrid = memo(function QuickServicesGrid({
   services,
@@ -32,19 +31,7 @@ const QuickServicesGrid = memo(function QuickServicesGrid({
     return ({ item }: { item: QuickService }) => {
       if (!item) return null;
 
-      const gradientColors = Array.isArray(item.bg)
-        ? (item.bg as [string, string])
-        : (() => {
-            const baseBg = item.bg as string;
-            let darkerBg = baseBg;
-            if (baseBg.startsWith('#') && baseBg.length === 7) {
-              darkerBg = baseBg.replace(/([0-9A-F]{2})$/i, (match) => {
-                const val = Math.max(0, parseInt(match, 16) - 30);
-                return val.toString(16).padStart(2, '0');
-              });
-            }
-            return [baseBg, darkerBg] as [string, string];
-          })();
+      const tintBg = Array.isArray(item.bg) ? item.bg[0] : (item.bg as string);
 
       return (
         <Pressable
@@ -52,27 +39,29 @@ const QuickServicesGrid = memo(function QuickServicesGrid({
           style={({ pressed }) => [
             styles.card,
             variant === 'grid' ? styles.gridCard : styles.railCard,
-            pressed ? { opacity: 0.88, transform: [{ scale: 0.95 }] } : null,
+            pressed ? { opacity: 0.88, transform: [{ scale: 0.97 }] } : null,
           ]}
         >
-          <LinearGradient
-            colors={gradientColors}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={StyleSheet.absoluteFill}
-          />
-          {/* Badge (HOT) — top-right */}
           {item.badge ? (
-            <View style={styles.badgeChip}>
-              <AppText variant="badge" color="#fff" style={{ fontSize: 9 }}>
+            <View style={[styles.badgeChip, { backgroundColor: item.fg }]}>
+              <AppText variant="badge" color="#fff" style={styles.badgeText}>
                 {item.badge}
               </AppText>
             </View>
           ) : null}
-          {/* Icon circle */}
-          <View style={styles.iconCircle}>
-            <Ionicons name={item.icon} size={28} color={item.fg} />
+
+          <View style={[styles.iconCircle, { backgroundColor: tintBg }]}>
+            <Ionicons
+              name={
+                (Ionicons.glyphMap[`${item.icon}-outline` as keyof typeof Ionicons.glyphMap]
+                  ? `${item.icon}-outline`
+                  : item.icon) as keyof typeof Ionicons.glyphMap
+              }
+              size={26}
+              color={item.fg}
+            />
           </View>
+
           <AppText
             variant="captionStrong"
             color={theme.colors.textHeader}
@@ -110,60 +99,63 @@ const QuickServicesGrid = memo(function QuickServicesGrid({
 const styles = StyleSheet.create({
   railWrap: {
     paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.sm,
-    gap: theme.spacing.md,
+    paddingTop: theme.spacing.md,
+    paddingBottom: theme.spacing.sm,
+    gap: 10,
   },
   gridWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: theme.spacing.md,
+    gap: 10,
     paddingHorizontal: theme.spacing.lg,
     paddingVertical: theme.spacing.sm,
   },
   card: {
-    borderRadius: theme.radius.xl,
-    padding: theme.spacing.lg,
+    backgroundColor: theme.colors.surface,
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingTop: 18,
+    paddingBottom: 14,
     alignItems: 'center',
-    justifyContent: 'flex-end',
-    overflow: 'hidden',
-    ...theme.shadows.md,
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.border,
+    ...theme.shadows.sm,
   },
   railCard: {
-    width: 128,
-    height: 144,
-    marginRight: theme.spacing.md,
+    width: 110,
+    height: 128,
+    marginRight: 10,
   },
   gridCard: {
     width: '47%',
-    height: 128,
+    height: 120,
     flexGrow: 1,
   },
   iconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: theme.spacing.md,
-    backgroundColor: 'rgba(255,255,255,0.7)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.9)',
-    ...theme.shadows.sm,
+    marginBottom: 10,
   },
   badgeChip: {
     position: 'absolute',
-    top: 10,
-    right: 10,
-    backgroundColor: theme.colors.discount,
+    top: 8,
+    right: 8,
     borderRadius: theme.radius.pill,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    ...theme.shadows.sm,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  badgeText: {
+    fontSize: 8,
+    letterSpacing: 0.3,
   },
   label: {
-    fontSize: 13,
-    lineHeight: 17,
-    fontWeight: '700',
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '600',
     textAlign: 'center',
   },
 });

@@ -2,7 +2,7 @@ const axios = require('axios');
 
 async function testOtp() {
   const phone = '03412248616';
-  const baseUrl = 'http://192.168.100.142/api/v1';
+  const baseUrl = 'http://192.168.0.241/api/v1';
 
   try {
     console.log('Sending OTP...');

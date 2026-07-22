@@ -1,9 +1,7 @@
 import React, { memo } from 'react';
 import { View, StyleSheet, Pressable, Animated } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import AppText from '../ui/AppText';
-import AppIconButton from '../ui/AppIconButton';
 import { theme } from '../../theme/theme';
 import { useAuthStore } from '../../store/authStore';
 
@@ -34,43 +32,46 @@ const HomeHeader = memo(function HomeHeader({
   children,
 }: HomeHeaderProps) {
   const { userData } = useAuthStore();
-  const isFood = variant === 'food';
-  const isPharma = variant === 'pharma';
-
-  const colors: [string, string] = isFood
-    ? [theme.colors.food, theme.colors.food + 'CC']
-    : isPharma
-      ? [theme.colors.pharma, theme.colors.pharma + 'CC']
-      : [theme.colors.primary, theme.colors.primary + 'CC'];
+  const accent =
+    variant === 'food'
+      ? theme.colors.food
+      : variant === 'pharma'
+        ? theme.colors.pharma
+        : theme.colors.primary;
 
   const firstName = userData?.name?.split(' ')[0] || 'Customer';
   const hours = new Date().getHours();
   let greetMsg = greeting;
   if (!greetMsg) {
-    if (hours < 12) greetMsg = `Good Morning, ${firstName}!`;
-    else if (hours < 17) greetMsg = `Good Afternoon, ${firstName}!`;
-    else greetMsg = `Good Evening, ${firstName}!`;
+    if (hours < 12) greetMsg = `Good morning, ${firstName}`;
+    else if (hours < 17) greetMsg = `Good afternoon, ${firstName}`;
+    else greetMsg = `Good evening, ${firstName}`;
   }
 
   return (
-    <LinearGradient colors={colors} style={styles.wrap} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+    <View style={styles.wrap}>
       <View style={styles.row}>
         <Pressable onPress={onLocationPress} style={styles.locationBtn} hitSlop={6}>
-          <Ionicons name="location" size={16} color="#fff" />
+          <View style={[styles.pinWrap, { backgroundColor: accent + '14' }]}>
+            <Ionicons name="location" size={16} color={accent} />
+          </View>
           <View style={styles.locationCol}>
+            <AppText variant="overline" color={theme.colors.textMuted} style={styles.deliverLabel}>
+              Deliver to
+            </AppText>
             <View style={styles.locationLine}>
               <AppText
                 variant="bodyStrong"
-                color="#fff"
+                color={theme.colors.textHeader}
                 numberOfLines={1}
                 style={styles.locationLabel}
               >
                 {locationLabel}
               </AppText>
-              <Ionicons name="chevron-down" size={14} color="#fff" />
+              <Ionicons name="chevron-down" size={14} color={theme.colors.textSecondary} />
             </View>
             {etaLabel ? (
-              <AppText variant="caption" color="rgba(255,255,255,0.85)" numberOfLines={1}>
+              <AppText variant="caption" color={theme.colors.textSecondary} numberOfLines={1}>
                 {etaLabel}
               </AppText>
             ) : null}
@@ -79,81 +80,128 @@ const HomeHeader = memo(function HomeHeader({
 
         <View style={styles.actions}>
           {onFavouritesPress ? (
-            <AppIconButton
-              size={36}
-              bg="rgba(255,255,255,0.18)"
+            <Pressable
               onPress={onFavouritesPress}
+              style={({ pressed }) => [styles.iconBtn, pressed && styles.iconBtnPressed]}
+              hitSlop={4}
             >
-              <Ionicons name="heart-outline" size={20} color="#fff" />
-            </AppIconButton>
+              <Ionicons name="heart-outline" size={22} color={theme.colors.textPrimary} />
+            </Pressable>
           ) : null}
-          <AppIconButton
-            size={36}
-            bg="rgba(255,255,255,0.18)"
+          <Pressable
             onPress={onNotificationsPress}
+            style={({ pressed }) => [styles.iconBtn, pressed && styles.iconBtnPressed]}
+            hitSlop={4}
           >
-            <Ionicons name="notifications-outline" size={20} color="#fff" />
-          </AppIconButton>
-          <View>
-            <AppIconButton
-              size={36}
-              bg="rgba(255,255,255,0.18)"
-              onPress={onCartPress}
-            >
-              <Ionicons name="bag-handle-outline" size={20} color="#fff" />
-            </AppIconButton>
+            <Ionicons name="notifications-outline" size={22} color={theme.colors.textPrimary} />
+          </Pressable>
+          <Pressable
+            onPress={onCartPress}
+            style={({ pressed }) => [styles.iconBtn, pressed && styles.iconBtnPressed]}
+            hitSlop={4}
+          >
+            <Ionicons name="bag-handle-outline" size={22} color={theme.colors.textPrimary} />
             {cartCount > 0 && (
-              <View style={styles.cartBadge}>
-                <AppText variant="badge" color={colors[0]} style={{ fontSize: 10, fontWeight: 'bold' }}>
+              <View style={[styles.cartBadge, { backgroundColor: accent }]}>
+                <AppText variant="badge" color="#fff" style={styles.cartBadgeText}>
                   {cartCount > 9 ? '9+' : String(cartCount)}
                 </AppText>
               </View>
             )}
-          </View>
+          </Pressable>
         </View>
       </View>
 
-      {greetMsg && (
-        <AppText variant="caption" color="rgba(255,255,255,0.95)" style={{ marginTop: 8, fontWeight: '600' }}>
+      {greetMsg ? (
+        <AppText variant="caption" color={theme.colors.textSecondary} style={styles.greeting}>
           {greetMsg}
         </AppText>
-      )}
+      ) : null}
+
       {children}
-    </LinearGradient>
+    </View>
   );
 });
 
 const styles = StyleSheet.create({
   wrap: {
+    backgroundColor: theme.colors.surface,
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 16,
-    borderBottomLeftRadius: 0,
-    borderBottomRightRadius: 0,
+    paddingTop: 6,
+    paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.colors.border,
   },
-  row: { flexDirection: 'row', alignItems: 'center' },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   locationBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
+    marginRight: 8,
   },
-  locationCol: { flex: 1 },
-  locationLine: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  locationLabel: { maxWidth: '78%' },
-  actions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  cartBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: '#fff',
+  pinWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.5)',
+  },
+  locationCol: { flex: 1 },
+  deliverLabel: {
+    fontSize: 9,
+    letterSpacing: 0.8,
+    marginBottom: 1,
+  },
+  locationLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  locationLabel: {
+    maxWidth: '82%',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  actions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconBtnPressed: {
+    backgroundColor: theme.colors.surfaceMuted,
+  },
+  cartBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+    borderWidth: 1.5,
+    borderColor: theme.colors.surface,
+  },
+  cartBadgeText: {
+    fontSize: 9,
+    lineHeight: 11,
+    fontWeight: '800',
+  },
+  greeting: {
+    marginTop: 10,
+    fontWeight: '500',
   },
 });
 

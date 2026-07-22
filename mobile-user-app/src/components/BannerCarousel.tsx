@@ -1,10 +1,8 @@
-// BannerCarousel.tsx — Redesigned v6 (Full Width Full Background Image & Spacing Gap)
-// Features: Full screen-width edge-to-edge banners, full background cover images,
-//           left-to-right contrast shadow overlays, glass deal tags, and premium paginators.
+// BannerCarousel — Foodpanda-inspired inset rounded promo banners
 
 import React, { useState, useEffect, useRef, memo, useCallback } from 'react';
 import {
-  View, StyleSheet, FlatList, Dimensions, Pressable, Text
+  View, StyleSheet, FlatList, Dimensions, Pressable, Text,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -14,18 +12,17 @@ import { useTheme } from '../context/ThemeContext';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
-// Banners are full width (edge-to-edge)
-const SIDE_PADDING = 0;
-const SLIDE_GAP = 0;
-const SLIDE_W = SCREEN_W;
-const SLIDE_H = Math.round(SLIDE_W * (9 / 21)); // Elegant thin aspect ratio
-const SNAP_INTERVAL = SCREEN_W;
+const SIDE_PADDING = 16;
+const SLIDE_GAP = 10;
+const SLIDE_W = SCREEN_W - SIDE_PADDING * 2;
+const SLIDE_H = Math.round(SLIDE_W * 0.42);
+const SNAP_INTERVAL = SLIDE_W + SLIDE_GAP;
 
 const GRADIENTS: readonly [string, string, ...string[]][] = [
-  ['#FF5F6D', '#FF8F70', '#FFAF7B'], // Coral Sunset
-  ['#4facfe', '#00f2fe', '#00e1fd'], // Sapphire Wave
-  ['#11998e', '#38ef7d', '#5af493'], // Emerald Grass
-  ['#7F00FF', '#E100FF', '#f552ff'], // Neon Purple
+  ['#D70F64', '#FF4D8D'],
+  ['#1A1A2E', '#16213E'],
+  ['#0F766E', '#14B8A6'],
+  ['#C2410C', '#EA580C'],
 ];
 
 interface Banner {
@@ -63,7 +60,6 @@ const BannerCarousel = memo(function BannerCarousel({
     ? banners
     : (fallbackBanner ? [fallbackBanner] : []);
 
-  // Auto-scroll
   useEffect(() => {
     if (displayBanners.length <= 1) return;
     const timer = setInterval(() => {
@@ -87,17 +83,15 @@ const BannerCarousel = memo(function BannerCarousel({
   const renderItem = useCallback(({ item, index }: { item: Banner; index: number }) => {
     const hasImage = !!item.imageUrl;
     const gradientColors = GRADIENTS[index % GRADIENTS.length];
-    const textThemeColor = '#FFFFFF'; // Force clean high-contrast white text on overlay
 
     return (
       <Pressable
         onPress={() => onPress?.(item)}
         style={({ pressed }) => [
           styles.slide,
-          pressed ? { opacity: 0.98 } : null,
+          pressed ? { opacity: 0.96 } : null,
         ]}
       >
-        {/* Fallback solid gradient color */}
         <LinearGradient
           colors={gradientColors}
           start={{ x: 0, y: 0 }}
@@ -105,7 +99,6 @@ const BannerCarousel = memo(function BannerCarousel({
           style={StyleSheet.absoluteFillObject}
         />
 
-        {/* Full background cover image */}
         {hasImage && (
           <Image
             source={{ uri: normalizeUrl(item.imageUrl!)! }}
@@ -116,43 +109,39 @@ const BannerCarousel = memo(function BannerCarousel({
           />
         )}
 
-        {/* Premium left-to-right dimming overlay to make text highly readable */}
         <LinearGradient
-          colors={['rgba(15, 23, 42, 0.72)', 'rgba(15, 23, 42, 0.35)', 'rgba(15, 23, 42, 0.0)']}
+          colors={['rgba(0,0,0,0.55)', 'rgba(0,0,0,0.15)', 'rgba(0,0,0,0)']}
           start={{ x: 0, y: 0.5 }}
           end={{ x: 1, y: 0.5 }}
           style={StyleSheet.absoluteFillObject}
         />
 
-        {/* Banner Content Layout */}
         <View style={styles.cardContent}>
           <View style={styles.leftCol}>
             {item.tagLabel ? (
-              <View style={styles.glassTag}>
+              <View style={styles.tag}>
                 <Text style={styles.tagText}>{item.tagLabel.toUpperCase()}</Text>
               </View>
             ) : null}
 
-            <Text style={[styles.title, { color: textThemeColor }]} numberOfLines={2}>
+            <Text style={styles.title} numberOfLines={2}>
               {item.title}
             </Text>
 
             {item.subtitle ? (
-              <Text style={[styles.subtitle, { color: textThemeColor + 'CC' }]} numberOfLines={1}>
+              <Text style={styles.subtitle} numberOfLines={1}>
                 {item.subtitle}
               </Text>
             ) : null}
           </View>
 
-          <View style={styles.rightCol}>
-            <View style={styles.ctaCircle}>
-              <Ionicons name="arrow-forward" size={18} color="#0F172A" />
-            </View>
+          <View style={styles.ctaCircle}>
+            <Ionicons name="arrow-forward" size={16} color="#111" />
           </View>
         </View>
       </Pressable>
     );
-  }, []);
+  }, [onPress]);
 
   if (displayBanners.length === 0) return null;
 
@@ -164,7 +153,7 @@ const BannerCarousel = memo(function BannerCarousel({
         keyExtractor={(b, i) => b.id || String(i)}
         renderItem={renderItem}
         horizontal
-        pagingEnabled
+        pagingEnabled={false}
         snapToInterval={SNAP_INTERVAL}
         snapToAlignment="start"
         decelerationRate="fast"
@@ -177,9 +166,9 @@ const BannerCarousel = memo(function BannerCarousel({
           offset: SNAP_INTERVAL * index,
           index,
         })}
+        ItemSeparatorComponent={() => <View style={{ width: SLIDE_GAP }} />}
       />
 
-      {/* Pagination indicators */}
       {displayBanners.length > 1 && (
         <View style={styles.indicatorContainer}>
           {displayBanners.map((_, i) => {
@@ -190,8 +179,10 @@ const BannerCarousel = memo(function BannerCarousel({
                 style={[
                   styles.dot,
                   {
-                    width: active ? 18 : 6,
-                    backgroundColor: active ? theme.colors.primary : 'rgba(255,255,255,0.4)',
+                    width: active ? 16 : 6,
+                    backgroundColor: active
+                      ? theme.colors.primary
+                      : theme.colors.borderStrong,
                   },
                 ]}
               />
@@ -207,88 +198,74 @@ export default BannerCarousel;
 
 const styles = StyleSheet.create({
   wrap: {
-    marginTop: 0, // Little gap between header and banner
-    marginBottom: 8,
-    position: 'relative',
+    marginTop: 12,
+    marginBottom: 4,
   },
   listContent: {
     paddingHorizontal: SIDE_PADDING,
-    paddingBottom: 0,
   },
   slide: {
     width: SLIDE_W,
     height: SLIDE_H,
-    position: 'relative',
+    borderRadius: 16,
     overflow: 'hidden',
+    backgroundColor: '#1A1A2E',
   },
   cardContent: {
     ...StyleSheet.absoluteFillObject,
     flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
     alignItems: 'center',
-    zIndex: 2,
   },
   leftCol: {
     flex: 1,
     justifyContent: 'center',
     gap: 4,
+    paddingRight: 12,
   },
-  rightCol: {
-    width: 50,
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  glassTag: {
+  tag: {
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255,255,255,0.22)',
+    backgroundColor: 'rgba(255,255,255,0.2)',
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   tagText: {
     color: '#FFF',
     fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 0.6,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   title: {
-    fontSize: 19,
-    fontWeight: '800',
-    lineHeight: 24,
-    letterSpacing: -0.3,
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
+    lineHeight: 23,
+    letterSpacing: -0.2,
   },
   subtitle: {
+    color: 'rgba(255,255,255,0.85)',
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '500',
     marginTop: 2,
   },
   ctaCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
   },
   indicatorContainer: {
-    position: 'absolute',
-    bottom: 12,
-    right: 20,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    justifyContent: 'center',
+    gap: 5,
+    marginTop: 10,
     height: 8,
-    zIndex: 10,
   },
   dot: {
     height: 5,
